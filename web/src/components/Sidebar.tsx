@@ -14,7 +14,7 @@ export function Sidebar() {
     <aside className="bg-rail border-r border-line flex flex-col min-h-0">
       <div className="px-3.5 pt-3.5 pb-2">
         <div className="flex items-center gap-2.5 mb-3.5">
-          <div className="w-[26px] h-[26px] rounded-md bg-clay text-white grid place-items-center font-bold text-[15px]">✳</div>
+          <img src="/favicon.svg" alt="" className="w-[26px] h-[26px] rounded-md" />
           <div className="leading-tight">
             <div className="font-semibold text-sm">ClaudeCode Workspace</div>
             <div className="text-[11px] text-txt3">{user?.displayName} 팀</div>

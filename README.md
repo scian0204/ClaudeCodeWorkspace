@@ -1,6 +1,8 @@
 <div align="center">
 
-# ✳ ClaudeCode Workspace
+<img src="docs/icon.svg" width="104" alt="ClaudeCode Workspace" />
+
+# ClaudeCode Workspace
 
 **서버 1대에 상주하는 Claude Code를, 팀 전체가 웹에서 함께 쓰는 워크스페이스.**
 

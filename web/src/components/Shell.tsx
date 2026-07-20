@@ -9,7 +9,7 @@ function Empty() {
   return (
     <div className="h-full grid place-items-center text-center">
       <div>
-        <div className="text-4xl mb-3">✳</div>
+        <img src="/favicon.svg" alt="" className="w-16 h-16 mx-auto mb-3" />
         <div className="text-txt2 mb-4">대화를 시작하거나 왼쪽에서 세션/대화방을 선택하세요.</div>
         <button className="btn-primary" onClick={() => newSession()}>＋ 새 대화 시작</button>
       </div>
