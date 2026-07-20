@@ -1,0 +1,12 @@
+{
+  "name": "ClaudeCode Workspace",
+  "short_name": "CCW",
+  "description": "서버 1대에 상주하는 Claude Code를 팀 단위로 쓰는 웹 워크스페이스",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1c1b19",
+  "theme_color": "#c8613a",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
