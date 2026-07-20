@@ -1,0 +1,15 @@
+{
+  "name": "claudecode-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Team workspace WebUI for a server-resident Claude Code — per-session isolation + shared rooms + code-server.",
+  "workspaces": ["server", "web"],
+  "scripts": {
+    "dev": "concurrently -n server,web -c blue,green \"npm:dev -w server\" \"npm:dev -w web\"",
+    "build": "npm run build -w web",
+    "start": "npm run start -w server",
+    "typecheck": "npm run typecheck -w server && npm run typecheck -w web"
+  },
+  "devDependencies": { "concurrently": "^9.1.0" },
+  "engines": { "node": ">=20" }
+}

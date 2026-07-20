@@ -1,0 +1,34 @@
+services:
+  app:
+    build: .
+    image: claudecode-workspace
+    container_name: claudecode-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: "3000"
+      DATA_DIR: /data
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      MOCK_CLAUDE: ${MOCK_CLAUDE:-0}
+      SESSION_SECRET: ${SESSION_SECRET:-change-me-please}
+      MAX_CONCURRENT_TURNS: ${MAX_CONCURRENT_TURNS:-3}
+      BOOTSTRAP_ADMIN_USER: ${BOOTSTRAP_ADMIN_USER:-admin}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-admin}
+      CODE_SERVER_IMAGE: ${CODE_SERVER_IMAGE:-codercom/code-server:latest}
+      CODE_SERVER_IDLE_MS: ${CODE_SERVER_IDLE_MS:-1800000}
+      CODE_SERVER_NETWORK: claudecode_internal
+      DATA_VOLUME: claudecode-workspace_data
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - data:/data
+    networks:
+      - internal
+
+networks:
+  internal:
+    name: claudecode_internal
+
+volumes:
+  data:
+    name: claudecode-workspace_data
