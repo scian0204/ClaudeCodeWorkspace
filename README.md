@@ -13,6 +13,12 @@
 ![license](https://img.shields.io/badge/license-MIT-black)
 ![node](https://img.shields.io/badge/node-%E2%89%A520-339933)
 
+<br/>
+
+<img src="docs/ccw-demo.gif" alt="ClaudeCode Workspace 데모 — 대화방 채팅 · 웹 권한 승인 · code-server 분할까지" width="92%" />
+
+<sub>로그인 → 대화방 → 메시지 전송 → 웹에서 툴 승인 → 툴 실행 → 분할 뷰로 브라우저 속 VS Code까지 (MOCK 모드 데모)</sub>
+
 </div>
 
 ---
