@@ -18,7 +18,7 @@ export function Chat() {
   return (
     <div className="flex flex-col min-w-0 h-full">
       <Header />
-      <div className="flex-1 grid min-h-0" style={{ gridTemplateColumns: viewMode === 'split' ? '1fr 1fr' : viewMode === 'editor' ? '0 1fr' : '1fr' }}>
+      <div className="flex-1 grid min-h-0" style={{ gridTemplateColumns: viewMode === 'split' ? '1fr 1fr' : '1fr' }}>
         {viewMode !== 'editor' && <ChatPane key={c.chatSessionId} />}
         {viewMode !== 'chat' && <EditorPane />}
       </div>
