@@ -5,6 +5,7 @@ import {
   COOKIE, login, logout, requireAuth, requireAdmin, createUser, findByUsername,
   toAuthUser, hashPassword,
 } from './index.js';
+import * as cs from '../codeserver/manager.js';
 
 export async function authRoutes(app: FastifyInstance) {
   app.post('/api/auth/login', async (req, reply) => {
@@ -20,6 +21,7 @@ export async function authRoutes(app: FastifyInstance) {
     const token = req.cookies?.[COOKIE];
     if (token) logout(token);
     reply.clearCookie(COOKIE, { path: '/' });
+    if (req.user) cs.killForOwner(req.user.id).catch(() => {}); // remove editors on logout
     return { ok: true };
   });
 
