@@ -1,0 +1,44 @@
+import { useStore } from '../lib/store';
+import { Sidebar } from './Sidebar';
+import { Chat } from './Chat';
+import { AdminPanel } from './AdminPanel';
+import { PluginsPanel } from './PluginsPanel';
+
+function Empty() {
+  const newSession = useStore((s) => s.newSession);
+  return (
+    <div className="h-full grid place-items-center text-center">
+      <div>
+        <div className="text-4xl mb-3">✳</div>
+        <div className="text-txt2 mb-4">대화를 시작하거나 왼쪽에서 세션/대화방을 선택하세요.</div>
+        <button className="btn-primary" onClick={() => newSession()}>＋ 새 대화 시작</button>
+      </div>
+    </div>
+  );
+}
+
+function Toast({ msg, onClose }: { msg: string; onClose: () => void }) {
+  return (
+    <div className="fixed bottom-5 left-1/2 -translate-x-1/2 bg-card border border-danger text-danger text-sm rounded-lg px-4 py-2 shadow-lg z-[60] flex items-center gap-3">
+      <span>{msg}</span>
+      <button className="text-txt3 hover:text-txt" onClick={onClose}>✕</button>
+    </div>
+  );
+}
+
+export function Shell() {
+  const current = useStore((s) => s.current);
+  const panel = useStore((s) => s.panel);
+  const error = useStore((s) => s.error);
+  const setError = useStore((s) => s.setError);
+
+  return (
+    <div className="grid h-full overflow-hidden" style={{ gridTemplateColumns: '264px 1fr' }}>
+      <Sidebar />
+      <main className="min-w-0 bg-panel flex flex-col">
+        {panel === 'admin' ? <AdminPanel /> : panel === 'plugins' ? <PluginsPanel /> : current ? <Chat /> : <Empty />}
+      </main>
+      {error && <Toast msg={error} onClose={() => setError(null)} />}
+    </div>
+  );
+}

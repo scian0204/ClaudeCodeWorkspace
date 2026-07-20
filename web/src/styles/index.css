@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root{
+  --bg:#f5f3ee; --panel:#ffffff; --rail:#efece5; --card:#ffffff;
+  --line:#e3ded3; --line-2:#d6d0c2;
+  --txt:#2c2a26; --txt-2:#6b675e; --txt-3:#9a958a;
+  --clay:#c8613a; --clay-soft:#f3e2d9;
+  --ok:#4f8a52; --ok-soft:#e4efe0; --warn:#b7791f; --warn-soft:#f6ecd6;
+  --danger:#b23b32; --danger-soft:#f6e0dd;
+  --serif:Georgia,"Times New Roman",serif;
+  --sans:ui-sans-serif,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#1c1b19; --panel:#232220; --rail:#191817; --card:#2a2825;
+    --line:#34322e; --line-2:#413e39;
+    --txt:#ece9e3; --txt-2:#a6a199; --txt-3:#736e65;
+    --clay:#df8763; --clay-soft:#3a2a22;
+    --ok:#7bb07d; --ok-soft:#22301f; --warn:#d9a441; --warn-soft:#332a18;
+    --danger:#e08a80; --danger-soft:#3a201d;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#1c1b19; --panel:#232220; --rail:#191817; --card:#2a2825;
+  --line:#34322e; --line-2:#413e39;
+  --txt:#ece9e3; --txt-2:#a6a199; --txt-3:#736e65;
+  --clay:#df8763; --clay-soft:#3a2a22;
+  --ok:#7bb07d; --ok-soft:#22301f; --warn:#d9a441; --warn-soft:#332a18;
+  --danger:#e08a80; --danger-soft:#3a201d;
+}
+:root[data-theme="light"]{
+  --bg:#f5f3ee; --panel:#ffffff; --rail:#efece5; --card:#ffffff;
+  --line:#e3ded3; --line-2:#d6d0c2;
+  --txt:#2c2a26; --txt-2:#6b675e; --txt-3:#9a958a;
+  --clay:#c8613a; --clay-soft:#f3e2d9;
+  --ok:#4f8a52; --ok-soft:#e4efe0; --warn:#b7791f; --warn-soft:#f6ecd6;
+  --danger:#b23b32; --danger-soft:#f6e0dd;
+}
+
+html,body,#root{height:100%}
+body{margin:0;background:var(--bg);color:var(--txt);font-family:var(--sans);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+
+@layer components{
+  .pill{ @apply inline-flex items-center gap-1.5 border border-line bg-panel text-txt2 rounded-lg px-2.5 py-1 text-xs cursor-pointer; }
+  .pill:hover{ border-color:var(--line-2); }
+  .seg{ @apply flex bg-rail border border-line rounded-lg p-0.5; }
+  .seg button{ @apply border-0 bg-transparent text-txt2 px-3 py-1 rounded-md text-xs cursor-pointer font-medium; }
+  .seg button.on{ background:var(--panel); color:var(--txt); box-shadow:0 1px 2px rgba(0,0,0,.06); }
+  .toolbtn{ @apply bg-transparent border border-line text-txt2 rounded-lg w-[30px] h-[30px] grid place-items-center cursor-pointer; }
+  .avatar{ @apply grid place-items-center rounded-full text-white font-semibold; }
+  .input{ @apply w-full bg-card border border-line2 rounded-lg px-3 py-2 text-sm text-txt outline-none; }
+  .input:focus{ border-color:var(--clay); }
+  .btn-primary{ @apply bg-clay text-white rounded-lg px-3.5 py-2 text-sm font-semibold cursor-pointer border-0; }
+  .btn-ghost{ @apply bg-card border border-line2 text-txt2 rounded-lg px-3.5 py-2 text-sm cursor-pointer; }
+}
+
+.scrolly::-webkit-scrollbar{width:9px;height:9px}
+.scrolly::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:8px}
+.scrolly::-webkit-scrollbar-track{background:transparent}
+
+@keyframes blink{0%,60%,100%{opacity:.3}30%{opacity:1}}
+.tdot{width:6px;height:6px;border-radius:50%;background:var(--clay);animation:blink 1.2s infinite}
+.tdot:nth-child(2){animation-delay:.2s}.tdot:nth-child(3){animation-delay:.4s}
+@media (prefers-reduced-motion:reduce){.tdot{animation:none}}
