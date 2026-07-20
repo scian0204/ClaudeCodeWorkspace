@@ -1,12 +1,14 @@
 <div align="center">
 
+**English** · [한국어](README.ko.md)
+
 <img src="docs/icon.svg" width="104" alt="ClaudeCode Workspace" />
 
 # ClaudeCode Workspace
 
-**서버 1대에 상주하는 Claude Code를, 팀 전체가 웹에서 함께 쓰는 워크스페이스.**
+**The server-resident Claude Code, shared by your whole team through the browser.**
 
-세션마다 격리된 Claude Code · 여러 명이 같이 쓰는 공유 대화방 · 브라우저 안의 VS Code까지 — 한 번의 `docker compose up`으로.
+Per-session isolated Claude Code · shared team rooms · VS Code in the browser — all from a single `docker compose up`.
 
 ![status](https://img.shields.io/badge/status-P0--P5%20complete-4f8a52)
 ![stack](https://img.shields.io/badge/stack-Fastify%20%2B%20React%20%2B%20SQLite-c8613a)
@@ -17,83 +19,83 @@
 
 <br/>
 
-<img src="docs/ccw-demo.gif" alt="ClaudeCode Workspace 데모 — 대화방 채팅 · 웹 권한 승인 · code-server 분할까지" width="92%" />
+<img src="docs/ccw-demo.gif" alt="ClaudeCode Workspace demo — room chat, web tool approval, code-server split view" width="92%" />
 
-<sub>로그인 → 대화방 → 메시지 전송 → 웹에서 툴 승인 → 툴 실행 → 분할 뷰로 브라우저 속 VS Code까지 (MOCK 모드 데모)</sub>
+<sub>Log in → room → send a message → approve the tool in the browser → tool runs → split into VS Code in the browser (MOCK-mode demo)</sub>
 
 </div>
 
 ---
 
-## 한눈에
+## At a glance
 
-Claude Code CLI는 강력하지만 **내 터미널 하나**에 묶여 있습니다. ClaudeCode Workspace는 그 CLI를 **서버에 올려 팀 자산으로** 바꿉니다.
+The Claude Code CLI is powerful, but it's tied to **one terminal — yours**. ClaudeCode Workspace lifts that CLI **onto a server and turns it into a team asset**.
 
-- 각자 브라우저로 접속 → **자기만의 격리된 Claude Code 세션**
-- 필요하면 **단체 대화방**에 모여 하나의 Claude를 같이 부린다 (단톡방처럼)
-- 승인이 필요한 위험한 작업은 **웹에서 실시간 승인/거부**
-- 그 자리에서 **VS Code(code-server)** 를 열어 편집·터미널·git까지
-- 공용 API 키 1개로 운영, 관리자는 **사용량 대시보드**로 전체 파악
+- Everyone connects via browser → **their own isolated Claude Code session**
+- Gather in a **shared room** to drive one Claude together (like a group chat)
+- Risky actions that need approval → **approve/deny live, in the browser**
+- Open **VS Code (code-server)** right there for editing, terminal, and git
+- Runs on a single shared API key; admins see everything via a **usage dashboard**
 
-> 개인 원격 셋업으로도 그대로 동작합니다 — 혼자라면 계정 1개짜리 "원격 Claude Code"가 됩니다.
+> Works as a personal remote setup too — solo, it becomes a single-account "remote Claude Code".
 
 ---
 
-## ✨ 강점
+## ✨ Strengths
 
-|  | 강점 | 설명 |
+|  | Strength | Description |
 |---|---|---|
-| 🧬 | **진짜 세션 격리** | "하나의 배포"지만 런타임은 세션마다 별도 프로세스. Agent SDK가 턴마다 `HOME`/`cwd`/plugins를 주입해 유저·방별로 완전히 분리 |
-| 👥 | **공유 대화방 + 세밀한 위임** | 방장이 멤버별로 승인·중단·초대·추방·방장이양·방삭제 권한을 토글. FIFO 큐로 다자 대화 정렬, 발화자 프리픽스로 모델이 화자 인식 |
-| 🛡 | **웹 권한 프롬프트** | Claude가 툴을 쓰기 직전 멈추고 브라우저에 허용/거부/항상. 격리 deny 펜스는 모드와 무관하게 항상 적용 |
-| 🧑‍💻 | **브라우저 속 VS Code** | 프로젝트를 code-server 컨테이너로 즉시 배포. 자기 볼륨 + 공통만 마운트(격리), 유휴 시 자동 회수 |
-| 🔌 | **2-클래스 플러그인** | 공통(관리자)·개인(유저) 티어. git·로컬 업로드 설치, 관리자 필수강제, 유저별 on/off |
-| 🔑 | **키 없이도 완전 동작** | `ANTHROPIC_API_KEY`가 없으면 **MOCK 모드**로 스트리밍·권한·툴카드 UX가 그대로 시연됨 → 평가·데모·CI에 최적 |
-| 🐳 | **한 방 배포** | 멀티스테이지 단일 이미지 + `docker compose up`. code-server는 형제 컨테이너로 동적 spawn (오케스트레이터 불필요) |
-| 🎨 | **데스크톱 앱 급 UI** | Claude Code 데스크톱을 따른 clay 테마, 라이트/다크, 접이식 툴카드, serif 응답, 멤버 아바타·presence |
+| 🧬 | **True session isolation** | "One deployment," but the runtime is a separate process per session. The Agent SDK injects `HOME`/`cwd`/plugins every turn, fully separating users and rooms. |
+| 👥 | **Shared rooms + fine-grained delegation** | The owner toggles per-member rights: approve, interrupt, invite, kick, transfer ownership, delete room. A FIFO queue orders multi-party turns; speaker prefixes let the model track who's talking. |
+| 🛡 | **Web permission prompts** | Claude pauses right before using a tool and asks the browser: allow / deny / always. The isolation deny-fence always applies, regardless of mode. |
+| 🧑‍💻 | **VS Code in the browser** | Spin up a project in a code-server container instantly. Mounts only your volume + the shared one (isolated); auto-reaped when idle. |
+| 🔌 | **Two-class plugins** | Common (admin) and personal (user) tiers. Install via git or local upload, admin-forced plugins, per-user on/off. |
+| 🔑 | **Fully functional without a key** | With no `ANTHROPIC_API_KEY`, it runs in **MOCK mode** — streaming, permissions, and tool-card UX all demoable. Ideal for evaluation, demos, CI. |
+| 🐳 | **One-shot deploy** | Multi-stage single image + `docker compose up`. code-server spawns dynamically as sibling containers (no orchestrator needed). |
+| 🎨 | **Desktop-app-grade UI** | Clay theme following the Claude Code desktop app, light/dark, collapsible tool cards, serif responses, member avatars and presence. |
 
 ---
 
-## 🚀 빠른 시작
+## 🚀 Quick start
 
-### 개발 모드
+### Development
 
 ```bash
 npm install
-cp .env.example .env      # 키 넣으면 실제 Claude, 비우면 MOCK 모드
-npm run dev               # server :3000  +  Vite :5173 (프록시)
+cp .env.example .env      # add a key for real Claude, leave empty for MOCK mode
+npm run dev               # server :3000  +  Vite :5173 (proxy)
 ```
 
-→ http://localhost:5173 접속 · 초기 관리자 **admin / admin** (배포 후 꼭 변경)
+→ open http://localhost:5173 · initial admin **admin / admin** (change it after deploy)
 
-### 프로덕션 (Docker)
+### Production (Docker)
 
 ```bash
-cp .env.example .env      # SESSION_SECRET, ANTHROPIC_API_KEY 설정
+cp .env.example .env      # set SESSION_SECRET, ANTHROPIC_API_KEY
 docker compose up -d --build
 ```
 
-→ http://localhost:3000 · 단일 이미지가 API·WebSocket·정적 SPA·code-server 프록시를 모두 서빙
+→ http://localhost:3000 · a single image serves the API, WebSocket, static SPA, and code-server proxy
 
-> **요구사항:** code-server 편집기는 Docker 배포에서만 동작하며, 볼륨 subpath 마운트를 위해 **Docker Engine ≥ 26**이 필요합니다.
+> **Requirement:** the code-server editor works only in the Docker deployment, and needs **Docker Engine ≥ 26** for volume-subpath mounts.
 
 ---
 
-## 🧭 아키텍처
+## 🧭 Architecture
 
 ```mermaid
 flowchart TB
-  subgraph B["🌐 브라우저 · React SPA"]
-    UI["채팅 · 대화방 · 에디터 · 관리자"]
+  subgraph B["🌐 Browser · React SPA"]
+    UI["Chat · Rooms · Editor · Admin"]
   end
-  subgraph A["🐳 app 컨테이너 · Fastify"]
+  subgraph A["🐳 app container · Fastify"]
     API["REST API"]
-    WS["Socket.IO 스트리밍/팬아웃"]
-    SM["세션 매니저 + FIFO 큐"]
-    PX["/cs 리버스 프록시"]
+    WS["Socket.IO streaming/fanout"]
+    SM["Session manager + FIFO queue"]
+    PX["/cs reverse proxy"]
   end
-  SDK["Claude CLI 서브프로세스<br/>(세션당 격리 · HOME/cwd)"]
-  subgraph C["🐳 code-server 형제 컨테이너<br/>(유저/방별 · 스코프 마운트)"]
+  SDK["Claude CLI subprocess<br/>(per-session · HOME/cwd)"]
+  subgraph C["🐳 code-server sibling containers<br/>(per user/room · scoped mounts)"]
     VS["VS Code"]
   end
   DB[("SQLite / Drizzle")]
@@ -103,106 +105,105 @@ flowchart TB
   UI -->|HTTP| API
   UI -->|iframe| PX
   WS --> SM
-  SM -->|query · 턴마다| SDK
+  SM -->|query · per turn| SDK
   API --> DB
   A -->|docker.sock| C
   PX -->|internal net| VS
   SDK --> VOL
-  VS -->|subpath 마운트| VOL
+  VS -->|subpath mount| VOL
 ```
 
-**동작 원리 (핵심 4가지)**
+**How it works (4 keys)**
 
-1. **세션 = 서브프로세스** — Agent SDK `query()`가 세션마다 Claude CLI를 spawn. `env.HOME`으로 개인/방 설정이 자연 해석되고, 공통 플러그인·MCP·agents는 명시 주입됩니다.
-2. **공유 대화방 = 장기 단일 세션** — resume로 컨텍스트를 이어가고, FIFO 큐가 여러 멤버의 발화를 순서대로 처리, 결과는 전원에게 WebSocket 팬아웃.
-3. **권한 = `canUseTool` 브리지** — 콜백이 멈추면 승인권자(방장/위임자)의 웹 응답을 기다립니다. 경로 이탈 툴은 정책상 항상 차단.
-4. **에디터 = 형제 컨테이너** — 앱이 도커 소켓으로 code-server를 띄우고, 자기 볼륨 subpath + 공통만 마운트한 뒤 인앱 프록시로만 노출(포트 미개방).
-
----
-
-## 🧩 기능 자세히
-
-<details>
-<summary><b>공유 대화방 & 권한 위임</b></summary>
-
-- 방 = 워크스페이스 엔티티(자체 `HOME`·프로젝트), 개인 세션과 평행 구조
-- 방장 기본 승인권 → 멤버 목록에서 권한별 토글로 위임
-- **위임 가능:** 승인 · 중단 · 초대 · 추방 · 방장이양 · 방삭제
-- **방장 전용(위임 불가):** 방 권한모드 변경
-- 대기 중 메시지 취소, 실행 중 턴 인터럽트, presence 표시
-</details>
-
-<details>
-<summary><b>권한 모델 (2-클래스 오버라이드)</b></summary>
-
-- **클래스 1 (잠금):** 타 유저 경로·`~/.claude`·키 경로 차단, `additionalDirectories` 펜스, 권한모드 천장 — 모드 무관 항상 강제
-- **클래스 2 (편의):** 공통 플러그인·MCP·agents — 기본 ON, 유저가 자기 세션서 끄기/개인 것 추가 가능(이름 충돌 시 개인 우선)
-- 모드: 기본(승인) · 편집 자동승인 · 전체 허용 · 플랜, 관리자가 bypass 상한 지정
-</details>
-
-<details>
-<summary><b>code-server 통합</b></summary>
-
-- on-demand spawn + 유휴 reaper(기본 30분) + 로그아웃 시 제거 + 부팅 시 고아 정리
-- 라우팅 `/cs/<uid>/<projectId>/<난수토큰>` — 타인 접근 차단, code-server auth는 프록시에 위임
-- 공용 API 키는 백엔드에만 → 편집기 터미널에서 키 조회 불가
-</details>
-
-<details>
-<summary><b>플러그인 관리</b></summary>
-
-- 공통 티어 = 관리자 전용(마켓플레이스 등록·git/로컬 업로드·필수강제)
-- 개인 티어 = 유저 자유(마켓 추가·설치·공통 클래스2 on/off)
-</details>
+1. **Session = subprocess** — The Agent SDK `query()` spawns a Claude CLI per session. `env.HOME` resolves personal/room settings naturally; common plugins/MCP/agents are injected explicitly.
+2. **Shared room = one long-lived session** — Context continues via resume; a FIFO queue processes members' turns in order; results fan out to everyone over WebSocket.
+3. **Permissions = `canUseTool` bridge** — The callback blocks for the approver's (owner/delegate) web response. Path-escaping tools are always blocked by policy.
+4. **Editor = sibling container** — The app launches code-server over the Docker socket, mounts only your volume subpath + the shared one, and exposes it solely through the in-app proxy (no published port).
 
 ---
 
-## ⚙️ 설정 (.env)
+## 🧩 Features in detail
 
-| 변수 | 설명 | 기본 |
+<details>
+<summary><b>Shared rooms & delegation</b></summary>
+
+- Room = a workspace entity (its own `HOME`/projects), parallel to personal sessions
+- Owner holds approval by default → delegate per right from the member list
+- **Delegable:** approve · interrupt · invite · kick · transfer ownership · delete room
+- **Owner-only (non-delegable):** changing the room's permission mode
+- Cancel queued messages, interrupt a running turn, presence indicators
+</details>
+
+<details>
+<summary><b>Permission model (2-class override)</b></summary>
+
+- **Class 1 (locked):** blocks other users' paths, `~/.claude`, key paths; `additionalDirectories` fence; permission-mode ceiling — always enforced regardless of mode
+- **Class 2 (convenience):** common plugins/MCP/agents — on by default; users can turn them off in their session or add personal ones (personal wins on name clash)
+- Modes: default (approve) · accept-edits · bypass · plan; admin caps the bypass ceiling
+</details>
+
+<details>
+<summary><b>code-server integration</b></summary>
+
+- on-demand spawn + idle reaper (default 30 min) + removal on logout + orphan cleanup on boot
+- routing `/cs/<uid>/<projectId>/<random-token>` — blocks others' access; code-server auth delegated to the proxy
+- the shared API key stays backend-only → editor terminals can't read it
+</details>
+
+<details>
+<summary><b>Plugin management</b></summary>
+
+- Common tier = admin-only (register marketplaces · git/local upload · force-required)
+- Personal tier = user-controlled (add marketplaces · install · toggle common class-2)
+</details>
+
+---
+
+## ⚙️ Configuration (.env)
+
+| Variable | Description | Default |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | 공용 단일 키. 비면 MOCK 모드 | — |
-| `SESSION_SECRET` | 쿠키 서명 시크릿 (**반드시 변경**) | — |
-| `MAX_CONCURRENT_TURNS` | 공용키 전역 동시 턴 캡 + 초과 큐잉 + 429 백오프 | `3` |
-| `BOOTSTRAP_ADMIN_USER` / `_PASSWORD` | 최초 부팅 admin(유저 0명일 때만) | `admin` |
-| `CODE_SERVER_IMAGE` | 편집기 이미지 | `codercom/code-server:latest` |
-| `CODE_SERVER_IDLE_MS` | 유휴 컨테이너 회수 시간 | `1800000` |
+| `ANTHROPIC_API_KEY` | Shared single key. Empty → MOCK mode | — |
+| `SESSION_SECRET` | Cookie signing secret (**must change**) | — |
+| `MAX_CONCURRENT_TURNS` | Global concurrent-turn cap for the shared key + queueing + 429 backoff | `3` |
+| `BOOTSTRAP_ADMIN_USER` / `_PASSWORD` | First-boot admin (only when there are zero users) | `admin` |
+| `CODE_SERVER_IMAGE` | Editor image | `codercom/code-server:latest` |
+| `CODE_SERVER_IDLE_MS` | Idle-container reclaim time | `1800000` |
 
 ---
 
-## 🗂 구조
+## 🗂 Structure
 
 ```
 server/                Fastify · Socket.IO · Agent SDK · SQLite/Drizzle · dockerode
-  src/claude/          세션 매니저 · config 레이어링 · 권한 브리지 · 스로틀
-  src/rooms/           방 매니저(위임) · FIFO 큐
-  src/codeserver/      spawn/reap · /cs 프록시(http+ws)
+  src/claude/          session manager · config layering · permission bridge · throttle
+  src/rooms/           room manager (delegation) · FIFO queue
+  src/codeserver/      spawn/reap · /cs proxy (http+ws)
   src/routes/          sessions · rooms · projects · plugins · admin
 web/                   React · Vite · Tailwind · Radix · zustand
-DESIGN.md              확정 설계 스펙 (19개 결정)
+DESIGN.md              finalized design spec (19 decisions, Korean)
 Dockerfile · docker-compose.yml
 ```
 
 ---
 
-## 🔐 보안 posture
+## 🔐 Security posture
 
-상호 신뢰하는 팀/개인을 전제로 한 **경량 posture**입니다. 앱 로그인 + revocable 세션 쿠키로 접근을 막고, 에이전트 파일 접근은 소프트 펜스, 사람의 편집기 터미널은 컨테이너 하드 격리 + 공용키 미노출로 분리합니다. 도커 소켓 마운트는 앱에 호스트 root급 권한을 주므로, **무신뢰 멀티테넌트 SaaS 용도가 아닙니다.** 인증 어댑터 자리를 남겨 SSO/프록시 헤더로 확장 가능합니다.
-
----
-
-## 🛣 로드맵
-
-- [ ] 유저별 API 키 (키 해석 추상화 뒤에 장착)
-- [ ] SSO / 프록시 헤더 인증 어댑터
-- [ ] Postgres · Redis 승격 (멀티프로세스 스케일)
-- [ ] CRDT 실시간 협업 편집
+A **lightweight posture** that assumes a mutually trusted team/individual. App login + revocable session cookies gate access; agent file access is a soft fence; a human's editor terminal is isolated behind a hard container boundary with the shared key kept out. The Docker socket mount grants the app host-root-level power, so **this is not a zero-trust multi-tenant SaaS.** An auth-adapter seam is left for SSO / proxy-header extension.
 
 ---
 
-## 🤝 기여 · 라이선스
+## 🛣 Roadmap
 
-이슈/PR 환영합니다. 커밋은 기능 단위(`feat`/`fix`/`chore`)로 유지합니다.
-[MIT License](LICENSE).
+- [ ] Per-user API keys (behind the key-resolution abstraction)
+- [ ] SSO / proxy-header auth adapter
+- [ ] Postgres · Redis promotion (multi-process scale)
+- [ ] CRDT real-time collaborative editing
 
-<div align="center"><sub>Built with Claude Code · 설계부터 구현·QA까지 <a href="DESIGN.md">DESIGN.md</a> 참고</sub></div>
+---
+
+## 🤝 Contributing · License
+
+Issues and PRs welcome. Keep commits feature-scoped (`feat`/`fix`/`chore`). [MIT License](LICENSE).
+
+<div align="center"><sub>Built with Claude Code · see <a href="DESIGN.md">DESIGN.md</a> for design → implementation → QA</sub></div>
