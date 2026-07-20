@@ -1,4 +1,5 @@
 import path from 'node:path';
+import http from 'node:http';
 import Docker from 'dockerode';
 import { config } from '../config.js';
 import { newToken } from '../lib/ids.js';
@@ -73,6 +74,7 @@ export async function open(ownerId: string, projectId: string, absProjectPath: s
       },
     });
     await container.start();
+    await waitReady(containerName); // code-server needs a moment to bind :8080
   })();
   await inst.starting;
   return { token, url: routeUrl(ownerId, projectId, token) };
@@ -107,6 +109,20 @@ export async function killForOwner(ownerId: string) {
   for (const inst of [...instances.values()]) {
     if (inst.key.startsWith(ownerId + ':')) await stop(inst).catch(() => {});
   }
+}
+
+
+// poll code-server until it answers on :8080 (avoids iframe 502 race)
+function waitReady(name: string, timeoutMs = 30000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  return new Promise((resolve) => {
+    const tryOnce = () => {
+      const req = http.get({ host: name, port: 8080, path: '/' , timeout: 2000 }, (res) => { res.resume(); resolve(); });
+      req.on('error', () => { if (Date.now() > deadline) resolve(); else setTimeout(tryOnce, 400); });
+      req.on('timeout', () => { req.destroy(); if (Date.now() > deadline) resolve(); else setTimeout(tryOnce, 400); });
+    };
+    tryOnce();
+  });
 }
 
 export function startReaper() {
