@@ -15,7 +15,7 @@ import { projectRoutes } from './routes/projects.js';
 import { pluginRoutes } from './routes/plugins.js';
 import { adminRoutes } from './routes/admin.js';
 import { initRealtime } from './realtime/io.js';
-import { startReaper } from './codeserver/manager.js';
+import { startReaper, cleanupOrphans } from './codeserver/manager.js';
 import { isCsPath, handleHttp, handleUpgrade } from './codeserver/proxy.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -64,6 +64,7 @@ async function main() {
   server.on('upgrade', (req, socket, head) => {
     if (isCsPath(req.url)) handleUpgrade(req, socket, head as Buffer);
   });
+  await cleanupOrphans(); // clear orphans from a previous run
   startReaper();
 
   await app.listen({ port: config.port, host: '0.0.0.0' });

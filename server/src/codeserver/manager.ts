@@ -125,6 +125,16 @@ function waitReady(name: string, timeoutMs = 30000): Promise<void> {
   });
 }
 
+
+// remove leftover code-server containers on boot (registry is in-memory; survivors would never be reaped)
+export async function cleanupOrphans() {
+  if (!dockerAvailable()) return;
+  try {
+    const list = await docker.listContainers({ all: true, filters: { label: ['ccw.codeserver=1'] } });
+    for (const c of list) { try { await docker.getContainer(c.Id).remove({ force: true }); } catch { /* ignore */ } }
+  } catch { /* docker unavailable */ }
+}
+
 export function startReaper() {
   if (!dockerAvailable()) return;
   setInterval(() => {
