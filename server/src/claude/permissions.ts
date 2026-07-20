@@ -1,0 +1,76 @@
+import { newId } from '../lib/ids.js';
+import { fenceViolation, type PermMode } from './config-layering.js';
+
+export type Decision = 'allow' | 'deny' | 'always';
+
+interface Pending {
+  sessionId: string;
+  tool: string;
+  input: any;
+  resolve: (d: Decision) => void;
+}
+const pending = new Map<string, Pending>();
+
+// per chat-session "always allow" memory (tool names)
+const alwaysAllowed = new Map<string, Set<string>>();
+export function getAlwaysAllowed(sessionId: string): Set<string> {
+  let s = alwaysAllowed.get(sessionId);
+  if (!s) { s = new Set(); alwaysAllowed.set(sessionId, s); }
+  return s;
+}
+
+export function pendingForSession(sessionId: string) {
+  return [...pending.entries()]
+    .filter(([, p]) => p.sessionId === sessionId)
+    .map(([requestId, p]) => ({ requestId, tool: p.tool, input: p.input }));
+}
+
+// Called by the realtime layer AFTER it has authorized the responder
+// (room owner / delegated member, or the private-session owner).
+export function respondPermission(requestId: string, decision: Decision): boolean {
+  const p = pending.get(requestId);
+  if (!p) return false;
+  pending.delete(requestId);
+  p.resolve(decision);
+  return true;
+}
+
+const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
+function autoAllows(mode: PermMode, tool: string): boolean {
+  if (mode === 'acceptEdits') return EDIT_TOOLS.has(tool);
+  return false; // default/plan -> prompt; bypass -> SDK never calls canUseTool
+}
+
+export function makeCanUseTool(opts: {
+  sessionId: string;
+  roots: string[];
+  mode: PermMode;
+  emit: (event: string, payload: any) => void;
+  signal: AbortSignal;
+}) {
+  const always = getAlwaysAllowed(opts.sessionId);
+  return async (toolName: string, input: any, ctx: { signal?: AbortSignal }) => {
+    // class-1 fence — always applied, mode-independent
+    const v = fenceViolation(toolName, input, opts.roots);
+    if (v) return { behavior: 'deny', message: v } as const;
+
+    if (always.has(toolName)) return { behavior: 'allow', updatedInput: input } as const;
+    if (autoAllows(opts.mode, toolName)) return { behavior: 'allow', updatedInput: input } as const;
+
+    const requestId = newId();
+    const decision = await new Promise<Decision>((resolve) => {
+      pending.set(requestId, { sessionId: opts.sessionId, tool: toolName, input, resolve });
+      opts.emit('permission:request', { requestId, sessionId: opts.sessionId, tool: toolName, input });
+      const onAbort = () => {
+        if (pending.has(requestId)) { pending.delete(requestId); resolve('deny'); }
+      };
+      opts.signal.addEventListener('abort', onAbort, { once: true });
+      ctx.signal?.addEventListener('abort', onAbort, { once: true });
+    });
+
+    opts.emit('permission:resolved', { requestId, sessionId: opts.sessionId, decision });
+    if (decision === 'deny') return { behavior: 'deny', message: 'Denied.' } as const;
+    if (decision === 'always') always.add(toolName);
+    return { behavior: 'allow', updatedInput: input } as const;
+  };
+}
