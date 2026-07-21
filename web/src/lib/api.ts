@@ -12,6 +12,7 @@ async function j(method: string, p: string, body?: any) {
 export const api = {
   get: (p: string) => j('GET', p),
   post: (p: string, b?: any) => j('POST', p, b),
+  put: (p: string, b?: any) => j('PUT', p, b),
   patch: (p: string, b?: any) => j('PATCH', p, b),
   del: (p: string) => j('DELETE', p),
   upload: async (p: string, form: FormData) => {

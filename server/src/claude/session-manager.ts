@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import { eq } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
-import { config } from '../config.js';
 import { newId } from '../lib/ids.js';
 import { paths, ensure } from '../lib/paths.js';
 import { allowBypass } from '../lib/settings.js';
@@ -10,6 +9,7 @@ import { buildOptions, clampMode, rootsFor, type SessionContext, type PermMode }
 import { makeCanUseTool } from './permissions.js';
 import { resolvePluginPaths } from '../plugins/manager.js';
 import { recordUsage } from '../usage/tracker.js';
+import { resolveClaudeAuth } from '../auth/claude-token.js';
 
 type Emit = (event: string, payload: any) => void;
 
@@ -71,12 +71,14 @@ function saveMessage(row: {
 // enabled-plugin signature so toggling plugins/skills refreshes the list without a stale hit.
 export interface CmdInfo { name: string; description: string; argumentHint: string }
 const cmdCache = new Map<string, CmdInfo[]>();
-export async function probeCommands(chatSessionId: string): Promise<CmdInfo[]> {
-  if (config.mockClaude) return [];
+export async function probeCommands(chatSessionId: string, requesterId?: string | null): Promise<CmdInfo[]> {
   const s = getSession(chatSessionId);
   if (!s) return [];
   const kind: 'user' | 'room' = s.kind === 'room' ? 'room' : 'user';
   const ownerId = kind === 'room' ? s.roomId! : s.ownerId;
+  // Probe with the viewer's token (or the owner's for a private session); no token => nothing to probe.
+  const auth = resolveClaudeAuth(requesterId ?? (kind === 'user' ? ownerId : null));
+  if (auth.source === 'none') return [];
   const plugins = resolvePluginPaths(kind, ownerId);
   const key = `${chatSessionId}|${plugins.join(',')}`;
   const hit = cmdCache.get(key);
@@ -84,6 +86,7 @@ export async function probeCommands(chatSessionId: string): Promise<CmdInfo[]> {
   const ctx: SessionContext = {
     kind, ownerId, cwd: cwdFor(s), model: s.model || 'claude-opus-4-8',
     permissionMode: clampMode((s.permissionMode as PermMode) || 'default', allowBypass()), plugins,
+    authToken: auth.token,
   };
   const abort = new AbortController();
   try {
@@ -118,9 +121,12 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
   const ownerId = kind === 'room' ? s.roomId! : s.ownerId;
   const cwd = cwdFor(s);
   const mode = clampMode((s.permissionMode as PermMode) || 'default', allowBypass());
+  // Each turn runs under its author's token (personal: owner; room: whoever sent this message).
+  const auth = resolveClaudeAuth(p.author.id);
   const ctx: SessionContext = {
     kind, ownerId, cwd, model: s.model || 'claude-opus-4-8',
     permissionMode: mode, plugins: resolvePluginPaths(kind, ownerId),
+    authToken: auth.token,
   };
 
   // persist + broadcast the human message (speaker prefix for multi-party rooms)
@@ -150,7 +156,7 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
   let inTok = 0, outTok = 0, cost = 0;
 
   try {
-    if (config.mockClaude) {
+    if (auth.source === 'none') {
       await runMock({ ctx, prompt: p.text, canUseTool, emit: p.emit, sessionId: s.id, blocks, signal: abort.signal });
       inTok = 12; outTok = 40; cost = 0;
     } else {

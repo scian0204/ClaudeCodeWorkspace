@@ -5,6 +5,7 @@ import { db, schema } from '../db/index.js';
 import { config } from '../config.js';
 import { newId, newToken, colorFor } from '../lib/ids.js';
 import { ensureUserLayout } from '../lib/paths.js';
+import { setUserToken, userTokenMeta } from './claude-token.js';
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -28,7 +29,7 @@ export function verifyPassword(pw: string, stored: string): boolean {
 }
 
 export function createUser(opts: {
-  username: string; password: string; role?: Role; displayName?: string;
+  username: string; password: string; role?: Role; displayName?: string; claudeToken?: string;
 }): AuthUser {
   const id = newId();
   const row = {
@@ -39,6 +40,7 @@ export function createUser(opts: {
   };
   db.insert(schema.users).values(row).run();
   ensureUserLayout(id);
+  if (opts.claudeToken) setUserToken(id, opts.claudeToken); // throws on bad format
   return { id, username: row.username, role: row.role, displayName: row.displayName, avatarColor: row.avatarColor };
 }
 
@@ -50,6 +52,12 @@ export function getUserById(id: string) {
 }
 export function toAuthUser(u: NonNullable<ReturnType<typeof getUserById>>): AuthUser {
   return { id: u.id, username: u.username, role: u.role as Role, displayName: u.displayName, avatarColor: u.avatarColor };
+}
+
+// AuthUser + Claude-token status (for /me and /login so the client can drive the nag popup).
+export function authUserWithToken(u: AuthUser) {
+  const m = userTokenMeta(u.id);
+  return { ...u, hasClaudeToken: m.hasToken, claudeTokenSetAt: m.setAt };
 }
 
 export function login(username: string, password: string): { token: string; user: AuthUser } | null {

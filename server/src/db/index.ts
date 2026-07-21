@@ -75,6 +75,9 @@ export function initDb() {
   try { sqlite.exec("ALTER TABLE wiki_topics ADD COLUMN compile_status TEXT NOT NULL DEFAULT 'idle'"); } catch { /* already present */ }
   try { sqlite.exec("ALTER TABLE wiki_topics ADD COLUMN compiled_at INTEGER"); } catch { /* already present */ }
   try { sqlite.exec("ALTER TABLE wiki_topics ADD COLUMN compile_error TEXT"); } catch { /* already present */ }
+  // per-user Claude token (encrypted at rest)
+  try { sqlite.exec("ALTER TABLE users ADD COLUMN claude_token_enc TEXT"); } catch { /* already present */ }
+  try { sqlite.exec("ALTER TABLE users ADD COLUMN claude_token_set_at INTEGER"); } catch { /* already present */ }
   db = drizzle(sqlite, { schema });
   return db;
 }

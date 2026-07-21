@@ -61,7 +61,7 @@ export async function sessionRoutes(app: FastifyInstance) {
     const s = db.select().from(schema.chatSessions).where(eq(schema.chatSessions.id, id)).get();
     if (!s) return reply.code(404).send({ error: 'not found' });
     if (s.kind === 'private' && s.ownerId !== u.id && u.role !== 'admin') return reply.code(403).send({ error: 'forbidden' });
-    return { commands: await probeCommands(id) };
+    return { commands: await probeCommands(id, u.id) };
   });
 
   app.patch('/api/sessions/:id', async (req, reply) => {

@@ -46,7 +46,7 @@ async function main() {
   await app.register(pluginRoutes);
   await app.register(adminRoutes);
 
-  app.get('/api/health', async () => ({ ok: true, mock: config.mockClaude }));
+  app.get('/api/health', async () => ({ ok: true, mock: config.forceMock }));
 
   // serve built SPA (production); in dev, Vite serves the frontend on :5173
   const webDist = path.resolve(__dirname, '../../web/dist');
@@ -73,7 +73,7 @@ async function main() {
   startReaper();
 
   await app.listen({ port: config.port, host: '0.0.0.0' });
-  console.log(`[ccw] listening on :${config.port}  mock=${config.mockClaude}  data=${config.dataDir}`);
+  console.log(`[ccw] listening on :${config.port}  forceMock=${config.forceMock}  data=${config.dataDir}`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });
