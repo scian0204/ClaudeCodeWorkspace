@@ -4,6 +4,7 @@ import { useStore, type Block, type Msg } from '../lib/store';
 import { api } from '../lib/api';
 import { Avatar, timeAgo } from '../lib/ui';
 import { MembersDialog } from './MembersDialog';
+import { WikiExplorer } from './WikiExplorer';
 
 const MODELS: Record<string, string> = {
   'claude-opus-4-8': 'Opus 4.8', 'claude-sonnet-5': 'Sonnet 5', 'claude-haiku-4-5-20251001': 'Haiku 4.5',
@@ -172,6 +173,7 @@ function WikiBanner() {
   const step = useStore((s) => (topicId ? s.wikiProgress[topicId] : undefined));
   const isAdmin = useStore((s) => s.user?.role === 'admin');
   const [open, setOpen] = useState(false);
+  const [explorer, setExplorer] = useState(false);
   const [files, setFiles] = useState<{ name: string; content: string }[] | null>(null);
   const [source, setSource] = useState<string>('');
   const [sel, setSel] = useState<string | null>(null);
@@ -201,10 +203,12 @@ function WikiBanner() {
         {statusEl}
         {files && <span className="text-txt3">· {source === 'raw' ? `원본 ${files.length}` : `아티클 ${files.length}`}</span>}
         <div className="ml-auto flex items-center gap-2">
+          <button className="text-txt3 hover:text-clay" onClick={() => setExplorer(true)}>📂 파일 탐색기</button>
           {isAdmin && <button className="text-txt3 hover:text-clay disabled:opacity-40" disabled={status === 'compiling'} onClick={recompile}>↻ 재컴파일</button>}
           <span className="cursor-pointer text-txt3" onClick={() => setOpen(!open)}>{open ? '▲' : '▼'}</span>
         </div>
       </div>
+      {explorer && <WikiExplorer topicId={topicId} onClose={() => setExplorer(false)} />}
       {status === 'compiling' && (
         <div className="px-5 pb-2 text-clay flex items-center gap-2">
           <span className="tdot" /><span className="tdot" /><span className="tdot" />
