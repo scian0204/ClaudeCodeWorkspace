@@ -8,9 +8,13 @@ import { paths, ensure } from '../lib/paths.js';
 import { newId } from '../lib/ids.js';
 import { compileTopic } from '../wiki/compile.js';
 
-function safeFile(n: string) {
-  const b = path.basename(String(n)).replace(/[^a-zA-Z0-9._ \-()가-힣]/g, '').trim();
-  return /^claude\.md$/i.test(b) ? b.replace(/\.md$/i, '_.md') : b; // CLAUDE.md is reserved (grounding)
+// Sanitize ONE path segment. Keep unicode filenames (Korean, Japanese, etc.); only strip path
+// separators + control chars and normalize NFD->NFC. macOS sends decomposed Hangul (U+1100 jamo),
+// which the old [가-힣]=U+AC00–D7A3 whitelist stripped entirely — collapsing Korean folder names
+// to '' (files fell to the parent) or dropping the Korean part of mixed names.
+function safeSeg(n: string): string {
+  const s = String(n).normalize('NFC').replace(/[\x00-\x1f/\\]/g, '').trim();
+  return /^\.+$/.test(s) ? '' : s;
 }
 function isText(n: string) { return /\.(md|markdown|txt|json|ya?ml|csv|tsv)$/i.test(n); }
 function validSid(sid: string) { return /^[A-Za-z0-9_-]{8,64}$/.test(String(sid)); }
@@ -18,7 +22,7 @@ function validSid(sid: string) { return /^[A-Za-z0-9_-]{8,64}$/.test(String(sid)
 // sanitize a client-supplied relative path (folder drops) segment-by-segment — blocks
 // traversal (.., absolute, drive) and keeps the nested structure under the staging/topic root.
 function safeRelPath(rel: string): string {
-  return String(rel).split(/[\/\\]/).map((s) => safeFile(s)).filter((s) => s && s !== '.' && s !== '..').join('/');
+  return String(rel).split(/[/\\]/).map(safeSeg).filter((s) => s && s !== '.' && s !== '..').join('/');
 }
 
 // recursively list every file under dir (all depths), returning root-relative paths + sizes
