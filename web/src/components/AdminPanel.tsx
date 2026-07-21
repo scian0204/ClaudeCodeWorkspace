@@ -8,7 +8,8 @@ export function AdminPanel() {
   const [usage, setUsage] = useState<any>(null);
   const [settings, setSettings] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
-  const [nu, setNu] = useState({ username: '', password: '', role: 'member', displayName: '' });
+  const [nu, setNu] = useState({ username: '', password: '', role: 'member', displayName: '', claudeToken: '' });
+  const [commonTok, setCommonTok] = useState('');
 
   const load = async () => {
     const [o, u, s, us] = await Promise.all([
@@ -20,12 +21,22 @@ export function AdminPanel() {
 
   const createUser = async () => {
     if (!nu.username || !nu.password) return;
-    try { await api.post('/api/users', nu); setNu({ username: '', password: '', role: 'member', displayName: '' }); await load(); }
+    try { await api.post('/api/users', nu); setNu({ username: '', password: '', role: 'member', displayName: '', claudeToken: '' }); await load(); }
     catch (e: any) { useStore.getState().setError(e.message); }
   };
   const delUser = async (id: string) => { if (!confirm('사용자를 삭제할까요?')) return; await api.del(`/api/users/${id}`); await load(); };
   const resetPw = async (id: string) => { const p = prompt('새 비밀번호'); if (!p) return; await api.post(`/api/users/${id}/password`, { password: p }); alert('변경됨'); };
   const toggleBypass = async () => { await api.post('/api/admin/settings', { allowBypass: !settings.allowBypass }); await load(); };
+  const saveCommon = async () => {
+    if (!commonTok.trim()) return;
+    try { await api.put('/api/admin/claude-token', { token: commonTok.trim() }); setCommonTok(''); await load(); }
+    catch (e: any) { useStore.getState().setError(e.message); }
+  };
+  const clearCommon = async () => {
+    if (!confirm('공용 토큰을 삭제할까요? 개인 토큰 없는 유저는 이후 MOCK(에코)으로 동작합니다.')) return;
+    try { await api.del('/api/admin/claude-token'); await load(); }
+    catch (e: any) { useStore.getState().setError(e.message); }
+  };
 
   return (
     <div className="h-full overflow-y-auto scrolly">
@@ -40,7 +51,23 @@ export function AdminPanel() {
             <Stat label="세션" v={ov.sessions} /><Stat label="동시 턴" v={`${ov.throttle.inUse}/${ov.throttle.max}${ov.throttle.waiting ? ` (+${ov.throttle.waiting})` : ''}`} />
           </div>
         )}
-        {ov?.mockClaude && <div className="text-xs text-warn bg-warnsoft border border-warn rounded-lg px-3 py-2">MOCK 모드 — ANTHROPIC_API_KEY 미설정. 실제 Claude 미동작(에코 응답).</div>}
+        {ov?.forceMock && <div className="text-xs text-warn bg-warnsoft border border-warn rounded-lg px-3 py-2">MOCK 강제 모드 (MOCK_CLAUDE=1) — 모든 턴이 에코 응답. 해제하려면 env에서 끄세요.</div>}
+        {!ov?.forceMock && ov?.commonToken && !ov.commonToken.hasToken && <div className="text-xs text-warn bg-warnsoft border border-warn rounded-lg px-3 py-2">공용 토큰 미설정 — 개인 토큰이 없는 유저는 MOCK(에코)으로 동작합니다. 아래 "공용 Claude 토큰"에서 등록하세요.</div>}
+
+        <Section title="공용 Claude 토큰 (개인 토큰 없는 유저의 폴백)">
+          <div className="text-sm mb-2 flex items-center gap-2">
+            {ov?.commonToken?.hasToken
+              ? <><span className="text-ok">●</span><span>등록됨{ov.commonToken.setAt ? ` · ${new Date(ov.commonToken.setAt).toLocaleDateString()}` : ' (env)'}</span>
+                  <button className="ml-auto text-xs text-txt3 hover:text-danger" onClick={clearCommon}>삭제</button></>
+              : <><span className="text-warn">●</span><span className="text-txt2">미설정</span></>}
+          </div>
+          <div className="flex gap-2">
+            <input className="input flex-1" type="password" placeholder="sk-ant-oat-… 또는 sk-ant-api-…" value={commonTok}
+              onChange={(e) => setCommonTok(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && saveCommon()} />
+            <button className="btn-primary" onClick={saveCommon}>저장</button>
+          </div>
+          <div className="text-[11px] text-txt3 mt-1.5">env <code className="bg-line px-1 rounded">ANTHROPIC_API_KEY</code>보다 이 값이 우선합니다. 개인 토큰이 있는 유저는 항상 본인 토큰을 사용합니다.</div>
+        </Section>
 
         <Section title="사용량 (가시성 · 과금 아님)">
           {usage && (
@@ -93,6 +120,8 @@ export function AdminPanel() {
             <select className="input" value={nu.role} onChange={(e) => setNu({ ...nu, role: e.target.value })}>
               <option value="member">member</option><option value="admin">admin</option>
             </select>
+            <input className="input col-span-2" type="password" placeholder="Claude 토큰 (선택 · sk-ant-oat…/api…)"
+              value={nu.claudeToken} onChange={(e) => setNu({ ...nu, claudeToken: e.target.value })} />
           </div>
           <button className="btn-primary mt-2" onClick={createUser}>사용자 발급</button>
         </Section>
