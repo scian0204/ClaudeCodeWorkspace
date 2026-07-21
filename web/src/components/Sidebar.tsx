@@ -3,12 +3,14 @@ import { useStore } from '../lib/store';
 import { api } from '../lib/api';
 import { Avatar, timeAgo } from '../lib/ui';
 import { Modal } from './Modal';
+import { MyTokenModal } from './TokenSettings';
 
 export function Sidebar() {
   const { user, sessions, rooms, wikiTopics, current, openPrivate, openRoom, openWiki, newSession, newRoom, logout, setPanel, panel, deleteSession, deleteRoom, deleteWikiTopic } = useStore();
   const [showRoom, setShowRoom] = useState(false);
   const [roomName, setRoomName] = useState('');
   const [showWiki, setShowWiki] = useState(false);
+  const [showToken, setShowToken] = useState(false);
   const isAdmin = user?.role === 'admin';
 
   const create = async () => { if (!roomName.trim()) return; await newRoom(roomName.trim()); setRoomName(''); setShowRoom(false); };
@@ -77,6 +79,10 @@ export function Sidebar() {
           <div className="flex-1 text-[13px]">{user?.displayName}</div>
           <span className="text-[10px] bg-claysoft text-clay px-1.5 py-0.5 rounded-full font-semibold">{user?.role}</span>
         </div>
+        <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full hover:bg-line text-left text-[13px] text-txt2" onClick={() => setShowToken(true)}>
+          <span className="w-7 text-center">🔑</span> 내 토큰
+          {!user?.hasClaudeToken && <span className="ml-auto text-[10px] bg-warnsoft text-warn px-1.5 py-0.5 rounded-full">미등록</span>}
+        </button>
         <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full hover:bg-line text-left text-[13px] text-txt2" onClick={() => setPanel('plugins')}>
           <span className="w-7 text-center">🧩</span> 플러그인
         </button>
@@ -100,6 +106,7 @@ export function Sidebar() {
       </Modal>
 
       {showWiki && <WikiCreateModal onClose={() => setShowWiki(false)} />}
+      <MyTokenModal open={showToken} onClose={() => setShowToken(false)} />
     </aside>
   );
 }
