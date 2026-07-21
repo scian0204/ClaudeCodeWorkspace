@@ -42,6 +42,39 @@ function getProject(id: string) {
   return db.select().from(schema.projects).where(eq(schema.projects.id, id)).get();
 }
 
+type FileItem = { name: string; size: number };
+
+// dirs never worth showing in the explorer (bloat / vcs / build output)
+const SKIP_DIRS = new Set(['.git', 'node_modules', '.next', 'dist', 'build', 'out', '.venv', 'venv',
+  '__pycache__', '.cache', 'vendor', 'target', '.idea', '.gradle', '.turbo', 'coverage']);
+const MAX_FILES = 5000; // cap tree size so huge repos don't hang the client
+
+// recursively list files (root-relative paths + sizes), skipping bloat dirs, depth+count capped
+function walkProject(dir: string, base = '', out: FileItem[] = [], depth = 0): FileItem[] {
+  if (depth > 14 || out.length >= MAX_FILES || !fs.existsSync(dir)) return out;
+  let entries: fs.Dirent[];
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return out; }
+  for (const e of entries) {
+    if (out.length >= MAX_FILES) break;
+    if (e.isDirectory()) { if (!SKIP_DIRS.has(e.name)) walkProject(path.join(dir, e.name), base ? `${base}/${e.name}` : e.name, out, depth + 1); }
+    else if (e.isFile()) { let size = 0; try { size = fs.statSync(path.join(dir, e.name)).size; } catch { /* noop */ } out.push({ name: base ? `${base}/${e.name}` : e.name, size }); }
+  }
+  return out;
+}
+
+// sanitize a client relative path and resolve it under root — blocks traversal (returns null)
+function resolveInProject(root: string, rel: string): string | null {
+  const clean = String(rel).split(/[/\\]/).map((s) => s.trim()).filter((s) => s && s !== '.' && s !== '..').join('/');
+  if (!clean) return null;
+  const full = path.resolve(root, clean);
+  return full === root || full.startsWith(root + path.sep) ? full : null;
+}
+
+const IMG_CT: Record<string, string> = {
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
+  webp: 'image/webp', bmp: 'image/bmp', svg: 'image/svg+xml',
+};
+
 export async function projectRoutes(app: FastifyInstance) {
   app.get('/api/projects', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
@@ -106,6 +139,44 @@ export async function projectRoutes(app: FastifyInstance) {
     } catch (e: any) {
       return reply.code(500).send({ error: String(e?.message || e) });
     }
+  });
+
+  // file tree of a project (paths + sizes only) — for the chat file explorer
+  app.get('/api/projects/:id/tree', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    const p = getProject((req.params as any).id);
+    if (!p) return reply.code(404).send({ error: 'not found' });
+    if (!canAccess(u, p)) return reply.code(403).send({ error: 'forbidden' });
+    return { files: walkProject(path.resolve(p.path)) };
+  });
+
+  // one file's text content — ?path=<relative>
+  app.get('/api/projects/:id/file', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    const p = getProject((req.params as any).id);
+    if (!p) return reply.code(404).send({ error: 'not found' });
+    if (!canAccess(u, p)) return reply.code(403).send({ error: 'forbidden' });
+    const full = resolveInProject(path.resolve(p.path), String((req.query as any).path || ''));
+    if (!full || !fs.existsSync(full) || !fs.statSync(full).isFile()) return reply.code(404).send({ error: 'not found' });
+    const st = fs.statSync(full);
+    if (st.size > 500_000) return { name: full, size: st.size, content: `(파일이 큽니다: ${st.size} bytes — 생략)` };
+    const buf = fs.readFileSync(full);
+    const content = buf.includes(0) ? '(바이너리 파일 — 미리보기 없음)' : buf.toString('utf8');
+    return { name: full, size: st.size, content };
+  });
+
+  // raw file bytes — for <img> preview; ?path=<relative>
+  app.get('/api/projects/:id/blob', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    const p = getProject((req.params as any).id);
+    if (!p) return reply.code(404).send({ error: 'not found' });
+    if (!canAccess(u, p)) return reply.code(403).send({ error: 'forbidden' });
+    const full = resolveInProject(path.resolve(p.path), String((req.query as any).path || ''));
+    if (!full || !fs.existsSync(full) || !fs.statSync(full).isFile()) return reply.code(404).send({ error: 'not found' });
+    const ext = (full.split('.').pop() || '').toLowerCase();
+    reply.header('Content-Type', IMG_CT[ext] || 'application/octet-stream');
+    reply.header('Cache-Control', 'private, max-age=60');
+    return reply.send(fs.createReadStream(full));
   });
 
   app.delete('/api/projects/:id', async (req, reply) => {

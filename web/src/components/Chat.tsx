@@ -5,6 +5,7 @@ import { api } from '../lib/api';
 import { Avatar, timeAgo } from '../lib/ui';
 import { MembersDialog } from './MembersDialog';
 import { WikiExplorer } from './WikiExplorer';
+import { FileExplorer } from './FileExplorer';
 import { md } from '../lib/md';
 
 const MODELS: Record<string, string> = {
@@ -31,6 +32,7 @@ export function Chat() {
 function Header() {
   const { current: c, presence, control, toggleTheme, setViewMode, viewMode, setModel, setMode } = useStore();
   const [showMembers, setShowMembers] = useState(false);
+  const [explorer, setExplorer] = useState(false);
   if (!c) return null;
   const isRoom = c.kind === 'room';
   const owner = c.room?.members.find((m) => m.isOwner);
@@ -59,6 +61,7 @@ function Header() {
       )}
 
       {!c.wikiTopicId && <ProjectMenu />}
+      {!c.wikiTopicId && c.projectId && <button className="pill" title="프로젝트 파일 탐색기" onClick={() => setExplorer(true)}>📂 파일</button>}
 
       <DM.Root>
         <DM.Trigger asChild><button className="pill">{MODELS[c.model] || c.model} ▾</button></DM.Trigger>
@@ -91,6 +94,16 @@ function Header() {
       <button className="toolbtn" title="테마 전환" onClick={toggleTheme}>◐</button>
 
       {showMembers && c.room && <MembersDialog open={showMembers} onClose={() => setShowMembers(false)} />}
+      {explorer && c.projectId && (
+        <FileExplorer
+          title={`${c.title} 파일 탐색기`}
+          sources={[{ key: 'files', label: '파일' }]}
+          loadTree={() => api.get(`/api/projects/${c.projectId}/tree`).then((r) => ({ files: r.files }))}
+          fileUrl={(_dir, p) => `/api/projects/${c.projectId}/file?path=${encodeURIComponent(p)}`}
+          blobUrl={(_dir, p) => `/api/projects/${c.projectId}/blob?path=${encodeURIComponent(p)}`}
+          onClose={() => setExplorer(false)}
+        />
+      )}
     </header>
   );
 }
