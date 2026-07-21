@@ -1,4 +1,7 @@
 import path from 'node:path';
+import fs from 'node:fs';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import type { FastifyInstance } from 'fastify';
 import { and, eq } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
@@ -8,7 +11,25 @@ import { newId } from '../lib/ids.js';
 import * as rooms from '../rooms/manager.js';
 import * as cs from '../codeserver/manager.js';
 
+const execFileP = promisify(execFile);
+
 function safeName(n: string) { return String(n).replace(/[^a-zA-Z0-9._ -]/g, '').trim() || 'project'; }
+
+// only http(s)/git/ssh remotes — no file:// (local-fs exfil) or other schemes
+function validGitUrl(url: string) {
+  return /^https?:\/\/\S+$/.test(url) || /^git:\/\/\S+$/.test(url) || /^ssh:\/\/\S+$/.test(url) || /^git@[^\s:]+:.+$/.test(url);
+}
+function repoNameFromUrl(url: string) {
+  const last = url.replace(/\.git$/, '').replace(/[\/]+$/, '').split(/[\/:]/).pop() || 'repo';
+  return safeName(last);
+}
+async function cloneRepo(url: string, dir: string) {
+  // shallow, no credential prompt (private repos fail fast instead of hanging)
+  await execFileP('git', ['clone', '--depth', '1', url, dir], {
+    timeout: 180_000,
+    env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '/bin/echo' },
+  });
+}
 
 function canAccess(u: AuthUser, p: NonNullable<ReturnType<typeof getProject>>): boolean {
   if (u.role === 'admin') return true;
@@ -41,8 +62,10 @@ export async function projectRoutes(app: FastifyInstance) {
 
   app.post('/api/projects', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
-    const { scope, name, roomId } = (req.body || {}) as any;
-    const nm = safeName(name);
+    const { scope, name, roomId, gitUrl } = (req.body || {}) as any;
+    const git = gitUrl ? String(gitUrl).trim() : '';
+    if (git && !validGitUrl(git)) return reply.code(400).send({ error: '지원하지 않는 저장소 URL (http/https/git/ssh만 가능)' });
+    const nm = safeName(name || (git ? repoNameFromUrl(git) : ''));
     let dir: string, ownerId: string | null;
     if (scope === 'common') {
       if (!requireAdmin(req, reply)) return;
@@ -53,7 +76,18 @@ export async function projectRoutes(app: FastifyInstance) {
     } else {
       dir = path.join(paths.userProjects(u.id), nm); ownerId = u.id;
     }
-    ensure(dir);
+    if (git) {
+      if (fs.existsSync(dir) && fs.readdirSync(dir).length) return reply.code(409).send({ error: `이미 존재하는 이름: ${nm}` });
+      ensure(path.dirname(dir));
+      try {
+        await cloneRepo(git, dir);
+      } catch (e: any) {
+        try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* noop */ }
+        return reply.code(500).send({ error: `git clone 실패: ${String(e?.stderr || e?.message || e).slice(0, 300)}` });
+      }
+    } else {
+      ensure(dir);
+    }
     const row = { id: newId(), scope: scope || 'user', ownerId, name: nm, path: dir, createdAt: Date.now() };
     db.insert(schema.projects).values(row).run();
     return { project: row };
