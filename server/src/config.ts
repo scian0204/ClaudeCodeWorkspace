@@ -6,9 +6,15 @@ export const config = {
   port: Number(env.PORT || 3000),
   dataDir: path.resolve(env.DATA_DIR || './data'),
   sessionSecret: env.SESSION_SECRET || 'change-me-please',
+  // Legacy/bootstrap shared credential. Per-user tokens (DB) take precedence; the
+  // admin-managed common token (DB) is the primary shared fallback — this env is only
+  // used before an admin sets one. Empty is fine.
   anthropicApiKey: env.ANTHROPIC_API_KEY || '',
-  // mock when no key OR explicitly forced — keeps the app fully runnable w/o a key
-  mockClaude: env.MOCK_CLAUDE === '1' || !env.ANTHROPIC_API_KEY,
+  // Force mock for every turn regardless of any token (dev). Otherwise mock is decided
+  // per-turn: a turn with no resolvable token (user/common/env) runs the echo agent.
+  forceMock: env.MOCK_CLAUDE === '1',
+  // Symmetric key material for encrypting stored tokens at rest (falls back to sessionSecret).
+  tokenEncSecret: env.TOKEN_ENC_SECRET || '',
   claudeCodePath: env.CLAUDE_CODE_PATH || '',
   maxConcurrentTurns: Number(env.MAX_CONCURRENT_TURNS || 3),
   bootstrapAdminUser: env.BOOTSTRAP_ADMIN_USER || 'admin',
