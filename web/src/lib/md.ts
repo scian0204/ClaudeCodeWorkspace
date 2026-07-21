@@ -1,5 +1,21 @@
 const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
+// One delegated listener for every rendered code-block copy button (content is injected via
+// dangerouslySetInnerHTML, so React can't bind onClick). textContent decodes the escaped code back.
+if (typeof document !== 'undefined' && !(window as any).__mdCopyBound) {
+  (window as any).__mdCopyBound = true;
+  document.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest('[data-copy]') as HTMLElement | null;
+    if (!btn) return;
+    const code = btn.parentElement?.querySelector('pre code')?.textContent ?? '';
+    navigator.clipboard.writeText(code).then(() => {
+      const prev = btn.textContent;
+      btn.textContent = '✓ 복사됨';
+      setTimeout(() => { btn.textContent = prev; }, 1500);
+    });
+  });
+}
+
 // NUL-delimited placeholders — a control char that never occurs in (escaped) user text, so
 // restoring them can't accidentally match real digits/spaces in the content.
 const fenceTok = (i: number) => `\x00f${i}\x00`;
@@ -30,7 +46,7 @@ export function md(src: string): string {
   // 1) pull fenced code blocks out first (before escaping/splitting)
   const cb: string[] = [];
   let s = src.replace(/```(\w*)\n?([\s\S]*?)```/g, (_m, _lang, code) => {
-    cb.push(`<pre class="bg-bg border border-line rounded-lg p-3 my-2 overflow-x-auto scrolly"><code class="font-mono text-[13px]">${esc(code.replace(/\n$/, ''))}</code></pre>`);
+    cb.push(`<div class="relative group/code"><button type="button" data-copy class="absolute top-1.5 right-1.5 z-10 text-[11px] px-1.5 py-0.5 rounded border border-line bg-card text-txt3 opacity-70 hover:opacity-100 hover:text-clay transition" title="복사">복사</button><pre class="bg-bg border border-line rounded-lg p-3 my-2 overflow-x-auto scrolly"><code class="font-mono text-[13px]">${esc(code.replace(/\n$/, ''))}</code></pre></div>`);
     return fenceTok(cb.length - 1);
   });
   s = esc(s);

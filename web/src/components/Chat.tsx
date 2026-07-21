@@ -262,7 +262,18 @@ function MessageView({ m }: { m: Msg }) {
   const { deleteMessage, editMessage } = useStore();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(m.content.text || '');
+  const [copied, setCopied] = useState(false);
   const canEdit = !isClaude; // user messages can be edited → regenerate from that point
+
+  const copyText = isClaude
+    ? blocks.filter((b): b is Extract<Block, { type: 'text' }> => b.type === 'text').map((b) => b.text).join('\n\n')
+    : (m.content.text || '');
+  const copy = () => {
+    navigator.clipboard.writeText(copyText).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
 
   const saveEdit = () => {
     const t = draft.trim();
@@ -277,6 +288,7 @@ function MessageView({ m }: { m: Msg }) {
         <div className="text-xs text-txt2 font-semibold mb-1 flex items-center gap-2">
           {isClaude ? 'Claude' : m.authorName}
           <span className="hidden group-hover:flex items-center gap-1.5 text-txt3">
+            {copyText && <button className={copied ? 'text-ok' : 'hover:text-clay'} title="복사" onClick={copy}>{copied ? '✓ 복사됨' : '📋'}</button>}
             {canEdit && <button className="hover:text-clay" title="수정" onClick={() => { setDraft(m.content.text || ''); setEditing(true); }}>✎</button>}
             <button className="hover:text-danger" title="삭제" onClick={() => { if (confirm('이 메시지를 삭제할까요?')) deleteMessage(m.id); }}>🗑</button>
           </span>
