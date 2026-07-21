@@ -77,6 +77,11 @@ export function initRealtime(httpServer: HttpServer) {
       const a = access(user, p.sessionId);
       if (!a) { ack?.({ error: 'no access' }); return; }
       if (!p.text?.trim()) { ack?.({ error: 'empty' }); return; }
+      // wiki thread: block queries while the topic's knowledge base is (re)compiling
+      if (a.s.wikiTopicId) {
+        const topic = db.select().from(schema.wikiTopics).where(eq(schema.wikiTopics.id, a.s.wikiTopicId)).get();
+        if (topic?.compileStatus === 'compiling') { ack?.({ error: '주제 컴파일 중입니다. 완료 후 질의하세요.' }); return; }
+      }
       const itemId = enqueueTurn(p.sessionId, { id: user.id, name: user.displayName }, p.text.trim());
       ack?.({ itemId });
     });
@@ -100,13 +105,13 @@ export function initRealtime(httpServer: HttpServer) {
       ack?.({ ok: interruptTurn(p.sessionId) });
     });
 
-    socket.on('permission:respond', (p: { sessionId: string; requestId: string; decision: Decision }, ack?: Function) => {
+    socket.on('permission:respond', (p: { sessionId: string; requestId: string; decision: Decision; answer?: string }, ack?: Function) => {
       const a = access(user, p.sessionId);
       if (!a) { ack?.({ error: 'no access' }); return; }
       const allowed = a.kind === 'room' ? rooms.can(a.roomId!, user, 'approve')
         : (a.s.ownerId === user.id || user.role === 'admin');
       if (!allowed) { ack?.({ error: 'forbidden' }); return; }
-      const ok = respondPermission(p.requestId, p.decision);
+      const ok = respondPermission(p.requestId, p.decision, p.answer);
       io.to(sessionRoom(p.sessionId)).emit('permission:answered', {
         sessionId: p.sessionId, requestId: p.requestId, decision: p.decision, by: user.displayName,
       });

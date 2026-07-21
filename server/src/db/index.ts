@@ -14,9 +14,14 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
 );
 CREATE TABLE IF NOT EXISTS chat_sessions (
   id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, kind TEXT NOT NULL, room_id TEXT,
-  title TEXT NOT NULL, project_id TEXT, claude_session_id TEXT,
+  title TEXT NOT NULL, project_id TEXT, wiki_topic_id TEXT, claude_session_id TEXT,
   model TEXT NOT NULL DEFAULT 'claude-opus-4-8', permission_mode TEXT NOT NULL DEFAULT 'default',
   created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS wiki_topics (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
+  path TEXT NOT NULL, created_by TEXT NOT NULL, created_at INTEGER NOT NULL,
+  compile_status TEXT NOT NULL DEFAULT 'idle', compiled_at INTEGER, compile_error TEXT
 );
 CREATE TABLE IF NOT EXISTS messages (
   id TEXT PRIMARY KEY, session_id TEXT NOT NULL, role TEXT NOT NULL, author_id TEXT,
@@ -65,6 +70,11 @@ export function initDb() {
   sqlite = new Database(paths.db);
   sqlite.pragma('journal_mode = WAL');
   sqlite.exec(DDL);
+  // migrate pre-wiki DBs: add the column DDL can't retrofit onto an existing table
+  try { sqlite.exec("ALTER TABLE chat_sessions ADD COLUMN wiki_topic_id TEXT"); } catch { /* already present */ }
+  try { sqlite.exec("ALTER TABLE wiki_topics ADD COLUMN compile_status TEXT NOT NULL DEFAULT 'idle'"); } catch { /* already present */ }
+  try { sqlite.exec("ALTER TABLE wiki_topics ADD COLUMN compiled_at INTEGER"); } catch { /* already present */ }
+  try { sqlite.exec("ALTER TABLE wiki_topics ADD COLUMN compile_error TEXT"); } catch { /* already present */ }
   db = drizzle(sqlite, { schema });
   return db;
 }

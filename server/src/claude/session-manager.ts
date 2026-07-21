@@ -34,8 +34,16 @@ function getSession(id: string) {
 function getProject(id: string) {
   return db.select().from(schema.projects).where(eq(schema.projects.id, id)).get();
 }
+function getWikiTopic(id: string) {
+  return db.select().from(schema.wikiTopics).where(eq(schema.wikiTopics.id, id)).get();
+}
 
 function cwdFor(s: NonNullable<ReturnType<typeof getSession>>): string {
+  // wiki thread runs inside its topic's knowledge dir so Claude reads the .md base + CLAUDE.md
+  if (s.wikiTopicId) {
+    const t = getWikiTopic(s.wikiTopicId);
+    if (t) { ensure(t.path); return t.path; }
+  }
   if (s.projectId) {
     const p = getProject(s.projectId);
     if (p) { ensure(p.path); return p.path; }
@@ -55,6 +63,44 @@ function saveMessage(row: {
   };
   db.insert(schema.messages).values(m).run();
   return { ...m, content: row.content };
+}
+
+// Probe the real slash commands (built-in + plugin + skill) the CLI exposes for this session,
+// with their descriptions and argument hints. `query.supportedCommands()` resolves right after
+// the CLI initializes; we then abort so no model tokens are spent. Cached by session +
+// enabled-plugin signature so toggling plugins/skills refreshes the list without a stale hit.
+export interface CmdInfo { name: string; description: string; argumentHint: string }
+const cmdCache = new Map<string, CmdInfo[]>();
+export async function probeCommands(chatSessionId: string): Promise<CmdInfo[]> {
+  if (config.mockClaude) return [];
+  const s = getSession(chatSessionId);
+  if (!s) return [];
+  const kind: 'user' | 'room' = s.kind === 'room' ? 'room' : 'user';
+  const ownerId = kind === 'room' ? s.roomId! : s.ownerId;
+  const plugins = resolvePluginPaths(kind, ownerId);
+  const key = `${chatSessionId}|${plugins.join(',')}`;
+  const hit = cmdCache.get(key);
+  if (hit) return hit;
+  const ctx: SessionContext = {
+    kind, ownerId, cwd: cwdFor(s), model: s.model || 'claude-opus-4-8',
+    permissionMode: clampMode((s.permissionMode as PermMode) || 'default', allowBypass()), plugins,
+  };
+  const abort = new AbortController();
+  try {
+    const { query } = await import('@anthropic-ai/claude-agent-sdk');
+    const options = buildOptions(ctx, { canUseTool: async () => ({ behavior: 'deny', message: 'probe' }), abortController: abort });
+    const q = query({ prompt: 'ping', options });
+    const cmds = await (q as any).supportedCommands();
+    const res: CmdInfo[] = (cmds || []).map((c: any) => ({
+      name: String(c.name || '').replace(/^\//, ''),
+      description: String(c.description || ''),
+      argumentHint: String(c.argumentHint || ''),
+    })).filter((c: CmdInfo) => c.name);
+    cmdCache.set(key, res);
+    return res;
+  } catch { /* probe failed — return empty, don't cache */ }
+  finally { try { abort.abort(); } catch { /* noop */ } }
+  return [];
 }
 
 export interface RunTurnParams {
@@ -108,10 +154,21 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
       await runMock({ ctx, prompt: p.text, canUseTool, emit: p.emit, sessionId: s.id, blocks, signal: abort.signal });
       inTok = 12; outTok = 40; cost = 0;
     } else {
-      const res = await withRateLimitRetry(
-        () => runReal({ ctx, prompt, canUseTool, emit: p.emit, sessionId: s.id, blocks, resume: s.claudeSessionId, abort }),
+      const runOnce = (resume: string | null) => withRateLimitRetry(
+        () => runReal({ ctx, prompt, canUseTool, emit: p.emit, sessionId: s.id, blocks, resume, abort }),
         (ms) => p.emit('turn:congested', { sessionId: s.id, backoffMs: ms }),
       );
+      let res;
+      try {
+        res = await runOnce(s.claudeSessionId);
+      } catch (e: any) {
+        // Stale resume id (transcript missing for this cwd, e.g. after a project switch)
+        // → drop the resume and start a fresh conversation once instead of failing the turn.
+        if (s.claudeSessionId && !abort.signal.aborted && /No conversation found/i.test(String(e?.message || e))) {
+          blocks.length = 0;
+          res = await runOnce(null);
+        } else throw e;
+      }
       newClaudeSessionId = res.claudeSessionId ?? newClaudeSessionId;
       inTok = res.inputTokens; outTok = res.outputTokens; cost = res.costUsd;
     }

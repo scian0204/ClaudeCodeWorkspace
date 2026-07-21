@@ -24,6 +24,7 @@ export const chatSessions = sqliteTable('chat_sessions', {
   roomId: text('room_id'),
   title: text('title').notNull(),
   projectId: text('project_id'),
+  wikiTopicId: text('wiki_topic_id'), // set => this is a user's private thread under a wiki topic
   claudeSessionId: text('claude_session_id'), // SDK resume id
   model: text('model').notNull().default('claude-opus-4-8'),
   permissionMode: text('permission_mode').notNull().default('default'),
@@ -64,6 +65,20 @@ export const projects = sqliteTable('projects', {
   name: text('name').notNull(),
   path: text('path').notNull(),
   createdAt: integer('created_at').notNull(),
+});
+
+// LLM Wiki: admin-curated knowledge topics. Each topic is a dir of foundational .md files
+// (the knowledge base). Users query it in their own private thread (chat_sessions.wikiTopicId).
+export const wikiTopics = sqliteTable('wiki_topics', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  description: text('description').notNull().default(''),
+  path: text('path').notNull(),
+  createdBy: text('created_by').notNull(),
+  createdAt: integer('created_at').notNull(),
+  compileStatus: text('compile_status').notNull().default('idle'), // idle|compiling|done|error
+  compiledAt: integer('compiled_at'),
+  compileError: text('compile_error'),
 });
 
 export const marketplaces = sqliteTable('marketplaces', {

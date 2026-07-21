@@ -20,4 +20,18 @@ export const api = {
     if (!r.ok) throw new Error((d as any).error || r.statusText);
     return d;
   },
+  // like upload() but reports upload progress (fetch can't) — used for bulk file uploads
+  uploadProgress: (p: string, form: FormData, onProgress: (pct: number) => void) => new Promise<any>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', p);
+    xhr.withCredentials = true;
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100)); };
+    xhr.onload = () => {
+      let d: any = {}; try { d = JSON.parse(xhr.responseText); } catch { /* noop */ }
+      if (xhr.status >= 200 && xhr.status < 300) resolve(d);
+      else reject(new Error(d.error || xhr.statusText));
+    };
+    xhr.onerror = () => reject(new Error('network error'));
+    xhr.send(form);
+  }),
 };

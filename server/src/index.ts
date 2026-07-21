@@ -12,6 +12,7 @@ import { authRoutes } from './auth/routes.js';
 import { sessionRoutes } from './routes/sessions.js';
 import { roomRoutes } from './routes/rooms.js';
 import { projectRoutes } from './routes/projects.js';
+import { wikiRoutes, reapWikiStaging } from './routes/wiki.js';
 import { pluginRoutes } from './routes/plugins.js';
 import { adminRoutes } from './routes/admin.js';
 import { initRealtime } from './realtime/io.js';
@@ -23,10 +24,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 async function main() {
   initDb();
   bootstrapAdmin();
+  reapWikiStaging(); // clear any orphaned wiki upload staging from a prior run
 
   const app = Fastify({ logger: false, bodyLimit: 6 * 1024 * 1024 });
   await app.register(cookie, { secret: config.sessionSecret });
-  await app.register(multipart, { limits: { fileSize: 50 * 1024 * 1024 } });
+  // fieldNameSize raised: wiki folder-drops carry each file's relative path in the field name
+  await app.register(multipart, { limits: { fileSize: 50 * 1024 * 1024, fieldNameSize: 16384 } });
 
   // intercept code-server proxy before auth/routing (gated by random token per spec)
   app.addHook('onRequest', async (req, reply) => {
@@ -38,6 +41,7 @@ async function main() {
   await app.register(sessionRoutes);
   await app.register(roomRoutes);
   await app.register(projectRoutes);
+  await app.register(wikiRoutes);
   await app.register(pluginRoutes);
   await app.register(adminRoutes);
 

@@ -17,6 +17,10 @@ export const paths = {
   roomHome: (roomId: string) => path.join(D, 'rooms', roomId),
   roomClaude: (roomId: string) => path.join(D, 'rooms', roomId, '.claude'),
   roomProjects: (roomId: string) => path.join(D, 'rooms', roomId, 'projects'),
+  wiki: path.join(D, 'wiki'),
+  wikiTopic: (id: string) => path.join(D, 'wiki', id),
+  wikiStagingRoot: path.join(D, 'wiki', '.staging'),
+  wikiStaging: (sid: string) => path.join(D, 'wiki', '.staging', sid),
 };
 
 export function ensure(dir: string) {
@@ -25,7 +29,7 @@ export function ensure(dir: string) {
 
 export function ensureBaseLayout() {
   [paths.common, paths.commonClaude, paths.commonPlugins, paths.commonProjects,
-   path.join(D, 'users'), path.join(D, 'rooms')].forEach(ensure);
+   path.join(D, 'users'), path.join(D, 'rooms'), paths.wiki].forEach(ensure);
 }
 
 export function ensureUserLayout(uid: string) {
