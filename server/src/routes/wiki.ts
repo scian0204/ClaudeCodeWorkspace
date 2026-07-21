@@ -45,6 +45,19 @@ export function reapWikiStaging() {
   try { fs.rmSync(paths.wikiStagingRoot, { recursive: true, force: true }); } catch { /* noop */ }
 }
 
+// remove topic dirs on disk with no matching DB row (leftovers from deletes before dirs were
+// removed, or a crash between mkdir and insert). Runs at boot.
+export function reapWikiOrphans() {
+  try {
+    if (!fs.existsSync(paths.wiki)) return;
+    const ids = new Set(db.select({ id: schema.wikiTopics.id }).from(schema.wikiTopics).all().map((r) => r.id));
+    for (const name of fs.readdirSync(paths.wiki)) {
+      if (name === '.staging' || ids.has(name)) continue;
+      try { fs.rmSync(path.join(paths.wiki, name), { recursive: true, force: true }); } catch { /* noop */ }
+    }
+  } catch { /* noop */ }
+}
+
 function getTopic(id: string) {
   return db.select().from(schema.wikiTopics).where(eq(schema.wikiTopics.id, id)).get();
 }
@@ -234,7 +247,7 @@ export async function wikiRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  // delete topic (admin) — drops topic + every user's thread + messages; files stay on disk (safe)
+  // delete topic (admin) — drops topic + every user's thread + messages + the topic dir on disk
   app.delete('/api/wiki/topics/:id', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
     if (!requireAdmin(req, reply)) return;
@@ -246,6 +259,7 @@ export async function wikiRoutes(app: FastifyInstance) {
       db.delete(schema.chatSessions).where(eq(schema.chatSessions.id, th.id)).run();
     }
     db.delete(schema.wikiTopics).where(eq(schema.wikiTopics.id, id)).run();
+    try { fs.rmSync(t.path, { recursive: true, force: true }); } catch { /* noop */ } // remove raw/ + wiki/ from disk
     return { ok: true };
   });
 

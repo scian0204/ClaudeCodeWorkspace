@@ -12,7 +12,7 @@ import { authRoutes } from './auth/routes.js';
 import { sessionRoutes } from './routes/sessions.js';
 import { roomRoutes } from './routes/rooms.js';
 import { projectRoutes } from './routes/projects.js';
-import { wikiRoutes, reapWikiStaging } from './routes/wiki.js';
+import { wikiRoutes, reapWikiStaging, reapWikiOrphans } from './routes/wiki.js';
 import { pluginRoutes } from './routes/plugins.js';
 import { adminRoutes } from './routes/admin.js';
 import { initRealtime } from './realtime/io.js';
@@ -25,6 +25,7 @@ async function main() {
   initDb();
   bootstrapAdmin();
   reapWikiStaging(); // clear any orphaned wiki upload staging from a prior run
+  reapWikiOrphans(); // remove wiki topic dirs on disk that no longer have a DB row
 
   const app = Fastify({ logger: false, bodyLimit: 6 * 1024 * 1024 });
   await app.register(cookie, { secret: config.sessionSecret });

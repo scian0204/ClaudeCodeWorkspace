@@ -65,7 +65,7 @@ export function Sidebar() {
             {t.compileStatus === 'compiling' && <span className="text-[10px] text-txt3 group-hover:hidden">컴파일…</span>}
             {isAdmin && (
               <button className="hidden group-hover:block text-txt3 hover:text-danger text-xs px-1" title="주제 삭제"
-                onClick={(e) => { e.stopPropagation(); if (confirm(`"${t.name}" 주제를 삭제할까요? (모든 사용자 스레드/기록 삭제, 파일은 남음)`)) deleteWikiTopic(t.id); }}>🗑</button>
+                onClick={(e) => { e.stopPropagation(); if (confirm(`"${t.name}" 주제를 삭제할까요? (스레드/기록 + 업로드 파일 전부 영구 삭제, 복구 불가)`)) deleteWikiTopic(t.id); }}>🗑</button>
             )}
           </Item>
         ))}
