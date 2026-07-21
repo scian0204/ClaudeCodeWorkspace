@@ -8,6 +8,8 @@ export const users = sqliteTable('users', {
   displayName: text('display_name').notNull(),
   avatarColor: text('avatar_color').notNull(),
   createdAt: integer('created_at').notNull(),
+  claudeTokenEnc: text('claude_token_enc'),        // AES-GCM blob of the user's Claude token
+  claudeTokenSetAt: integer('claude_token_set_at'), // when it was registered (display only)
 });
 
 export const authSessions = sqliteTable('auth_sessions', {
