@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../lib/store';
 import { api } from '../lib/api';
+import { md } from '../lib/md';
 import { Modal } from './Modal';
+
+const isImage = (n: string) => /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(n);
+const isMarkdown = (n: string) => /\.(md|markdown)$/i.test(n);
 
 type FileItem = { name: string; size: number };
 type Node = { name: string; path: string; dir: boolean; size: number; children: Node[] };
@@ -60,13 +64,16 @@ export function WikiExplorer({ topicId, onClose }: { topicId: string; onClose: (
   const [sel, setSel] = useState<string | null>(null);
   const [file, setFile] = useState<{ name: string; content: string } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [mdRaw, setMdRaw] = useState(false); // markdown: false=rendered, true=source
 
   useEffect(() => {
     api.get(`/api/wiki/topics/${topicId}/tree`).then(setTree).catch((e) => useStore.getState().setError(e.message));
   }, [topicId]);
 
   const openFile = async (p: string) => {
-    setSel(p); setLoading(true); setFile(null);
+    setSel(p); setFile(null); setMdRaw(false);
+    if (isImage(p)) return; // rendered via <img>, no text fetch
+    setLoading(true);
     try { setFile(await api.get(`/api/wiki/topics/${topicId}/file?dir=${dir}&path=${encodeURIComponent(p)}`)); }
     catch (e: any) { useStore.getState().setError(e.message); }
     finally { setLoading(false); }
@@ -90,14 +97,31 @@ export function WikiExplorer({ topicId, onClose }: { topicId: string; onClose: (
           {nodes.map((n) => <TreeNode key={n.path} node={n} depth={0} onOpen={openFile} selected={sel} />)}
         </div>
         <div className="border border-line rounded overflow-auto scrolly bg-bg min-w-0">
-          {loading && <div className="text-txt3 text-xs p-3">불러오는 중…</div>}
-          {!loading && file && (
-            <div>
-              <div className="sticky top-0 bg-card border-b border-line px-3 py-1.5 text-xs font-mono truncate">{file.name}</div>
-              <pre className="whitespace-pre-wrap break-words font-mono text-[11px] text-txt2 p-3">{file.content}</pre>
-            </div>
+          {!sel && <div className="text-txt3 text-xs p-3">왼쪽에서 파일을 선택하세요.</div>}
+          {sel && (
+            <>
+              <div className="sticky top-0 bg-card border-b border-line px-3 py-1.5 text-xs font-mono flex items-center gap-2">
+                <span className="truncate flex-1">{sel}</span>
+                {isMarkdown(sel) && !isImage(sel) && (
+                  <button className="shrink-0 px-1.5 py-0.5 rounded border border-line hover:text-clay" onClick={() => setMdRaw(!mdRaw)}>
+                    {mdRaw ? '📖 렌더' : '</> 원문'}
+                  </button>
+                )}
+              </div>
+              {isImage(sel) ? (
+                <div className="p-3">
+                  <img src={`/api/wiki/topics/${topicId}/blob?dir=${dir}&path=${encodeURIComponent(sel)}`}
+                    alt={sel} className="max-w-full h-auto rounded border border-line" />
+                </div>
+              ) : loading ? (
+                <div className="text-txt3 text-xs p-3">불러오는 중…</div>
+              ) : file && isMarkdown(sel) && !mdRaw ? (
+                <div className="p-3 text-sm break-words leading-relaxed" dangerouslySetInnerHTML={{ __html: md(file.content) }} />
+              ) : file ? (
+                <pre className="whitespace-pre-wrap break-words font-mono text-[11px] text-txt2 p-3">{file.content}</pre>
+              ) : null}
+            </>
           )}
-          {!loading && !file && <div className="text-txt3 text-xs p-3">왼쪽에서 파일을 선택하세요.</div>}
         </div>
       </div>
     </Modal>

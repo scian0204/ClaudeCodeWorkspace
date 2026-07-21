@@ -218,6 +218,27 @@ export async function wikiRoutes(app: FastifyInstance) {
     return { name: rel, size: st.size, content };
   });
 
+  // raw file bytes (any user) — for <img> preview; ?dir=raw|wiki & ?path=<relative>
+  app.get('/api/wiki/topics/:id/blob', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    const { id } = req.params as any;
+    const t = getTopic(id); if (!t) return reply.code(404).send({ error: 'not found' });
+    const q = req.query as any;
+    const dir = q.dir === 'wiki' ? 'wiki' : 'raw';
+    const rel = safeRelPath(String(q.path || ''));
+    if (!rel) return reply.code(400).send({ error: 'bad path' });
+    const full = path.join(t.path, dir, rel);
+    if (!fs.existsSync(full) || !fs.statSync(full).isFile()) return reply.code(404).send({ error: 'not found' });
+    const ext = (rel.split('.').pop() || '').toLowerCase();
+    const CT: Record<string, string> = {
+      png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
+      webp: 'image/webp', bmp: 'image/bmp', svg: 'image/svg+xml',
+    };
+    reply.header('Content-Type', CT[ext] || 'application/octet-stream');
+    reply.header('Cache-Control', 'private, max-age=60');
+    return reply.send(fs.createReadStream(full));
+  });
+
   // add more source files to a topic (admin) — into raw/, then recompile
   app.post('/api/wiki/topics/:id/files', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
