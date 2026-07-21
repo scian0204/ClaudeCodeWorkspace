@@ -171,6 +171,35 @@ export async function wikiRoutes(app: FastifyInstance) {
     };
   });
 
+  // full file tree of a topic (any user) — paths + sizes only (no content), for the explorer
+  app.get('/api/wiki/topics/:id/tree', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    const { id } = req.params as any;
+    const t = getTopic(id); if (!t) return reply.code(404).send({ error: 'not found' });
+    return {
+      raw: walkFiles(path.join(t.path, 'raw')),
+      wiki: walkFiles(path.join(t.path, 'wiki')),
+      status: t.compileStatus, compiledAt: t.compiledAt,
+    };
+  });
+
+  // one file's content (any user) — ?dir=raw|wiki & ?path=<relative>, text only
+  app.get('/api/wiki/topics/:id/file', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    const { id } = req.params as any;
+    const t = getTopic(id); if (!t) return reply.code(404).send({ error: 'not found' });
+    const q = req.query as any;
+    const dir = q.dir === 'wiki' ? 'wiki' : 'raw';
+    const rel = safeRelPath(String(q.path || ''));
+    if (!rel) return reply.code(400).send({ error: 'bad path' });
+    const full = path.join(t.path, dir, rel);
+    if (!fs.existsSync(full) || !fs.statSync(full).isFile()) return reply.code(404).send({ error: 'not found' });
+    const st = fs.statSync(full);
+    if (!isText(rel)) return { name: rel, size: st.size, content: '(비텍스트 파일 — 미리보기 없음)' };
+    const content = st.size <= 500_000 ? fs.readFileSync(full, 'utf8') : `(파일이 큽니다: ${st.size} bytes — 생략)`;
+    return { name: rel, size: st.size, content };
+  });
+
   // add more source files to a topic (admin) — into raw/, then recompile
   app.post('/api/wiki/topics/:id/files', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;

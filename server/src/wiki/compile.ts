@@ -70,8 +70,21 @@ async function runCompile(t: NonNullable<ReturnType<typeof getTopic>>) {
   };
   const { query } = await import('@anthropic-ai/claude-agent-sdk');
   const abort = new AbortController();
+  const rawDir = path.resolve(t.path, 'raw');
   const options = buildOptions(ctx, {
-    canUseTool: async (_name: string, input: any) => ({ behavior: 'allow' as const, updatedInput: input }),
+    // auto-allow every tool EXCEPT writes into raw/ — originals are immutable sources
+    canUseTool: async (name: string, input: any) => {
+      if (/Edit|Write/.test(name)) {
+        const p = input?.file_path || input?.path;
+        if (p) {
+          const abs = path.resolve(p.startsWith('/') ? p : path.join(t.path, p));
+          if (abs === rawDir || abs.startsWith(rawDir + path.sep)) {
+            return { behavior: 'deny' as const, message: 'raw/ is immutable — write compiled output under wiki/ instead' };
+          }
+        }
+      }
+      return { behavior: 'allow' as const, updatedInput: input };
+    },
     abortController: abort,
   });
   const q = query({ prompt: compilePrompt(t.name, t.description), options });
