@@ -39,7 +39,14 @@ export function buildOptions(ctx: SessionContext, extra: {
 
   const env: Record<string, string> = { ...process.env } as any;
   env.HOME = home;
-  if (config.anthropicApiKey) env.ANTHROPIC_API_KEY = config.anthropicApiKey;
+  // OAuth tokens (sk-ant-oat*, from `claude setup-token` / Pro-Max login) must go via
+  // CLAUDE_CODE_OAUTH_TOKEN; plain API keys (sk-ant-api*) via ANTHROPIC_API_KEY.
+  // Passing an OAuth token as ANTHROPIC_API_KEY is rejected by the API (401 Invalid API key).
+  const key = config.anthropicApiKey;
+  if (key) {
+    if (key.startsWith('sk-ant-oat')) { env.CLAUDE_CODE_OAUTH_TOKEN = key; delete env.ANTHROPIC_API_KEY; }
+    else env.ANTHROPIC_API_KEY = key;
+  }
 
   const options: any = {
     cwd: ctx.cwd,
@@ -48,7 +55,7 @@ export function buildOptions(ctx: SessionContext, extra: {
     permissionMode: ctx.permissionMode,
     settingSources: ['user', 'project', 'local'],
     additionalDirectories,
-    plugins: ctx.plugins.length ? ctx.plugins : undefined,
+    plugins: ctx.plugins.length ? ctx.plugins.map((p) => ({ type: 'local' as const, path: p })) : undefined,
     canUseTool: extra.canUseTool,
     abortController: extra.abortController,
     includePartialMessages: true,
