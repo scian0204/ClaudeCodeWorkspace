@@ -2,8 +2,8 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { eq } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
-import { config } from '../config.js';
 import { buildOptions, type SessionContext } from '../claude/config-layering.js';
+import { resolveClaudeAuth } from '../auth/claude-token.js';
 import { recordUsage } from '../usage/tracker.js';
 import { io } from '../realtime/io.js';
 
@@ -67,6 +67,7 @@ async function runCompile(t: NonNullable<ReturnType<typeof getTopic>>) {
     // tool, and bypass maps to --dangerously-skip-permissions which the CLI refuses under root.
     permissionMode: 'acceptEdits',
     plugins: [], // deterministic compile — no user plugins/skills in the loop
+    authToken: resolveClaudeAuth(t.createdBy).token, // creator's token, else admin common, else env
   };
   const { query } = await import('@anthropic-ai/claude-agent-sdk');
   const abort = new AbortController();
@@ -113,7 +114,8 @@ export async function compileTopic(topicId: string): Promise<void> {
   const rawDir = path.join(t.path, 'raw');
   const wikiDir = path.join(t.path, 'wiki');
   if (!anyFiles(rawDir)) { setStatus(topicId, 'done', null); return; } // nothing to compile
-  if (config.mockClaude) { setStatus(topicId, 'done', null); return; } // no API key — skip
+  // no resolvable token (creator's own, admin common, or env) — skip; nothing to authenticate with
+  if (resolveClaudeAuth(t.createdBy).source === 'none') { setStatus(topicId, 'done', null); return; }
 
   inflight.add(topicId);
   setStatus(topicId, 'compiling', null);

@@ -3,8 +3,9 @@ import { eq } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import {
   COOKIE, login, logout, requireAuth, requireAdmin, createUser, findByUsername,
-  toAuthUser, hashPassword,
+  toAuthUser, hashPassword, authUserWithToken,
 } from './index.js';
+import { setUserToken, clearUserToken } from './claude-token.js';
 import * as cs from '../codeserver/manager.js';
 
 export async function authRoutes(app: FastifyInstance) {
@@ -14,7 +15,7 @@ export async function authRoutes(app: FastifyInstance) {
     const res = login(String(username), String(password));
     if (!res) return reply.code(401).send({ error: 'invalid credentials' });
     reply.setCookie(COOKIE, res.token, { httpOnly: true, sameSite: 'lax', path: '/', maxAge: 30 * 24 * 3600 });
-    return { user: res.user };
+    return { user: authUserWithToken(res.user) };
   });
 
   app.post('/api/auth/logout', async (req, reply) => {
@@ -27,7 +28,23 @@ export async function authRoutes(app: FastifyInstance) {
 
   app.get('/api/auth/me', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
-    return { user: u };
+    return { user: authUserWithToken(u) };
+  });
+
+  // ── self-service Claude token (register / update / clear) ──
+  app.put('/api/auth/me/claude-token', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    const { token } = (req.body || {}) as any;
+    if (!token) return reply.code(400).send({ error: 'token required' });
+    try { setUserToken(u.id, String(token)); }
+    catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
+    return { user: authUserWithToken(u) };
+  });
+
+  app.delete('/api/auth/me/claude-token', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    clearUserToken(u.id);
+    return { user: authUserWithToken(u) };
   });
 
   // lightweight directory for any authed user (invite picker) — names only
@@ -46,13 +63,17 @@ export async function authRoutes(app: FastifyInstance) {
 
   app.post('/api/users', async (req, reply) => {
     if (!requireAdmin(req, reply)) return;
-    const { username, password, role, displayName } = (req.body || {}) as any;
+    const { username, password, role, displayName, claudeToken } = (req.body || {}) as any;
     if (!username || !password) return reply.code(400).send({ error: 'username/password required' });
     if (findByUsername(String(username))) return reply.code(409).send({ error: 'username taken' });
-    const u = createUser({
-      username: String(username), password: String(password),
-      role: role === 'admin' ? 'admin' : 'member', displayName: displayName ? String(displayName) : undefined,
-    });
+    let u;
+    try {
+      u = createUser({
+        username: String(username), password: String(password),
+        role: role === 'admin' ? 'admin' : 'member', displayName: displayName ? String(displayName) : undefined,
+        claudeToken: claudeToken ? String(claudeToken) : undefined,
+      });
+    } catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
     return { user: u };
   });
 

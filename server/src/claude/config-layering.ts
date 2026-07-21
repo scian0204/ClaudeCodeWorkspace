@@ -11,6 +11,7 @@ export interface SessionContext {
   model: string;
   permissionMode: PermMode;
   plugins: string[]; // resolved enabled plugin dir paths (common class-2 + forced + personal)
+  authToken: string; // resolved Claude token for the turn's author ('' => mock/no-auth)
 }
 
 export function homeFor(ctx: SessionContext): string {
@@ -42,9 +43,12 @@ export function buildOptions(ctx: SessionContext, extra: {
   // OAuth tokens (sk-ant-oat*, from `claude setup-token` / Pro-Max login) must go via
   // CLAUDE_CODE_OAUTH_TOKEN; plain API keys (sk-ant-api*) via ANTHROPIC_API_KEY.
   // Passing an OAuth token as ANTHROPIC_API_KEY is rejected by the API (401 Invalid API key).
-  const key = config.anthropicApiKey;
+  // Start from a clean slate so a stray host key never leaks into a mock/other-user turn.
+  delete env.ANTHROPIC_API_KEY;
+  delete env.CLAUDE_CODE_OAUTH_TOKEN;
+  const key = ctx.authToken;
   if (key) {
-    if (key.startsWith('sk-ant-oat')) { env.CLAUDE_CODE_OAUTH_TOKEN = key; delete env.ANTHROPIC_API_KEY; }
+    if (key.startsWith('sk-ant-oat')) env.CLAUDE_CODE_OAUTH_TOKEN = key;
     else env.ANTHROPIC_API_KEY = key;
   }
 
