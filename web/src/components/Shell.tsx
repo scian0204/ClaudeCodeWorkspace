@@ -33,9 +33,9 @@ export function Shell() {
   const setError = useStore((s) => s.setError);
 
   return (
-    <div className="grid h-full overflow-hidden" style={{ gridTemplateColumns: '264px 1fr' }}>
+    <div className="grid h-full overflow-hidden" style={{ gridTemplateColumns: '264px 1fr', gridTemplateRows: 'minmax(0, 1fr)' }}>
       <Sidebar />
-      <main className="min-w-0 bg-panel flex flex-col">
+      <main className="min-w-0 min-h-0 bg-panel flex flex-col">
         {panel === 'admin' ? <AdminPanel /> : panel === 'plugins' ? <PluginsPanel /> : current ? <Chat /> : <Empty />}
       </main>
       {error && <Toast msg={error} onClose={() => setError(null)} />}
