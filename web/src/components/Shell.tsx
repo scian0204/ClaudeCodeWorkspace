@@ -1,8 +1,10 @@
+import { useEffect, useState } from 'react';
 import { useStore } from '../lib/store';
 import { Sidebar } from './Sidebar';
 import { Chat } from './Chat';
 import { AdminPanel } from './AdminPanel';
 import { PluginsPanel } from './PluginsPanel';
+import { MyTokenModal } from './TokenSettings';
 
 function Empty() {
   const newSession = useStore((s) => s.newSession);
@@ -31,6 +33,12 @@ export function Shell() {
   const panel = useStore((s) => s.panel);
   const error = useStore((s) => s.error);
   const setError = useStore((s) => s.setError);
+  const user = useStore((s) => s.user);
+
+  // Nag users without a personal token to register one — every login, until registered or dismissed.
+  const [nagDismissed, setNagDismissed] = useState(false);
+  useEffect(() => { setNagDismissed(false); }, [user?.id]);
+  const showNag = !!user && !user.hasClaudeToken && !nagDismissed;
 
   return (
     <div className="grid h-full overflow-hidden" style={{ gridTemplateColumns: '264px 1fr', gridTemplateRows: 'minmax(0, 1fr)' }}>
@@ -39,6 +47,7 @@ export function Shell() {
         {panel === 'admin' ? <AdminPanel /> : panel === 'plugins' ? <PluginsPanel /> : current ? <Chat /> : <Empty />}
       </main>
       {error && <Toast msg={error} onClose={() => setError(null)} />}
+      <MyTokenModal open={showNag} nag onClose={() => setNagDismissed(true)} />
     </div>
   );
 }

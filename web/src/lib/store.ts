@@ -12,7 +12,7 @@ export interface RoomSummary { id: string; name: string; ownerId: string; chatSe
 export interface PrivateSession { id: string; title: string; updatedAt: number; projectId: string | null; model: string; permissionMode: string; }
 export interface Project { id: string; scope: string; ownerId: string | null; name: string; path: string; }
 export interface WikiTopic { id: string; name: string; description: string; path: string; createdBy: string; createdAt: number; compileStatus?: string; compiledAt?: number | null; compileError?: string | null; }
-export interface User { id: string; username: string; role: string; displayName: string; avatarColor: string; }
+export interface User { id: string; username: string; role: string; displayName: string; avatarColor: string; hasClaudeToken?: boolean; claudeTokenSetAt?: number | null; }
 export interface Live { blocks: Block[]; toolMap: Record<string, number>; }
 export interface QueueState { running: { id: string; author: { id: string; name: string } } | null; waiting: { id: string; author: { id: string; name: string } }[]; }
 export interface Control { canApprove: boolean; canInterrupt: boolean; canSetMode: boolean; isOwner: boolean; delegable: string[]; }
@@ -70,6 +70,8 @@ interface State {
   reloadRoom: () => Promise<void>;
   setPanel: (p: null | 'admin' | 'plugins') => void;
   setError: (e: string | null) => void;
+  saveClaudeToken: (token: string) => Promise<void>;
+  clearClaudeToken: () => Promise<void>;
 }
 
 const emptyLive = (): Live => ({ blocks: [], toolMap: {} });
@@ -252,6 +254,15 @@ export const useStore = create<State>((set, get) => ({
 
   setPanel: (p) => set({ panel: p }),
   setError: (e) => set({ error: e }),
+
+  saveClaudeToken: async (token) => {
+    const { user } = await api.put('/api/auth/me/claude-token', { token });
+    set({ user });
+  },
+  clearClaudeToken: async () => {
+    const { user } = await api.del('/api/auth/me/claude-token');
+    set({ user });
+  },
 }));
 
 function applyTheme(theme: 'light' | 'dark' | null) {
