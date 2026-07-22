@@ -11,6 +11,10 @@ import { newId } from '../lib/ids.js';
 import { walkFiles, resolveUnder, IMG_CT } from '../lib/filetree.js';
 import * as rooms from '../rooms/manager.js';
 import * as cs from '../codeserver/manager.js';
+import { gitStatus, gitCommit, gitPush, originHost } from '../lib/git-ops.js';
+import {
+  resolveGitCred, resolveGitCredById, getGitCredRow, gitIdentity, askpassEnv, identityEnv, hostFromGitUrl,
+} from '../auth/git-cred.js';
 
 const execFileP = promisify(execFile);
 
@@ -24,11 +28,12 @@ function repoNameFromUrl(url: string) {
   const last = url.replace(/\.git$/, '').replace(/[\/]+$/, '').split(/[\/:]/).pop() || 'repo';
   return safeName(last);
 }
-async function cloneRepo(url: string, dir: string) {
-  // shallow, no credential prompt (private repos fail fast instead of hanging)
+async function cloneRepo(url: string, dir: string, credEnv?: Record<string, string>) {
+  // shallow. Without a credential the prompt is disabled so private repos fail fast; with one,
+  // credEnv supplies GIT_ASKPASS + GIT_CRED_* so the token authenticates (never placed in the URL).
   await execFileP('git', ['clone', '--depth', '1', url, dir], {
     timeout: 180_000,
-    env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '/bin/echo' },
+    env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '/bin/echo', ...(credEnv || {}) },
   });
 }
 
@@ -63,9 +68,24 @@ export async function projectRoutes(app: FastifyInstance) {
 
   app.post('/api/projects', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
-    const { scope, name, roomId, gitUrl } = (req.body || {}) as any;
+    const { scope, name, roomId, gitUrl, credentialId } = (req.body || {}) as any;
     const git = gitUrl ? String(gitUrl).trim() : '';
     if (git && !validGitUrl(git)) return reply.code(400).send({ error: '지원하지 않는 저장소 URL (http/https/git/ssh만 가능)' });
+    // Resolve a clone credential: explicit pick (must be the user's own or a common one), else auto by host.
+    let cloneEnv: Record<string, string> | undefined;
+    if (git) {
+      let cred = null;
+      if (credentialId) {
+        const row = getGitCredRow(String(credentialId));
+        if (!row) return reply.code(404).send({ error: 'credential not found' });
+        if (!(row.scope === 'common' || (row.scope === 'user' && row.ownerId === u.id)))
+          return reply.code(403).send({ error: 'forbidden credential' });
+        cred = resolveGitCredById(String(credentialId));
+      } else {
+        cred = resolveGitCred(u.id, hostFromGitUrl(git));
+      }
+      if (cred) cloneEnv = askpassEnv(cred);
+    }
     const nm = safeName(name || (git ? repoNameFromUrl(git) : ''));
     let dir: string, ownerId: string | null;
     if (scope === 'common') {
@@ -81,7 +101,7 @@ export async function projectRoutes(app: FastifyInstance) {
       if (fs.existsSync(dir) && fs.readdirSync(dir).length) return reply.code(409).send({ error: `이미 존재하는 이름: ${nm}` });
       ensure(path.dirname(dir));
       try {
-        await cloneRepo(git, dir);
+        await cloneRepo(git, dir, cloneEnv);
       } catch (e: any) {
         try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* noop */ }
         return reply.code(500).send({ error: `git clone 실패: ${String(e?.stderr || e?.message || e).slice(0, 300)}` });
@@ -157,5 +177,50 @@ export async function projectRoutes(app: FastifyInstance) {
     // only removes the DB index entry; files remain on the volume (safe)
     db.delete(schema.projects).where(eq(schema.projects.id, id)).run();
     return { ok: true };
+  });
+
+  // ── git: status / commit / push on the project's working dir ──
+  // Loads the project and enforces access; returns null after replying on failure.
+  function loadForGit(req: any, reply: any) {
+    const u = requireAuth(req, reply); if (!u) return null;
+    const p = getProject((req.params as any).id);
+    if (!p) { reply.code(404).send({ error: 'not found' }); return null; }
+    if (!canAccess(u, p)) { reply.code(403).send({ error: 'forbidden' }); return null; }
+    return { u, p, dir: path.resolve(p.path) };
+  }
+
+  app.get('/api/projects/:id/git/status', async (req, reply) => {
+    const ctx = loadForGit(req, reply); if (!ctx) return;
+    const st = await gitStatus(ctx.dir);
+    const host = st.repo ? await originHost(ctx.dir) : null;
+    return { ...st, host, hasCredential: !!(host && resolveGitCred(ctx.u.id, host)) };
+  });
+
+  app.post('/api/projects/:id/git/commit', async (req, reply) => {
+    const ctx = loadForGit(req, reply); if (!ctx) return;
+    const { message, files } = (req.body || {}) as any;
+    if (!message || !String(message).trim()) return reply.code(400).send({ error: 'commit message required' });
+    const host = await originHost(ctx.dir);
+    const cred = host ? resolveGitCred(ctx.u.id, host) : null;
+    const ident = gitIdentity({ username: ctx.u.username, displayName: ctx.u.displayName }, cred);
+    try {
+      const { commit } = await gitCommit(ctx.dir, {
+        message: String(message), files: Array.isArray(files) ? files.map(String) : undefined,
+        env: identityEnv(ident),
+      });
+      return { ok: true, commit };
+    } catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
+  });
+
+  app.post('/api/projects/:id/git/push', async (req, reply) => {
+    const ctx = loadForGit(req, reply); if (!ctx) return;
+    const host = await originHost(ctx.dir);
+    if (!host) return reply.code(400).send({ error: 'origin remote 없음 — 푸시할 원격지가 없습니다' });
+    const cred = resolveGitCred(ctx.u.id, host);
+    if (!cred) return reply.code(400).send({ error: `${host} 자격증명이 없습니다 — 설정에서 등록하세요` });
+    try {
+      const { output } = await gitPush(ctx.dir, { env: askpassEnv(cred) });
+      return { ok: true, output };
+    } catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
   });
 }
