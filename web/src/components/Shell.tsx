@@ -5,15 +5,17 @@ import { Chat } from './Chat';
 import { AdminPanel } from './AdminPanel';
 import { PluginsPanel } from './PluginsPanel';
 import { MyTokenModal } from './TokenSettings';
+import { useT } from '../lib/i18n';
 
 function Empty() {
   const newSession = useStore((s) => s.newSession);
+  const t = useT();
   return (
     <div className="h-full grid place-items-center text-center">
       <div>
         <img src="/favicon.svg" alt="" className="w-16 h-16 mx-auto mb-3" />
-        <div className="text-txt2 mb-4">대화를 시작하거나 왼쪽에서 세션/대화방을 선택하세요.</div>
-        <button className="btn-primary" onClick={() => newSession()}>＋ 새 대화 시작</button>
+        <div className="text-txt2 mb-4">{t('shell.emptyHint')}</div>
+        <button className="btn-primary" onClick={() => newSession()}>{t('shell.newConversation')}</button>
       </div>
     </div>
   );

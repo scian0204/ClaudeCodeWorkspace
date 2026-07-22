@@ -1,4 +1,5 @@
 import React from 'react';
+import { t, useT, useLang, toggleLang } from './i18n';
 
 export function initials(name?: string): string {
   const t = (name || '').trim();
@@ -15,8 +16,19 @@ export function Avatar({ name, color, size = 28, claude = false }: { name?: stri
 
 export function timeAgo(ts: number): string {
   const s = Math.floor((Date.now() - ts) / 1000);
-  if (s < 60) return '방금';
-  if (s < 3600) return `${Math.floor(s / 60)}분`;
-  if (s < 86400) return `${Math.floor(s / 3600)}시간`;
-  return `${Math.floor(s / 86400)}일`;
+  if (s < 60) return t('time.justNow');
+  if (s < 3600) return t('time.minutes', { n: Math.floor(s / 60) });
+  if (s < 86400) return t('time.hours', { n: Math.floor(s / 3600) });
+  return t('time.days', { n: Math.floor(s / 86400) });
+}
+
+// Language switcher — reused in the chat header and the login page.
+export function LangToggle({ className }: { className?: string }) {
+  const lang = useLang();
+  const tr = useT();
+  return (
+    <button className={className || 'toolbtn'} title={tr('lang.toggleTitle')} onClick={toggleLang}>
+      {lang === 'ko' ? '한' : 'EN'}
+    </button>
+  );
 }
