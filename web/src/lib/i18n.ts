@@ -330,6 +330,17 @@ const ko: Dict = {
   'wikiExplorer.title': 'LLM Wiki 파일 탐색기',
   'wikiExplorer.sourceRaw': '원본 raw',
   'wikiExplorer.sourceWiki': '컴파일 wiki',
+
+  // wikiSources — 답변이 인용한 출처 패널
+  'wikiSources.title': '출처',
+  'wikiSources.empty': '이 대화에서 인용한 출처가 아직 없습니다.',
+  'wikiSources.wikiGroup': '지식 아티클',
+  'wikiSources.rawGroup': '원본 소스',
+  'wikiSources.collapse': '접기',
+  'wikiSources.expand': '출처 열기',
+  'wikiSources.back': '← 목록',
+  'wikiSources.notFound': '파일을 찾을 수 없습니다. (모델이 적은 경로와 실제 파일이 다를 수 있어요)',
+  'wikiSources.resize': '드래그해서 폭 조절',
 };
 
 const en: Dict = {
@@ -601,6 +612,17 @@ const en: Dict = {
   'wikiExplorer.title': 'LLM Wiki File Explorer',
   'wikiExplorer.sourceRaw': 'Raw source',
   'wikiExplorer.sourceWiki': 'Compiled wiki',
+
+  // wikiSources — cited-sources panel
+  'wikiSources.title': 'Sources',
+  'wikiSources.empty': 'No sources cited in this conversation yet.',
+  'wikiSources.wikiGroup': 'Knowledge articles',
+  'wikiSources.rawGroup': 'Original sources',
+  'wikiSources.collapse': 'Collapse',
+  'wikiSources.expand': 'Open sources',
+  'wikiSources.back': '← List',
+  'wikiSources.notFound': "File not found (the model's written path may differ from the real file).",
+  'wikiSources.resize': 'Drag to resize',
 };
 
 const DICT: Record<Lang, Dict> = { ko, en };

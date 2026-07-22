@@ -182,6 +182,7 @@ flowchart TB
 - Admin uploads a folder of docs/images → Claude reads the `raw/` sources and **auto-compiles** them into `wiki/` articles + `_index.md` (multimodal — images transcribed too)
 - **Import an already-compiled wiki:** on topic creation, the "already-compiled wiki" option skips compilation and uses the finished wiki as-is (reuse a topic export)
 - Each user gets a **private thread** for read-only queries scoped to the wiki; browse raw/wiki via the file explorer
+- **Cited-sources panel:** every answer lists the files it drew on in a right-side panel (grouped wiki / raw); hovering a source highlights its mentions inline (and vice-versa), and clicking one previews the file right there
 </details>
 
 <details>

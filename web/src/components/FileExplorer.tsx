@@ -7,6 +7,16 @@ import { Modal } from './Modal';
 export const isImage = (n: string) => /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(n);
 export const isMarkdown = (n: string) => /\.(md|markdown)$/i.test(n);
 
+// Resolve a relative asset href (e.g. a markdown image) against the containing file's directory.
+// The href is URL-encoded in the source; server-side path sanitizing trims stray segment spaces.
+export function resolveRelAsset(baseDir: string, rawSrc: string): string {
+  let rel: string;
+  try { rel = decodeURIComponent(rawSrc); } catch { rel = rawSrc; }
+  rel = rel.replace(/^\.\//, '');
+  return baseDir ? `${baseDir}/${rel}` : rel;
+}
+const dirOf = (p: string) => p.split('/').slice(0, -1).join('/');
+
 export type FileItem = { name: string; size: number };
 type Node = { name: string; path: string; dir: boolean; size: number; children: Node[] };
 
@@ -138,7 +148,7 @@ export function FileExplorer({
               ) : loading ? (
                 <div className="text-txt3 text-xs p-3">{t('fileExplorer.loading')}</div>
               ) : file && isMarkdown(sel) && !mdRaw ? (
-                <div className="p-3 text-sm break-words leading-relaxed" dangerouslySetInnerHTML={{ __html: md(file.content) }} />
+                <div className="p-3 text-sm break-words leading-relaxed" dangerouslySetInnerHTML={{ __html: md(file.content, { img: (s) => blobUrl(dir, resolveRelAsset(dirOf(sel), s)) }) }} />
               ) : file ? (
                 <pre className="whitespace-pre-wrap break-words font-mono text-[11px] text-txt2 p-3">{file.content}</pre>
               ) : null}
