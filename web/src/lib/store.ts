@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { api } from './api';
 import { getSocket } from './socket';
+import { t } from './i18n';
 
 export type Block =
   | { type: 'text'; text: string }
@@ -221,7 +222,7 @@ export const useStore = create<State>((set, get) => ({
   },
 
   openEditor: async () => {
-    const c = get().current; if (!c?.projectId) { set({ error: '먼저 프로젝트를 선택하세요.' }); return; }
+    const c = get().current; if (!c?.projectId) { set({ error: t('store.selectProjectFirst') }); return; }
     try {
       const { url } = await api.post(`/api/projects/${c.projectId}/open-editor`);
       set({ editorUrl: url });
@@ -347,7 +348,7 @@ function wire(set: any, get: () => State) {
 
   sock.on('turn:error', (p: any) => {
     if (!isCur(p.sessionId)) return;
-    set({ live: null, turnActive: false, error: p.aborted ? null : `오류: ${p.error}` });
+    set({ live: null, turnActive: false, error: p.aborted ? null : t('common.errorPrefix', { msg: p.error }) });
   });
 
   sock.on('permission:request', (p: any) => {

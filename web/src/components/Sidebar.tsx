@@ -1,9 +1,10 @@
 import { useState, useRef } from 'react';
 import { useStore } from '../lib/store';
 import { api } from '../lib/api';
-import { Avatar, timeAgo } from '../lib/ui';
+import { Avatar, timeAgo, LangToggle } from '../lib/ui';
 import { Modal } from './Modal';
 import { MyTokenModal } from './TokenSettings';
+import { useT } from '../lib/i18n';
 
 export function Sidebar() {
   const { user, sessions, rooms, wikiTopics, current, openPrivate, openRoom, openWiki, newSession, newRoom, logout, setPanel, panel, deleteSession, deleteRoom, deleteWikiTopic } = useStore();
@@ -12,37 +13,39 @@ export function Sidebar() {
   const [showWiki, setShowWiki] = useState(false);
   const [showToken, setShowToken] = useState(false);
   const isAdmin = user?.role === 'admin';
+  const t = useT();
 
   const create = async () => { if (!roomName.trim()) return; await newRoom(roomName.trim()); setRoomName(''); setShowRoom(false); };
 
   return (
     <aside className="bg-rail border-r border-line flex flex-col min-h-0">
-      <div className="px-3.5 pt-3.5 pb-2">
-        <div className="flex items-center gap-2.5 mb-3.5">
-          <img src="/favicon.svg" alt="" className="w-[26px] h-[26px] rounded-md" />
-          <div className="leading-tight">
-            <div className="font-semibold text-sm">ClaudeCode Workspace</div>
-            <div className="text-[11px] text-txt3">{user?.displayName} 팀</div>
+      <div className="px-3.5 pt-3.5 pb-2 relative">
+        <LangToggle className="absolute top-3 right-3 text-[11px] text-txt3 hover:text-txt border border-line rounded px-1.5 py-0.5 z-10" />
+        <div className="flex items-center gap-2.5 mb-3.5 pr-9">
+          <img src="/favicon.svg" alt="" className="w-[26px] h-[26px] rounded-md shrink-0" />
+          <div className="leading-tight min-w-0">
+            <div className="font-semibold text-sm whitespace-nowrap">ClaudeCode Workspace</div>
+            <div className="text-[11px] text-txt3 truncate">{t('sidebar.teamName', { name: user?.displayName ?? '' })}</div>
           </div>
         </div>
-        <button className="btn-primary w-full flex items-center justify-center gap-2 !py-2" onClick={() => newSession()}>＋ 새 대화</button>
+        <button className="btn-primary w-full flex items-center justify-center gap-2 !py-2" onClick={() => newSession()}>{t('sidebar.newChat')}</button>
       </div>
 
       <div className="flex-1 overflow-y-auto scrolly px-2 pb-1">
-        <Section label="개인" onAdd={() => newSession()} />
-        {sessions.length === 0 && <div className="text-[11px] text-txt3 px-2 py-1">아직 없음</div>}
+        <Section label={t('sidebar.personal')} onAdd={() => newSession()} />
+        {sessions.length === 0 && <div className="text-[11px] text-txt3 px-2 py-1">{t('common.none')}</div>}
         {sessions.map((s) => (
           <Item key={s.id} active={panel === null && current?.chatSessionId === s.id} onClick={() => { setPanel(null); openPrivate(s.id); }}>
             <span className="opacity-70">💬</span>
             <span className="flex-1 truncate text-[13px]">{s.title}</span>
             <span className="text-[11px] text-txt3 group-hover:hidden">{timeAgo(s.updatedAt)}</span>
-            <button className="hidden group-hover:block text-txt3 hover:text-danger text-xs px-1" title="대화 삭제"
-              onClick={(e) => { e.stopPropagation(); if (confirm(`"${s.title}" 대화를 삭제할까요?`)) deleteSession(s.id); }}>🗑</button>
+            <button className="hidden group-hover:block text-txt3 hover:text-danger text-xs px-1" title={t('sidebar.deleteChatTitle')}
+              onClick={(e) => { e.stopPropagation(); if (confirm(t('sidebar.deleteChatConfirm', { title: s.title }))) deleteSession(s.id); }}>🗑</button>
           </Item>
         ))}
 
-        <Section label="대화방" onAdd={() => setShowRoom(true)} />
-        {rooms.length === 0 && <div className="text-[11px] text-txt3 px-2 py-1">아직 없음</div>}
+        <Section label={t('sidebar.rooms')} onAdd={() => setShowRoom(true)} />
+        {rooms.length === 0 && <div className="text-[11px] text-txt3 px-2 py-1">{t('common.none')}</div>}
         {rooms.map((r) => (
           <Item key={r.id} active={panel === null && current?.roomId === r.id} onClick={() => { setPanel(null); openRoom(r.id); }}>
             <span className="w-[7px] h-[7px] rounded-full bg-ok shrink-0" />
@@ -53,21 +56,21 @@ export function Sidebar() {
                   style={{ background: m.avatarColor, borderColor: 'var(--rail)' }}>{m.displayName.slice(0, 2).toUpperCase()}</span>
               ))}
             </span>
-            <button className="hidden group-hover:block text-txt3 hover:text-danger text-xs px-1" title="대화방 삭제"
-              onClick={(e) => { e.stopPropagation(); if (confirm(`"${r.name}" 대화방을 삭제할까요? (방장/삭제 권한 필요)`)) deleteRoom(r.id); }}>🗑</button>
+            <button className="hidden group-hover:block text-txt3 hover:text-danger text-xs px-1" title={t('sidebar.deleteRoomTitle')}
+              onClick={(e) => { e.stopPropagation(); if (confirm(t('sidebar.deleteRoomConfirm', { name: r.name }))) deleteRoom(r.id); }}>🗑</button>
           </Item>
         ))}
 
         <Section label="LLM Wiki" onAdd={isAdmin ? () => setShowWiki(true) : undefined} />
-        {wikiTopics.length === 0 && <div className="text-[11px] text-txt3 px-2 py-1">{isAdmin ? '＋로 주제 생성' : '아직 없음'}</div>}
-        {wikiTopics.map((t) => (
-          <Item key={t.id} active={panel === null && current?.wikiTopicId === t.id} onClick={() => { setPanel(null); openWiki(t.id); }}>
-            <span className="opacity-70">{t.compileStatus === 'compiling' ? '⏳' : t.compileStatus === 'error' ? '⚠️' : '📚'}</span>
-            <span className="flex-1 truncate text-[13px]">{t.name}</span>
-            {t.compileStatus === 'compiling' && <span className="text-[10px] text-txt3 group-hover:hidden">컴파일…</span>}
+        {wikiTopics.length === 0 && <div className="text-[11px] text-txt3 px-2 py-1">{isAdmin ? t('sidebar.createTopicHint') : t('common.none')}</div>}
+        {wikiTopics.map((wt) => (
+          <Item key={wt.id} active={panel === null && current?.wikiTopicId === wt.id} onClick={() => { setPanel(null); openWiki(wt.id); }}>
+            <span className="opacity-70">{wt.compileStatus === 'compiling' ? '⏳' : wt.compileStatus === 'error' ? '⚠️' : '📚'}</span>
+            <span className="flex-1 truncate text-[13px]">{wt.name}</span>
+            {wt.compileStatus === 'compiling' && <span className="text-[10px] text-txt3 group-hover:hidden">{t('sidebar.compiling')}</span>}
             {isAdmin && (
-              <button className="hidden group-hover:block text-txt3 hover:text-danger text-xs px-1" title="주제 삭제"
-                onClick={(e) => { e.stopPropagation(); if (confirm(`"${t.name}" 주제를 삭제할까요? (스레드/기록 + 업로드 파일 전부 영구 삭제, 복구 불가)`)) deleteWikiTopic(t.id); }}>🗑</button>
+              <button className="hidden group-hover:block text-txt3 hover:text-danger text-xs px-1" title={t('sidebar.deleteTopicTitle')}
+                onClick={(e) => { e.stopPropagation(); if (confirm(t('sidebar.deleteTopicConfirm', { name: wt.name }))) deleteWikiTopic(wt.id); }}>🗑</button>
             )}
           </Item>
         ))}
@@ -80,28 +83,28 @@ export function Sidebar() {
           <span className="text-[10px] bg-claysoft text-clay px-1.5 py-0.5 rounded-full font-semibold">{user?.role}</span>
         </div>
         <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full hover:bg-line text-left text-[13px] text-txt2" onClick={() => setShowToken(true)}>
-          <span className="w-7 text-center">🔑</span> 내 토큰
-          {!user?.hasClaudeToken && <span className="ml-auto text-[10px] bg-warnsoft text-warn px-1.5 py-0.5 rounded-full">미등록</span>}
+          <span className="w-7 text-center">🔑</span> {t('sidebar.myToken')}
+          {!user?.hasClaudeToken && <span className="ml-auto text-[10px] bg-warnsoft text-warn px-1.5 py-0.5 rounded-full">{t('sidebar.tokenUnregistered')}</span>}
         </button>
         <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full hover:bg-line text-left text-[13px] text-txt2" onClick={() => setPanel('plugins')}>
-          <span className="w-7 text-center">🧩</span> 플러그인
+          <span className="w-7 text-center">🧩</span> {t('sidebar.plugins')}
         </button>
         {user?.role === 'admin' && (
           <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full hover:bg-line text-left text-[13px] text-txt2" onClick={() => setPanel('admin')}>
-            <span className="w-7 text-center">🛠</span> 관리자 패널
+            <span className="w-7 text-center">🛠</span> {t('sidebar.adminPanel')}
           </button>
         )}
         <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full hover:bg-line text-left text-[13px] text-txt2" onClick={() => logout()}>
-          <span className="w-7 text-center">↩</span> 로그아웃
+          <span className="w-7 text-center">↩</span> {t('sidebar.logout')}
         </button>
       </div>
 
-      <Modal open={showRoom} onOpenChange={setShowRoom} title="새 대화방 만들기">
-        <input className="input mb-3" placeholder="대화방 이름" value={roomName} autoFocus
+      <Modal open={showRoom} onOpenChange={setShowRoom} title={t('sidebar.newRoomTitle')}>
+        <input className="input mb-3" placeholder={t('sidebar.roomNamePlaceholder')} value={roomName} autoFocus
           onChange={(e) => setRoomName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && create()} />
         <div className="flex justify-end gap-2">
-          <button className="btn-ghost" onClick={() => setShowRoom(false)}>취소</button>
-          <button className="btn-primary" onClick={create}>만들기</button>
+          <button className="btn-ghost" onClick={() => setShowRoom(false)}>{t('common.cancel')}</button>
+          <button className="btn-primary" onClick={create}>{t('common.create')}</button>
         </div>
       </Modal>
 
@@ -146,6 +149,7 @@ function WikiCreateModal({ onClose }: { onClose: () => void }) {
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const dirRef = useRef<HTMLInputElement>(null);
+  const t = useT();
 
   const uploadCollected = async (list: { file: File; rel: string }[]) => {
     if (!list.length) return;
@@ -184,23 +188,23 @@ function WikiCreateModal({ onClose }: { onClose: () => void }) {
   const cancel = () => { api.del(`/api/wiki/staging/${sid}`).catch(() => {}); onClose(); };
 
   const confirm = async () => {
-    if (!name.trim()) { setError('주제 이름을 입력하세요.'); return; }
+    if (!name.trim()) { setError(t('sidebar.topicNameRequired')); return; }
     setBusy(true);
     try { await newWikiTopic({ name: name.trim(), description: desc.trim(), stagingId: sid, precompiled }); onClose(); }
     catch (e: any) { setError(e.message); setBusy(false); }
   };
 
   return (
-    <Modal open onOpenChange={(o) => { if (!o) cancel(); }} title="새 LLM Wiki 주제 만들기" width={480}>
-      <input className="input mb-2" placeholder="주제 이름" value={name} autoFocus onChange={(e) => setName(e.target.value)} />
-      <textarea className="input mb-2 resize-none" rows={3} placeholder="설명 / 지침 (선택) — 클로드가 이 범위에서 답변합니다"
+    <Modal open onOpenChange={(o) => { if (!o) cancel(); }} title={t('sidebar.newWikiTopicTitle')} width={480}>
+      <input className="input mb-2" placeholder={t('sidebar.topicNamePlaceholder')} value={name} autoFocus onChange={(e) => setName(e.target.value)} />
+      <textarea className="input mb-2 resize-none" rows={3} placeholder={t('sidebar.topicDescPlaceholder')}
         value={desc} onChange={(e) => setDesc(e.target.value)} />
 
       <label className="flex items-start gap-2 mb-2 text-xs text-txt2 cursor-pointer select-none">
         <input type="checkbox" className="mt-0.5" checked={precompiled} onChange={(e) => setPrecompiled(e.target.checked)} />
         <span>
-          이미 컴파일된 위키 추가 <span className="text-txt3">(컴파일 생략)</span>
-          <span className="block text-[11px] text-txt3">컴파일된 <code>wiki/</code> 아티클(또는 raw//wiki/ 포함 주제 폴더)을 그대로 사용합니다.</span>
+          {t('sidebar.precompiledLabel')} <span className="text-txt3">{t('sidebar.precompiledSkip')}</span>
+          <span className="block text-[11px] text-txt3">{t('sidebar.precompiledHint')}</span>
         </span>
       </label>
 
@@ -209,10 +213,10 @@ function WikiCreateModal({ onClose }: { onClose: () => void }) {
         onDragLeave={() => setDragOver(false)}
         onDrop={onDrop}
         className={`border-2 border-dashed rounded-lg px-3 py-4 text-center mb-2 transition-colors ${dragOver ? 'border-clay bg-claysoft' : 'border-line'}`}>
-        <div className="text-xs text-txt2 mb-2">📁 {precompiled ? '컴파일된 wiki 폴더' : '폴더/파일'}을 여기로 드래그 — 하위 폴더 전부 업로드</div>
+        <div className="text-xs text-txt2 mb-2">{t(precompiled ? 'sidebar.dropZonePrecompiled' : 'sidebar.dropZone')}</div>
         <div className="flex justify-center gap-2">
-          <button className="btn-ghost !py-1 !text-xs" disabled={progress !== null} onClick={() => fileRef.current?.click()}>파일 선택</button>
-          <button className="btn-ghost !py-1 !text-xs" disabled={progress !== null} onClick={() => dirRef.current?.click()}>폴더 선택</button>
+          <button className="btn-ghost !py-1 !text-xs" disabled={progress !== null} onClick={() => fileRef.current?.click()}>{t('sidebar.chooseFiles')}</button>
+          <button className="btn-ghost !py-1 !text-xs" disabled={progress !== null} onClick={() => dirRef.current?.click()}>{t('sidebar.chooseFolder')}</button>
         </div>
         <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => pick(e.target.files)} />
         <input ref={dirRef} type="file" multiple className="hidden"
@@ -222,30 +226,30 @@ function WikiCreateModal({ onClose }: { onClose: () => void }) {
       {progress !== null && (
         <div className="mb-2">
           <div className="h-1.5 bg-line rounded overflow-hidden"><div className="h-full bg-clay transition-all" style={{ width: `${progress}%` }} /></div>
-          <div className="text-[11px] text-txt3 mt-0.5">업로드 중… {progress}%</div>
+          <div className="text-[11px] text-txt3 mt-0.5">{t('sidebar.uploading', { progress })}</div>
         </div>
       )}
 
       <div className="max-h-44 overflow-auto scrolly mb-3 border border-line rounded divide-y divide-line">
-        {files.length === 0 && <div className="text-[11px] text-txt3 px-2 py-1.5">업로드된 파일 없음</div>}
+        {files.length === 0 && <div className="text-[11px] text-txt3 px-2 py-1.5">{t('sidebar.noFilesUploaded')}</div>}
         {files.map((f) => (
           <div key={f.name} className="flex items-center gap-2 px-2 py-1.5 text-xs">
             <span>📄</span>
             <span className="flex-1 truncate" title={f.name}>{f.name}</span>
             <span className="text-txt3 text-[11px]">{fmtSize(f.size)}</span>
-            <button className="text-txt3 hover:text-danger" title="삭제" onClick={() => removeFile(f.name)}>🗑</button>
+            <button className="text-txt3 hover:text-danger" title={t('common.delete')} onClick={() => removeFile(f.name)}>🗑</button>
           </div>
         ))}
       </div>
 
       <div className="flex items-center justify-between mb-3">
-        <span className="text-[11px] text-txt3">사용자는 각자 개인 스레드에서 질의만 가능</span>
-        {files.length > 0 && <span className="text-[11px] text-txt3">{files.length}개 파일</span>}
+        <span className="text-[11px] text-txt3">{t('sidebar.queryOnlyHint')}</span>
+        {files.length > 0 && <span className="text-[11px] text-txt3">{t('sidebar.fileCount', { count: files.length })}</span>}
       </div>
       <div className="flex justify-end gap-2">
-        <button className="btn-ghost" onClick={cancel} disabled={busy}>취소</button>
+        <button className="btn-ghost" onClick={cancel} disabled={busy}>{t('common.cancel')}</button>
         <button className="btn-primary" onClick={confirm} disabled={busy || progress !== null}>
-          {busy ? '생성 중…' : `확인${files.length ? ` (${files.length}개)` : ''}`}
+          {busy ? t('common.creating') : files.length ? t('sidebar.confirmWithCount', { count: files.length }) : t('common.confirm')}
         </button>
       </div>
     </Modal>
