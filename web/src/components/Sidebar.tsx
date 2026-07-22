@@ -22,7 +22,7 @@ export function Sidebar() {
       <div className="px-3.5 pt-3.5 pb-2 relative">
         <LangToggle className="absolute top-3 right-3 text-[11px] text-txt3 hover:text-txt border border-line rounded px-1.5 py-0.5 z-10" />
         <div className="flex items-center gap-2.5 mb-3.5 pr-9">
-          <img src="/favicon.svg" alt="" className="w-[26px] h-[26px] rounded-md shrink-0" />
+          <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" className="w-[26px] h-[26px] rounded-md shrink-0" />
           <div className="leading-tight min-w-0">
             <div className="font-semibold text-sm whitespace-nowrap">ClaudeCode Workspace</div>
             <div className="text-[11px] text-txt3 truncate">{t('sidebar.teamName', { name: user?.displayName ?? '' })}</div>

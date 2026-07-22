@@ -23,6 +23,10 @@ ClaudeCode Workspace — 서버 1대 상주 Claude Code 팀 워크스페이스. 
    - React 밖(store 등): `import { t } from './i18n'` (비반응형) 사용.
    - 키 네이밍: 기존 `scope.camelCase` 컨벤션 유지(`sidebar.*`, `common.*`, `chat.*` 등). 조건부 문구는 키 2개로 분기(예: `t(flag ? 'x.a' : 'x.b')`).
 7. **중요 기능은 README 반영.** 자잘한 수정(버그픽스·리팩터·문구 조정)이 아니라, 사용자가 체감하는 새 기능/워크플로가 추가되면 스스로 판단해 `README.md`(영문)와 `README.ko.md`(국문) **양쪽**의 관련 섹션(기능 목록 등)에 간결히 추가한다. 애매하면 넣는 쪽으로.
+8. **새 기능은 정적 데모에도 반영.** 프론트(`web/`)에 사용자에게 보이는 기능을 추가/변경하면, GitHub Pages 정적 데모(`npm run build:demo`, `VITE_DEMO`)에서도 그대로 눌러볼 수 있게 목(mock) 레이어를 함께 갱신한다. 데모는 **실제 컴포넌트·스토어를 그대로 재사용**하므로 UI/스토어 변경은 자동 반영되지만, 백엔드 의존은 목으로 채워야 한다.
+   - 새 **REST 엔드포인트**(`api.get/post/...` 또는 raw `fetch('/api/...')`) → `web/src/demo/router.ts`에 라우트 추가 + 필요한 시드는 `web/src/demo/data.ts`.
+   - 새 **socket 이벤트**(emit/on) → `web/src/demo/socket.ts`에서 처리(들어오는 이벤트는 시뮬레이션, 나가는 이벤트는 해석).
+   - 검증: `npm run build:demo -w web` 후 `npx vite preview --base=/ClaudeCodeWorkspace/`로 브라우저 확인. 상세 가이드는 [web/src/demo/README.md](web/src/demo/README.md).
 
 ## 개발
 

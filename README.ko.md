@@ -10,6 +10,8 @@
 
 세션마다 격리된 Claude Code · 여러 명이 같이 쓰는 공유 대화방 · 브라우저 안의 VS Code까지 — 한 번의 `docker compose up`으로.
 
+[![라이브 데모](https://img.shields.io/badge/▶_라이브_데모-GitHub_Pages-c8613a)](https://scian0204.github.io/ClaudeCodeWorkspace/)
+
 ![status](https://img.shields.io/badge/status-P0--P5%20complete-4f8a52)
 ![stack](https://img.shields.io/badge/stack-Fastify%20%2B%20React%20%2B%20SQLite-c8613a)
 ![realtime](https://img.shields.io/badge/realtime-Socket.IO-6b5b8c)
@@ -22,6 +24,10 @@
 <img src="docs/ccw-demo.gif" alt="ClaudeCode Workspace 데모 — 대화방 채팅 · 웹 권한 승인 · code-server 분할까지" width="92%" />
 
 <sub>로그인 → 대화방 → 메시지 전송 → 웹에서 툴 승인 → 툴 실행 → 분할 뷰로 브라우저 속 VS Code까지 (MOCK 모드 데모)</sub>
+
+<br/><br/>
+
+**▶ [라이브 데모 보기](https://scian0204.github.io/ClaudeCodeWorkspace/)** — 설치도 로그인도 필요 없습니다. 백엔드만 목(mock)으로 바꾼 실제 UI라 스트리밍·툴카드·웹 권한 승인·대화방·LLM Wiki·관리자 패널까지 그대로 눌러볼 수 있습니다. 새로고침하면 데이터는 초기화됩니다.
 
 </div>
 
