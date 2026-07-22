@@ -6,6 +6,7 @@ import { Avatar, timeAgo } from '../lib/ui';
 import { MembersDialog } from './MembersDialog';
 import { WikiExplorer } from './WikiExplorer';
 import { FileExplorer } from './FileExplorer';
+import { GitPanel } from './GitPanel';
 import { SourcesPanel, CiteHighlighter } from './SourcesPanel';
 import { extractSources, markCitations, type WikiSource } from '../lib/wikiCite';
 import { md } from '../lib/md';
@@ -51,6 +52,7 @@ function Header() {
   const { current: c, presence, control, toggleTheme, setViewMode, viewMode, setModel, setMode } = useStore();
   const [showMembers, setShowMembers] = useState(false);
   const [explorer, setExplorer] = useState(false);
+  const [gitOpen, setGitOpen] = useState(false);
   const t = useT();
   if (!c) return null;
   const isRoom = c.kind === 'room';
@@ -81,6 +83,7 @@ function Header() {
 
       {!c.wikiTopicId && <ProjectMenu />}
       {!c.wikiTopicId && c.projectId && <button className="pill" title={t('chat.projectFileExplorer')} onClick={() => setExplorer(true)}>{t('chat.filesBtn')}</button>}
+      {!c.wikiTopicId && c.projectId && <button className="pill" title={t('git.title')} onClick={() => setGitOpen(true)}>{t('git.pill')}</button>}
 
       <DM.Root>
         <DM.Trigger asChild><button className="pill">{MODELS[c.model] || c.model} ▾</button></DM.Trigger>
@@ -112,6 +115,7 @@ function Header() {
       )}
       <button className="toolbtn" title={t('chat.toggleTheme')} onClick={toggleTheme}>◐</button>
 
+      {gitOpen && c.projectId && <GitPanel projectId={c.projectId} open={gitOpen} onClose={() => setGitOpen(false)} />}
       {showMembers && c.room && <MembersDialog open={showMembers} onClose={() => setShowMembers(false)} />}
       {explorer && c.projectId && (
         <FileExplorer
@@ -133,11 +137,14 @@ function ProjectMenu() {
   const [newName, setNewName] = useState('');
   const [gitUrl, setGitUrl] = useState('');
   const [busy, setBusy] = useState(false);
+  const [creds, setCreds] = useState<any[]>([]);
+  const [credentialId, setCredentialId] = useState('');
   const refresh = useStore((s) => s.refreshLists);
 
   useEffect(() => {
     if (c?.kind === 'room' && c.roomId) api.get(`/api/projects/room/${c.roomId}`).then((r) => setRoomProjects(r.projects)).catch(() => {});
   }, [c?.roomId, c?.kind]);
+  useEffect(() => { api.get('/api/git-credentials').then((r) => setCreds([...(r.mine || []), ...(r.common || [])])).catch(() => {}); }, []);
 
   const t = useT();
   if (!c) return null;
@@ -151,7 +158,7 @@ function ProjectMenu() {
     const scope = c.kind === 'room' ? 'room' : 'user';
     setBusy(true);
     try {
-      const { project } = await api.post('/api/projects', { scope, name, roomId: c.roomId, gitUrl: git || undefined });
+      const { project } = await api.post('/api/projects', { scope, name, roomId: c.roomId, gitUrl: git || undefined, credentialId: (git && credentialId) || undefined });
       setNewName(''); setGitUrl(''); await refresh();
       if (c.kind === 'room') { const r = await api.get(`/api/projects/room/${c.roomId}`); setRoomProjects(r.projects); }
       await setProject(project.id);
@@ -177,6 +184,12 @@ function ProjectMenu() {
           <input className="input !py-1 !text-xs" placeholder={t('chat.gitCloneUrlPlaceholder')} value={gitUrl}
             onChange={(e) => setGitUrl(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); create(); } }} />
+          {gitUrl.trim() && (
+            <select className="input !py-1 !text-xs" value={credentialId} onChange={(e) => setCredentialId(e.target.value)}>
+              <option value="">{t('chat.credAuto')}</option>
+              {creds.map((cr) => <option key={cr.id} value={cr.id}>[{cr.provider}] {cr.host} · {cr.username}</option>)}
+            </select>
+          )}
           <button className="btn-ghost !py-1 !text-xs" disabled={busy} onClick={create}>
             {busy ? t('common.creating') : gitUrl.trim() ? t('chat.cloneCreate') : t('chat.createBtn')}
           </button>

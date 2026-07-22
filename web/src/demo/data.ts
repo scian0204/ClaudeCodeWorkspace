@@ -178,6 +178,24 @@ export const ADMIN = {
   settings: { allowBypass: false, maxConcurrentTurns: 3, codeServer: 'codercom/code-server:latest' },
 };
 
+// ---- git credentials + a dirty repo (for the commit/push demo) ----------------
+export const GIT = {
+  creds: {
+    mine: [{ id: 'gc_gh', scope: 'user', provider: 'github', host: 'github.com', username: 'x-access-token', authorEmail: 'demo@ccw.local', setAt: ago(60 * 24 * 4) }],
+    common: [{ id: 'gc_gl', scope: 'common', provider: 'gitlab', host: 'gitlab.com', username: 'oauth2', authorEmail: null, setAt: ago(60 * 24 * 15) }],
+  } as Record<string, any[]>,
+  ahead: 1, behind: 0,
+  files: [
+    { path: 'src/auth/middleware.ts', index: 'M', work: ' ', staged: true },
+    { path: 'src/auth/tokenService.ts', index: ' ', work: 'M', staged: false },
+    { path: 'src/routes/login.ts', index: '?', work: '?', staged: false },
+  ] as any[],
+  status() {
+    return { repo: true, branch: 'main', upstream: true, ahead: this.ahead, behind: this.behind,
+      files: this.files, clean: this.files.length === 0, host: 'github.com', hasCredential: true };
+  },
+};
+
 export const pluginDetail = (id: string) => {
   const all = [...db.plugins.common, ...db.plugins.mine];
   const p = all.find((x) => x.id === id) || db.plugins.common[0];

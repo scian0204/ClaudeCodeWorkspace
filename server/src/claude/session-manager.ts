@@ -10,6 +10,8 @@ import { makeCanUseTool } from './permissions.js';
 import { resolvePluginPaths } from '../plugins/manager.js';
 import { recordUsage } from '../usage/tracker.js';
 import { resolveClaudeAuth } from '../auth/claude-token.js';
+import { originHost } from '../lib/git-ops.js';
+import { resolveGitCred, gitIdentity, identityEnv, askpassEnv } from '../auth/git-cred.js';
 
 type Emit = (event: string, payload: any) => void;
 
@@ -51,6 +53,19 @@ function cwdFor(s: NonNullable<ReturnType<typeof getSession>>): string {
   const dir = s.kind === 'room' ? paths.roomProjects(s.roomId!) : paths.userProjects(s.ownerId);
   ensure(dir);
   return dir;
+}
+
+// Git env for a turn: author identity (always) + push credentials for the workspace's origin host
+// (if one is stored). Lets Claude's own `git commit`/`git push` be attributed and authenticated.
+async function buildGitEnv(cwd: string, userId: string): Promise<Record<string, string> | undefined> {
+  try {
+    const user = db.select().from(schema.users).where(eq(schema.users.id, userId)).get();
+    if (!user) return undefined;
+    const host = await originHost(cwd);
+    const cred = host ? resolveGitCred(userId, host) : null;
+    const ident = gitIdentity({ username: user.username, displayName: user.displayName }, cred);
+    return { ...identityEnv(ident), ...(cred ? askpassEnv(cred) : {}) };
+  } catch { return undefined; }
 }
 
 function saveMessage(row: {
@@ -123,10 +138,11 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
   const mode = clampMode((s.permissionMode as PermMode) || 'default', allowBypass());
   // Each turn runs under its author's token (personal: owner; room: whoever sent this message).
   const auth = resolveClaudeAuth(p.author.id);
+  const gitEnv = await buildGitEnv(cwd, p.author.id);
   const ctx: SessionContext = {
     kind, ownerId, cwd, model: s.model || 'claude-opus-4-8',
     permissionMode: mode, plugins: resolvePluginPaths(kind, ownerId),
-    authToken: auth.token,
+    authToken: auth.token, gitEnv,
   };
 
   // persist + broadcast the human message (speaker prefix for multi-party rooms)
