@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as DM from '@radix-ui/react-dropdown-menu';
 import { useStore, type Block, type Msg } from '../lib/store';
 import { api } from '../lib/api';
@@ -6,6 +6,8 @@ import { Avatar, timeAgo } from '../lib/ui';
 import { MembersDialog } from './MembersDialog';
 import { WikiExplorer } from './WikiExplorer';
 import { FileExplorer } from './FileExplorer';
+import { SourcesPanel, CiteHighlighter } from './SourcesPanel';
+import { extractSources, markCitations, type WikiSource } from '../lib/wikiCite';
 import { md } from '../lib/md';
 import { useT } from '../lib/i18n';
 
@@ -19,13 +21,21 @@ const MODES: Record<string, string> = {
 export function Chat() {
   const c = useStore((s) => s.current)!;
   const viewMode = useStore((s) => s.viewMode);
+  const [sourcesOpen, setSourcesOpen] = useState(true);
+  const isWiki = !!c.wikiTopicId;
+  const cols = isWiki
+    ? (sourcesOpen ? '1fr 300px' : '1fr 44px')
+    : (viewMode === 'split' ? '1fr 1fr' : '1fr');
   return (
     <div className="flex flex-col min-w-0 h-full">
       <Header />
-      <div className="flex-1 grid min-h-0" style={{ gridTemplateColumns: viewMode === 'split' ? '1fr 1fr' : '1fr', gridTemplateRows: 'minmax(0, 1fr)' }}>
+      <div className="flex-1 grid min-h-0" style={{ gridTemplateColumns: cols, gridTemplateRows: 'minmax(0, 1fr)' }}>
         {viewMode !== 'editor' && <ChatPane key={c.chatSessionId} />}
-        {viewMode !== 'chat' && <EditorPane />}
+        {isWiki
+          ? <SourcesPanel topicId={c.wikiTopicId!} open={sourcesOpen} onToggle={() => setSourcesOpen((v) => !v)} />
+          : (viewMode !== 'chat' && <EditorPane />)}
       </div>
+      {isWiki && <CiteHighlighter />}
     </div>
   );
 }
@@ -330,6 +340,8 @@ function FoldedSegment({ seg }: { seg: Segment }) {
 function MessageView({ m }: { m: Msg }) {
   const isClaude = m.role === 'assistant';
   const blocks: Block[] = isClaude ? (m.content.blocks || []) : [];
+  const topicId = useStore((s) => s.current?.wikiTopicId);
+  const sources = useMemo(() => (topicId && isClaude ? extractSources(blocks, topicId) : []), [blocks, topicId, isClaude]);
   const { deleteMessage, editMessage } = useStore();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(m.content.text || '');
@@ -378,7 +390,7 @@ function MessageView({ m }: { m: Msg }) {
         ) : (
           <>
             {!isClaude && <div className="text-sm break-words leading-relaxed" dangerouslySetInnerHTML={{ __html: md(m.content.text || '') }} />}
-            {isClaude && <BlockList blocks={blocks} />}
+            {isClaude && <BlockList blocks={blocks} sources={sources} />}
             {m.content.interrupted && <div className="text-[11px] text-warn mt-1">{t('chat.interrupted')}</div>}
           </>
         )}
@@ -404,11 +416,21 @@ function LiveView() {
   );
 }
 
-function BlockList({ blocks }: { blocks: Block[] }) {
+// Rendered answer text. In wiki mode, mentions of cited sources are wrapped as hoverable/clickable
+// <mark> citations (markCitations mutates the DOM after React sets innerHTML; re-runs when either
+// the html or the source set changes).
+function MdText({ text, sources }: { text: string; sources: WikiSource[] }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const html = useMemo(() => md(text), [text]);
+  useLayoutEffect(() => { if (ref.current) markCitations(ref.current, sources); }, [html, sources]);
+  return <div ref={ref} className="font-serif text-[15px] leading-relaxed break-words" dangerouslySetInnerHTML={{ __html: html }} />;
+}
+
+function BlockList({ blocks, sources = [] }: { blocks: Block[]; sources?: WikiSource[] }) {
   return (
     <>
       {blocks.map((b, i) => b.type === 'text'
-        ? <div key={i} className="font-serif text-[15px] leading-relaxed break-words" dangerouslySetInnerHTML={{ __html: md(b.text) }} />
+        ? <MdText key={i} text={b.text} sources={sources} />
         : <ToolCard key={i} b={b} />)}
     </>
   );
