@@ -157,6 +157,21 @@ flowchart TB
 - 개인 티어 = 유저 자유(마켓 추가·설치·공통 클래스2 on/off)
 </details>
 
+<details>
+<summary><b>LLM Wiki (팀 지식 기반)</b></summary>
+
+- 관리자가 문서/이미지 폴더를 업로드 → Claude가 `raw/` 소스를 읽어 `wiki/` 아티클 + `_index.md`로 **자동 컴파일**(멀티모달, 이미지 전사 포함)
+- **이미 컴파일된 위키 임포트:** 주제 생성 시 "이미 컴파일된 위키" 옵션 → 컴파일 생략, 완성본을 그대로 사용(주제 export 재활용)
+- 사용자는 각자 **개인 스레드**에서 위키 범위 내 읽기 전용 질의, 파일 탐색기로 raw/wiki 열람
+</details>
+
+<details>
+<summary><b>다국어 UI (한국어 / English)</b></summary>
+
+- 사이드바 상단 토글로 즉시 전환, `localStorage` 저장 + 브라우저 언어 자동 감지
+- 사전 1곳(`web/src/lib/i18n.ts`)에서 관리, 신규 UI 문자열은 항상 i18n 처리
+</details>
+
 ---
 
 ## ⚙️ 설정 (.env)

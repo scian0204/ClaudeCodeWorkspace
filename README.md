@@ -157,6 +157,21 @@ flowchart TB
 - Personal tier = user-controlled (add marketplaces · install · toggle common class-2)
 </details>
 
+<details>
+<summary><b>LLM Wiki (team knowledge base)</b></summary>
+
+- Admin uploads a folder of docs/images → Claude reads the `raw/` sources and **auto-compiles** them into `wiki/` articles + `_index.md` (multimodal — images transcribed too)
+- **Import an already-compiled wiki:** on topic creation, the "already-compiled wiki" option skips compilation and uses the finished wiki as-is (reuse a topic export)
+- Each user gets a **private thread** for read-only queries scoped to the wiki; browse raw/wiki via the file explorer
+</details>
+
+<details>
+<summary><b>Multilingual UI (Korean / English)</b></summary>
+
+- Instant switch from the sidebar toggle, persisted to `localStorage` + browser-language auto-detect
+- Managed from a single dictionary (`web/src/lib/i18n.ts`); new UI strings always go through i18n
+</details>
+
 ---
 
 ## ⚙️ Configuration (.env)
