@@ -1,4 +1,5 @@
 import path from 'node:path';
+import fs from 'node:fs';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { and, eq } from 'drizzle-orm';
@@ -49,6 +50,53 @@ export async function installFromGit(scope: 'common' | 'user', ownerId: string |
   ensure(path.dirname(dest));
   await run('git', ['clone', '--depth', '1', repo, dest]);
   return record(scope, ownerId, name, 'marketplace', repo, dest);
+}
+
+export function getPlugin(id: string) {
+  return db.select().from(schema.plugins).where(eq(schema.plugins.id, id)).get();
+}
+
+// pull one `key: value` out of a SKILL.md YAML frontmatter block (unquoted or quoted)
+function frontmatter(text: string): { name?: string; description?: string } {
+  const m = text.match(/^---\s*\n([\s\S]*?)\n---/);
+  if (!m) return {};
+  const out: Record<string, string> = {};
+  for (const line of m[1].split('\n')) {
+    const kv = line.match(/^([A-Za-z_-]+):\s*(.*)$/);
+    if (kv) out[kv[1].toLowerCase()] = kv[2].trim().replace(/^["']|["']$/g, '');
+  }
+  return { name: out.name, description: out.description };
+}
+
+// Read a plugin's manifest + the skills it exposes (skills/<dir>/SKILL.md frontmatter).
+export function pluginDetail(dir: string) {
+  let manifest: any = null;
+  try { manifest = JSON.parse(fs.readFileSync(path.join(dir, '.claude-plugin', 'plugin.json'), 'utf8')); } catch { /* no manifest */ }
+  const skills: { dir: string; name: string; description: string }[] = [];
+  try {
+    for (const e of fs.readdirSync(path.join(dir, 'skills'), { withFileTypes: true })) {
+      if (!e.isDirectory()) continue;
+      const md = path.join(dir, 'skills', e.name, 'SKILL.md');
+      if (!fs.existsSync(md)) continue;
+      const fm = frontmatter(fs.readFileSync(md, 'utf8'));
+      skills.push({ dir: e.name, name: fm.name || e.name, description: fm.description || '' });
+    }
+  } catch { /* no skills dir */ }
+  skills.sort((a, b) => a.name.localeCompare(b.name));
+  return { manifest, skills };
+}
+
+// Update a git-installed plugin in place: refresh to the remote's latest HEAD.
+// Shallow-clone-safe (fetch depth 1 + hard reset); discards any local edits in the plugin dir.
+export async function updatePlugin(id: string) {
+  const p = getPlugin(id);
+  if (!p) throw new Error('plugin not found');
+  if (p.source !== 'marketplace' || !p.repo) throw new Error('git 저장소 플러그인만 업데이트할 수 있습니다');
+  const opts = { env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '/bin/echo' } };
+  await run('git', ['-C', p.path, 'fetch', '--depth', '1', 'origin', 'HEAD'], opts);
+  await run('git', ['-C', p.path, 'reset', '--hard', 'FETCH_HEAD'], opts);
+  await run('git', ['-C', p.path, 'clean', '-fd'], opts);
+  return p;
 }
 
 // local upload: a .tar.gz of the plugin dir. Uses system tar (present in image).

@@ -5,8 +5,9 @@ import { pipeline } from 'node:stream/promises';
 import type { FastifyInstance } from 'fastify';
 import { eq } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
-import { requireAuth, requireAdmin } from '../auth/index.js';
+import { requireAuth, requireAdmin, type AuthUser } from '../auth/index.js';
 import { newId } from '../lib/ids.js';
+import { walkFiles, resolveUnder, IMG_CT } from '../lib/filetree.js';
 import * as pm from '../plugins/manager.js';
 
 function ownsPlugin(id: string, userId: string): boolean {
@@ -15,6 +16,12 @@ function ownsPlugin(id: string, userId: string): boolean {
 }
 function pluginScope(id: string) {
   return db.select().from(schema.plugins).where(eq(schema.plugins.id, id)).get();
+}
+// who may VIEW a plugin's detail/files: common → any signed-in user; user-scoped → owner or admin
+function canViewPlugin(u: AuthUser, p: NonNullable<ReturnType<typeof pluginScope>>): boolean {
+  if (u.role === 'admin') return true;
+  if (p.scope === 'common') return true;
+  return p.scope === 'user' && p.ownerId === u.id;
 }
 
 export async function pluginRoutes(app: FastifyInstance) {
@@ -107,6 +114,59 @@ export async function pluginRoutes(app: FastifyInstance) {
     if (p.forced) return reply.code(403).send({ error: 'plugin is mandatory (admin-forced)' });
     pm.setUserPref(u.id, id, !!enabled);
     return { ok: true };
+  });
+
+  // plugin detail: manifest + exposed skills (skills/<dir>/SKILL.md)
+  app.get('/api/plugins/:id/detail', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    const p = pluginScope((req.params as any).id); if (!p) return reply.code(404).send({ error: 'not found' });
+    if (!canViewPlugin(u, p)) return reply.code(403).send({ error: 'forbidden' });
+    return { plugin: { id: p.id, name: p.name, scope: p.scope, source: p.source, repo: p.repo }, ...pm.pluginDetail(path.resolve(p.path)) };
+  });
+
+  // file tree of a plugin dir (paths + sizes) — reuses the shared explorer
+  app.get('/api/plugins/:id/tree', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    const p = pluginScope((req.params as any).id); if (!p) return reply.code(404).send({ error: 'not found' });
+    if (!canViewPlugin(u, p)) return reply.code(403).send({ error: 'forbidden' });
+    return { files: walkFiles(path.resolve(p.path)) };
+  });
+
+  // one file's text content — ?path=<relative>
+  app.get('/api/plugins/:id/file', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    const p = pluginScope((req.params as any).id); if (!p) return reply.code(404).send({ error: 'not found' });
+    if (!canViewPlugin(u, p)) return reply.code(403).send({ error: 'forbidden' });
+    const full = resolveUnder(path.resolve(p.path), String((req.query as any).path || ''));
+    if (!full || !fs.existsSync(full) || !fs.statSync(full).isFile()) return reply.code(404).send({ error: 'not found' });
+    const st = fs.statSync(full);
+    if (st.size > 500_000) return { name: full, size: st.size, content: `(파일이 큽니다: ${st.size} bytes — 생략)` };
+    const buf = fs.readFileSync(full);
+    const content = buf.includes(0) ? '(바이너리 파일 — 미리보기 없음)' : buf.toString('utf8');
+    return { name: full, size: st.size, content };
+  });
+
+  // raw file bytes — for <img> preview; ?path=<relative>
+  app.get('/api/plugins/:id/blob', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    const p = pluginScope((req.params as any).id); if (!p) return reply.code(404).send({ error: 'not found' });
+    if (!canViewPlugin(u, p)) return reply.code(403).send({ error: 'forbidden' });
+    const full = resolveUnder(path.resolve(p.path), String((req.query as any).path || ''));
+    if (!full || !fs.existsSync(full) || !fs.statSync(full).isFile()) return reply.code(404).send({ error: 'not found' });
+    const ext = (full.split('.').pop() || '').toLowerCase();
+    reply.header('Content-Type', IMG_CT[ext] || 'application/octet-stream');
+    reply.header('Cache-Control', 'private, max-age=60');
+    return reply.send(fs.createReadStream(full));
+  });
+
+  // update a git-installed plugin to the remote's latest (common→admin, personal→owner)
+  app.post('/api/plugins/:id/update', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    const p = pluginScope((req.params as any).id); if (!p) return reply.code(404).send({ error: 'not found' });
+    if (p.scope === 'common' && u.role !== 'admin') return reply.code(403).send({ error: 'admin only' });
+    if (p.scope === 'user' && !ownsPlugin(p.id, u.id) && u.role !== 'admin') return reply.code(403).send({ error: 'forbidden' });
+    try { await pm.updatePlugin(p.id); return { ok: true }; }
+    catch (e: any) { return reply.code(500).send({ error: String(e?.message || e) }); }
   });
 
   app.delete('/api/plugins/:id', async (req, reply) => {
