@@ -340,6 +340,7 @@ const ko: Dict = {
   'wikiSources.expand': '출처 열기',
   'wikiSources.back': '← 목록',
   'wikiSources.notFound': '파일을 찾을 수 없습니다. (모델이 적은 경로와 실제 파일이 다를 수 있어요)',
+  'wikiSources.resize': '드래그해서 폭 조절',
 };
 
 const en: Dict = {
@@ -621,6 +622,7 @@ const en: Dict = {
   'wikiSources.expand': 'Open sources',
   'wikiSources.back': '← List',
   'wikiSources.notFound': "File not found (the model's written path may differ from the real file).",
+  'wikiSources.resize': 'Drag to resize',
 };
 
 const DICT: Record<Lang, Dict> = { ko, en };

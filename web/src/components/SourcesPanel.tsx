@@ -23,11 +23,26 @@ export function CiteHighlighter() {
 
 // Right-side panel for LLM-Wiki threads: aggregates every source the assistant cited across the
 // conversation (grouped wiki / raw), highlights on hover, and previews the file on click.
-export function SourcesPanel({ topicId, open, onToggle }: { topicId: string; open: boolean; onToggle: () => void }) {
+export function SourcesPanel({ topicId, open, onToggle, width, onResize }: { topicId: string; open: boolean; onToggle: () => void; width: number; onResize: (w: number) => void }) {
   const messages = useStore((s) => s.messages);
   const live = useStore((s) => s.live);
   const { hovered, preview, setHovered, openPreview } = useCite();
   const t = useT();
+
+  // drag the left edge to widen/narrow the panel (delta-based; Chat clamps + persists)
+  const startDrag = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX, startW = width;
+    const move = (ev: MouseEvent) => onResize(startW - (ev.clientX - startX));
+    const up = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      document.body.style.userSelect = '';
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+    document.body.style.userSelect = 'none';
+  };
 
   // reset the open preview when switching threads/topics
   useEffect(() => () => openPreview(null), [topicId]);
@@ -56,7 +71,9 @@ export function SourcesPanel({ topicId, open, onToggle }: { topicId: string; ope
   ];
 
   return (
-    <aside className="border-l border-line bg-panel flex flex-col min-h-0">
+    <aside className="relative border-l border-line bg-panel flex flex-col min-h-0">
+      <div onMouseDown={startDrag} title={t('wikiSources.resize')}
+        className="absolute left-0 top-0 h-full w-1.5 -ml-0.5 cursor-col-resize z-10 hover:bg-clay/40" />
       <div className="flex items-center gap-2 px-3 py-2.5 border-b border-line shrink-0">
         <span>📎</span>
         <span className="font-semibold text-sm">{t('wikiSources.title')}</span>
