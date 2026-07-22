@@ -1,7 +1,7 @@
 // Routes every /api/* request to canned data / in-memory mutations for the static demo.
 // Called by the fetch + XHR interceptors in ./install. Returns a plain {status, data}.
 import {
-  db, ADMIN, COMMANDS, TREE_PROJECT, TREE_PLUGIN, WIKI_ARTICLES, WIKI_RAW, WIKI_TREE_ARTICLES,
+  db, ADMIN, GIT, COMMANDS, TREE_PROJECT, TREE_PLUGIN, WIKI_ARTICLES, WIKI_RAW, WIKI_TREE_ARTICLES,
   fileContent, wikiFileContent, pluginDetail, EDITOR_URL, genId,
 } from './data';
 
@@ -82,6 +82,28 @@ export function route(method: string, rawPath: string, body?: any): Res {
   if (seg[1] === 'projects' && seg[3] === 'tree') return ok({ files: TREE_PROJECT });
   if (seg[1] === 'projects' && seg[3] === 'open-editor') return ok({ url: EDITOR_URL });
   if (seg[1] === 'projects' && seg[3] === 'file') { const path = query.get('path') || ''; return ok({ name: path.split('/').pop(), content: fileContent(path) }); }
+  if (seg[1] === 'projects' && seg[3] === 'git' && seg[4] === 'status') return ok(GIT.status());
+  if (seg[1] === 'projects' && seg[3] === 'git' && seg[4] === 'commit') {
+    const picked: string[] = Array.isArray(b.files) ? b.files : [];
+    GIT.files = picked.length ? GIT.files.filter((f: any) => !picked.includes(f.path)) : [];
+    GIT.ahead += 1;
+    return ok({ ok: true, commit: genId('c').slice(2, 9) });
+  }
+  if (seg[1] === 'projects' && seg[3] === 'git' && seg[4] === 'push') { GIT.ahead = 0; GIT.behind = 0; return ok({ ok: true, output: 'Everything up-to-date (demo)' }); }
+
+  // ---- git credentials ----
+  if (P === '/api/git-credentials' && M === 'GET') return ok({ mine: GIT.creds.mine, common: GIT.creds.common });
+  if (P === '/api/git-credentials' && M === 'POST') {
+    const scope = b.scope === 'common' ? 'common' : 'user';
+    const cred = { id: genId('gc'), scope, provider: b.provider || 'other', host: b.host, username: b.username, authorEmail: b.authorEmail || null, setAt: Date.now() };
+    GIT.creds[scope].push(cred);
+    return ok({ credential: cred });
+  }
+  if (seg[1] === 'git-credentials' && seg[2] && M === 'DELETE') {
+    GIT.creds.mine = GIT.creds.mine.filter((c: any) => c.id !== idAt(2));
+    GIT.creds.common = GIT.creds.common.filter((c: any) => c.id !== idAt(2));
+    return ok({ ok: true });
+  }
 
   // ---- wiki ----
   if (P === '/api/wiki/topics' && M === 'GET') return ok({ topics: db.wikiTopics });
