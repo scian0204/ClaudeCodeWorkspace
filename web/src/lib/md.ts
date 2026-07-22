@@ -21,6 +21,10 @@ if (typeof document !== 'undefined' && !(window as any).__mdCopyBound) {
 const fenceTok = (i: number) => `\x00f${i}\x00`;
 const codeTok = (i: number) => `\x00c${i}\x00`;
 
+// image src resolver for the current md() call — maps relative image hrefs to real URLs
+// (e.g. wiki blob endpoint). Set per call from opts.img; undefined = relative images dropped.
+let IMG: ((src: string) => string | null) | undefined;
+
 // inline spans, applied to already-escaped text. code spans are pulled out first so **/_/~~
 // inside them aren't reprocessed.
 function inline(t: string): string {
@@ -30,7 +34,10 @@ function inline(t: string): string {
     return codeTok(codes.length - 1);
   });
   t = t
-    .replace(/!\[([^\]]*)\]\((https?:[^)\s]+)\)/g, '<img src="$2" alt="$1" class="max-w-full rounded my-1"/>')
+    .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_m, alt, url) => {
+      const src = /^https?:/i.test(url) ? url : (IMG ? IMG(url) : null);
+      return src ? `<img src="${src}" alt="${alt}" class="max-w-full rounded my-1"/>` : (alt || '');
+    })
     .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-clay underline">$1</a>')
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/~~([^~]+)~~/g, '<del>$1</del>')
@@ -42,13 +49,15 @@ function inline(t: string): string {
 // Lightweight block-level Markdown → HTML (escape-first = XSS-safe). ponytail: hand-rolled, no dep.
 // Covers headings(1-6), hr, blockquote, fenced code, ul/ol + task items, GFM tables, paragraphs
 // with soft breaks, and inline bold/italic/strike/code/links/images.
-export function md(src: string): string {
+export function md(src: string, opts?: { img?: (src: string) => string | null }): string {
+  IMG = opts?.img;
   // 1) pull fenced code blocks out first (before escaping/splitting)
   const cb: string[] = [];
   let s = src.replace(/```(\w*)\n?([\s\S]*?)```/g, (_m, _lang, code) => {
     cb.push(`<div class="relative group/code"><button type="button" data-copy class="absolute top-1.5 right-1.5 z-10 text-[11px] px-1.5 py-0.5 rounded border border-line bg-card text-txt3 opacity-70 hover:opacity-100 hover:text-clay transition" title="복사">복사</button><pre class="bg-bg border border-line rounded-lg p-3 my-2 overflow-x-auto scrolly"><code class="font-mono text-[13px]">${esc(code.replace(/\n$/, ''))}</code></pre></div>`);
     return fenceTok(cb.length - 1);
   });
+  s = s.replace(/<\/?aside[^>]*>/gi, ''); // Notion callout wrapper — unwrap so inner markdown renders
   s = esc(s);
 
   const lines = s.split('\n');

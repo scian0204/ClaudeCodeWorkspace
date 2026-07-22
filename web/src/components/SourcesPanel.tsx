@@ -3,7 +3,7 @@ import { useStore } from '../lib/store';
 import { api } from '../lib/api';
 import { md } from '../lib/md';
 import { useT } from '../lib/i18n';
-import { isImage, isMarkdown } from './FileExplorer';
+import { isImage, isMarkdown, resolveRelAsset } from './FileExplorer';
 import { citeId, extractSources, resolveRealPath, useCite, type WikiSource } from '../lib/wikiCite';
 
 // Toggles the `.on` class on every in-text citation mark matching the hovered source, so hovering
@@ -162,7 +162,7 @@ function CitePreview({ topicId, src, onBack }: { topicId: string; src: WikiSourc
         ) : loading ? (
           <div className="text-txt3 text-xs p-3">{t('fileExplorer.loading')}</div>
         ) : file && isMarkdown(real.path) && !raw ? (
-          <div className="p-3 text-sm break-words leading-relaxed" dangerouslySetInnerHTML={{ __html: md(file.content) }} />
+          <div className="p-3 text-sm break-words leading-relaxed" dangerouslySetInnerHTML={{ __html: md(file.content, { img: (s) => `/api/wiki/topics/${topicId}/blob?dir=${real.dir}&path=${encodeURIComponent(resolveRelAsset(real.path.split('/').slice(0, -1).join('/'), s))}` }) }} />
         ) : file ? (
           <pre className="whitespace-pre-wrap break-words font-mono text-[11px] text-txt2 p-3">{file.content}</pre>
         ) : null}
