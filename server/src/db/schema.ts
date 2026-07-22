@@ -127,3 +127,18 @@ export const settings = sqliteTable('settings', {
   key: text('key').primaryKey(),
   value: text('value').notNull(),
 });
+
+// Git remote credentials (HTTPS PAT), encrypted at rest. Mirrors the Claude-token model:
+// per-user creds override an admin-managed common cred, resolved by remote host.
+export const gitCredentials = sqliteTable('git_credentials', {
+  id: text('id').primaryKey(),
+  scope: text('scope').notNull(),        // 'user' | 'common'
+  ownerId: text('owner_id').notNull(),   // user id for 'user'; '' for 'common' (keeps the unique index working)
+  provider: text('provider').notNull(),  // 'github' | 'gitlab' | 'bitbucket' | 'other'
+  host: text('host').notNull(),          // resolution key, e.g. github.com
+  username: text('username').notNull(),  // git username (the PAT is the password)
+  tokenEnc: text('token_enc').notNull(), // AES-GCM blob
+  authorName: text('author_name'),       // optional git author override
+  authorEmail: text('author_email'),     // optional git author email override
+  createdAt: integer('created_at').notNull(),
+});

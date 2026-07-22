@@ -41,6 +41,7 @@ The Claude Code CLI is powerful, but it's tied to **one terminal — yours**. Cl
 - Gather in a **shared room** to drive one Claude together (like a group chat)
 - Risky actions that need approval → **approve/deny live, in the browser**
 - Open **VS Code (code-server)** right there for editing, terminal, and git
+- **Commit & push** a cloned repo from the chat header (or let Claude do it) with encrypted per-user git credentials
 - Build a team **LLM Wiki** — upload docs, Claude compiles them into a queryable knowledge base
 - Each user runs on **their own Claude token** (admin-common token + env as fallback); admins see everything via a **usage dashboard**
 
@@ -58,6 +59,7 @@ The Claude Code CLI is powerful, but it's tied to **one terminal — yours**. Cl
 | 🧑‍💻 | **VS Code in the browser** | Spin up a project in a code-server container instantly. Mounts only your volume + the shared one (isolated); auto-reaped when idle. |
 | 🔌 | **Two-class plugins** | Common (admin) and personal (user) tiers. Install via git or local upload, admin-forced plugins, per-user on/off. Per-plugin detail view + one-click update. |
 | 🪪 | **Per-user Claude tokens** | Each member registers their own token (encrypted at rest); usage and cost are attributed per person. Falls back to an admin-set common token, then env. |
+| ⑂ | **Git commit & push** | Commit (with file-level staging) and push a cloned project right from the chat header — Claude can also commit/push itself. HTTPS PAT credentials for GitHub/GitLab/Bitbucket are encrypted per-user (admin-common fallback), picked at clone time, resolved by host. |
 | 📚 | **LLM Wiki knowledge base** | Upload a folder of docs/images; Claude compiles them into cross-linked articles users can query in read-only threads. Import an already-compiled wiki to skip compilation. |
 | 🔑 | **Fully functional without a key** | With no token anywhere, it runs in **MOCK mode** — streaming, permissions, and tool-card UX all demoable. Ideal for evaluation, demos, CI. |
 | 🐳 | **One-shot deploy** | Multi-stage single image + `docker compose up`. code-server spawns dynamically as sibling containers (no orchestrator needed). |

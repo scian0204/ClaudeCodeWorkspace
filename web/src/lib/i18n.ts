@@ -341,6 +341,40 @@ const ko: Dict = {
   'wikiSources.back': '← 목록',
   'wikiSources.notFound': '파일을 찾을 수 없습니다. (모델이 적은 경로와 실제 파일이 다를 수 있어요)',
   'wikiSources.resize': '드래그해서 폭 조절',
+
+  // git credentials
+  'sidebar.gitCreds': 'Git 자격증명',
+  'gitcred.title': 'Git 자격증명',
+  'gitcred.notice': '원격 저장소(GitHub·GitLab·Bitbucket)에 클론/푸시할 때 쓰는 HTTPS 개인 액세스 토큰(PAT)입니다. 토큰은 암호화되어 저장되며 다시 표시되지 않습니다.',
+  'gitcred.none': '등록된 자격증명이 없습니다.',
+  'gitcred.add': '추가',
+  'gitcred.deleteConfirm': '이 자격증명을 삭제할까요?',
+  'gitcred.fillRequired': '호스트·사용자명·토큰은 필수입니다.',
+  'gitcred.saveFailed': '저장 실패',
+  'gitcred.hostPlaceholder': '호스트 (예: github.com)',
+  'gitcred.usernamePlaceholder': '사용자명',
+  'gitcred.tokenPlaceholder': '개인 액세스 토큰 (PAT)',
+  'gitcred.authorNamePlaceholder': '커밋 작성자 이름 (선택)',
+  'gitcred.authorEmailPlaceholder': '커밋 작성자 이메일 (선택)',
+  'gitcred.hint': 'GitHub는 사용자명에 x-access-token, GitLab은 oauth2를 쓰면 편합니다. 토큰이 비밀번호 역할을 합니다.',
+  'admin.gitCredsTitle': '공용 Git 자격증명',
+  'admin.gitCredsHint': '모든 사용자에게 공유되는 원격 저장소 자격증명입니다. 개인 자격증명이 있으면 그쪽이 우선합니다.',
+  'chat.credAuto': '자동 (호스트로 매칭)',
+
+  // git commit / push
+  'git.title': 'Git 커밋 · 푸시',
+  'git.pill': '⑂ Git',
+  'git.noRepo': 'git 저장소가 아닙니다. (클론한 프로젝트에서만 커밋/푸시할 수 있어요)',
+  'git.clean': '변경 사항 없음 — 작업 트리가 깨끗합니다.',
+  'git.aheadBehind': 'ahead {ahead} · behind {behind}',
+  'git.noUpstream': '업스트림 미설정 (첫 푸시 시 origin에 설정)',
+  'git.changes': '변경 파일 {n}개',
+  'git.messagePlaceholder': '커밋 메시지',
+  'git.needMessage': '커밋 메시지를 입력하세요.',
+  'git.commit': '커밋 ({n})',
+  'git.push': '푸시',
+  'git.commitDone': '커밋됨: {commit}',
+  'git.pushDone': '푸시 완료',
 };
 
 const en: Dict = {
@@ -623,6 +657,40 @@ const en: Dict = {
   'wikiSources.back': '← List',
   'wikiSources.notFound': "File not found (the model's written path may differ from the real file).",
   'wikiSources.resize': 'Drag to resize',
+
+  // git credentials
+  'sidebar.gitCreds': 'Git credentials',
+  'gitcred.title': 'Git credentials',
+  'gitcred.notice': 'HTTPS personal access tokens (PAT) used to clone/push to remote repos (GitHub, GitLab, Bitbucket). Tokens are stored encrypted and never shown again.',
+  'gitcred.none': 'No credentials yet.',
+  'gitcred.add': 'Add',
+  'gitcred.deleteConfirm': 'Delete this credential?',
+  'gitcred.fillRequired': 'Host, username and token are required.',
+  'gitcred.saveFailed': 'Save failed',
+  'gitcred.hostPlaceholder': 'Host (e.g. github.com)',
+  'gitcred.usernamePlaceholder': 'Username',
+  'gitcred.tokenPlaceholder': 'Personal access token (PAT)',
+  'gitcred.authorNamePlaceholder': 'Commit author name (optional)',
+  'gitcred.authorEmailPlaceholder': 'Commit author email (optional)',
+  'gitcred.hint': 'Tip: GitHub accepts x-access-token as the username, GitLab uses oauth2. The token acts as the password.',
+  'admin.gitCredsTitle': 'Common git credentials',
+  'admin.gitCredsHint': 'Remote credentials shared with all users. A user’s own credential takes precedence.',
+  'chat.credAuto': 'Auto (match by host)',
+
+  // git commit / push
+  'git.title': 'Git commit & push',
+  'git.pill': '⑂ Git',
+  'git.noRepo': 'Not a git repository. (Commit/push works only in cloned projects.)',
+  'git.clean': 'No changes — working tree is clean.',
+  'git.aheadBehind': 'ahead {ahead} · behind {behind}',
+  'git.noUpstream': 'No upstream set (will set origin on first push)',
+  'git.changes': '{n} changed file(s)',
+  'git.messagePlaceholder': 'Commit message',
+  'git.needMessage': 'Enter a commit message.',
+  'git.commit': 'Commit ({n})',
+  'git.push': 'Push',
+  'git.commitDone': 'Committed: {commit}',
+  'git.pushDone': 'Pushed',
 };
 
 const DICT: Record<Lang, Dict> = { ko, en };

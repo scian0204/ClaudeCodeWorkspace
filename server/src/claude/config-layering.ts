@@ -12,6 +12,7 @@ export interface SessionContext {
   permissionMode: PermMode;
   plugins: string[]; // resolved enabled plugin dir paths (common class-2 + forced + personal)
   authToken: string; // resolved Claude token for the turn's author ('' => mock/no-auth)
+  gitEnv?: Record<string, string>; // git author identity + askpass creds so Claude can commit/push
 }
 
 export function homeFor(ctx: SessionContext): string {
@@ -51,6 +52,8 @@ export function buildOptions(ctx: SessionContext, extra: {
     if (key.startsWith('sk-ant-oat')) env.CLAUDE_CODE_OAUTH_TOKEN = key;
     else env.ANTHROPIC_API_KEY = key;
   }
+  // Git identity + credentials so the agent's own `git commit`/`git push` are attributed and authenticated.
+  if (ctx.gitEnv) Object.assign(env, ctx.gitEnv);
 
   const options: any = {
     cwd: ctx.cwd,

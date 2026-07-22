@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import { Avatar, timeAgo, LangToggle } from '../lib/ui';
 import { Modal } from './Modal';
 import { MyTokenModal } from './TokenSettings';
+import { GitCredentialsModal } from './GitCredentials';
 import { useT } from '../lib/i18n';
 
 export function Sidebar() {
@@ -12,6 +13,7 @@ export function Sidebar() {
   const [roomName, setRoomName] = useState('');
   const [showWiki, setShowWiki] = useState(false);
   const [showToken, setShowToken] = useState(false);
+  const [showGitCreds, setShowGitCreds] = useState(false);
   const isAdmin = user?.role === 'admin';
   const t = useT();
 
@@ -86,6 +88,9 @@ export function Sidebar() {
           <span className="w-7 text-center">🔑</span> {t('sidebar.myToken')}
           {!user?.hasClaudeToken && <span className="ml-auto text-[10px] bg-warnsoft text-warn px-1.5 py-0.5 rounded-full">{t('sidebar.tokenUnregistered')}</span>}
         </button>
+        <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full hover:bg-line text-left text-[13px] text-txt2" onClick={() => setShowGitCreds(true)}>
+          <span className="w-7 text-center">🔀</span> {t('sidebar.gitCreds')}
+        </button>
         <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full hover:bg-line text-left text-[13px] text-txt2" onClick={() => setPanel('plugins')}>
           <span className="w-7 text-center">🧩</span> {t('sidebar.plugins')}
         </button>
@@ -110,6 +115,7 @@ export function Sidebar() {
 
       {showWiki && <WikiCreateModal onClose={() => setShowWiki(false)} />}
       <MyTokenModal open={showToken} onClose={() => setShowToken(false)} />
+      <GitCredentialsModal open={showGitCreds} onClose={() => setShowGitCreds(false)} />
     </aside>
   );
 }

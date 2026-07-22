@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useStore } from '../lib/store';
 import { api } from '../lib/api';
 import { useT } from '../lib/i18n';
+import { GitCredList } from './GitCredentials';
 
 export function AdminPanel() {
   const setPanel = useStore((s) => s.setPanel);
@@ -69,6 +70,11 @@ export function AdminPanel() {
             <button className="btn-primary" onClick={saveCommon}>{t('admin.save')}</button>
           </div>
           <div className="text-[11px] text-txt3 mt-1.5">{t('admin.commonTokenHint', { key: 'ANTHROPIC_API_KEY' })}</div>
+        </Section>
+
+        <Section title={t('admin.gitCredsTitle')}>
+          <div className="text-[11px] text-txt3 mb-2">{t('admin.gitCredsHint')}</div>
+          <GitCredList scope="common" />
         </Section>
 
         <Section title={t('admin.usageTitle')}>

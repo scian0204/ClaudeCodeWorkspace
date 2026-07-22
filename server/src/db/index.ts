@@ -60,6 +60,12 @@ CREATE TABLE IF NOT EXISTS usage (
 );
 CREATE INDEX IF NOT EXISTS idx_usage_user ON usage(user_id, created_at);
 CREATE TABLE IF NOT EXISTS settings ( key TEXT PRIMARY KEY, value TEXT NOT NULL );
+CREATE TABLE IF NOT EXISTS git_credentials (
+  id TEXT PRIMARY KEY, scope TEXT NOT NULL, owner_id TEXT NOT NULL,
+  provider TEXT NOT NULL, host TEXT NOT NULL, username TEXT NOT NULL, token_enc TEXT NOT NULL,
+  author_name TEXT, author_email TEXT, created_at INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_git_cred_scope_owner_host ON git_credentials(scope, owner_id, host);
 `;
 
 export let sqlite: Database.Database;

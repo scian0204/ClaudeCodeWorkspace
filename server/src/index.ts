@@ -15,6 +15,7 @@ import { projectRoutes } from './routes/projects.js';
 import { wikiRoutes, reapWikiStaging, reapWikiOrphans } from './routes/wiki.js';
 import { pluginRoutes } from './routes/plugins.js';
 import { adminRoutes } from './routes/admin.js';
+import { gitCredentialRoutes } from './routes/git-credentials.js';
 import { initRealtime } from './realtime/io.js';
 import { startReaper, cleanupOrphans } from './codeserver/manager.js';
 import { isCsPath, handleHttp, handleUpgrade } from './codeserver/proxy.js';
@@ -45,6 +46,7 @@ async function main() {
   await app.register(wikiRoutes);
   await app.register(pluginRoutes);
   await app.register(adminRoutes);
+  await app.register(gitCredentialRoutes);
 
   app.get('/api/health', async () => ({ ok: true, mock: config.forceMock }));
 
