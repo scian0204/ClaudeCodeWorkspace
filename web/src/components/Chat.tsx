@@ -18,13 +18,20 @@ const MODES: Record<string, string> = {
   default: 'chat.modeDefault', acceptEdits: 'chat.modeAcceptEdits', bypassPermissions: 'chat.modeBypass', plan: 'chat.modePlan',
 };
 
+const clampPanelW = (w: number) => Math.max(300, Math.min(w, 1000));
+
 export function Chat() {
   const c = useStore((s) => s.current)!;
   const viewMode = useStore((s) => s.viewMode);
   const [sourcesOpen, setSourcesOpen] = useState(true);
+  const [panelW, setPanelW] = useState(() => {
+    const v = Number(localStorage.getItem('wikiSourcesW'));
+    return v ? clampPanelW(v) : 360;
+  });
+  const resize = (w: number) => { const c2 = clampPanelW(w); setPanelW(c2); localStorage.setItem('wikiSourcesW', String(c2)); };
   const isWiki = !!c.wikiTopicId;
   const cols = isWiki
-    ? (sourcesOpen ? '1fr 300px' : '1fr 44px')
+    ? (sourcesOpen ? `1fr ${panelW}px` : '1fr 44px')
     : (viewMode === 'split' ? '1fr 1fr' : '1fr');
   return (
     <div className="flex flex-col min-w-0 h-full">
@@ -32,7 +39,7 @@ export function Chat() {
       <div className="flex-1 grid min-h-0" style={{ gridTemplateColumns: cols, gridTemplateRows: 'minmax(0, 1fr)' }}>
         {viewMode !== 'editor' && <ChatPane key={c.chatSessionId} />}
         {isWiki
-          ? <SourcesPanel topicId={c.wikiTopicId!} open={sourcesOpen} onToggle={() => setSourcesOpen((v) => !v)} />
+          ? <SourcesPanel topicId={c.wikiTopicId!} open={sourcesOpen} onToggle={() => setSourcesOpen((v) => !v)} width={panelW} onResize={resize} />
           : (viewMode !== 'chat' && <EditorPane />)}
       </div>
       {isWiki && <CiteHighlighter />}
