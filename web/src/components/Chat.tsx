@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import * as DM from '@radix-ui/react-dropdown-menu';
 import { useStore, type Block, type Msg } from '../lib/store';
 import { api } from '../lib/api';
-import { Avatar, timeAgo, LangToggle } from '../lib/ui';
+import { Avatar, timeAgo } from '../lib/ui';
 import { MembersDialog } from './MembersDialog';
 import { WikiExplorer } from './WikiExplorer';
 import { FileExplorer } from './FileExplorer';
@@ -94,7 +94,6 @@ function Header() {
         </div>
       )}
       <button className="toolbtn" title={t('chat.toggleTheme')} onClick={toggleTheme}>◐</button>
-      <LangToggle />
 
       {showMembers && c.room && <MembersDialog open={showMembers} onClose={() => setShowMembers(false)} />}
       {explorer && c.projectId && (
