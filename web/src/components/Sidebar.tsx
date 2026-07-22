@@ -19,14 +19,14 @@ export function Sidebar() {
 
   return (
     <aside className="bg-rail border-r border-line flex flex-col min-h-0">
-      <div className="px-3.5 pt-3.5 pb-2">
-        <div className="flex items-center gap-2.5 mb-3.5">
-          <img src="/favicon.svg" alt="" className="w-[26px] h-[26px] rounded-md" />
-          <div className="leading-tight">
-            <div className="font-semibold text-sm">ClaudeCode Workspace</div>
-            <div className="text-[11px] text-txt3">{t('sidebar.teamName', { name: user?.displayName ?? '' })}</div>
+      <div className="px-3.5 pt-3.5 pb-2 relative">
+        <LangToggle className="absolute top-3 right-3 text-[11px] text-txt3 hover:text-txt border border-line rounded px-1.5 py-0.5 z-10" />
+        <div className="flex items-center gap-2.5 mb-3.5 pr-9">
+          <img src="/favicon.svg" alt="" className="w-[26px] h-[26px] rounded-md shrink-0" />
+          <div className="leading-tight min-w-0">
+            <div className="font-semibold text-sm whitespace-nowrap">ClaudeCode Workspace</div>
+            <div className="text-[11px] text-txt3 truncate">{t('sidebar.teamName', { name: user?.displayName ?? '' })}</div>
           </div>
-          <LangToggle className="ml-auto text-[11px] text-txt3 hover:text-txt border border-line rounded px-1.5 py-0.5" />
         </div>
         <button className="btn-primary w-full flex items-center justify-center gap-2 !py-2" onClick={() => newSession()}>{t('sidebar.newChat')}</button>
       </div>
