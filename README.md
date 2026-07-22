@@ -35,7 +35,8 @@ The Claude Code CLI is powerful, but it's tied to **one terminal — yours**. Cl
 - Gather in a **shared room** to drive one Claude together (like a group chat)
 - Risky actions that need approval → **approve/deny live, in the browser**
 - Open **VS Code (code-server)** right there for editing, terminal, and git
-- Runs on a single shared API key; admins see everything via a **usage dashboard**
+- Build a team **LLM Wiki** — upload docs, Claude compiles them into a queryable knowledge base
+- Each user runs on **their own Claude token** (admin-common token + env as fallback); admins see everything via a **usage dashboard**
 
 > Works as a personal remote setup too — solo, it becomes a single-account "remote Claude Code".
 
@@ -49,8 +50,10 @@ The Claude Code CLI is powerful, but it's tied to **one terminal — yours**. Cl
 | 👥 | **Shared rooms + fine-grained delegation** | The owner toggles per-member rights: approve, interrupt, invite, kick, transfer ownership, delete room. A FIFO queue orders multi-party turns; speaker prefixes let the model track who's talking. |
 | 🛡 | **Web permission prompts** | Claude pauses right before using a tool and asks the browser: allow / deny / always. The isolation deny-fence always applies, regardless of mode. |
 | 🧑‍💻 | **VS Code in the browser** | Spin up a project in a code-server container instantly. Mounts only your volume + the shared one (isolated); auto-reaped when idle. |
-| 🔌 | **Two-class plugins** | Common (admin) and personal (user) tiers. Install via git or local upload, admin-forced plugins, per-user on/off. |
-| 🔑 | **Fully functional without a key** | With no `ANTHROPIC_API_KEY`, it runs in **MOCK mode** — streaming, permissions, and tool-card UX all demoable. Ideal for evaluation, demos, CI. |
+| 🔌 | **Two-class plugins** | Common (admin) and personal (user) tiers. Install via git or local upload, admin-forced plugins, per-user on/off. Per-plugin detail view + one-click update. |
+| 🪪 | **Per-user Claude tokens** | Each member registers their own token (encrypted at rest); usage and cost are attributed per person. Falls back to an admin-set common token, then env. |
+| 📚 | **LLM Wiki knowledge base** | Upload a folder of docs/images; Claude compiles them into cross-linked articles users can query in read-only threads. Import an already-compiled wiki to skip compilation. |
+| 🔑 | **Fully functional without a key** | With no token anywhere, it runs in **MOCK mode** — streaming, permissions, and tool-card UX all demoable. Ideal for evaluation, demos, CI. |
 | 🐳 | **One-shot deploy** | Multi-stage single image + `docker compose up`. code-server spawns dynamically as sibling containers (no orchestrator needed). |
 | 🎨 | **Desktop-app-grade UI** | Clay theme following the Claude Code desktop app, light/dark, collapsible tool cards, serif responses, member avatars and presence. |
 
@@ -155,6 +158,15 @@ flowchart TB
 
 - Common tier = admin-only (register marketplaces · git/local upload · force-required)
 - Personal tier = user-controlled (add marketplaces · install · toggle common class-2)
+- Per-plugin detail view (manifest · skills · file tree) with one-click update for git-sourced plugins
+</details>
+
+<details>
+<summary><b>Per-user Claude tokens</b></summary>
+
+- Each user registers a personal Claude token (`sk-ant-oat…` / `sk-ant-api…`), encrypted at rest; a login nag reminds those who haven't
+- Turn precedence: user's own token → admin-set common token → env key → MOCK
+- In shared rooms each author's turn runs on that author's token; usage is tracked per user for the admin dashboard
 </details>
 
 <details>
@@ -178,7 +190,7 @@ flowchart TB
 
 | Variable | Description | Default |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | Shared single key. Empty → MOCK mode | — |
+| `ANTHROPIC_API_KEY` | Env-level shared fallback token (per-user & admin-common tokens take precedence). None set anywhere → MOCK mode | — |
 | `SESSION_SECRET` | Cookie signing secret (**must change**) | — |
 | `MAX_CONCURRENT_TURNS` | Global concurrent-turn cap for the shared key + queueing + 429 backoff | `3` |
 | `BOOTSTRAP_ADMIN_USER` / `_PASSWORD` | First-boot admin (only when there are zero users) | `admin` |
@@ -194,8 +206,12 @@ server/                Fastify · Socket.IO · Agent SDK · SQLite/Drizzle · do
   src/claude/          session manager · config layering · permission bridge · throttle
   src/rooms/           room manager (delegation) · FIFO queue
   src/codeserver/      spawn/reap · /cs proxy (http+ws)
-  src/routes/          sessions · rooms · projects · plugins · admin
+  src/wiki/            LLM Wiki compile (raw/ sources → wiki/ articles)
+  src/auth/            login · per-user/common Claude token resolution
+  src/usage/           per-user token & cost tracking
+  src/routes/          sessions · rooms · projects · plugins · wiki · admin
 web/                   React · Vite · Tailwind · Radix · zustand
+  src/lib/i18n.ts      ko/en dictionary + language switch
 DESIGN.md              finalized design spec (19 decisions, Korean)
 Dockerfile · docker-compose.yml
 ```
@@ -210,7 +226,7 @@ A **lightweight posture** that assumes a mutually trusted team/individual. App l
 
 ## 🛣 Roadmap
 
-- [ ] Per-user API keys (behind the key-resolution abstraction)
+- [x] Per-user Claude tokens (personal + admin-common + env fallback)
 - [ ] SSO / proxy-header auth adapter
 - [ ] Postgres · Redis promotion (multi-process scale)
 - [ ] CRDT real-time collaborative editing
