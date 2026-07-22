@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import * as DM from '@radix-ui/react-dropdown-menu';
 import { useStore, type Block, type Msg } from '../lib/store';
 import { api } from '../lib/api';
@@ -252,10 +252,32 @@ function WikiBanner() {
   );
 }
 
+// /clear and /compact reset (or compact) the CLI conversation. We keep every message in the DB,
+// so in the UI we fold the history above each such command into a collapsed toggle. Each command
+// closes a segment; segments before the final one collapse, so folds stack as they accumulate.
+function boundaryCmd(m: Msg): 'clear' | 'compact' | null {
+  if (m.role !== 'user') return null;
+  const mt = (m.content?.text || '').trim().match(/^\/(clear|compact)\b/);
+  return mt ? (mt[1] as 'clear' | 'compact') : null;
+}
+interface Segment { key: string; cmd: 'clear' | 'compact' | null; msgs: Msg[]; }
+function segmentMessages(messages: Msg[]): Segment[] {
+  const segs: Segment[] = [];
+  let cur: Msg[] = [];
+  for (const m of messages) {
+    cur.push(m);
+    const cmd = boundaryCmd(m);
+    if (cmd) { segs.push({ key: m.id, cmd, msgs: cur }); cur = []; }
+  }
+  segs.push({ key: 'live', cmd: null, msgs: cur }); // trailing (open) segment
+  return segs;
+}
+
 function ChatPane() {
   const { current: c, messages, live, viewMode } = useStore();
   const streamRef = useRef<HTMLDivElement>(null);
   useEffect(() => { streamRef.current?.scrollTo({ top: streamRef.current.scrollHeight }); }, [messages, live]);
+  const segments = useMemo(() => segmentMessages(messages), [messages]);
   if (!c) return null;
 
   return (
@@ -263,12 +285,44 @@ function ChatPane() {
       <WikiBanner />
       <div ref={streamRef} className="flex-1 overflow-y-auto scrolly px-5 py-5">
         <div className="max-w-[760px] mx-auto">
-          {messages.map((m) => <MessageView key={m.id} m={m} />)}
+          {segments.map((seg) => seg.cmd
+            ? <FoldedSegment key={seg.key} seg={seg} />
+            : seg.msgs.map((m) => <MessageView key={m.id} m={m} />))}
           {live && <LiveView />}
         </div>
       </div>
       <PermissionArea />
       <Composer />
+    </div>
+  );
+}
+
+const hhmm = (ts: number) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const mmdd = (ts: number) => new Date(ts).toLocaleDateString([], { month: '2-digit', day: '2-digit' });
+const sameDay = (a: number, b: number) => new Date(a).toDateString() === new Date(b).toDateString();
+
+function FoldedSegment({ seg }: { seg: Segment }) {
+  const [open, setOpen] = useState(false);
+  const t = useT();
+  const a = seg.msgs[0].createdAt;
+  const b = seg.msgs[seg.msgs.length - 1].createdAt;
+  const range = sameDay(a, b) ? `${mmdd(a)} ${hhmm(a)}–${hhmm(b)}` : `${mmdd(a)} ${hhmm(a)} – ${mmdd(b)} ${hhmm(b)}`;
+  const label = seg.cmd === 'clear' ? t('chat.foldClear') : t('chat.foldCompact');
+  return (
+    <div className="border border-line rounded-lg my-3 bg-card overflow-hidden">
+      <div className="flex items-center gap-2 px-3 py-2 cursor-pointer text-xs select-none" onClick={() => setOpen(!open)}>
+        <span className="text-txt3">{open ? '▼' : '▶'}</span>
+        <span className="text-clay">🗂</span>
+        <code className="font-mono text-clay">/{seg.cmd}</code>
+        <span className="font-semibold text-txt2">{label}</span>
+        <span className="text-txt3 font-mono truncate">{range}</span>
+        <span className="ml-auto text-txt3 shrink-0">{t('chat.foldMessages', { count: seg.msgs.length })}</span>
+      </div>
+      {open && (
+        <div className="border-t border-line px-3 pt-3 pb-1 bg-bg">
+          {seg.msgs.map((m) => <MessageView key={m.id} m={m} />)}
+        </div>
+      )}
     </div>
   );
 }
