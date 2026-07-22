@@ -64,7 +64,12 @@ const ROOM_MSGS = [
 const WIKI_MSGS = [
   userMsg(ME, 'How does a refund flow through the payments domain?', ago(200)),
   claudeMsg([
-    tx('A refund is modeled as a **negative capture** against the original `Payment`, never a delete:\n\n1. `RefundRequested` is recorded on the `Payment` aggregate\n2. The gateway adapter issues the provider refund\n3. On the webhook, `RefundSettled` flips the ledger entry\n\nSee **refunds.md** for the state machine and the idempotency rules.'),
+    tx('Let me check the knowledge base first.'),
+    tool('Read', { file_path: 'wiki/_index.md' }, '# Payments Domain — Index\n- overview.md\n- refunds.md\n- ledger.md'),
+    tx('The refund flow lives in the refunds article — reading it, plus the overview for context.'),
+    tool('Read', { file_path: 'wiki/refunds.md' }, 'A refund is a negative capture, never a delete. States: RefundRequested → RefundSettled. Idempotent by (paymentId, requestId).'),
+    tool('Read', { file_path: 'wiki/overview.md' }, 'The payments domain owns captures, refunds, and the ledger. Event-sourced on the Payment aggregate.'),
+    tx('Grounded in the wiki, here is the flow.\n\nA refund is modeled as a **negative capture** against the original `Payment`, never a delete:\n\n1. `RefundRequested` is recorded on the `Payment` aggregate\n2. The gateway adapter issues the provider refund\n3. On the webhook, `RefundSettled` flips the ledger entry\n\nRefunds are **idempotent** by `(paymentId, requestId)`.\n\n**Sources:** `wiki/refunds.md` (state machine + idempotency), `wiki/overview.md`. Original source: `raw/gateway-notes.md`.'),
   ], ago(199)),
 ];
 
@@ -90,6 +95,7 @@ export const fileContent = (path: string) => FILE_CONTENT[path]
 
 // ---- wiki content ----------------------------------------------------------
 export const WIKI_ARTICLES = [
+  { name: '_index.md', content: '# Payments Domain — Index\n\nEntry point for the compiled knowledge base.\n\n- [[overview]] — what the domain owns\n- [[refunds]] — refund state machine + idempotency\n- [[ledger]] — double-entry source of truth' },
   { name: 'overview.md', content: '# Payments Domain\n\nThe payments domain owns money movement: **captures**, **refunds**, and the **ledger**. Everything is event-sourced on the `Payment` aggregate.' },
   { name: 'refunds.md', content: '# Refunds\n\nA refund is a *negative capture*, never a delete.\n\n| State | Trigger |\n|---|---|\n| RefundRequested | user/admin action |\n| RefundSettled | provider webhook |\n\nRefunds are **idempotent** by `(paymentId, requestId)`.' },
   { name: 'ledger.md', content: '# Ledger\n\nDouble-entry. Every capture/refund writes two rows. The ledger is the source of truth for reporting — not the gateway.' },
