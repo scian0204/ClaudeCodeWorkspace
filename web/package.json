@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --port 5173",
     "build": "vite build",
+    "build:demo": "vite build --mode demo --base=/ClaudeCodeWorkspace/",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },

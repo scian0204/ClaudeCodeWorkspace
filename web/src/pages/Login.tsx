@@ -20,7 +20,7 @@ export function Login() {
     <div className="h-full grid place-items-center bg-bg">
       <form onSubmit={submit} className="w-[340px] bg-panel border border-line rounded-xl p-7 shadow-sm">
         <div className="flex items-center gap-2.5 mb-5">
-          <img src="/favicon.svg" alt="" className="w-8 h-8 rounded-lg" />
+          <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" className="w-8 h-8 rounded-lg" />
           <div>
             <div className="font-semibold">ClaudeCode Workspace</div>
             <div className="text-xs text-txt3">{t('login.subtitle')}</div>

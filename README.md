@@ -10,6 +10,8 @@
 
 Per-session isolated Claude Code · shared team rooms · VS Code in the browser — all from a single `docker compose up`.
 
+[![live demo](https://img.shields.io/badge/▶_live_demo-GitHub_Pages-c8613a)](https://scian0204.github.io/ClaudeCodeWorkspace/)
+
 ![status](https://img.shields.io/badge/status-P0--P5%20complete-4f8a52)
 ![stack](https://img.shields.io/badge/stack-Fastify%20%2B%20React%20%2B%20SQLite-c8613a)
 ![realtime](https://img.shields.io/badge/realtime-Socket.IO-6b5b8c)
@@ -22,6 +24,10 @@ Per-session isolated Claude Code · shared team rooms · VS Code in the browser 
 <img src="docs/ccw-demo.gif" alt="ClaudeCode Workspace demo — room chat, web tool approval, code-server split view" width="92%" />
 
 <sub>Log in → room → send a message → approve the tool in the browser → tool runs → split into VS Code in the browser (MOCK-mode demo)</sub>
+
+<br/><br/>
+
+**▶ [Try the live demo](https://scian0204.github.io/ClaudeCodeWorkspace/)** — no install, no login. It's the real UI with a mocked backend, so streaming, tool cards, web permission prompts, rooms, the LLM Wiki and the admin panel are all clickable. Data resets on reload.
 
 </div>
 

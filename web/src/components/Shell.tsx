@@ -13,7 +13,7 @@ function Empty() {
   return (
     <div className="h-full grid place-items-center text-center">
       <div>
-        <img src="/favicon.svg" alt="" className="w-16 h-16 mx-auto mb-3" />
+        <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" className="w-16 h-16 mx-auto mb-3" />
         <div className="text-txt2 mb-4">{t('shell.emptyHint')}</div>
         <button className="btn-primary" onClick={() => newSession()}>{t('shell.newConversation')}</button>
       </div>
