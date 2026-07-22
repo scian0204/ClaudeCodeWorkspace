@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { useStore } from '../lib/store';
 import { api } from '../lib/api';
-import { Avatar, timeAgo } from '../lib/ui';
+import { Avatar, timeAgo, LangToggle } from '../lib/ui';
 import { Modal } from './Modal';
 import { MyTokenModal } from './TokenSettings';
 import { useT } from '../lib/i18n';
@@ -26,6 +26,7 @@ export function Sidebar() {
             <div className="font-semibold text-sm">ClaudeCode Workspace</div>
             <div className="text-[11px] text-txt3">{t('sidebar.teamName', { name: user?.displayName ?? '' })}</div>
           </div>
+          <LangToggle className="ml-auto text-[11px] text-txt3 hover:text-txt border border-line rounded px-1.5 py-0.5" />
         </div>
         <button className="btn-primary w-full flex items-center justify-center gap-2 !py-2" onClick={() => newSession()}>{t('sidebar.newChat')}</button>
       </div>
