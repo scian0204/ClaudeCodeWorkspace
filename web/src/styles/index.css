@@ -61,6 +61,15 @@ body{margin:0;background:var(--bg);color:var(--txt);font-family:var(--sans);font
 .scrolly::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:8px}
 .scrolly::-webkit-scrollbar-track{background:transparent}
 
+/* LLM-Wiki in-text source citations (injected as <mark> by markCitations) */
+.wiki-cite{
+  background:var(--clay-soft); color:var(--clay);
+  border-radius:3px; padding:0 2px; cursor:pointer;
+  text-decoration:underline; text-decoration-style:dotted; text-underline-offset:2px;
+  transition:background .12s, color .12s;
+}
+.wiki-cite:hover, .wiki-cite.on{ background:var(--clay); color:#fff; text-decoration:none; }
+
 @keyframes blink{0%,60%,100%{opacity:.3}30%{opacity:1}}
 .tdot{width:6px;height:6px;border-radius:50%;background:var(--clay);animation:blink 1.2s infinite}
 .tdot:nth-child(2){animation-delay:.2s}.tdot:nth-child(3){animation-delay:.4s}
