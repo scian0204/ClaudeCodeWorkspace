@@ -39,6 +39,40 @@ function walkFiles(dir: string, base = ''): { name: string; size: number }[] {
 }
 function listStaged(dir: string) { return walkFiles(dir); }
 
+// Map staged relative paths to their destination when importing an ALREADY-COMPILED wiki
+// (compile step skipped). Two source shapes are normalized to the topic's raw//wiki/ layout:
+//   - a topic-export dir (has a top-level wiki/, optionally raw/) -> wiki/*->wiki, raw/*->raw
+//   - a bare articles folder -> everything goes under wiki/
+// A single wrapper dir shared by every path (the folder picker prepends the dropped folder's
+// name) is stripped first, so `MyWiki/_index.md` lands at wiki/_index.md, not wiki/MyWiki/....
+// Pure (no fs) so the path logic is testable in isolation. Stray top-level files (e.g. a
+// bundled CLAUDE.md) are dropped — the grounding doc is regenerated per topic.
+export function mapPrecompiled(rels: string[]): { rel: string; dir: 'raw' | 'wiki'; destRel: string }[] {
+  if (!rels.length) return [];
+  const first = rels[0].split('/')[0];
+  const wrapper = first && rels.every((r) => r.split('/')[0] === first && r.includes('/')) ? first : null;
+  const stripped = rels.map((r) => ({ orig: r, rel: wrapper ? r.slice(wrapper.length + 1) : r }));
+  const hasWiki = stripped.some(({ rel }) => rel === 'wiki' || rel.startsWith('wiki/'));
+  const out: { rel: string; dir: 'raw' | 'wiki'; destRel: string }[] = [];
+  for (const { orig, rel } of stripped) {
+    if (!hasWiki) { if (rel) out.push({ rel: orig, dir: 'wiki', destRel: rel }); continue; }
+    if (rel.startsWith('wiki/')) out.push({ rel: orig, dir: 'wiki', destRel: rel.slice(5) });
+    else if (rel.startsWith('raw/')) out.push({ rel: orig, dir: 'raw', destRel: rel.slice(4) });
+    // else: stray top-level file -> dropped
+  }
+  return out.filter((x) => x.destRel);
+}
+
+// Move a staged tree into a topic as a precompiled wiki (see mapPrecompiled), then drop staging.
+function placePrecompiled(stagedDir: string, topicDir: string) {
+  for (const { rel, dir, destRel } of mapPrecompiled(walkFiles(stagedDir).map((f) => f.name))) {
+    const dest = path.join(topicDir, dir, destRel);
+    ensure(path.dirname(dest));
+    fs.renameSync(path.join(stagedDir, rel), dest);
+  }
+  try { fs.rmSync(stagedDir, { recursive: true, force: true }); } catch { /* noop */ }
+}
+
 // staged uploads that never got confirmed (crash between upload and create) are transient —
 // wipe the whole staging area at startup. Nothing in it survives a restart anyway.
 export function reapWikiStaging() {
@@ -142,23 +176,31 @@ export async function wikiRoutes(app: FastifyInstance) {
     const name = String(b.name || '').trim() || '새 주제';
     const description = String(b.description || '');
     const sid = b.stagingId ? String(b.stagingId) : '';
+    // precompiled: the upload IS an already-compiled wiki — skip Claude compile, use it as-is
+    const precompiled = b.precompiled === true || b.precompiled === 'true';
     const id = newId();
     const dir = paths.wikiTopic(id);
     const rawDir = path.join(dir, 'raw');
     ensure(dir);
     const staged = sid && validSid(sid) ? paths.wikiStaging(sid) : '';
     if (staged && fs.existsSync(staged)) {
-      fs.renameSync(staged, rawDir); // staged tree becomes the immutable raw/ sources
+      if (precompiled) {
+        ensure(rawDir); // may stay empty (import may carry only wiki/)
+        placePrecompiled(staged, dir); // staged tree -> wiki/ (+ raw/ if it's a topic export)
+      } else {
+        fs.renameSync(staged, rawDir); // staged tree becomes the immutable raw/ sources
+      }
     } else {
       ensure(rawDir);
     }
     fs.writeFileSync(path.join(dir, 'CLAUDE.md'), groundingDoc(name, description));
+    const compileStatus: 'done' | 'idle' = precompiled ? 'done' : 'idle';
     const row = {
       id, name, description, path: dir, createdBy: u.id, createdAt: Date.now(),
-      compileStatus: 'idle' as const, compiledAt: null, compileError: null,
+      compileStatus, compiledAt: precompiled ? Date.now() : null, compileError: null,
     };
     db.insert(schema.wikiTopics).values(row).run();
-    void compileTopic(id); // auto-compile raw/ -> wiki/ (async; status via 'wiki:status' socket)
+    if (!precompiled) void compileTopic(id); // auto-compile raw/ -> wiki/ (async; status via 'wiki:status' socket)
     return { topic: row };
   });
 

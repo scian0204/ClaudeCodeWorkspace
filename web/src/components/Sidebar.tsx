@@ -139,6 +139,7 @@ function WikiCreateModal({ onClose }: { onClose: () => void }) {
   const [sid] = useState(() => (crypto.randomUUID?.() || `${Date.now()}${Math.random()}`).replace(/[^a-zA-Z0-9]/g, '').slice(0, 32));
   const [name, setName] = useState('');
   const [desc, setDesc] = useState('');
+  const [precompiled, setPrecompiled] = useState(false); // upload IS an already-compiled wiki
   const [files, setFiles] = useState<{ name: string; size: number }[]>([]);
   const [progress, setProgress] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
@@ -185,7 +186,7 @@ function WikiCreateModal({ onClose }: { onClose: () => void }) {
   const confirm = async () => {
     if (!name.trim()) { setError('주제 이름을 입력하세요.'); return; }
     setBusy(true);
-    try { await newWikiTopic({ name: name.trim(), description: desc.trim(), stagingId: sid }); onClose(); }
+    try { await newWikiTopic({ name: name.trim(), description: desc.trim(), stagingId: sid, precompiled }); onClose(); }
     catch (e: any) { setError(e.message); setBusy(false); }
   };
 
@@ -195,12 +196,20 @@ function WikiCreateModal({ onClose }: { onClose: () => void }) {
       <textarea className="input mb-2 resize-none" rows={3} placeholder="설명 / 지침 (선택) — 클로드가 이 범위에서 답변합니다"
         value={desc} onChange={(e) => setDesc(e.target.value)} />
 
+      <label className="flex items-start gap-2 mb-2 text-xs text-txt2 cursor-pointer select-none">
+        <input type="checkbox" className="mt-0.5" checked={precompiled} onChange={(e) => setPrecompiled(e.target.checked)} />
+        <span>
+          이미 컴파일된 위키 추가 <span className="text-txt3">(컴파일 생략)</span>
+          <span className="block text-[11px] text-txt3">컴파일된 <code>wiki/</code> 아티클(또는 raw//wiki/ 포함 주제 폴더)을 그대로 사용합니다.</span>
+        </span>
+      </label>
+
       <div
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
         onDrop={onDrop}
         className={`border-2 border-dashed rounded-lg px-3 py-4 text-center mb-2 transition-colors ${dragOver ? 'border-clay bg-claysoft' : 'border-line'}`}>
-        <div className="text-xs text-txt2 mb-2">📁 폴더/파일을 여기로 드래그 — 하위 폴더 전부 업로드</div>
+        <div className="text-xs text-txt2 mb-2">📁 {precompiled ? '컴파일된 wiki 폴더' : '폴더/파일'}을 여기로 드래그 — 하위 폴더 전부 업로드</div>
         <div className="flex justify-center gap-2">
           <button className="btn-ghost !py-1 !text-xs" disabled={progress !== null} onClick={() => fileRef.current?.click()}>파일 선택</button>
           <button className="btn-ghost !py-1 !text-xs" disabled={progress !== null} onClick={() => dirRef.current?.click()}>폴더 선택</button>
