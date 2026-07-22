@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../lib/store';
 import { api } from '../lib/api';
+import { PluginDetail } from './PluginDetail';
 
 export function PluginsPanel() {
   const setPanel = useStore((s) => s.setPanel);
@@ -8,6 +9,7 @@ export function PluginsPanel() {
   const isAdmin = user.role === 'admin';
   const [data, setData] = useState<any>({ common: [], mine: [], prefs: [] });
   const [mkt, setMkt] = useState<any>({ common: [], mine: [] });
+  const [detail, setDetail] = useState<{ id: string; canUpdate: boolean } | null>(null);
 
   const load = async () => {
     const [p, m] = await Promise.all([api.get('/api/plugins'), api.get('/api/marketplaces')]);
@@ -36,6 +38,7 @@ export function PluginsPanel() {
               const pref = prefMap.has(p.id) ? prefMap.get(p.id) === 1 : true;
               return (
                 <Row key={p.id} p={p}>
+                  <button className="text-[11px] text-txt3 hover:text-clay" onClick={() => setDetail({ id: p.id, canUpdate: isAdmin })}>상세</button>
                   {isAdmin ? (
                     <>
                       <Toggle on={!!p.enabled} label="활성" onClick={async () => { await api.post(`/api/plugins/${p.id}/enabled`, { enabled: !p.enabled }); load(); }} />
@@ -61,6 +64,7 @@ export function PluginsPanel() {
             {data.mine.length === 0 && <Empty />}
             {data.mine.map((p: any) => (
               <Row key={p.id} p={p}>
+                <button className="text-[11px] text-txt3 hover:text-clay" onClick={() => setDetail({ id: p.id, canUpdate: true })}>상세</button>
                 <Toggle on={!!p.enabled} label="활성" onClick={async () => { await api.post(`/api/plugins/${p.id}/enabled`, { enabled: !p.enabled }); load(); }} />
                 <button className="text-xs text-txt3 hover:text-danger" onClick={async () => { await api.del(`/api/plugins/${p.id}`); load(); }}>삭제</button>
               </Row>
@@ -68,6 +72,14 @@ export function PluginsPanel() {
           </div>
         </div>
       </div>
+      {detail && (
+        <PluginDetail
+          pluginId={detail.id}
+          canUpdate={detail.canUpdate}
+          onClose={() => setDetail(null)}
+          onChanged={load}
+        />
+      )}
     </div>
   );
 }
