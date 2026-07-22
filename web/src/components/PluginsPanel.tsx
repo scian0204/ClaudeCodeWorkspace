@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../lib/store';
 import { api } from '../lib/api';
 import { PluginDetail } from './PluginDetail';
+import { useT } from '../lib/i18n';
 
 export function PluginsPanel() {
   const setPanel = useStore((s) => s.setPanel);
@@ -10,6 +11,7 @@ export function PluginsPanel() {
   const [data, setData] = useState<any>({ common: [], mine: [], prefs: [] });
   const [mkt, setMkt] = useState<any>({ common: [], mine: [] });
   const [detail, setDetail] = useState<{ id: string; canUpdate: boolean } | null>(null);
+  const t = useT();
 
   const load = async () => {
     const [p, m] = await Promise.all([api.get('/api/plugins'), api.get('/api/marketplaces')]);
@@ -24,13 +26,13 @@ export function PluginsPanel() {
     <div className="h-full overflow-y-auto scrolly">
       <div className="flex items-center gap-3 px-5 py-3 border-b border-line sticky top-0 bg-panel z-10">
         <button className="toolbtn" onClick={() => setPanel(null)}>←</button>
-        <div className="font-semibold">🧩 플러그인</div>
+        <div className="font-semibold">{t('plugins.title')}</div>
       </div>
       <div className="max-w-[860px] mx-auto p-5 space-y-6">
         {/* COMMON */}
         <div className="bg-card border border-line rounded-xl p-4">
-          <div className="font-semibold mb-1">공통 플러그인 {isAdmin ? '' : '(관리자 관리 · 개인 on/off 가능)'}</div>
-          <div className="text-xs text-txt3 mb-3">{isAdmin ? '팀 전체에 적용. 필수강제 지정 시 개인이 끌 수 없음.' : '관리자가 설치. 필수(🔒)가 아니면 내 세션에서 끌 수 있음.'}</div>
+          <div className="font-semibold mb-1">{t('plugins.commonPlugins')} {isAdmin ? '' : t('plugins.commonPluginsUserNote')}</div>
+          <div className="text-xs text-txt3 mb-3">{isAdmin ? t('plugins.commonAdminDesc') : t('plugins.commonUserDesc')}</div>
           {isAdmin && <InstallForms scope="common" mkt={mkt.common} onChange={load} onErr={err} />}
           <div className="mt-3 space-y-1.5">
             {data.common.length === 0 && <Empty />}
@@ -38,16 +40,16 @@ export function PluginsPanel() {
               const pref = prefMap.has(p.id) ? prefMap.get(p.id) === 1 : true;
               return (
                 <Row key={p.id} p={p}>
-                  <button className="text-[11px] text-txt3 hover:text-clay" onClick={() => setDetail({ id: p.id, canUpdate: isAdmin })}>상세</button>
+                  <button className="text-[11px] text-txt3 hover:text-clay" onClick={() => setDetail({ id: p.id, canUpdate: isAdmin })}>{t('plugins.detail')}</button>
                   {isAdmin ? (
                     <>
-                      <Toggle on={!!p.enabled} label="활성" onClick={async () => { await api.post(`/api/plugins/${p.id}/enabled`, { enabled: !p.enabled }); load(); }} />
-                      <Toggle on={!!p.forced} label="🔒 필수" onClick={async () => { await api.post(`/api/plugins/${p.id}/forced`, { forced: !p.forced }); load(); }} />
-                      <button className="text-xs text-txt3 hover:text-danger" onClick={async () => { await api.del(`/api/plugins/${p.id}`); load(); }}>삭제</button>
+                      <Toggle on={!!p.enabled} label={t('plugins.enabledLabel')} onClick={async () => { await api.post(`/api/plugins/${p.id}/enabled`, { enabled: !p.enabled }); load(); }} />
+                      <Toggle on={!!p.forced} label={t('plugins.required')} onClick={async () => { await api.post(`/api/plugins/${p.id}/forced`, { forced: !p.forced }); load(); }} />
+                      <button className="text-xs text-txt3 hover:text-danger" onClick={async () => { await api.del(`/api/plugins/${p.id}`); load(); }}>{t('common.delete')}</button>
                     </>
                   ) : (
-                    p.forced ? <span className="text-[11px] text-clay">🔒 필수</span>
-                      : <Toggle on={pref} label="내 세션 사용" onClick={async () => { await api.post(`/api/plugins/${p.id}/pref`, { enabled: !pref }).catch(err); load(); }} />
+                    p.forced ? <span className="text-[11px] text-clay">{t('plugins.required')}</span>
+                      : <Toggle on={pref} label={t('plugins.usePref')} onClick={async () => { await api.post(`/api/plugins/${p.id}/pref`, { enabled: !pref }).catch(err); load(); }} />
                   )}
                 </Row>
               );
@@ -57,16 +59,16 @@ export function PluginsPanel() {
 
         {/* PERSONAL */}
         <div className="bg-card border border-line rounded-xl p-4">
-          <div className="font-semibold mb-1">개인 플러그인</div>
-          <div className="text-xs text-txt3 mb-3">내 세션에만 적용. 이름 충돌 시 개인 우선.</div>
+          <div className="font-semibold mb-1">{t('plugins.personalPlugins')}</div>
+          <div className="text-xs text-txt3 mb-3">{t('plugins.personalDesc')}</div>
           <InstallForms scope="user" mkt={mkt.mine} onChange={load} onErr={err} />
           <div className="mt-3 space-y-1.5">
             {data.mine.length === 0 && <Empty />}
             {data.mine.map((p: any) => (
               <Row key={p.id} p={p}>
-                <button className="text-[11px] text-txt3 hover:text-clay" onClick={() => setDetail({ id: p.id, canUpdate: true })}>상세</button>
-                <Toggle on={!!p.enabled} label="활성" onClick={async () => { await api.post(`/api/plugins/${p.id}/enabled`, { enabled: !p.enabled }); load(); }} />
-                <button className="text-xs text-txt3 hover:text-danger" onClick={async () => { await api.del(`/api/plugins/${p.id}`); load(); }}>삭제</button>
+                <button className="text-[11px] text-txt3 hover:text-clay" onClick={() => setDetail({ id: p.id, canUpdate: true })}>{t('plugins.detail')}</button>
+                <Toggle on={!!p.enabled} label={t('plugins.enabledLabel')} onClick={async () => { await api.post(`/api/plugins/${p.id}/enabled`, { enabled: !p.enabled }); load(); }} />
+                <button className="text-xs text-txt3 hover:text-danger" onClick={async () => { await api.del(`/api/plugins/${p.id}`); load(); }}>{t('common.delete')}</button>
               </Row>
             ))}
           </div>
@@ -89,6 +91,7 @@ function InstallForms({ scope, mkt, onChange, onErr }: { scope: 'common' | 'user
   const [mk, setMk] = useState({ name: '', url: '' });
   const [upName, setUpName] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+  const t = useT();
 
   const installGit = async () => { if (!git.name || !git.repo) return; try { await api.post('/api/plugins/install', { scope, ...git }); setGit({ name: '', repo: '' }); onChange(); } catch (e) { onErr(e); } };
   const addMk = async () => { if (!mk.name || !mk.url) return; try { await api.post('/api/marketplaces', { scope, ...mk }); setMk({ name: '', url: '' }); onChange(); } catch (e) { onErr(e); } };
@@ -100,31 +103,32 @@ function InstallForms({ scope, mkt, onChange, onErr }: { scope: 'common' | 'user
 
   return (
     <div className="space-y-2 border-t border-line pt-3">
-      {mkt.length > 0 && <div className="text-xs text-txt3">마켓플레이스: {mkt.map((m) => m.name).join(', ')}</div>}
+      {mkt.length > 0 && <div className="text-xs text-txt3">{t('plugins.marketplaces', { names: mkt.map((m) => m.name).join(', ') })}</div>}
       <div className="grid grid-cols-[1fr_1fr_auto] gap-1.5">
-        <input className="input !py-1.5 !text-xs" placeholder="마켓 이름" value={mk.name} onChange={(e) => setMk({ ...mk, name: e.target.value })} />
+        <input className="input !py-1.5 !text-xs" placeholder={t('plugins.marketNamePlaceholder')} value={mk.name} onChange={(e) => setMk({ ...mk, name: e.target.value })} />
         <input className="input !py-1.5 !text-xs" placeholder="git URL" value={mk.url} onChange={(e) => setMk({ ...mk, url: e.target.value })} />
-        <button className="btn-ghost !py-1.5 !text-xs" onClick={addMk}>마켓추가</button>
+        <button className="btn-ghost !py-1.5 !text-xs" onClick={addMk}>{t('plugins.addMarket')}</button>
       </div>
       <div className="grid grid-cols-[1fr_1fr_auto] gap-1.5">
-        <input className="input !py-1.5 !text-xs" placeholder="플러그인 이름" value={git.name} onChange={(e) => setGit({ ...git, name: e.target.value })} />
+        <input className="input !py-1.5 !text-xs" placeholder={t('plugins.pluginNamePlaceholder')} value={git.name} onChange={(e) => setGit({ ...git, name: e.target.value })} />
         <input className="input !py-1.5 !text-xs" placeholder="git repo (clone)" value={git.repo} onChange={(e) => setGit({ ...git, repo: e.target.value })} />
-        <button className="btn-primary !py-1.5 !text-xs" onClick={installGit}>설치</button>
+        <button className="btn-primary !py-1.5 !text-xs" onClick={installGit}>{t('plugins.install')}</button>
       </div>
       <div className="grid grid-cols-[1fr_1fr_auto] gap-1.5">
-        <input className="input !py-1.5 !text-xs" placeholder="업로드 이름" value={upName} onChange={(e) => setUpName(e.target.value)} />
+        <input className="input !py-1.5 !text-xs" placeholder={t('plugins.uploadNamePlaceholder')} value={upName} onChange={(e) => setUpName(e.target.value)} />
         <input ref={fileRef} type="file" accept=".tar.gz,.tgz" className="text-xs text-txt2" />
-        <button className="btn-ghost !py-1.5 !text-xs" onClick={upload}>업로드(.tar.gz)</button>
+        <button className="btn-ghost !py-1.5 !text-xs" onClick={upload}>{t('plugins.uploadTarGz')}</button>
       </div>
     </div>
   );
 }
 
 function Row({ p, children }: { p: any; children: React.ReactNode }) {
+  const t = useT();
   return (
     <div className="flex items-center gap-2 text-sm border-b border-line py-1.5">
       <span>🧩</span><span className="font-medium">{p.name}</span>
-      <span className="text-[10px] text-txt3">{p.source === 'local' ? '업로드' : 'git'}</span>
+      <span className="text-[10px] text-txt3">{p.source === 'local' ? t('plugins.sourceUpload') : 'git'}</span>
       <div className="ml-auto flex items-center gap-3">{children}</div>
     </div>
   );
@@ -136,4 +140,4 @@ function Toggle({ on, label, onClick }: { on: boolean; label: string; onClick: (
     </button>
   );
 }
-function Empty() { return <div className="text-xs text-txt3">아직 없음</div>; }
+function Empty() { const t = useT(); return <div className="text-xs text-txt3">{t('common.none')}</div>; }

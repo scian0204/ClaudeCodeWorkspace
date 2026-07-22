@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../lib/store';
 import { md } from '../lib/md';
+import { useT } from '../lib/i18n';
 import { Modal } from './Modal';
 
 export const isImage = (n: string) => /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(n);
@@ -72,6 +73,7 @@ export function FileExplorer({
   blobUrl: (dir: string, path: string) => string;
   onClose: () => void;
 }) {
+  const t = useT();
   const [dir, setDir] = useState(sources[0].key);
   const [tree, setTree] = useState<Record<string, FileItem[]> | null>(null);
   const [sel, setSel] = useState<string | null>(null);
@@ -113,19 +115,19 @@ export function FileExplorer({
       )}
       <div className="grid gap-2" style={{ gridTemplateColumns: '260px 1fr', height: '60vh' }}>
         <div className="border border-line rounded overflow-auto scrolly p-1">
-          {!tree && <div className="text-txt3 text-xs p-2">불러오는 중…</div>}
-          {tree && list.length === 0 && <div className="text-txt3 text-xs p-2">파일 없음</div>}
+          {!tree && <div className="text-txt3 text-xs p-2">{t('fileExplorer.loading')}</div>}
+          {tree && list.length === 0 && <div className="text-txt3 text-xs p-2">{t('fileExplorer.noFiles')}</div>}
           {nodes.map((n) => <TreeNode key={n.path} node={n} depth={0} onOpen={openFile} selected={sel} />)}
         </div>
         <div className="border border-line rounded overflow-auto scrolly bg-bg min-w-0">
-          {!sel && <div className="text-txt3 text-xs p-3">왼쪽에서 파일을 선택하세요.</div>}
+          {!sel && <div className="text-txt3 text-xs p-3">{t('fileExplorer.selectFilePrompt')}</div>}
           {sel && (
             <>
               <div className="sticky top-0 bg-card border-b border-line px-3 py-1.5 text-xs font-mono flex items-center gap-2">
                 <span className="truncate flex-1">{sel}</span>
                 {isMarkdown(sel) && !isImage(sel) && (
                   <button className="shrink-0 px-1.5 py-0.5 rounded border border-line hover:text-clay" onClick={() => setMdRaw(!mdRaw)}>
-                    {mdRaw ? '📖 렌더' : '</> 원문'}
+                    {mdRaw ? t('fileExplorer.rendered') : t('fileExplorer.source')}
                   </button>
                 )}
               </div>
@@ -134,7 +136,7 @@ export function FileExplorer({
                   <img src={blobUrl(dir, sel)} alt={sel} className="max-w-full h-auto rounded border border-line" />
                 </div>
               ) : loading ? (
-                <div className="text-txt3 text-xs p-3">불러오는 중…</div>
+                <div className="text-txt3 text-xs p-3">{t('fileExplorer.loading')}</div>
               ) : file && isMarkdown(sel) && !mdRaw ? (
                 <div className="p-3 text-sm break-words leading-relaxed" dangerouslySetInnerHTML={{ __html: md(file.content) }} />
               ) : file ? (
