@@ -2,17 +2,18 @@ import { useEffect, useRef, useState } from 'react';
 import * as DM from '@radix-ui/react-dropdown-menu';
 import { useStore, type Block, type Msg } from '../lib/store';
 import { api } from '../lib/api';
-import { Avatar, timeAgo } from '../lib/ui';
+import { Avatar, timeAgo, LangToggle } from '../lib/ui';
 import { MembersDialog } from './MembersDialog';
 import { WikiExplorer } from './WikiExplorer';
 import { FileExplorer } from './FileExplorer';
 import { md } from '../lib/md';
+import { useT } from '../lib/i18n';
 
 const MODELS: Record<string, string> = {
   'claude-opus-4-8': 'Opus 4.8', 'claude-sonnet-5': 'Sonnet 5', 'claude-haiku-4-5-20251001': 'Haiku 4.5',
 };
 const MODES: Record<string, string> = {
-  default: '🛡 기본(승인)', acceptEdits: '✎ 편집 자동승인', bypassPermissions: '⚡ 전체 허용', plan: '📋 플랜',
+  default: 'chat.modeDefault', acceptEdits: 'chat.modeAcceptEdits', bypassPermissions: 'chat.modeBypass', plan: 'chat.modePlan',
 };
 
 export function Chat() {
@@ -33,6 +34,7 @@ function Header() {
   const { current: c, presence, control, toggleTheme, setViewMode, viewMode, setModel, setMode } = useStore();
   const [showMembers, setShowMembers] = useState(false);
   const [explorer, setExplorer] = useState(false);
+  const t = useT();
   if (!c) return null;
   const isRoom = c.kind === 'room';
   const owner = c.room?.members.find((m) => m.isOwner);
@@ -42,7 +44,7 @@ function Header() {
       <div className="font-semibold text-sm flex items-center gap-2 min-w-0">
         <span className="w-[7px] h-[7px] rounded-full bg-ok shrink-0" />
         <span className="truncate">{c.title}</span>
-        <span className="text-txt3 text-xs font-mono truncate hidden md:inline">{c.wikiTopicId ? '📚 지식 기반 질의' : (c.projectId ? '' : '~/(프로젝트 미선택)')}</span>
+        <span className="text-txt3 text-xs font-mono truncate hidden md:inline">{c.wikiTopicId ? t('chat.knowledgeQuery') : (c.projectId ? '' : t('chat.noProject'))}</span>
       </div>
       <div className="flex-1" />
 
@@ -56,12 +58,12 @@ function Header() {
                 {m.displayName.slice(0, 2).toUpperCase()}</span>
             ))}
           </div>
-          <button className="pill" onClick={() => setShowMembers(true)}>👑 {owner?.displayName || '방장'} · 멤버</button>
+          <button className="pill" onClick={() => setShowMembers(true)}>{t('chat.ownerMembers', { owner: owner?.displayName || t('chat.roomOwner') })}</button>
         </>
       )}
 
       {!c.wikiTopicId && <ProjectMenu />}
-      {!c.wikiTopicId && c.projectId && <button className="pill" title="프로젝트 파일 탐색기" onClick={() => setExplorer(true)}>📂 파일</button>}
+      {!c.wikiTopicId && c.projectId && <button className="pill" title={t('chat.projectFileExplorer')} onClick={() => setExplorer(true)}>{t('chat.filesBtn')}</button>}
 
       <DM.Root>
         <DM.Trigger asChild><button className="pill">{MODELS[c.model] || c.model} ▾</button></DM.Trigger>
@@ -73,12 +75,12 @@ function Header() {
       </DM.Root>
 
       <DM.Root>
-        <DM.Trigger asChild><button className="pill" disabled={isRoom && !control.canSetMode}>{MODES[c.permissionMode] || c.permissionMode} ▾</button></DM.Trigger>
+        <DM.Trigger asChild><button className="pill" disabled={isRoom && !control.canSetMode}>{t(MODES[c.permissionMode]) || c.permissionMode} ▾</button></DM.Trigger>
         <Menu>
           {Object.entries(MODES).map(([id, label]) => (
-            <MenuItem key={id} onSelect={() => setMode(id)}>{label}</MenuItem>
+            <MenuItem key={id} onSelect={() => setMode(id)}>{t(label)}</MenuItem>
           ))}
-          {isRoom && !control.canSetMode && <div className="px-2 py-1 text-[11px] text-txt3">방장만 변경 가능</div>}
+          {isRoom && !control.canSetMode && <div className="px-2 py-1 text-[11px] text-txt3">{t('chat.ownerOnlyMode')}</div>}
         </Menu>
       </DM.Root>
 
@@ -86,18 +88,19 @@ function Header() {
         <div className="seg">
           {(['chat', 'split', 'editor'] as const).map((m) => (
             <button key={m} className={viewMode === m ? 'on' : ''} onClick={() => setViewMode(m)}>
-              {m === 'chat' ? '대화' : m === 'split' ? '분할' : '에디터'}
+              {m === 'chat' ? t('chat.viewChat') : m === 'split' ? t('chat.viewSplit') : t('chat.viewEditor')}
             </button>
           ))}
         </div>
       )}
-      <button className="toolbtn" title="테마 전환" onClick={toggleTheme}>◐</button>
+      <button className="toolbtn" title={t('chat.toggleTheme')} onClick={toggleTheme}>◐</button>
+      <LangToggle />
 
       {showMembers && c.room && <MembersDialog open={showMembers} onClose={() => setShowMembers(false)} />}
       {explorer && c.projectId && (
         <FileExplorer
-          title={`${c.title} 파일 탐색기`}
-          sources={[{ key: 'files', label: '파일' }]}
+          title={t('chat.fileExplorerTitle', { title: c.title })}
+          sources={[{ key: 'files', label: t('chat.filesSource') }]}
           loadTree={() => api.get(`/api/projects/${c.projectId}/tree`).then((r) => ({ files: r.files }))}
           fileUrl={(_dir, p) => `/api/projects/${c.projectId}/file?path=${encodeURIComponent(p)}`}
           blobUrl={(_dir, p) => `/api/projects/${c.projectId}/blob?path=${encodeURIComponent(p)}`}
@@ -120,9 +123,10 @@ function ProjectMenu() {
     if (c?.kind === 'room' && c.roomId) api.get(`/api/projects/room/${c.roomId}`).then((r) => setRoomProjects(r.projects)).catch(() => {});
   }, [c?.roomId, c?.kind]);
 
+  const t = useT();
   if (!c) return null;
-  const list = [...projects.common.map((p) => ({ ...p, tag: '공통' })),
-    ...(c.kind === 'room' ? roomProjects.map((p) => ({ ...p, tag: '방' })) : projects.mine.map((p) => ({ ...p, tag: '개인' })))];
+  const list = [...projects.common.map((p) => ({ ...p, tag: t('chat.tagCommon') })),
+    ...(c.kind === 'room' ? roomProjects.map((p) => ({ ...p, tag: t('chat.tagRoom') })) : projects.mine.map((p) => ({ ...p, tag: t('chat.tagMine') })))];
   const cur = list.find((p) => p.id === c.projectId);
 
   const create = async () => {
@@ -141,9 +145,9 @@ function ProjectMenu() {
 
   return (
     <DM.Root>
-      <DM.Trigger asChild><button className="pill">📁 {cur ? cur.name : '프로젝트'} ▾</button></DM.Trigger>
+      <DM.Trigger asChild><button className="pill">📁 {cur ? cur.name : t('chat.project')} ▾</button></DM.Trigger>
       <Menu>
-        {list.length === 0 && <div className="px-2 py-1 text-[11px] text-txt3">프로젝트 없음</div>}
+        {list.length === 0 && <div className="px-2 py-1 text-[11px] text-txt3">{t('chat.noProjects')}</div>}
         {list.map((p) => (
           <MenuItem key={p.id} onSelect={() => setProject(p.id)}>
             <span className="text-[10px] text-txt3 mr-1">[{p.tag}]</span>{p.name}
@@ -151,14 +155,14 @@ function ProjectMenu() {
         ))}
         <div className="border-t border-line my-1" />
         <div className="flex flex-col gap-1 p-1" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-          <input className="input !py-1 !text-xs" placeholder="새 프로젝트 이름 (git이면 선택)" value={newName}
+          <input className="input !py-1 !text-xs" placeholder={t('chat.newProjectNamePlaceholder')} value={newName}
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && !gitUrl.trim()) { e.preventDefault(); create(); } }} />
-          <input className="input !py-1 !text-xs" placeholder="git clone URL (선택)" value={gitUrl}
+          <input className="input !py-1 !text-xs" placeholder={t('chat.gitCloneUrlPlaceholder')} value={gitUrl}
             onChange={(e) => setGitUrl(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); create(); } }} />
           <button className="btn-ghost !py-1 !text-xs" disabled={busy} onClick={create}>
-            {busy ? '생성 중…' : gitUrl.trim() ? '⬇ Clone & 생성' : '＋ 생성'}
+            {busy ? t('common.creating') : gitUrl.trim() ? t('chat.cloneCreate') : t('chat.createBtn')}
           </button>
         </div>
       </Menu>
@@ -199,15 +203,16 @@ function WikiBanner() {
     api.get(`/api/wiki/topics/${topicId}/files`).then((r) => { setFiles(r.files); setSource(r.source); }).catch(() => setFiles([]));
   }, [topicId, status]);
 
+  const t = useT();
   if (!topicId) return null;
   const selFile = files?.find((f) => f.name === sel);
   const recompile = () => api.post(`/api/wiki/topics/${topicId}/recompile`).catch((e) => useStore.getState().setError(e.message));
 
   const statusEl =
-    status === 'compiling' ? <span className="text-clay">⏳ 컴파일 중…</span>
-      : status === 'error' ? <span className="text-danger" title={topic?.compileError || ''}>⚠ 컴파일 오류</span>
-      : status === 'done' ? <span className="text-ok">✓ 컴파일됨{topic?.compiledAt ? ` · ${timeAgo(topic.compiledAt)}` : ''}</span>
-      : <span className="text-txt3">미컴파일</span>;
+    status === 'compiling' ? <span className="text-clay">{t('chat.compiling')}</span>
+      : status === 'error' ? <span className="text-danger" title={topic?.compileError || ''}>{t('chat.compileError')}</span>
+      : status === 'done' ? <span className="text-ok">{t('chat.compiled')}{topic?.compiledAt ? ` · ${timeAgo(topic.compiledAt)}` : ''}</span>
+      : <span className="text-txt3">{t('chat.notCompiled')}</span>;
 
   return (
     <div className="border-b border-line bg-card text-xs shrink-0">
@@ -215,10 +220,10 @@ function WikiBanner() {
         <span className="cursor-pointer" onClick={() => setOpen(!open)}>📚</span>
         <span className="font-semibold cursor-pointer" onClick={() => setOpen(!open)}>{c?.title}</span>
         {statusEl}
-        {files && <span className="text-txt3">· {source === 'raw' ? `원본 ${files.length}` : `아티클 ${files.length}`}</span>}
+        {files && <span className="text-txt3">· {source === 'raw' ? t('chat.rawCount', { count: files.length }) : t('chat.articleCount', { count: files.length })}</span>}
         <div className="ml-auto flex items-center gap-2">
-          <button className="text-txt3 hover:text-clay" onClick={() => setExplorer(true)}>📂 파일 탐색기</button>
-          {isAdmin && <button className="text-txt3 hover:text-clay disabled:opacity-40" disabled={status === 'compiling'} onClick={recompile}>↻ 재컴파일</button>}
+          <button className="text-txt3 hover:text-clay" onClick={() => setExplorer(true)}>{t('chat.fileExplorerBtn')}</button>
+          {isAdmin && <button className="text-txt3 hover:text-clay disabled:opacity-40" disabled={status === 'compiling'} onClick={recompile}>{t('chat.recompile')}</button>}
           <span className="cursor-pointer text-txt3" onClick={() => setOpen(!open)}>{open ? '▲' : '▼'}</span>
         </div>
       </div>
@@ -226,15 +231,15 @@ function WikiBanner() {
       {status === 'compiling' && (
         <div className="px-5 pb-2 text-clay flex items-center gap-2">
           <span className="tdot" /><span className="tdot" /><span className="tdot" />
-          <span>컴파일 중 — 완료 후 질의 가능.</span>
+          <span>{t('chat.compilingHint')}</span>
           {step && <span className="text-txt3 font-mono truncate">{step}</span>}
         </div>
       )}
-      {status === 'error' && topic?.compileError && <div className="px-5 pb-2 text-danger truncate" title={topic.compileError}>오류: {topic.compileError}</div>}
+      {status === 'error' && topic?.compileError && <div className="px-5 pb-2 text-danger truncate" title={topic.compileError}>{t('chat.errorPrefix', { error: topic.compileError })}</div>}
       {open && status !== 'compiling' && (
         <div className="px-5 pb-3">
-          {source === 'raw' && files && files.length > 0 && <div className="text-txt3 mb-1">아직 미컴파일 — 원본 표시 중. 답변은 컴파일 후 정확합니다.</div>}
-          {files && files.length === 0 && <div className="text-txt3">문서 없음 — 관리자가 파일을 추가하면 근거로 쓰입니다.</div>}
+          {source === 'raw' && files && files.length > 0 && <div className="text-txt3 mb-1">{t('chat.rawShown')}</div>}
+          {files && files.length === 0 && <div className="text-txt3">{t('chat.noDocs')}</div>}
           <div className="flex flex-wrap gap-1.5 mb-2">
             {files?.map((f) => (
               <button key={f.name} className={`px-2 py-0.5 rounded border text-[11px] ${sel === f.name ? 'border-clay text-clay' : 'border-line text-txt2'}`}
@@ -276,6 +281,7 @@ function MessageView({ m }: { m: Msg }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(m.content.text || '');
   const [copied, setCopied] = useState(false);
+  const t = useT();
   const canEdit = !isClaude; // user messages can be edited → regenerate from that point
 
   const copyText = isClaude
@@ -289,9 +295,9 @@ function MessageView({ m }: { m: Msg }) {
   };
 
   const saveEdit = () => {
-    const t = draft.trim();
+    const edited = draft.trim();
     setEditing(false);
-    if (t && t !== m.content.text) editMessage(m.id, t);
+    if (edited && edited !== m.content.text) editMessage(m.id, edited);
   };
 
   return (
@@ -301,9 +307,9 @@ function MessageView({ m }: { m: Msg }) {
         <div className="text-xs text-txt2 font-semibold mb-1 flex items-center gap-2">
           {isClaude ? 'Claude' : m.authorName}
           <span className="hidden group-hover:flex items-center gap-1.5 text-txt3">
-            {copyText && <button className={copied ? 'text-ok' : 'hover:text-clay'} title="복사" onClick={copy}>{copied ? '✓ 복사됨' : '📋'}</button>}
-            {canEdit && <button className="hover:text-clay" title="수정" onClick={() => { setDraft(m.content.text || ''); setEditing(true); }}>✎</button>}
-            <button className="hover:text-danger" title="삭제" onClick={() => { if (confirm('이 메시지를 삭제할까요?')) deleteMessage(m.id); }}>🗑</button>
+            {copyText && <button className={copied ? 'text-ok' : 'hover:text-clay'} title={t('chat.copy')} onClick={copy}>{copied ? t('chat.copied') : '📋'}</button>}
+            {canEdit && <button className="hover:text-clay" title={t('chat.edit')} onClick={() => { setDraft(m.content.text || ''); setEditing(true); }}>✎</button>}
+            <button className="hover:text-danger" title={t('common.delete')} onClick={() => { if (confirm(t('chat.deleteMessageConfirm'))) deleteMessage(m.id); }}>🗑</button>
           </span>
         </div>
         {editing ? (
@@ -312,15 +318,15 @@ function MessageView({ m }: { m: Msg }) {
               value={draft} autoFocus onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit(); } if (e.key === 'Escape') setEditing(false); }} />
             <div className="flex gap-2 justify-end mt-1">
-              <button className="btn-ghost !py-1 !text-xs" onClick={() => setEditing(false)}>취소</button>
-              <button className="rounded-md px-3 py-1 text-xs font-semibold text-white bg-clay" onClick={saveEdit}>저장 후 재생성</button>
+              <button className="btn-ghost !py-1 !text-xs" onClick={() => setEditing(false)}>{t('common.cancel')}</button>
+              <button className="rounded-md px-3 py-1 text-xs font-semibold text-white bg-clay" onClick={saveEdit}>{t('chat.saveRegenerate')}</button>
             </div>
           </div>
         ) : (
           <>
             {!isClaude && <div className="text-sm break-words leading-relaxed" dangerouslySetInnerHTML={{ __html: md(m.content.text || '') }} />}
             {isClaude && <BlockList blocks={blocks} />}
-            {m.content.interrupted && <div className="text-[11px] text-warn mt-1">⏹ 중단됨</div>}
+            {m.content.interrupted && <div className="text-[11px] text-warn mt-1">{t('chat.interrupted')}</div>}
           </>
         )}
       </div>
@@ -330,6 +336,7 @@ function MessageView({ m }: { m: Msg }) {
 
 function LiveView() {
   const live = useStore((s) => s.live)!;
+  const t = useT();
   return (
     <div className="flex gap-3 mb-5">
       <Avatar claude />
@@ -337,7 +344,7 @@ function LiveView() {
         <div className="text-xs text-txt2 font-semibold mb-1">Claude</div>
         <BlockList blocks={live.blocks} />
         <div className="flex items-center gap-1.5 text-txt3 text-[13px] italic mt-1">
-          <span className="tdot" /><span className="tdot" /><span className="tdot" /> 작업 중…
+          <span className="tdot" /><span className="tdot" /><span className="tdot" /> {t('chat.working')}
         </div>
       </div>
     </div>
@@ -356,23 +363,24 @@ function BlockList({ blocks }: { blocks: Block[] }) {
 
 function ToolCard({ b }: { b: Extract<Block, { type: 'tool_use' }> }) {
   const [open, setOpen] = useState(false);
+  const t = useT();
   // AskUserQuestion's pick is fed back as a (technically) denied tool result — the SDK flags it
   // is_error even though nothing failed. Render it as a normal choice, not "오류".
   const isAsk = b.name === 'AskUserQuestion';
   const cancelled = isAsk && b.output === 'Denied.';
   const cmd = isAsk
-    ? (b.input?.questions?.[0]?.question || '질문')
+    ? (b.input?.questions?.[0]?.question || t('chat.question'))
     : (b.input?.command || b.input?.file_path || b.input?.path || JSON.stringify(b.input || {}).slice(0, 80));
   const status =
-    b.output == null ? { text: '실행 중…', color: 'var(--txt-3)' }
-    : isAsk ? (cancelled ? { text: '취소됨', color: 'var(--txt-3)' } : { text: '✓ 선택됨', color: 'var(--ok)' })
-    : b.isError ? { text: '✗ 오류', color: 'var(--danger)' }
-    : { text: '✓ 완료', color: 'var(--ok)' };
+    b.output == null ? { text: t('chat.toolRunning'), color: 'var(--txt-3)' }
+    : isAsk ? (cancelled ? { text: t('chat.cancelled'), color: 'var(--txt-3)' } : { text: t('chat.selected'), color: 'var(--ok)' })
+    : b.isError ? { text: t('chat.toolError'), color: 'var(--danger)' }
+    : { text: t('chat.toolDone'), color: 'var(--ok)' };
   return (
     <div className="border border-line rounded-lg my-2 overflow-hidden bg-card">
       <div className="flex items-center gap-2 px-3 py-2 cursor-pointer text-xs" onClick={() => setOpen(!open)}>
         <span className="text-clay">{isAsk ? '❓' : '⌘'}</span>
-        <span className="font-semibold">{isAsk ? '질문' : b.name}</span>
+        <span className="font-semibold">{isAsk ? t('chat.question') : b.name}</span>
         <code className="font-mono text-txt2 truncate flex-1">{String(cmd)}</code>
         <span className="text-[11px] flex items-center gap-1" style={{ color: status.color }}>{status.text}</span>
       </div>
@@ -400,18 +408,19 @@ function PermissionArea() {
 }
 
 function ToolApproval({ p, canApprove, respond }: { p: any; canApprove: boolean; respond: any }) {
+  const t = useT();
   return (
     <>
-      <div className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: 'var(--warn)' }}>⚠ 툴 승인 요청 — {p.tool}</div>
+      <div className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: 'var(--warn)' }}>{t('chat.toolApprovalRequest', { tool: p.tool })}</div>
       <code className="font-mono text-xs bg-card px-1.5 py-1 rounded border border-line block truncate">{p.input?.command || p.input?.file_path || JSON.stringify(p.input)}</code>
       {canApprove ? (
         <div className="flex gap-2 mt-2.5">
-          <button className="rounded-md px-3.5 py-1.5 text-xs font-semibold text-white" style={{ background: 'var(--ok)' }} onClick={() => respond(p.requestId, 'allow')}>허용</button>
-          <button className="btn-ghost !py-1.5 !text-xs" onClick={() => respond(p.requestId, 'deny')}>거부</button>
-          <button className="btn-ghost !py-1.5 !text-xs" onClick={() => respond(p.requestId, 'always')}>항상 허용</button>
+          <button className="rounded-md px-3.5 py-1.5 text-xs font-semibold text-white" style={{ background: 'var(--ok)' }} onClick={() => respond(p.requestId, 'allow')}>{t('chat.allow')}</button>
+          <button className="btn-ghost !py-1.5 !text-xs" onClick={() => respond(p.requestId, 'deny')}>{t('chat.deny')}</button>
+          <button className="btn-ghost !py-1.5 !text-xs" onClick={() => respond(p.requestId, 'always')}>{t('chat.alwaysAllow')}</button>
         </div>
       ) : (
-        <div className="text-[11px] text-txt2 mt-2">승인권자(방장/위임자)의 응답 대기 중…</div>
+        <div className="text-[11px] text-txt2 mt-2">{t('chat.awaitingApprovalResponse')}</div>
       )}
     </>
   );
@@ -423,8 +432,9 @@ function ToolApproval({ p, canApprove, respond }: { p: any; canApprove: boolean;
 // question is answered. Fine for the common single-question case; revisit if multi-question shows up.
 function AskQuestion({ p, canApprove, respond }: { p: any; canApprove: boolean; respond: any }) {
   const qs: any[] = p.input?.questions || [];
+  const t = useT();
   if (!canApprove) {
-    return <div className="text-[11px] text-txt2">승인권자(방장/위임자)의 선택 대기 중…</div>;
+    return <div className="text-[11px] text-txt2">{t('chat.awaitingApprovalChoice')}</div>;
   }
   return (
     <div className="flex flex-col gap-3">
@@ -434,7 +444,7 @@ function AskQuestion({ p, canApprove, respond }: { p: any; canApprove: boolean; 
           <div className="flex flex-col gap-1.5">
             {(q.options || []).map((o: any, oi: number) => (
               <button key={oi} className="text-left border border-line rounded-md px-3 py-2 bg-card hover:bg-line transition"
-                onClick={() => respond(p.requestId, 'answer', `[사용자 선택] 질문 "${q.question}" → "${o.label}"${o.description ? ` (${o.description})` : ''}`)}>
+                onClick={() => respond(p.requestId, 'answer', t('chat.userChoiceAnswer', { question: q.question, label: o.label }) + (o.description ? ` (${o.description})` : ''))}>
                 <div className="font-semibold text-xs">{o.label}</div>
                 {o.description && <div className="text-[11px] text-txt2 mt-0.5">{o.description}</div>}
               </button>
@@ -442,7 +452,7 @@ function AskQuestion({ p, canApprove, respond }: { p: any; canApprove: boolean; 
           </div>
         </div>
       ))}
-      <button className="btn-ghost !py-1.5 !text-xs self-start" onClick={() => respond(p.requestId, 'deny')}>취소</button>
+      <button className="btn-ghost !py-1.5 !text-xs self-start" onClick={() => respond(p.requestId, 'deny')}>{t('common.cancel')}</button>
     </div>
   );
 }
@@ -450,11 +460,11 @@ function AskQuestion({ p, canApprove, respond }: { p: any; canApprove: boolean; 
 // Client-side UI actions (run immediately on select). Real Claude Code commands + skills
 // are fetched per session and merged in below.
 const CLIENT_CMDS: { cmd: string; label: string; kind: 'ui'; run: (s: any) => void }[] = [
-  { cmd: '/new', label: '새 대화 시작', kind: 'ui', run: (s) => s.newSession() },
-  { cmd: '/split', label: '분할 뷰 (채팅 + 에디터)', kind: 'ui', run: (s) => s.setViewMode('split') },
-  { cmd: '/editor', label: '에디터 뷰 열기', kind: 'ui', run: (s) => s.setViewMode('editor') },
-  { cmd: '/chat', label: '대화 뷰', kind: 'ui', run: (s) => s.setViewMode('chat') },
-  { cmd: '/interrupt', label: '실행 중인 턴 중단', kind: 'ui', run: (s) => s.interrupt() },
+  { cmd: '/new', label: 'chat.cmdNew', kind: 'ui', run: (s) => s.newSession() },
+  { cmd: '/split', label: 'chat.cmdSplit', kind: 'ui', run: (s) => s.setViewMode('split') },
+  { cmd: '/editor', label: 'chat.cmdEditor', kind: 'ui', run: (s) => s.setViewMode('editor') },
+  { cmd: '/chat', label: 'chat.cmdChat', kind: 'ui', run: (s) => s.setViewMode('chat') },
+  { cmd: '/interrupt', label: 'chat.cmdInterrupt', kind: 'ui', run: (s) => s.interrupt() },
 ];
 type Cmd = { cmd: string; label: string; kind: 'ui' | 'cmd'; desc?: string; hint?: string; run?: (s: any) => void };
 
@@ -464,6 +474,7 @@ function Composer() {
   const [text, setText] = useState('');
   const [sel, setSel] = useState(0);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const t = useT();
   if (!c) return null;
   const isRoom = c.kind === 'room';
   const wikiCompiling = !!c.wikiTopicId && store.wikiTopics.find((t) => t.id === c.wikiTopicId)?.compileStatus === 'compiling';
@@ -504,24 +515,24 @@ function Composer() {
       <div className="max-w-[760px] mx-auto">
         {(queue.running || queue.waiting.length > 0 || congested) && (
           <div className="text-xs text-txt3 mb-2 flex items-center gap-2 flex-wrap">
-            {queue.running && <span>🕒 {queue.running.author.name} 작업 중</span>}
+            {queue.running && <span>{t('chat.authorWorking', { name: queue.running.author.name })}</span>}
             {turnActive && (
-              <button className="text-danger hover:underline" onClick={interrupt}>· 중단</button>
+              <button className="text-danger hover:underline" onClick={interrupt}>{t('chat.interruptShort')}</button>
             )}
             {queue.waiting.map((w) => (
               <span key={w.id} className="bg-rail border border-line rounded-full px-2.5 py-0.5 text-txt2 flex items-center gap-1">
-                {w.author.name} 대기
-                {(w.author.id === user?.id) && <button className="text-danger" title="취소" onClick={() => cancel(w.id)}>✕</button>}
+                {t('chat.authorWaiting', { name: w.author.name })}
+                {(w.author.id === user?.id) && <button className="text-danger" title={t('common.cancel')} onClick={() => cancel(w.id)}>✕</button>}
               </span>
             ))}
-            {congested && <span className="text-warn">· 잠시 혼잡 (대기 중)</span>}
+            {congested && <span className="text-warn">{t('chat.congested')}</span>}
           </div>
         )}
         <div className="relative">
           {showSlash && (
             <div className="absolute bottom-full mb-2 left-0 right-0 bg-panel border border-line rounded-lg shadow-2xl overflow-hidden z-40">
               <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-txt3 border-b border-line flex justify-between">
-                <span>명령어 · 스킬</span><span>{matches.length}</span>
+                <span>{t('chat.commandsSkills')}</span><span>{matches.length}</span>
               </div>
               <div className="max-h-64 overflow-y-auto scrolly">
                 {matches.map((m, i) => (
@@ -529,10 +540,10 @@ function Composer() {
                     className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer text-sm ${i === sel ? 'bg-line' : ''}`}>
                     <code className="font-mono text-clay text-xs shrink-0">{m.cmd}</code>
                     {m.hint && <code className="font-mono text-txt3 text-[11px] shrink-0">{m.hint}</code>}
-                    <span className="text-txt2 text-xs truncate">{m.desc || (m.kind === 'ui' ? m.label : '')}</span>
+                    <span className="text-txt2 text-xs truncate">{m.desc || (m.kind === 'ui' ? t(m.label) : '')}</span>
                     <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full shrink-0"
                       style={{ background: 'var(--claysoft)', color: 'var(--clay)' }}>
-                      {m.kind === 'ui' ? 'UI' : '명령'}
+                      {m.kind === 'ui' ? 'UI' : t('chat.cmdBadge')}
                     </span>
                   </div>
                 ))}
@@ -547,7 +558,7 @@ function Composer() {
             )}
             <textarea ref={taRef} disabled={wikiCompiling}
               className="relative z-10 w-full bg-transparent outline-none resize-none text-sm text-txt placeholder:text-txt3 disabled:opacity-50"
-              rows={2} placeholder={wikiCompiling ? '주제 컴파일 중 — 완료 후 질의 가능' : isRoom ? `${c.title}에 메시지…  (당신 발화는 [${user?.displayName}]로 전달)` : '메시지…  (/ 입력 시 명령어)'}
+              rows={2} placeholder={wikiCompiling ? t('chat.topicCompiling') : isRoom ? t('chat.roomMessagePlaceholder', { title: c.title, name: user?.displayName ?? '' }) : t('chat.messagePlaceholder')}
               value={text} onChange={(e) => { setText(e.target.value); setSel(0); }}
               onKeyDown={(e) => {
                 if (showSlash && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab')) {
@@ -560,8 +571,8 @@ function Composer() {
                 if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
               }} />
             <div className="flex items-center gap-2 mt-2">
-              <span className="text-xs text-txt3 truncate">{wikiCompiling ? `⏳ 컴파일 중${wikiStep ? ` — ${wikiStep}` : ' — 완료 후 질의 가능'}` : turnActive ? 'Claude 응답 중' : 'Enter 전송 · Shift+Enter 줄바꿈 · / 명령어'}</span>
-              <button className="ml-auto bg-clay text-white rounded-lg w-8 h-8 grid place-items-center disabled:opacity-40" disabled={wikiCompiling} onClick={submit} aria-label="보내기">➤</button>
+              <span className="text-xs text-txt3 truncate">{wikiCompiling ? (wikiStep ? t('chat.compilingStep', { step: wikiStep }) : t('chat.compilingReady')) : turnActive ? t('chat.claudeResponding') : t('chat.composerHint')}</span>
+              <button className="ml-auto bg-clay text-white rounded-lg w-8 h-8 grid place-items-center disabled:opacity-40" disabled={wikiCompiling} onClick={submit} aria-label={t('chat.send')}>➤</button>
             </div>
           </div>
         </div>
@@ -572,12 +583,13 @@ function Composer() {
 
 function EditorPane() {
   const { editorUrl, current: c } = useStore();
+  const t = useT();
   if (!c) return null;
   if (!editorUrl) return (
     <div className="grid place-items-center bg-[#1e1e1e] text-[#bbb] text-sm">
       <div className="text-center">
-        <div className="mb-2">에디터를 여는 중…</div>
-        <div className="text-xs text-[#888]">{c.projectId ? '' : '헤더에서 프로젝트를 먼저 선택하세요.'}</div>
+        <div className="mb-2">{t('chat.openingEditor')}</div>
+        <div className="text-xs text-[#888]">{c.projectId ? '' : t('chat.selectProjectFirst')}</div>
       </div>
     </div>
   );

@@ -1,0 +1,592 @@
+import { useSyncExternalStore } from 'react';
+
+export type Lang = 'ko' | 'en';
+export const LANGS = ['ko', 'en'] as const;
+export const LANG_LABELS: Record<Lang, string> = { ko: '한국어', en: 'English' };
+
+// i18n owns the current language itself (source of truth) — self-contained state +
+// localStorage persistence + a React subscription. Nothing else needs to store `lang`.
+const listeners = new Set<() => void>();
+let current: Lang = detect();
+
+function detect(): Lang {
+  try { const s = localStorage.getItem('lang'); if (s === 'ko' || s === 'en') return s; } catch { /* noop */ }
+  if (typeof navigator !== 'undefined' && navigator.language?.toLowerCase().startsWith('ko')) return 'ko';
+  return 'ko'; // team default
+}
+
+export function getLang(): Lang { return current; }
+
+export function setLang(l: Lang): void {
+  if (l === current) return;
+  current = l;
+  try { localStorage.setItem('lang', l); } catch { /* noop */ }
+  document.documentElement.setAttribute('lang', l);
+  listeners.forEach((fn) => fn());
+}
+
+export function toggleLang(): void { setLang(current === 'ko' ? 'en' : 'ko'); }
+
+// Subscribe a component to language changes (re-renders on switch).
+export function useLang(): Lang {
+  return useSyncExternalStore(
+    (cb) => { listeners.add(cb); return () => listeners.delete(cb); },
+    getLang, getLang,
+  );
+}
+
+type Params = Record<string, string | number>;
+
+function interpolate(s: string, params?: Params): string {
+  if (!params) return s;
+  for (const k of Object.keys(params)) s = s.split(`{${k}}`).join(String(params[k]));
+  return s;
+}
+
+export function translate(lang: Lang, key: string, params?: Params): string {
+  const s = DICT[lang][key] ?? DICT.ko[key] ?? key; // fall back to ko, then the raw key
+  return interpolate(s, params);
+}
+
+// Non-reactive lookup — for use outside React (store, plain helpers).
+export function t(key: string, params?: Params): string { return translate(current, key, params); }
+
+// Reactive lookup — components re-render when the language changes.
+export function useT(): (key: string, params?: Params) => string {
+  const lang = useLang();
+  return (key, params) => translate(lang, key, params);
+}
+
+document.documentElement.setAttribute('lang', current);
+
+type Dict = Record<string, string>;
+
+const ko: Dict = {
+  // common / shared
+  'common.cancel': '취소',
+  'common.create': '만들기',
+  'common.delete': '삭제',
+  'common.confirm': '확인',
+  'common.creating': '생성 중…',
+  'common.none': '아직 없음',
+  'common.errorPrefix': '오류: {msg}',
+  // infra
+  'app.loading': '로딩…',
+  'store.selectProjectFirst': '먼저 프로젝트를 선택하세요.',
+  'lang.toggleTitle': '언어 전환 (한국어/English)',
+  // relative time
+  'time.justNow': '방금',
+  'time.minutes': '{n}분',
+  'time.hours': '{n}시간',
+  'time.days': '{n}일',
+
+  // chat
+  'chat.modeDefault': '🛡 기본(승인)',
+  'chat.modeAcceptEdits': '✎ 편집 자동승인',
+  'chat.modeBypass': '⚡ 전체 허용',
+  'chat.modePlan': '📋 플랜',
+  'chat.knowledgeQuery': '📚 지식 기반 질의',
+  'chat.noProject': '~/(프로젝트 미선택)',
+  'chat.ownerMembers': '👑 {owner} · 멤버',
+  'chat.roomOwner': '방장',
+  'chat.projectFileExplorer': '프로젝트 파일 탐색기',
+  'chat.filesBtn': '📂 파일',
+  'chat.ownerOnlyMode': '방장만 변경 가능',
+  'chat.viewChat': '대화',
+  'chat.viewSplit': '분할',
+  'chat.viewEditor': '에디터',
+  'chat.toggleTheme': '테마 전환',
+  'chat.fileExplorerTitle': '{title} 파일 탐색기',
+  'chat.filesSource': '파일',
+  'chat.project': '프로젝트',
+  'chat.noProjects': '프로젝트 없음',
+  'chat.tagCommon': '공통',
+  'chat.tagRoom': '방',
+  'chat.tagMine': '개인',
+  'chat.newProjectNamePlaceholder': '새 프로젝트 이름 (git이면 선택)',
+  'chat.gitCloneUrlPlaceholder': 'git clone URL (선택)',
+  'chat.cloneCreate': '⬇ Clone & 생성',
+  'chat.createBtn': '＋ 생성',
+  'chat.compiling': '⏳ 컴파일 중…',
+  'chat.compileError': '⚠ 컴파일 오류',
+  'chat.compiled': '✓ 컴파일됨',
+  'chat.notCompiled': '미컴파일',
+  'chat.rawCount': '원본 {count}',
+  'chat.articleCount': '아티클 {count}',
+  'chat.fileExplorerBtn': '📂 파일 탐색기',
+  'chat.recompile': '↻ 재컴파일',
+  'chat.compilingHint': '컴파일 중 — 완료 후 질의 가능.',
+  'chat.errorPrefix': '오류: {error}',
+  'chat.rawShown': '아직 미컴파일 — 원본 표시 중. 답변은 컴파일 후 정확합니다.',
+  'chat.noDocs': '문서 없음 — 관리자가 파일을 추가하면 근거로 쓰입니다.',
+  'chat.copy': '복사',
+  'chat.copied': '✓ 복사됨',
+  'chat.edit': '수정',
+  'chat.deleteMessageConfirm': '이 메시지를 삭제할까요?',
+  'chat.saveRegenerate': '저장 후 재생성',
+  'chat.interrupted': '⏹ 중단됨',
+  'chat.working': '작업 중…',
+  'chat.question': '질문',
+  'chat.toolRunning': '실행 중…',
+  'chat.cancelled': '취소됨',
+  'chat.selected': '✓ 선택됨',
+  'chat.toolError': '✗ 오류',
+  'chat.toolDone': '✓ 완료',
+  'chat.toolApprovalRequest': '⚠ 툴 승인 요청 — {tool}',
+  'chat.allow': '허용',
+  'chat.deny': '거부',
+  'chat.alwaysAllow': '항상 허용',
+  'chat.awaitingApprovalResponse': '승인권자(방장/위임자)의 응답 대기 중…',
+  'chat.awaitingApprovalChoice': '승인권자(방장/위임자)의 선택 대기 중…',
+  'chat.userChoiceAnswer': '[사용자 선택] 질문 "{question}" → "{label}"',
+  'chat.cmdNew': '새 대화 시작',
+  'chat.cmdSplit': '분할 뷰 (채팅 + 에디터)',
+  'chat.cmdEditor': '에디터 뷰 열기',
+  'chat.cmdChat': '대화 뷰',
+  'chat.cmdInterrupt': '실행 중인 턴 중단',
+  'chat.authorWorking': '🕒 {name} 작업 중',
+  'chat.interruptShort': '· 중단',
+  'chat.authorWaiting': '{name} 대기',
+  'chat.congested': '· 잠시 혼잡 (대기 중)',
+  'chat.commandsSkills': '명령어 · 스킬',
+  'chat.cmdBadge': '명령',
+  'chat.topicCompiling': '주제 컴파일 중 — 완료 후 질의 가능',
+  'chat.roomMessagePlaceholder': '{title}에 메시지…  (당신 발화는 [{name}]로 전달)',
+  'chat.messagePlaceholder': '메시지…  (/ 입력 시 명령어)',
+  'chat.compilingStep': '⏳ 컴파일 중 — {step}',
+  'chat.compilingReady': '⏳ 컴파일 중 — 완료 후 질의 가능',
+  'chat.claudeResponding': 'Claude 응답 중',
+  'chat.composerHint': 'Enter 전송 · Shift+Enter 줄바꿈 · / 명령어',
+  'chat.send': '보내기',
+  'chat.openingEditor': '에디터를 여는 중…',
+  'chat.selectProjectFirst': '헤더에서 프로젝트를 먼저 선택하세요.',
+
+  // sidebar
+  'sidebar.teamName': '{name} 팀',
+  'sidebar.newChat': '＋ 새 대화',
+  'sidebar.personal': '개인',
+  'sidebar.deleteChatTitle': '대화 삭제',
+  'sidebar.deleteChatConfirm': '"{title}" 대화를 삭제할까요?',
+  'sidebar.rooms': '대화방',
+  'sidebar.deleteRoomTitle': '대화방 삭제',
+  'sidebar.deleteRoomConfirm': '"{name}" 대화방을 삭제할까요? (방장/삭제 권한 필요)',
+  'sidebar.createTopicHint': '＋로 주제 생성',
+  'sidebar.compiling': '컴파일…',
+  'sidebar.deleteTopicTitle': '주제 삭제',
+  'sidebar.deleteTopicConfirm': '"{name}" 주제를 삭제할까요? (스레드/기록 + 업로드 파일 전부 영구 삭제, 복구 불가)',
+  'sidebar.myToken': '내 토큰',
+  'sidebar.tokenUnregistered': '미등록',
+  'sidebar.plugins': '플러그인',
+  'sidebar.adminPanel': '관리자 패널',
+  'sidebar.logout': '로그아웃',
+  'sidebar.newRoomTitle': '새 대화방 만들기',
+  'sidebar.roomNamePlaceholder': '대화방 이름',
+  'sidebar.topicNameRequired': '주제 이름을 입력하세요.',
+  'sidebar.newWikiTopicTitle': '새 LLM Wiki 주제 만들기',
+  'sidebar.topicNamePlaceholder': '주제 이름',
+  'sidebar.topicDescPlaceholder': '설명 / 지침 (선택) — 클로드가 이 범위에서 답변합니다',
+  'sidebar.dropZone': '📁 폴더/파일을 여기로 드래그 — 하위 폴더 전부 업로드',
+  'sidebar.chooseFiles': '파일 선택',
+  'sidebar.chooseFolder': '폴더 선택',
+  'sidebar.uploading': '업로드 중… {progress}%',
+  'sidebar.noFilesUploaded': '업로드된 파일 없음',
+  'sidebar.queryOnlyHint': '사용자는 각자 개인 스레드에서 질의만 가능',
+  'sidebar.fileCount': '{count}개 파일',
+  'sidebar.confirmWithCount': '확인 ({count}개)',
+
+  // login
+  'login.subtitle': '팀 워크스페이스에 로그인',
+  'login.username': '아이디',
+  'login.password': '비밀번호',
+  'login.logIn': '로그인',
+  'login.loginFailed': '로그인 실패',
+  'login.initialAdmin': '초기 관리자: admin / admin (배포 후 변경)',
+
+  // shell
+  'shell.emptyHint': '대화를 시작하거나 왼쪽에서 세션/대화방을 선택하세요.',
+  'shell.newConversation': '＋ 새 대화 시작',
+
+  // admin
+  'admin.deleteUserConfirm': '사용자를 삭제할까요?',
+  'admin.newPasswordPrompt': '새 비밀번호',
+  'admin.changed': '변경됨',
+  'admin.clearCommonTokenConfirm': '공용 토큰을 삭제할까요? 개인 토큰 없는 유저는 이후 MOCK(에코)으로 동작합니다.',
+  'admin.panelTitle': '🛠 관리자 패널',
+  'admin.statUsers': '사용자',
+  'admin.statRooms': '대화방',
+  'admin.statSessions': '세션',
+  'admin.statConcurrentTurns': '동시 턴',
+  'admin.mockForcedWarning': 'MOCK 강제 모드 (MOCK_CLAUDE=1) — 모든 턴이 에코 응답. 해제하려면 env에서 끄세요.',
+  'admin.commonTokenUnsetWarning': '공용 토큰 미설정 — 개인 토큰이 없는 유저는 MOCK(에코)으로 동작합니다. 아래 "공용 Claude 토큰"에서 등록하세요.',
+  'admin.commonTokenTitle': '공용 Claude 토큰 (개인 토큰 없는 유저의 폴백)',
+  'admin.registered': '등록됨',
+  'admin.notSet': '미설정',
+  'admin.commonTokenPlaceholder': 'sk-ant-oat-… 또는 sk-ant-api-…',
+  'admin.save': '저장',
+  'admin.commonTokenHint': 'env {key}보다 이 값이 우선합니다. 개인 토큰이 있는 유저는 항상 본인 토큰을 사용합니다.',
+  'admin.usageTitle': '사용량 (가시성 · 과금 아님)',
+  'admin.usageTotals': '누적 · 턴 {turns} · in {input} · out {output} · ${cost}',
+  'admin.colUser': '사용자',
+  'admin.colTurns': '턴',
+  'admin.globalSettingsTitle': '전역 설정',
+  'admin.allowBypassLabel': 'bypass(전체 허용) 모드 허용 — 끄면 최대 권한이 편집자동승인으로 제한(천장)',
+  'admin.concurrentTurnCap': '전역 동시 턴 캡: {max} (env MAX_CONCURRENT_TURNS)',
+  'admin.codeServerImage': 'code-server 이미지: {image}',
+  'admin.userManagementTitle': '사용자 관리',
+  'admin.resetPassword': '비번변경',
+  'admin.usernamePlaceholder': '아이디',
+  'admin.displayNamePlaceholder': '표시이름',
+  'admin.passwordPlaceholder': '비밀번호',
+  'admin.claudeTokenPlaceholder': 'Claude 토큰 (선택 · sk-ant-oat…/api…)',
+  'admin.createUser': '사용자 발급',
+
+  // plugins
+  'plugins.title': '🧩 플러그인',
+  'plugins.commonPlugins': '공통 플러그인',
+  'plugins.commonPluginsUserNote': '(관리자 관리 · 개인 on/off 가능)',
+  'plugins.commonAdminDesc': '팀 전체에 적용. 필수강제 지정 시 개인이 끌 수 없음.',
+  'plugins.commonUserDesc': '관리자가 설치. 필수(🔒)가 아니면 내 세션에서 끌 수 있음.',
+  'plugins.detail': '상세',
+  'plugins.enabledLabel': '활성',
+  'plugins.required': '🔒 필수',
+  'plugins.usePref': '내 세션 사용',
+  'plugins.personalPlugins': '개인 플러그인',
+  'plugins.personalDesc': '내 세션에만 적용. 이름 충돌 시 개인 우선.',
+  'plugins.marketplaces': '마켓플레이스: {names}',
+  'plugins.marketNamePlaceholder': '마켓 이름',
+  'plugins.addMarket': '마켓추가',
+  'plugins.pluginNamePlaceholder': '플러그인 이름',
+  'plugins.install': '설치',
+  'plugins.uploadNamePlaceholder': '업로드 이름',
+  'plugins.uploadTarGz': '업로드(.tar.gz)',
+  'plugins.sourceUpload': '업로드',
+
+  // pluginDetail
+  'pluginDetail.fallbackPlugin': '플러그인',
+  'pluginDetail.filesTitle': '{name} · 파일',
+  'pluginDetail.files': '파일',
+  'pluginDetail.title': '🧩 {name}',
+  'pluginDetail.loading': '불러오는 중…',
+  'pluginDetail.scopeCommon': '공통',
+  'pluginDetail.scopePersonal': '개인',
+  'pluginDetail.sourceUpload': '업로드',
+  'pluginDetail.homepage': '홈페이지 ↗',
+  'pluginDetail.viewFileTree': '📁 파일 트리 보기',
+  'pluginDetail.updating': '업데이트 중…',
+  'pluginDetail.update': '⬇ 업데이트',
+  'pluginDetail.skills': '스킬',
+  'pluginDetail.noSkills': '노출된 스킬 없음 (commands/agents만 있을 수 있음).',
+
+  // members
+  'members.permApprove': '승인',
+  'members.permInterrupt': '중단',
+  'members.permInvite': '초대',
+  'members.permKick': '추방',
+  'members.permTransfer': '방장이양',
+  'members.permDeleteRoom': '방삭제',
+  'members.deleteRoomConfirm': '대화방을 삭제할까요? 되돌릴 수 없습니다.',
+  'members.title': '멤버 · {name}',
+  'members.ownerBadge': '👑 방장',
+  'members.transferOwnership': '방장 이양',
+  'members.leave': '나가기',
+  'members.invitePlaceholder': '멤버 초대…',
+  'members.delegationRuleIntro': '위임 규칙: 승인·중단·초대·추방·방장이양·방삭제는 위임 가능.',
+  'members.delegationRuleBold': '방 권한모드 변경은 방장 전용(위임 불가)',
+  'members.deleteRoom': '대화방 삭제',
+
+  // token
+  'token.enterToken': '토큰을 입력하세요.',
+  'token.saveFailed': '저장 실패',
+  'token.clearConfirm': '등록된 토큰을 삭제할까요? 삭제 후에는 공용 토큰으로 동작합니다.',
+  'token.deleteFailed': '삭제 실패',
+  'token.registerTitle': 'Claude Code 토큰 등록',
+  'token.myTokenTitle': '내 Claude 토큰',
+  'token.nagNotice': '아직 개인 토큰이 없습니다. 지금은 공용 토큰으로 동작하지만, 본인 토큰을 등록하면 질의가 본인 계정으로 실행되고 사용량도 본인에게 귀속됩니다.',
+  'token.registered': '등록됨',
+  'token.notRegistered': '미등록',
+  'token.replaceToken': '토큰 교체',
+  'token.token': '토큰',
+  'token.tokenPrefixHint': '(sk-ant-oat… 또는 sk-ant-api…)',
+  'token.setupHint': '터미널에서 {code} 실행 후 나온 토큰을 붙여넣으세요. (Pro/Max 로그인) 또는 콘솔 API 키.',
+  'token.later': '나중에',
+  'token.close': '닫기',
+  'token.save': '저장',
+
+  // fileExplorer
+  'fileExplorer.loading': '불러오는 중…',
+  'fileExplorer.noFiles': '파일 없음',
+  'fileExplorer.selectFilePrompt': '왼쪽에서 파일을 선택하세요.',
+  'fileExplorer.rendered': '📖 렌더',
+  'fileExplorer.source': '</> 원문',
+
+  // wikiExplorer
+  'wikiExplorer.title': 'LLM Wiki 파일 탐색기',
+  'wikiExplorer.sourceRaw': '원본 raw',
+  'wikiExplorer.sourceWiki': '컴파일 wiki',
+};
+
+const en: Dict = {
+  // common / shared
+  'common.cancel': 'Cancel',
+  'common.create': 'Create',
+  'common.delete': 'Delete',
+  'common.confirm': 'Confirm',
+  'common.creating': 'Creating…',
+  'common.none': 'None yet',
+  'common.errorPrefix': 'Error: {msg}',
+  // infra
+  'app.loading': 'Loading…',
+  'store.selectProjectFirst': 'Select a project first.',
+  'lang.toggleTitle': 'Switch language (한국어/English)',
+  // relative time
+  'time.justNow': 'just now',
+  'time.minutes': '{n}m',
+  'time.hours': '{n}h',
+  'time.days': '{n}d',
+
+  // chat
+  'chat.modeDefault': '🛡 Default (approve)',
+  'chat.modeAcceptEdits': '✎ Auto-approve edits',
+  'chat.modeBypass': '⚡ Allow all',
+  'chat.modePlan': '📋 Plan',
+  'chat.knowledgeQuery': '📚 Knowledge-based query',
+  'chat.noProject': '~/(no project selected)',
+  'chat.ownerMembers': '👑 {owner} · Members',
+  'chat.roomOwner': 'Owner',
+  'chat.projectFileExplorer': 'Project file explorer',
+  'chat.filesBtn': '📂 Files',
+  'chat.ownerOnlyMode': 'Only the owner can change',
+  'chat.viewChat': 'Chat',
+  'chat.viewSplit': 'Split',
+  'chat.viewEditor': 'Editor',
+  'chat.toggleTheme': 'Toggle theme',
+  'chat.fileExplorerTitle': '{title} file explorer',
+  'chat.filesSource': 'Files',
+  'chat.project': 'Project',
+  'chat.noProjects': 'No projects',
+  'chat.tagCommon': 'Common',
+  'chat.tagRoom': 'Room',
+  'chat.tagMine': 'Personal',
+  'chat.newProjectNamePlaceholder': 'New project name (optional if git)',
+  'chat.gitCloneUrlPlaceholder': 'git clone URL (optional)',
+  'chat.cloneCreate': '⬇ Clone & create',
+  'chat.createBtn': '＋ Create',
+  'chat.compiling': '⏳ Compiling…',
+  'chat.compileError': '⚠ Compile error',
+  'chat.compiled': '✓ Compiled',
+  'chat.notCompiled': 'Not compiled',
+  'chat.rawCount': 'Raw {count}',
+  'chat.articleCount': 'Articles {count}',
+  'chat.fileExplorerBtn': '📂 File explorer',
+  'chat.recompile': '↻ Recompile',
+  'chat.compilingHint': 'Compiling — queries available when done.',
+  'chat.errorPrefix': 'Error: {error}',
+  'chat.rawShown': 'Not yet compiled — showing raw source. Answers are accurate after compiling.',
+  'chat.noDocs': 'No documents — files added by an admin are used as sources.',
+  'chat.copy': 'Copy',
+  'chat.copied': '✓ Copied',
+  'chat.edit': 'Edit',
+  'chat.deleteMessageConfirm': 'Delete this message?',
+  'chat.saveRegenerate': 'Save & regenerate',
+  'chat.interrupted': '⏹ Interrupted',
+  'chat.working': 'Working…',
+  'chat.question': 'Question',
+  'chat.toolRunning': 'Running…',
+  'chat.cancelled': 'Cancelled',
+  'chat.selected': '✓ Selected',
+  'chat.toolError': '✗ Error',
+  'chat.toolDone': '✓ Done',
+  'chat.toolApprovalRequest': '⚠ Tool approval request — {tool}',
+  'chat.allow': 'Allow',
+  'chat.deny': 'Deny',
+  'chat.alwaysAllow': 'Always allow',
+  'chat.awaitingApprovalResponse': 'Awaiting approver (owner/delegate) response…',
+  'chat.awaitingApprovalChoice': 'Awaiting approver (owner/delegate) choice…',
+  'chat.userChoiceAnswer': '[User choice] Question "{question}" → "{label}"',
+  'chat.cmdNew': 'New conversation',
+  'chat.cmdSplit': 'Split view (chat + editor)',
+  'chat.cmdEditor': 'Open editor view',
+  'chat.cmdChat': 'Chat view',
+  'chat.cmdInterrupt': 'Interrupt running turn',
+  'chat.authorWorking': '🕒 {name} working',
+  'chat.interruptShort': '· Interrupt',
+  'chat.authorWaiting': '{name} waiting',
+  'chat.congested': '· Busy for a moment (queued)',
+  'chat.commandsSkills': 'Commands · Skills',
+  'chat.cmdBadge': 'Command',
+  'chat.topicCompiling': 'Compiling topic — queries available when done',
+  'chat.roomMessagePlaceholder': 'Message to {title}…  (your messages are sent as [{name}])',
+  'chat.messagePlaceholder': 'Message…  (type / for commands)',
+  'chat.compilingStep': '⏳ Compiling — {step}',
+  'chat.compilingReady': '⏳ Compiling — available when done',
+  'chat.claudeResponding': 'Claude responding',
+  'chat.composerHint': 'Enter to send · Shift+Enter newline · / commands',
+  'chat.send': 'Send',
+  'chat.openingEditor': 'Opening editor…',
+  'chat.selectProjectFirst': 'Select a project in the header first.',
+
+  // sidebar
+  'sidebar.teamName': '{name} team',
+  'sidebar.newChat': '＋ New chat',
+  'sidebar.personal': 'Personal',
+  'sidebar.deleteChatTitle': 'Delete chat',
+  'sidebar.deleteChatConfirm': 'Delete conversation "{title}"?',
+  'sidebar.rooms': 'Rooms',
+  'sidebar.deleteRoomTitle': 'Delete room',
+  'sidebar.deleteRoomConfirm': 'Delete room "{name}"? (owner/delete permission required)',
+  'sidebar.createTopicHint': '＋ to create a topic',
+  'sidebar.compiling': 'Compiling…',
+  'sidebar.deleteTopicTitle': 'Delete topic',
+  'sidebar.deleteTopicConfirm': 'Delete topic "{name}"? (all threads/history + uploaded files permanently deleted, unrecoverable)',
+  'sidebar.myToken': 'My token',
+  'sidebar.tokenUnregistered': 'Not registered',
+  'sidebar.plugins': 'Plugins',
+  'sidebar.adminPanel': 'Admin panel',
+  'sidebar.logout': 'Log out',
+  'sidebar.newRoomTitle': 'New room',
+  'sidebar.roomNamePlaceholder': 'Room name',
+  'sidebar.topicNameRequired': 'Enter a topic name.',
+  'sidebar.newWikiTopicTitle': 'New LLM Wiki topic',
+  'sidebar.topicNamePlaceholder': 'Topic name',
+  'sidebar.topicDescPlaceholder': 'Description / instructions (optional) — Claude answers within this scope',
+  'sidebar.dropZone': '📁 Drag folders/files here — all subfolders uploaded',
+  'sidebar.chooseFiles': 'Choose files',
+  'sidebar.chooseFolder': 'Choose folder',
+  'sidebar.uploading': 'Uploading… {progress}%',
+  'sidebar.noFilesUploaded': 'No files uploaded',
+  'sidebar.queryOnlyHint': 'Users can only query in their own private threads',
+  'sidebar.fileCount': '{count} files',
+  'sidebar.confirmWithCount': 'Confirm ({count})',
+
+  // login
+  'login.subtitle': 'Log in to team workspace',
+  'login.username': 'Username',
+  'login.password': 'Password',
+  'login.logIn': 'Log in',
+  'login.loginFailed': 'Login failed',
+  'login.initialAdmin': 'Initial admin: admin / admin (change after deploy)',
+
+  // shell
+  'shell.emptyHint': 'Start a conversation, or pick a session/room on the left.',
+  'shell.newConversation': '＋ New conversation',
+
+  // admin
+  'admin.deleteUserConfirm': 'Delete this user?',
+  'admin.newPasswordPrompt': 'New password',
+  'admin.changed': 'Changed',
+  'admin.clearCommonTokenConfirm': 'Delete the common token? Users without a personal token will then run in MOCK (echo).',
+  'admin.panelTitle': '🛠 Admin Panel',
+  'admin.statUsers': 'Users',
+  'admin.statRooms': 'Rooms',
+  'admin.statSessions': 'Sessions',
+  'admin.statConcurrentTurns': 'Concurrent turns',
+  'admin.mockForcedWarning': 'MOCK forced mode (MOCK_CLAUDE=1) — every turn returns an echo. Turn it off in env to disable.',
+  'admin.commonTokenUnsetWarning': 'Common token not set — users without a personal token run in MOCK (echo). Register one under "Common Claude Token" below.',
+  'admin.commonTokenTitle': 'Common Claude Token (fallback for users without a personal token)',
+  'admin.registered': 'Registered',
+  'admin.notSet': 'Not set',
+  'admin.commonTokenPlaceholder': 'sk-ant-oat-… or sk-ant-api-…',
+  'admin.save': 'Save',
+  'admin.commonTokenHint': 'This value takes precedence over env {key}. Users with a personal token always use their own.',
+  'admin.usageTitle': 'Usage (visibility · not billing)',
+  'admin.usageTotals': 'Total · turns {turns} · in {input} · out {output} · ${cost}',
+  'admin.colUser': 'User',
+  'admin.colTurns': 'Turns',
+  'admin.globalSettingsTitle': 'Global settings',
+  'admin.allowBypassLabel': 'Allow bypass (allow-all) mode — when off, max permission is capped at edit-auto-approve (ceiling)',
+  'admin.concurrentTurnCap': 'Global concurrent-turn cap: {max} (env MAX_CONCURRENT_TURNS)',
+  'admin.codeServerImage': 'code-server image: {image}',
+  'admin.userManagementTitle': 'User management',
+  'admin.resetPassword': 'Reset password',
+  'admin.usernamePlaceholder': 'Username',
+  'admin.displayNamePlaceholder': 'Display name',
+  'admin.passwordPlaceholder': 'Password',
+  'admin.claudeTokenPlaceholder': 'Claude token (optional · sk-ant-oat…/api…)',
+  'admin.createUser': 'Create user',
+
+  // plugins
+  'plugins.title': '🧩 Plugins',
+  'plugins.commonPlugins': 'Common plugins',
+  'plugins.commonPluginsUserNote': '(admin-managed · personal on/off available)',
+  'plugins.commonAdminDesc': 'Applies team-wide. When marked required, individuals can\'t turn it off.',
+  'plugins.commonUserDesc': 'Installed by admin. Unless required (🔒), you can turn it off in your session.',
+  'plugins.detail': 'Details',
+  'plugins.enabledLabel': 'Active',
+  'plugins.required': '🔒 Required',
+  'plugins.usePref': 'Use in my session',
+  'plugins.personalPlugins': 'Personal plugins',
+  'plugins.personalDesc': 'Applies only to my session. On name conflict, personal wins.',
+  'plugins.marketplaces': 'Marketplaces: {names}',
+  'plugins.marketNamePlaceholder': 'Market name',
+  'plugins.addMarket': 'Add market',
+  'plugins.pluginNamePlaceholder': 'Plugin name',
+  'plugins.install': 'Install',
+  'plugins.uploadNamePlaceholder': 'Upload name',
+  'plugins.uploadTarGz': 'Upload (.tar.gz)',
+  'plugins.sourceUpload': 'upload',
+
+  // pluginDetail
+  'pluginDetail.fallbackPlugin': 'Plugin',
+  'pluginDetail.filesTitle': '{name} · Files',
+  'pluginDetail.files': 'Files',
+  'pluginDetail.title': '🧩 {name}',
+  'pluginDetail.loading': 'Loading…',
+  'pluginDetail.scopeCommon': 'Common',
+  'pluginDetail.scopePersonal': 'Personal',
+  'pluginDetail.sourceUpload': 'Upload',
+  'pluginDetail.homepage': 'Homepage ↗',
+  'pluginDetail.viewFileTree': '📁 View file tree',
+  'pluginDetail.updating': 'Updating…',
+  'pluginDetail.update': '⬇ Update',
+  'pluginDetail.skills': 'Skills',
+  'pluginDetail.noSkills': 'No exposed skills (may only contain commands/agents).',
+
+  // members
+  'members.permApprove': 'Approve',
+  'members.permInterrupt': 'Interrupt',
+  'members.permInvite': 'Invite',
+  'members.permKick': 'Kick',
+  'members.permTransfer': 'Transfer ownership',
+  'members.permDeleteRoom': 'Delete room',
+  'members.deleteRoomConfirm': 'Delete this room? This cannot be undone.',
+  'members.title': 'Members · {name}',
+  'members.ownerBadge': '👑 Owner',
+  'members.transferOwnership': 'Transfer ownership',
+  'members.leave': 'Leave',
+  'members.invitePlaceholder': 'Invite member…',
+  'members.delegationRuleIntro': 'Delegation rules: approve, interrupt, invite, kick, transfer, and delete room can be delegated.',
+  'members.delegationRuleBold': 'Room permission mode changes are owner-only (not delegable)',
+  'members.deleteRoom': 'Delete room',
+
+  // token
+  'token.enterToken': 'Enter a token.',
+  'token.saveFailed': 'Save failed',
+  'token.clearConfirm': 'Delete the registered token? After deletion, the shared token will be used.',
+  'token.deleteFailed': 'Delete failed',
+  'token.registerTitle': 'Register Claude Code token',
+  'token.myTokenTitle': 'My Claude token',
+  'token.nagNotice': 'You don\'t have a personal token yet. It currently runs on the shared token, but registering your own token runs queries on your account and attributes usage to you.',
+  'token.registered': 'Registered',
+  'token.notRegistered': 'Not registered',
+  'token.replaceToken': 'Replace token',
+  'token.token': 'Token',
+  'token.tokenPrefixHint': '(sk-ant-oat… or sk-ant-api…)',
+  'token.setupHint': 'Run {code} in your terminal and paste the resulting token. (Pro/Max login) or a Console API key.',
+  'token.later': 'Later',
+  'token.close': 'Close',
+  'token.save': 'Save',
+
+  // fileExplorer
+  'fileExplorer.loading': 'Loading…',
+  'fileExplorer.noFiles': 'No files',
+  'fileExplorer.selectFilePrompt': 'Select a file on the left.',
+  'fileExplorer.rendered': '📖 Rendered',
+  'fileExplorer.source': '</> Source',
+
+  // wikiExplorer
+  'wikiExplorer.title': 'LLM Wiki File Explorer',
+  'wikiExplorer.sourceRaw': 'Raw source',
+  'wikiExplorer.sourceWiki': 'Compiled wiki',
+};
+
+const DICT: Record<Lang, Dict> = { ko, en };
