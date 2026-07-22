@@ -52,7 +52,7 @@ interface State {
   openWiki: (topicId: string) => Promise<void>;
   newSession: () => Promise<void>;
   newRoom: (name: string) => Promise<void>;
-  newWikiTopic: (payload: { name: string; description: string; stagingId?: string }) => Promise<void>;
+  newWikiTopic: (payload: { name: string; description: string; stagingId?: string; precompiled?: boolean }) => Promise<void>;
   deleteSession: (id: string) => Promise<void>;
   deleteRoom: (id: string) => Promise<void>;
   deleteWikiTopic: (id: string) => Promise<void>;
