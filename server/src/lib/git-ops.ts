@@ -3,7 +3,7 @@ import { promisify } from 'node:util';
 
 const execFileP = promisify(execFile);
 
-export interface GitFile { path: string; index: string; work: string; staged: boolean; }
+export interface GitFile { path: string; index: string; work: string; staged: boolean; orig?: string; }
 export interface GitStatus {
   repo: boolean; branch: string; upstream: boolean;
   ahead: number; behind: number; files: GitFile[]; clean: boolean;
@@ -49,10 +49,16 @@ function parsePorcelainZ(buf: string): GitFile[] {
     const t = toks[i];
     if (!t || t.length < 3) continue;
     const index = t[0], work = t[1], p = t.slice(3);
-    if (index === 'R' || index === 'C' || work === 'R' || work === 'C') i++; // consume the origin-path token
-    out.push({ path: p, index, work, staged: index !== ' ' && index !== '?' });
+    const isRename = index === 'R' || index === 'C' || work === 'R' || work === 'C';
+    const orig = isRename ? toks[++i] : undefined; // origin path follows in the next NUL token
+    out.push({ path: p, index, work, staged: index !== ' ' && index !== '?', ...(orig ? { orig } : {}) });
   }
   return out;
+}
+
+async function changedFiles(dir: string): Promise<GitFile[]> {
+  const { stdout } = await git(dir, ['status', '--porcelain', '-z']);
+  return parsePorcelainZ(stdout);
 }
 
 export async function gitStatus(dir: string): Promise<GitStatus> {
@@ -68,8 +74,7 @@ export async function gitStatus(dir: string): Promise<GitStatus> {
     const [b, a] = stdout.trim().split(/\s+/).map((n) => Number(n) || 0);
     behind = b; ahead = a; upstream = true;
   } catch { /* no upstream configured */ }
-  const { stdout } = await git(dir, ['status', '--porcelain', '-z']);
-  const files = parsePorcelainZ(stdout);
+  const files = await changedFiles(dir);
   return { repo: true, branch, upstream, ahead, behind, files, clean: files.length === 0 };
 }
 
@@ -80,8 +85,12 @@ export async function gitCommit(dir: string, opts: { message: string; files?: st
   const files = (opts.files || []).filter(Boolean);
   try {
     if (files.length) {
+      // Expand any selected staged rename to include its origin path, else `commit -- <new>`
+      // drops the staged deletion of the old path and commits only half the rename.
+      const renames = new Map((await changedFiles(dir)).filter((f) => f.orig).map((f) => [f.path, f.orig!]));
+      const pathspec = [...new Set(files.flatMap((f) => (renames.has(f) ? [f, renames.get(f)!] : [f])))];
       await git(dir, ['add', '--', ...files], opts.env);
-      await git(dir, ['commit', '-m', msg, '--', ...files], opts.env);
+      await git(dir, ['commit', '-m', msg, '--', ...pathspec], opts.env);
     } else {
       await git(dir, ['add', '-A'], opts.env);
       await git(dir, ['commit', '-m', msg], opts.env);

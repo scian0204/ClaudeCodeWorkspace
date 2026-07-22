@@ -80,6 +80,10 @@ export async function projectRoutes(app: FastifyInstance) {
         if (!row) return reply.code(404).send({ error: 'credential not found' });
         if (!(row.scope === 'common' || (row.scope === 'user' && row.ownerId === u.id)))
           return reply.code(403).send({ error: 'forbidden credential' });
+        // host binding: never send a stored token to a different host than it belongs to
+        // (else a caller could exfiltrate a PAT to an attacker-controlled clone URL).
+        if (row.host !== hostFromGitUrl(git))
+          return reply.code(400).send({ error: 'credential host does not match repository URL' });
         cred = resolveGitCredById(String(credentialId));
       } else {
         cred = resolveGitCred(u.id, hostFromGitUrl(git));
