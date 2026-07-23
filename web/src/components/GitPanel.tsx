@@ -15,15 +15,32 @@ export function GitPanel({ projectId, open, onClose }: { projectId: string; open
   const [busy, setBusy] = useState<'' | 'load' | 'commit' | 'push'>('');
   const [err, setErr] = useState('');
   const [note, setNote] = useState('');
+  const [branches, setBranches] = useState<{ current: string; local: string[]; remote: string[] } | null>(null);
+  const [switching, setSwitching] = useState(false);
 
   const load = async () => {
     setBusy('load'); setErr('');
     try {
-      const s: Status = await api.get(`/api/projects/${projectId}/git/status`);
+      const [s, br] = await Promise.all([
+        api.get(`/api/projects/${projectId}/git/status`) as Promise<Status>,
+        api.get(`/api/projects/${projectId}/git/branches`).catch(() => null),
+      ]);
       setSt(s);
+      setBranches(br && br.repo ? { current: br.current, local: br.local, remote: br.remote } : null);
       setSel(new Set(s.files.map((f) => f.path))); // default: all changes selected
     } catch (e: any) { setErr(e.message); }
     finally { setBusy(''); }
+  };
+
+  const checkout = async (name: string) => {
+    if (!name || name === branches?.current) return;
+    setSwitching(true); setErr(''); setNote('');
+    try {
+      await api.post(`/api/projects/${projectId}/git/checkout`, { branch: name });
+      setNote(t('git.switched', { branch: name }));
+      await load();
+    } catch (e: any) { setErr(e.message); }
+    finally { setSwitching(false); }
   };
   useEffect(() => { if (open) { setNote(''); load(); } /* eslint-disable-next-line */ }, [open, projectId]);
 
@@ -58,7 +75,24 @@ export function GitPanel({ projectId, open, onClose }: { projectId: string; open
       {st && st.repo && (
         <>
           <div className="flex items-center gap-2 text-sm mb-3">
-            <span className="text-[10px] bg-claysoft text-clay px-1.5 py-0.5 rounded-full font-mono">⑂ {st.branch}</span>
+            <span className="text-clay" title={t('git.branchLabel')}>⑂</span>
+            {branches
+              ? (
+                <select className="input !py-0.5 !text-xs !w-auto max-w-[220px] font-mono" value={branches.current}
+                  disabled={switching} onChange={(e) => checkout(e.target.value)}>
+                  {!branches.local.includes(branches.current) && <option value={branches.current}>{branches.current}</option>}
+                  <optgroup label={t('git.localBranches')}>
+                    {branches.local.map((b) => <option key={`l:${b}`} value={b}>{b}</option>)}
+                  </optgroup>
+                  {branches.remote.length > 0 && (
+                    <optgroup label={t('git.remoteBranches')}>
+                      {branches.remote.map((b) => <option key={`r:${b}`} value={b.split('/').slice(1).join('/')}>{b}</option>)}
+                    </optgroup>
+                  )}
+                </select>
+              )
+              : <span className="text-[10px] bg-claysoft text-clay px-1.5 py-0.5 rounded-full font-mono">{st.branch}</span>}
+            {switching && <span className="text-txt3 text-xs">…</span>}
             {st.upstream
               ? <span className="text-txt3 text-xs">{t('git.aheadBehind', { ahead: st.ahead, behind: st.behind })}</span>
               : <span className="text-warn text-xs">{t('git.noUpstream')}</span>}
