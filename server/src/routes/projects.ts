@@ -28,11 +28,12 @@ function repoNameFromUrl(url: string) {
   const last = url.replace(/\.git$/, '').replace(/[\/]+$/, '').split(/[\/:]/).pop() || 'repo';
   return safeName(last);
 }
-async function cloneRepo(url: string, dir: string, credEnv?: Record<string, string>) {
+async function cloneRepo(url: string, dir: string, credEnv?: Record<string, string>, branch?: string) {
   // Full clone: complete history + every branch (so git log/blame and `git branch -r` all work).
+  // `branch` (validated by caller) checks out that ref after clone; still fetches all branches.
   // Without a credential the prompt is disabled so private repos fail fast; with one, credEnv
   // supplies GIT_ASKPASS + GIT_CRED_* so the token authenticates (never placed in the URL).
-  await execFileP('git', ['clone', url, dir], {
+  await execFileP('git', ['clone', ...(branch ? ['--branch', branch] : []), url, dir], {
     timeout: 180_000,
     env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '/bin/echo', ...(credEnv || {}) },
   });
@@ -69,9 +70,13 @@ export async function projectRoutes(app: FastifyInstance) {
 
   app.post('/api/projects', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
-    const { scope, name, roomId, gitUrl, credentialId } = (req.body || {}) as any;
+    const { scope, name, roomId, gitUrl, credentialId, branch } = (req.body || {}) as any;
     const git = gitUrl ? String(gitUrl).trim() : '';
     if (git && !validGitUrl(git)) return reply.code(400).send({ error: '지원하지 않는 저장소 URL (http/https/git/ssh만 가능)' });
+    // Branch goes into `git clone --branch <br>` argv. execFile (no shell) blocks injection, but a
+    // leading '-' would still be parsed as an option, so restrict to safe ref chars, no leading '-'.
+    const br = branch ? String(branch).trim() : '';
+    if (br && !/^(?!-)[\w./-]+$/.test(br)) return reply.code(400).send({ error: '잘못된 브랜치 이름' });
     // Resolve a clone credential: explicit pick (must be the user's own or a common one), else auto by host.
     let cloneEnv: Record<string, string> | undefined;
     if (git) {
@@ -106,7 +111,7 @@ export async function projectRoutes(app: FastifyInstance) {
       if (fs.existsSync(dir) && fs.readdirSync(dir).length) return reply.code(409).send({ error: `이미 존재하는 이름: ${nm}` });
       ensure(path.dirname(dir));
       try {
-        await cloneRepo(git, dir, cloneEnv);
+        await cloneRepo(git, dir, cloneEnv, br || undefined);
       } catch (e: any) {
         try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* noop */ }
         return reply.code(500).send({ error: `git clone 실패: ${String(e?.stderr || e?.message || e).slice(0, 300)}` });

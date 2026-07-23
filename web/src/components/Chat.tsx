@@ -136,6 +136,7 @@ function ProjectMenu() {
   const [roomProjects, setRoomProjects] = useState<any[]>([]);
   const [newName, setNewName] = useState('');
   const [gitUrl, setGitUrl] = useState('');
+  const [branch, setBranch] = useState('');
   const [busy, setBusy] = useState(false);
   const [creds, setCreds] = useState<any[]>([]);
   const [credentialId, setCredentialId] = useState('');
@@ -159,8 +160,8 @@ function ProjectMenu() {
     const scope = c.kind === 'room' ? 'room' : 'user';
     setBusy(true);
     try {
-      const { project } = await api.post('/api/projects', { scope, name, roomId: c.roomId, gitUrl: git || undefined, credentialId: (git && credentialId) || undefined });
-      setNewName(''); setGitUrl(''); await refresh();
+      const { project } = await api.post('/api/projects', { scope, name, roomId: c.roomId, gitUrl: git || undefined, branch: (git && branch.trim()) || undefined, credentialId: (git && credentialId) || undefined });
+      setNewName(''); setGitUrl(''); setBranch(''); await refresh();
       if (c.kind === 'room') { const r = await api.get(`/api/projects/room/${c.roomId}`); setRoomProjects(r.projects); }
       await setProject(project.id);
       setMenuOpen(false);
@@ -199,6 +200,11 @@ function ProjectMenu() {
           <input className="input !py-1 !text-xs" placeholder={t('chat.gitCloneUrlPlaceholder')} value={gitUrl}
             onChange={(e) => setGitUrl(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); create(); } }} />
+          {gitUrl.trim() && (
+            <input className="input !py-1 !text-xs" placeholder={t('chat.gitBranchPlaceholder')} value={branch}
+              onChange={(e) => setBranch(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); create(); } }} />
+          )}
           {gitUrl.trim() && (
             <select className="input !py-1 !text-xs" value={credentialId} onChange={(e) => setCredentialId(e.target.value)}>
               <option value="">{t('chat.credAuto')}</option>
