@@ -21,15 +21,15 @@ export function GitPanel({ projectId, open, onClose }: { projectId: string; open
   const load = async () => {
     setBusy('load'); setErr('');
     try {
-      const [s, br] = await Promise.all([
-        api.get(`/api/projects/${projectId}/git/status`) as Promise<Status>,
-        api.get(`/api/projects/${projectId}/git/branches`).catch(() => null),
-      ]);
+      const s: Status = await api.get(`/api/projects/${projectId}/git/status`);
       setSt(s);
-      setBranches(br && br.repo ? { current: br.current, local: br.local, remote: br.remote } : null);
       setSel(new Set(s.files.map((f) => f.path))); // default: all changes selected
     } catch (e: any) { setErr(e.message); }
     finally { setBusy(''); }
+    // branches require a remote fetch (slower) — load without blocking the status view
+    api.get(`/api/projects/${projectId}/git/branches`)
+      .then((br) => setBranches(br && br.repo ? { current: br.current, local: br.local, remote: br.remote } : null))
+      .catch(() => {});
   };
 
   const checkout = async (name: string) => {

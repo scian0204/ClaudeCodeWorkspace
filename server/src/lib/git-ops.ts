@@ -124,6 +124,17 @@ export async function gitBranches(dir: string): Promise<GitBranches> {
   return { repo: true, current, local, remote };
 }
 
+// Refresh remote-tracking refs. Shallow clones default to single-branch (only origin/<default>
+// exists), so first widen the fetch refspec to all branches, then fetch their tips. Best-effort:
+// offline / auth failure / no origin leaves the existing refs untouched.
+export async function gitFetchRemotes(dir: string, env?: Env): Promise<void> {
+  if (!(await isRepo(dir))) return;
+  try {
+    await git(dir, ['remote', 'set-branches', 'origin', '*'], env);
+    await git(dir, ['fetch', '--depth', '1', 'origin'], env, 180_000);
+  } catch { /* keep whatever refs we already have */ }
+}
+
 // Switch branches. `git checkout <name>` DWIMs: an existing local branch is checked out;
 // a name that only exists on a remote auto-creates a local tracking branch. Fails (surfaced)
 // if the working tree has changes that would be overwritten.

@@ -11,7 +11,7 @@ import { newId } from '../lib/ids.js';
 import { walkFiles, resolveUnder, IMG_CT } from '../lib/filetree.js';
 import * as rooms from '../rooms/manager.js';
 import * as cs from '../codeserver/manager.js';
-import { gitStatus, gitCommit, gitPush, originHost, gitBranches, gitCheckout } from '../lib/git-ops.js';
+import { gitStatus, gitCommit, gitPush, originHost, gitBranches, gitCheckout, gitFetchRemotes } from '../lib/git-ops.js';
 import {
   resolveGitCred, resolveGitCredById, getGitCredRow, gitIdentity, askpassEnv, identityEnv, hostFromGitUrl,
 } from '../auth/git-cred.js';
@@ -31,7 +31,9 @@ function repoNameFromUrl(url: string) {
 async function cloneRepo(url: string, dir: string, credEnv?: Record<string, string>) {
   // shallow. Without a credential the prompt is disabled so private repos fail fast; with one,
   // credEnv supplies GIT_ASKPASS + GIT_CRED_* so the token authenticates (never placed in the URL).
-  await execFileP('git', ['clone', '--depth', '1', url, dir], {
+  // --no-single-branch: still shallow (depth 1) but fetch every branch tip, so `git branch -r`
+  // lists all remote branches (else --depth implies --single-branch → only the default branch).
+  await execFileP('git', ['clone', '--depth', '1', '--no-single-branch', url, dir], {
     timeout: 180_000,
     env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '/bin/echo', ...(credEnv || {}) },
   });
@@ -230,6 +232,10 @@ export async function projectRoutes(app: FastifyInstance) {
 
   app.get('/api/projects/:id/git/branches', async (req, reply) => {
     const ctx = loadForGit(req, reply); if (!ctx) return;
+    // refresh remote refs first so pre-existing single-branch clones also list every remote branch
+    const host = await originHost(ctx.dir);
+    const cred = host ? resolveGitCred(ctx.u.id, host) : null;
+    await gitFetchRemotes(ctx.dir, cred ? askpassEnv(cred) : undefined);
     return await gitBranches(ctx.dir);
   });
 
