@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import Fastify from 'fastify';
+import Fastify, { type FastifyServerOptions } from 'fastify';
 import cookie from '@fastify/cookie';
 import multipart from '@fastify/multipart';
 import fstatic from '@fastify/static';
@@ -28,7 +28,19 @@ async function main() {
   reapWikiStaging(); // clear any orphaned wiki upload staging from a prior run
   reapWikiOrphans(); // remove wiki topic dirs on disk that no longer have a DB row
 
-  const app = Fastify({ logger: false, bodyLimit: 6 * 1024 * 1024 });
+  // Serve HTTPS when a cert is supplied so PWA install works off-localhost (secure
+  // context). socket.io and the /cs proxy both ride app.server, so this covers them.
+  const tls =
+    config.tlsKeyPath && config.tlsCertPath &&
+    fs.existsSync(config.tlsKeyPath) && fs.existsSync(config.tlsCertPath)
+      ? { key: fs.readFileSync(config.tlsKeyPath), cert: fs.readFileSync(config.tlsCertPath) }
+      : null;
+  const opts: FastifyServerOptions & { https?: { key: Buffer; cert: Buffer } } = {
+    logger: false,
+    bodyLimit: 6 * 1024 * 1024,
+  };
+  if (tls) opts.https = tls;
+  const app = Fastify(opts);
   await app.register(cookie, { secret: config.sessionSecret });
   // fieldNameSize raised: wiki folder-drops carry each file's relative path in the field name
   await app.register(multipart, { limits: { fileSize: 50 * 1024 * 1024, fieldNameSize: 16384 } });
@@ -75,7 +87,7 @@ async function main() {
   startReaper();
 
   await app.listen({ port: config.port, host: '0.0.0.0' });
-  console.log(`[ccw] listening on :${config.port}  forceMock=${config.forceMock}  data=${config.dataDir}`);
+  console.log(`[ccw] listening on ${tls ? 'https' : 'http'}://:${config.port}  forceMock=${config.forceMock}  data=${config.dataDir}`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

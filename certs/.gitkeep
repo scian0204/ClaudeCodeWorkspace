@@ -1,0 +1,1 @@
+Put your TLS cert here (key.pem, cert.pem) to serve HTTPS. See README "PWA over HTTPS".

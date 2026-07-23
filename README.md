@@ -91,6 +91,21 @@ docker compose up -d --build
 
 > **Requirement:** the code-server editor works only in the Docker deployment, and needs **Docker Engine ≥ 26** for volume-subpath mounts.
 
+### PWA over HTTPS
+
+Browsers only offer **Install as app** (PWA) on a *secure context*. `http://localhost` is exempt, so PWA works locally — but over `http://<server-ip>:3000` it never appears. To install on a real host, serve HTTPS with a **browser-trusted** cert (a self-signed cert with a click-through is not enough — Chrome still blocks it):
+
+```bash
+# on the server — generate a locally-trusted cert for the host's IP/hostname
+mkcert -install                                   # once: trust the local CA on each client device too
+mkcert -key-file certs/key.pem -cert-file certs/cert.pem 192.168.1.50 myhost.local
+
+# point the app at it and redeploy
+TLS_KEY=/certs/key.pem TLS_CERT=/certs/cert.pem docker compose up -d --build
+```
+
+`./certs` is mounted read-only into the container. With a public domain, use a real cert (Let's Encrypt) instead of mkcert. Leave `TLS_KEY`/`TLS_CERT` empty to stay on plain HTTP.
+
 ---
 
 ## 🧭 Architecture
