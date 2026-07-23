@@ -382,6 +382,11 @@ const ko: Dict = {
   'git.localBranches': '로컬 브랜치',
   'git.remoteBranches': '원격 브랜치',
   'git.switched': '브랜치 전환: {branch}',
+  'git.credUsing': '이 저장소 자격증명',
+  'git.credMine': '내 계정',
+  'git.credCommon': '공용',
+  'git.credNone': '{host} 자격증명 없음 — 설정 › Git 자격증명에서 등록하세요',
+  'git.commitsAs': '커밋 작성자',
 };
 
 const en: Dict = {
@@ -705,6 +710,11 @@ const en: Dict = {
   'git.localBranches': 'Local branches',
   'git.remoteBranches': 'Remote branches',
   'git.switched': 'Switched to {branch}',
+  'git.credUsing': 'Credential for this repo',
+  'git.credMine': 'Yours',
+  'git.credCommon': 'Shared',
+  'git.credNone': 'No credential for {host} — add one in Settings › Git credentials',
+  'git.commitsAs': 'Commits as',
 };
 
 const DICT: Record<Lang, Dict> = { ko, en };

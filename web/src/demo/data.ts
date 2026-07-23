@@ -197,7 +197,9 @@ export const GIT = {
   },
   status() {
     return { repo: true, branch: this.branches.current, upstream: true, ahead: this.ahead, behind: this.behind,
-      files: this.files, clean: this.files.length === 0, host: 'github.com', hasCredential: true };
+      files: this.files, clean: this.files.length === 0, host: 'github.com', hasCredential: true,
+      credential: { scope: 'user', provider: 'github', host: 'github.com', username: 'x-access-token', authorEmail: 'demo@ccw.local' },
+      identity: { name: 'Demo User', email: 'demo@ccw.local' } };
   },
 };
 

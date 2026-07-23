@@ -13,7 +13,7 @@ import * as rooms from '../rooms/manager.js';
 import * as cs from '../codeserver/manager.js';
 import { gitStatus, gitCommit, gitPush, originHost, gitBranches, gitCheckout, gitFetchRemotes } from '../lib/git-ops.js';
 import {
-  resolveGitCred, resolveGitCredById, getGitCredRow, gitIdentity, askpassEnv, identityEnv, hostFromGitUrl,
+  resolveGitCred, resolveGitCredById, resolveGitCredMeta, getGitCredRow, gitIdentity, askpassEnv, identityEnv, hostFromGitUrl,
 } from '../auth/git-cred.js';
 
 const execFileP = promisify(execFile);
@@ -209,7 +209,12 @@ export async function projectRoutes(app: FastifyInstance) {
     const ctx = loadForGit(req, reply); if (!ctx) return;
     const st = await gitStatus(ctx.dir);
     const host = st.repo ? await originHost(ctx.dir) : null;
-    return { ...st, host, hasCredential: !!(host && resolveGitCred(ctx.u.id, host)) };
+    // Which credential this repo's push/commit actually resolves to (meta only — token never sent),
+    // plus the identity commits will be attributed to. Powers the "credential in effect" panel.
+    const credential = host ? resolveGitCredMeta(ctx.u.id, host) : null;
+    const cred = host ? resolveGitCred(ctx.u.id, host) : null;
+    const identity = gitIdentity({ username: ctx.u.username, displayName: ctx.u.displayName }, cred);
+    return { ...st, host, credential, hasCredential: !!credential, identity };
   });
 
   app.post('/api/projects/:id/git/commit', async (req, reply) => {
