@@ -7,3 +7,6 @@ web/dist/
 .DS_Store
 *.local
 .claude/settings.local.json
+certs/*.pem
+certs/*.key
+certs/*.crt

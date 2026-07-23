@@ -16,6 +16,11 @@ export const config = {
   // Symmetric key material for encrypting stored tokens at rest (falls back to sessionSecret).
   tokenEncSecret: env.TOKEN_ENC_SECRET || '',
   claudeCodePath: env.CLAUDE_CODE_PATH || '',
+  // Optional TLS. PWA install requires a secure context, and browsers only exempt
+  // localhost from that — over http://<ip> the install prompt never appears. Point
+  // these at a browser-trusted cert (e.g. mkcert) to serve HTTPS; empty = plain HTTP.
+  tlsKeyPath: env.TLS_KEY || '',
+  tlsCertPath: env.TLS_CERT || '',
   maxConcurrentTurns: Number(env.MAX_CONCURRENT_TURNS || 3),
   bootstrapAdminUser: env.BOOTSTRAP_ADMIN_USER || 'admin',
   bootstrapAdminPassword: env.BOOTSTRAP_ADMIN_PASSWORD || 'admin',

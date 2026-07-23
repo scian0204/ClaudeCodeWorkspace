@@ -91,6 +91,21 @@ docker compose up -d --build
 
 > **요구사항:** code-server 편집기는 Docker 배포에서만 동작하며, 볼륨 subpath 마운트를 위해 **Docker Engine ≥ 26**이 필요합니다.
 
+### HTTPS로 PWA 설치
+
+브라우저는 **보안 컨텍스트**에서만 **앱으로 설치**(PWA)를 허용합니다. `http://localhost`는 예외라 로컬에선 되지만, `http://<서버-IP>:3000`에서는 설치 버튼이 뜨지 않습니다. 실제 서버에서 설치하려면 **브라우저가 신뢰하는** 인증서로 HTTPS를 서빙해야 합니다 (자체 서명 인증서를 경고 무시로 통과시키는 것만으로는 부족 — Chrome이 여전히 차단):
+
+```bash
+# 서버에서 — 호스트 IP/도메인용 로컬 신뢰 인증서 생성
+mkcert -install                                   # 최초 1회: 접속하는 각 기기에도 로컬 CA 신뢰 등록
+mkcert -key-file certs/key.pem -cert-file certs/cert.pem 192.168.1.50 myhost.local
+
+# 앱에 인증서 경로를 지정하고 재배포
+TLS_KEY=/certs/key.pem TLS_CERT=/certs/cert.pem docker compose up -d --build
+```
+
+`./certs`는 컨테이너에 읽기 전용으로 마운트됩니다. 공인 도메인이 있으면 mkcert 대신 실제 인증서(Let's Encrypt)를 쓰세요. `TLS_KEY`/`TLS_CERT`를 비우면 그대로 평문 HTTP로 동작합니다.
+
 ---
 
 ## 🧭 아키텍처

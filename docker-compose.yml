@@ -19,9 +19,14 @@ services:
       CODE_SERVER_IDLE_MS: ${CODE_SERVER_IDLE_MS:-1800000}
       CODE_SERVER_NETWORK: claudecode_internal
       DATA_VOLUME: claudecode-workspace_data
+      # HTTPS for PWA install off-localhost. Put a browser-trusted cert (e.g. mkcert)
+      # in ./certs and set TLS_KEY/TLS_CERT; empty = plain HTTP. See README "PWA over HTTPS".
+      TLS_KEY: ${TLS_KEY:-}
+      TLS_CERT: ${TLS_CERT:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - data:/data
+      - ./certs:/certs:ro
     networks:
       - internal
 
