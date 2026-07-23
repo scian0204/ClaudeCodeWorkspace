@@ -29,11 +29,10 @@ function repoNameFromUrl(url: string) {
   return safeName(last);
 }
 async function cloneRepo(url: string, dir: string, credEnv?: Record<string, string>) {
-  // shallow. Without a credential the prompt is disabled so private repos fail fast; with one,
-  // credEnv supplies GIT_ASKPASS + GIT_CRED_* so the token authenticates (never placed in the URL).
-  // --no-single-branch: still shallow (depth 1) but fetch every branch tip, so `git branch -r`
-  // lists all remote branches (else --depth implies --single-branch → only the default branch).
-  await execFileP('git', ['clone', '--depth', '1', '--no-single-branch', url, dir], {
+  // Full clone: complete history + every branch (so git log/blame and `git branch -r` all work).
+  // Without a credential the prompt is disabled so private repos fail fast; with one, credEnv
+  // supplies GIT_ASKPASS + GIT_CRED_* so the token authenticates (never placed in the URL).
+  await execFileP('git', ['clone', url, dir], {
     timeout: 180_000,
     env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '/bin/echo', ...(credEnv || {}) },
   });
