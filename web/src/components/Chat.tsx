@@ -139,6 +139,7 @@ function ProjectMenu() {
   const [busy, setBusy] = useState(false);
   const [creds, setCreds] = useState<any[]>([]);
   const [credentialId, setCredentialId] = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);
   const refresh = useStore((s) => s.refreshLists);
 
   useEffect(() => {
@@ -162,6 +163,7 @@ function ProjectMenu() {
       setNewName(''); setGitUrl(''); await refresh();
       if (c.kind === 'room') { const r = await api.get(`/api/projects/room/${c.roomId}`); setRoomProjects(r.projects); }
       await setProject(project.id);
+      setMenuOpen(false);
     } catch (e: any) { useStore.getState().setError(e.message); }
     finally { setBusy(false); }
   };
@@ -175,20 +177,19 @@ function ProjectMenu() {
   };
 
   return (
-    <DM.Root>
+    <DM.Root open={menuOpen} onOpenChange={setMenuOpen}>
       <DM.Trigger asChild><button className="pill">📁 {cur ? cur.name : t('chat.project')} ▾</button></DM.Trigger>
       <Menu>
         {list.length === 0 && <div className="px-2 py-1 text-[11px] text-txt3">{t('chat.noProjects')}</div>}
         {list.map((p) => (
-          <DM.Item key={p.id} onSelect={() => setProject(p.id)}
-            className="flex items-center gap-1.5 px-2 py-1.5 text-sm rounded cursor-pointer hover:bg-line outline-none data-[highlighted]:bg-line group">
-            <span className="text-[10px] text-txt3">[{p.tag}]</span>
-            <span className="flex-1 truncate">{p.name}</span>
-            <span role="button" title={t('common.delete')}
-              className="text-txt3 hover:text-danger opacity-50 group-hover:opacity-100 px-0.5"
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => { e.stopPropagation(); e.preventDefault(); removeProject(p); }}>🗑</span>
-          </DM.Item>
+          <div key={p.id} className="flex items-center gap-1.5 px-2 py-1.5 text-sm rounded hover:bg-line group">
+            <button className="flex items-center gap-1.5 flex-1 min-w-0 text-left" onClick={() => { setProject(p.id); setMenuOpen(false); }}>
+              <span className="text-[10px] text-txt3">[{p.tag}]</span>
+              <span className="flex-1 truncate">{p.name}</span>
+            </button>
+            <button title={t('common.delete')} className="text-txt3 hover:text-danger opacity-50 group-hover:opacity-100 px-0.5 shrink-0"
+              onClick={() => removeProject(p)}>🗑</button>
+          </div>
         ))}
         <div className="border-t border-line my-1" />
         <div className="flex flex-col gap-1 p-1" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
