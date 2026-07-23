@@ -190,8 +190,13 @@ export const GIT = {
     { path: 'src/auth/tokenService.ts', index: ' ', work: 'M', staged: false },
     { path: 'src/routes/login.ts', index: '?', work: '?', staged: false },
   ] as any[],
+  branches: {
+    current: 'main',
+    local: ['main', 'feat/auth-refactor'],
+    remote: ['origin/main', 'origin/feat/auth-refactor', 'origin/release/2.3'],
+  },
   status() {
-    return { repo: true, branch: 'main', upstream: true, ahead: this.ahead, behind: this.behind,
+    return { repo: true, branch: this.branches.current, upstream: true, ahead: this.ahead, behind: this.behind,
       files: this.files, clean: this.files.length === 0, host: 'github.com', hasCredential: true };
   },
 };

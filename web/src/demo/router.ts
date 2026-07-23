@@ -90,6 +90,12 @@ export function route(method: string, rawPath: string, body?: any): Res {
     return ok({ ok: true, commit: genId('c').slice(2, 9) });
   }
   if (seg[1] === 'projects' && seg[3] === 'git' && seg[4] === 'push') { GIT.ahead = 0; GIT.behind = 0; return ok({ ok: true, output: 'Everything up-to-date (demo)' }); }
+  if (seg[1] === 'projects' && seg[3] === 'git' && seg[4] === 'branches') return ok({ repo: true, ...GIT.branches });
+  if (seg[1] === 'projects' && seg[3] === 'git' && seg[4] === 'checkout') {
+    const name = String(b.branch || '').trim();
+    if (name) { GIT.branches.current = name; if (!GIT.branches.local.includes(name)) GIT.branches.local.push(name); }
+    return ok({ ok: true, branch: name });
+  }
 
   // ---- git credentials ----
   if (P === '/api/git-credentials' && M === 'GET') return ok({ mine: GIT.creds.mine, common: GIT.creds.common });

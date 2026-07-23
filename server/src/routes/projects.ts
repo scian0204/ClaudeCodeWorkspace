@@ -11,7 +11,7 @@ import { newId } from '../lib/ids.js';
 import { walkFiles, resolveUnder, IMG_CT } from '../lib/filetree.js';
 import * as rooms from '../rooms/manager.js';
 import * as cs from '../codeserver/manager.js';
-import { gitStatus, gitCommit, gitPush, originHost } from '../lib/git-ops.js';
+import { gitStatus, gitCommit, gitPush, originHost, gitBranches, gitCheckout } from '../lib/git-ops.js';
 import {
   resolveGitCred, resolveGitCredById, getGitCredRow, gitIdentity, askpassEnv, identityEnv, hostFromGitUrl,
 } from '../auth/git-cred.js';
@@ -225,6 +225,21 @@ export async function projectRoutes(app: FastifyInstance) {
     try {
       const { output } = await gitPush(ctx.dir, { env: askpassEnv(cred) });
       return { ok: true, output };
+    } catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
+  });
+
+  app.get('/api/projects/:id/git/branches', async (req, reply) => {
+    const ctx = loadForGit(req, reply); if (!ctx) return;
+    return await gitBranches(ctx.dir);
+  });
+
+  app.post('/api/projects/:id/git/checkout', async (req, reply) => {
+    const ctx = loadForGit(req, reply); if (!ctx) return;
+    const { branch } = (req.body || {}) as any;
+    if (!branch || !String(branch).trim()) return reply.code(400).send({ error: 'branch required' });
+    try {
+      const r = await gitCheckout(ctx.dir, { branch: String(branch) });
+      return { ok: true, branch: r.branch };
     } catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
   });
 }

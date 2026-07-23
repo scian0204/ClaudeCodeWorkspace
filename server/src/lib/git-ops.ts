@@ -107,3 +107,30 @@ export async function gitPush(dir: string, opts: { env?: Env }): Promise<{ outpu
     return { output: (stderr || stdout || '').trim().slice(0, 1000) };
   } catch (e: any) { throw new Error(gitErr(e)); }
 }
+
+export interface GitBranches { repo: boolean; current: string; local: string[]; remote: string[]; }
+
+export async function gitBranches(dir: string): Promise<GitBranches> {
+  if (!(await isRepo(dir))) return { repo: false, current: '', local: [], remote: [] };
+  let current = '';
+  try { current = (await git(dir, ['rev-parse', '--abbrev-ref', 'HEAD'])).stdout.trim(); } catch { /* unborn */ }
+  const lines = (s: string) => s.split('\n').map((x) => x.trim()).filter(Boolean);
+  const local = lines((await git(dir, ['branch', '--format=%(refname:short)'])).stdout);
+  let remote: string[] = [];
+  try {
+    remote = lines((await git(dir, ['branch', '-r', '--format=%(refname:short)'])).stdout)
+      .filter((b) => !b.endsWith('/HEAD') && !b.includes('->')); // drop the symbolic origin/HEAD
+  } catch { /* no remotes */ }
+  return { repo: true, current, local, remote };
+}
+
+// Switch branches. `git checkout <name>` DWIMs: an existing local branch is checked out;
+// a name that only exists on a remote auto-creates a local tracking branch. Fails (surfaced)
+// if the working tree has changes that would be overwritten.
+export async function gitCheckout(dir: string, opts: { branch: string; env?: Env }): Promise<{ branch: string }> {
+  const b = (opts.branch || '').trim();
+  if (!b) throw new Error('branch required');
+  try { await git(dir, ['checkout', b], opts.env); }
+  catch (e: any) { throw new Error(gitErr(e)); }
+  return { branch: b };
+}

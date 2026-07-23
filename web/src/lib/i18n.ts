@@ -375,6 +375,10 @@ const ko: Dict = {
   'git.push': '푸시',
   'git.commitDone': '커밋됨: {commit}',
   'git.pushDone': '푸시 완료',
+  'git.branchLabel': '브랜치',
+  'git.localBranches': '로컬 브랜치',
+  'git.remoteBranches': '원격 브랜치',
+  'git.switched': '브랜치 전환: {branch}',
 };
 
 const en: Dict = {
@@ -691,6 +695,10 @@ const en: Dict = {
   'git.push': 'Push',
   'git.commitDone': 'Committed: {commit}',
   'git.pushDone': 'Pushed',
+  'git.branchLabel': 'Branch',
+  'git.localBranches': 'Local branches',
+  'git.remoteBranches': 'Remote branches',
+  'git.switched': 'Switched to {branch}',
 };
 
 const DICT: Record<Lang, Dict> = { ko, en };
