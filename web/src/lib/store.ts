@@ -55,6 +55,7 @@ interface State {
   newRoom: (name: string) => Promise<void>;
   newWikiTopic: (payload: { name: string; description: string; stagingId?: string; precompiled?: boolean }) => Promise<void>;
   deleteSession: (id: string) => Promise<void>;
+  renameSession: (id: string, title: string) => Promise<void>;
   deleteRoom: (id: string) => Promise<void>;
   deleteWikiTopic: (id: string) => Promise<void>;
   deleteMessage: (id: string) => Promise<void>;
@@ -176,6 +177,12 @@ export const useStore = create<State>((set, get) => ({
     await api.del(`/api/sessions/${id}`);
     if (get().current?.chatSessionId === id) set({ current: null, messages: [] });
     await get().refreshLists();
+  },
+  renameSession: async (id, title) => {
+    await api.patch(`/api/sessions/${id}`, { title });
+    set({ sessions: get().sessions.map((s) => (s.id === id ? { ...s, title } : s)) });
+    const c = get().current;
+    if (c && c.chatSessionId === id) set({ current: { ...c, title } });
   },
   deleteRoom: async (id) => {
     await api.del(`/api/rooms/${id}`);
