@@ -66,6 +66,7 @@ interface State {
   setViewMode: (m: 'chat' | 'split' | 'editor') => void;
   openEditor: () => Promise<void>;
   setProject: (projectId: string | null) => Promise<void>;
+  deleteProject: (projectId: string) => Promise<void>;
   setModel: (model: string) => Promise<void>;
   setMode: (mode: string) => Promise<void>;
   reloadRoom: () => Promise<void>;
@@ -234,6 +235,12 @@ export const useStore = create<State>((set, get) => ({
     if (c.kind === 'private') await api.patch(`/api/sessions/${c.chatSessionId}`, { projectId });
     else await api.patch(`/api/rooms/${c.roomId}/project`, { projectId });
     set({ current: { ...c, projectId }, editorUrl: null });
+  },
+  deleteProject: async (projectId) => {
+    await api.del(`/api/projects/${projectId}`);
+    const c = get().current;
+    if (c && c.projectId === projectId) set({ current: { ...c, projectId: null }, editorUrl: null });
+    await get().refreshLists();
   },
   setModel: async (model) => {
     const c = get().current; if (!c) return;
