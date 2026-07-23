@@ -90,16 +90,26 @@ function decryptRow(r: typeof schema.gitCredentials.$inferSelect | undefined): R
   catch { return null; } // corrupt/rekeyed → treat as no credential
 }
 
-// Resolve the credential for a host: the user's own first, else the admin common one.
-export function resolveGitCred(userId: string | null, host: string | null): ResolvedGitCred | null {
+// Pick the row that authenticates a host: the user's own first, else the admin common one.
+function resolveGitCredRow(userId: string | null, host: string | null) {
   const h = (host || '').toLowerCase();
-  if (!h) return null;
+  if (!h) return undefined;
   const pick = (scope: GitScope, owner: string) => db.select().from(schema.gitCredentials).where(and(
     eq(schema.gitCredentials.scope, scope), eq(schema.gitCredentials.ownerId, owner),
     eq(schema.gitCredentials.host, h))).get();
-  let row = userId ? pick('user', userId) : undefined;
-  if (!row) row = pick('common', COMMON_OWNER);
-  return decryptRow(row);
+  return (userId ? pick('user', userId) : undefined) ?? pick('common', COMMON_OWNER);
+}
+
+// Resolve the credential for a host (decrypted token, server-side only).
+export function resolveGitCred(userId: string | null, host: string | null): ResolvedGitCred | null {
+  return decryptRow(resolveGitCredRow(userId, host));
+}
+
+// Same resolution, but meta only (no token) — safe to send to clients so the UI can show
+// which credential a repo's push/commit will actually use, and whether it's yours or the shared one.
+export function resolveGitCredMeta(userId: string | null, host: string | null): GitCredMeta | null {
+  const row = resolveGitCredRow(userId, host);
+  return row ? toMeta(row) : null;
 }
 
 // Resolve one specific credential by id (explicit clone picker). Access is checked by the caller.

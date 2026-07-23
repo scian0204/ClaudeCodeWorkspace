@@ -4,7 +4,8 @@ import { Modal } from './Modal';
 import { useT } from '../lib/i18n';
 
 interface GitFile { path: string; index: string; work: string; staged: boolean; }
-interface Status { repo: boolean; branch: string; upstream: boolean; ahead: number; behind: number; files: GitFile[]; clean: boolean; host: string | null; hasCredential: boolean; }
+interface CredMeta { scope: 'user' | 'common'; provider: string; host: string; username: string; authorEmail: string | null; }
+interface Status { repo: boolean; branch: string; upstream: boolean; ahead: number; behind: number; files: GitFile[]; clean: boolean; host: string | null; hasCredential: boolean; credential: CredMeta | null; identity: { name: string; email: string }; }
 
 // Commit (with file-level staging) + push for a project's workspace. Opened from the chat header.
 export function GitPanel({ projectId, open, onClose }: { projectId: string; open: boolean; onClose: () => void }) {
@@ -98,6 +99,30 @@ export function GitPanel({ projectId, open, onClose }: { projectId: string; open
               : <span className="text-warn text-xs">{t('git.noUpstream')}</span>}
             {st.host && <span className="text-txt3 text-[11px] ml-auto font-mono">{st.host}{st.hasCredential ? ' ✓' : ' ⚠'}</span>}
           </div>
+
+          {/* Which credential this session's push/commit actually uses (resolved: yours → shared) */}
+          {st.host && (
+            <div className="text-xs border border-line rounded-lg px-2.5 py-2 mb-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-txt3">{t('git.credUsing')}</span>
+                {st.credential
+                  ? (
+                    <>
+                      <span className="text-[10px] bg-claysoft text-clay px-1.5 py-0.5 rounded-full">
+                        {st.credential.scope === 'user' ? t('git.credMine') : t('git.credCommon')}
+                      </span>
+                      <span className="text-[10px] bg-claysoft text-clay px-1.5 py-0.5 rounded-full">{st.credential.provider}</span>
+                      <span className="font-mono text-[11px]">{st.credential.host}</span>
+                      <span className="text-txt3">· {st.credential.username}</span>
+                    </>
+                  )
+                  : <span className="text-warn">{t('git.credNone', { host: st.host })}</span>}
+              </div>
+              <div className="text-txt3 text-[11px] mt-1">
+                {t('git.commitsAs')}: <span className="font-mono">{st.identity.name} &lt;{st.identity.email}&gt;</span>
+              </div>
+            </div>
+          )}
 
           {st.files.length === 0
             ? <div className="text-sm text-txt3 mb-3">{t('git.clean')}</div>
