@@ -132,7 +132,7 @@ function Header() {
 }
 
 function ProjectMenu() {
-  const { current: c, projects, setProject } = useStore();
+  const { current: c, projects, setProject, deleteProject } = useStore();
   const [roomProjects, setRoomProjects] = useState<any[]>([]);
   const [newName, setNewName] = useState('');
   const [gitUrl, setGitUrl] = useState('');
@@ -166,15 +166,29 @@ function ProjectMenu() {
     finally { setBusy(false); }
   };
 
+  const removeProject = async (p: { id: string; name: string }) => {
+    if (!confirm(t('chat.deleteProjectConfirm', { name: p.name }))) return;
+    try {
+      await deleteProject(p.id);
+      if (c.kind === 'room' && c.roomId) { const r = await api.get(`/api/projects/room/${c.roomId}`); setRoomProjects(r.projects); }
+    } catch (e: any) { useStore.getState().setError(e.message); }
+  };
+
   return (
     <DM.Root>
       <DM.Trigger asChild><button className="pill">📁 {cur ? cur.name : t('chat.project')} ▾</button></DM.Trigger>
       <Menu>
         {list.length === 0 && <div className="px-2 py-1 text-[11px] text-txt3">{t('chat.noProjects')}</div>}
         {list.map((p) => (
-          <MenuItem key={p.id} onSelect={() => setProject(p.id)}>
-            <span className="text-[10px] text-txt3 mr-1">[{p.tag}]</span>{p.name}
-          </MenuItem>
+          <DM.Item key={p.id} onSelect={() => setProject(p.id)}
+            className="flex items-center gap-1.5 px-2 py-1.5 text-sm rounded cursor-pointer hover:bg-line outline-none data-[highlighted]:bg-line group">
+            <span className="text-[10px] text-txt3">[{p.tag}]</span>
+            <span className="flex-1 truncate">{p.name}</span>
+            <span role="button" title={t('common.delete')}
+              className="text-txt3 hover:text-danger opacity-50 group-hover:opacity-100 px-0.5"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.stopPropagation(); e.preventDefault(); removeProject(p); }}>🗑</span>
+          </DM.Item>
         ))}
         <div className="border-t border-line my-1" />
         <div className="flex flex-col gap-1 p-1" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>

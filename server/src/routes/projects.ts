@@ -178,9 +178,19 @@ export async function projectRoutes(app: FastifyInstance) {
     const { id } = req.params as any;
     const p = getProject(id);
     if (!p) return reply.code(404).send({ error: 'not found' });
+    if (!canAccess(u, p)) return reply.code(403).send({ error: 'forbidden' });
     if (p.scope === 'common' && u.role !== 'admin') return reply.code(403).send({ error: 'admin only' });
     if (p.scope === 'user' && p.ownerId !== u.id && u.role !== 'admin') return reply.code(403).send({ error: 'forbidden' });
-    // only removes the DB index entry; files remain on the volume (safe)
+    // remove the working dir too, but ONLY if it resolves strictly inside the scope's projects
+    // root (guard against a stray/absolute path deleting something outside the volume layout).
+    const root = path.resolve(
+      p.scope === 'common' ? paths.commonProjects
+        : p.scope === 'room' ? paths.roomProjects(p.ownerId!)
+          : paths.userProjects(p.ownerId!));
+    const dir = path.resolve(p.path);
+    if (dir !== root && dir.startsWith(root + path.sep)) {
+      try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort: keep going, still unindex */ }
+    }
     db.delete(schema.projects).where(eq(schema.projects.id, id)).run();
     return { ok: true };
   });

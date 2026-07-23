@@ -79,6 +79,13 @@ export function route(method: string, rawPath: string, body?: any): Res {
     return ok({ project: p });
   }
   if (seg[1] === 'projects' && seg[2] === 'room') return ok({ projects: db.roomProjects[idAt(3)] || [] });
+  if (seg[1] === 'projects' && seg[2] && seg.length === 3 && M === 'DELETE') {
+    const id = idAt(2);
+    db.projects.common = db.projects.common.filter((p: any) => p.id !== id);
+    db.projects.mine = db.projects.mine.filter((p: any) => p.id !== id);
+    for (const k of Object.keys(db.roomProjects)) db.roomProjects[k] = db.roomProjects[k].filter((p: any) => p.id !== id);
+    return ok({ ok: true });
+  }
   if (seg[1] === 'projects' && seg[3] === 'tree') return ok({ files: TREE_PROJECT });
   if (seg[1] === 'projects' && seg[3] === 'open-editor') return ok({ url: EDITOR_URL });
   if (seg[1] === 'projects' && seg[3] === 'file') { const path = query.get('path') || ''; return ok({ name: path.split('/').pop(), content: fileContent(path) }); }
