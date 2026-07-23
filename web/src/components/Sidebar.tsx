@@ -8,7 +8,7 @@ import { GitCredentialsModal } from './GitCredentials';
 import { useT } from '../lib/i18n';
 
 export function Sidebar() {
-  const { user, sessions, rooms, wikiTopics, current, openPrivate, openRoom, openWiki, newSession, newRoom, logout, setPanel, panel, deleteSession, deleteRoom, deleteWikiTopic } = useStore();
+  const { user, sessions, rooms, wikiTopics, current, openPrivate, openRoom, openWiki, newSession, newRoom, logout, setPanel, panel, deleteSession, deleteRoom, deleteWikiTopic, renameSession } = useStore();
   const [showRoom, setShowRoom] = useState(false);
   const [roomName, setRoomName] = useState('');
   const [showWiki, setShowWiki] = useState(false);
@@ -41,6 +41,8 @@ export function Sidebar() {
             <span className="opacity-70">💬</span>
             <span className="flex-1 truncate text-[13px]">{s.title}</span>
             <span className="text-[11px] text-txt3 group-hover:hidden">{timeAgo(s.updatedAt)}</span>
+            <button className="hidden group-hover:block text-txt3 hover:text-clay text-xs px-1" title={t('sidebar.renameChatTitle')}
+              onClick={(e) => { e.stopPropagation(); const nt = prompt(t('sidebar.renameChatPrompt'), s.title); if (nt && nt.trim() && nt.trim() !== s.title) renameSession(s.id, nt.trim()); }}>✎</button>
             <button className="hidden group-hover:block text-txt3 hover:text-danger text-xs px-1" title={t('sidebar.deleteChatTitle')}
               onClick={(e) => { e.stopPropagation(); if (confirm(t('sidebar.deleteChatConfirm', { title: s.title }))) deleteSession(s.id); }}>🗑</button>
           </Item>
