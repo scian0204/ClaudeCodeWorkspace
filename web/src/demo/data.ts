@@ -73,6 +73,15 @@ const WIKI_MSGS = [
   ], ago(199)),
 ];
 
+const REVIEW_MSGS = [
+  userMsg(ME, 'Merge PR #142 locally, then build and run the tests.', ago(14)),
+  claudeMsg([
+    tx('Merged `feat/rate-limit` into `main` cleanly. Building and running the suite now.'),
+    tool('Bash', { command: 'npm ci && npm test' }, 'PASS  test/rate-limit.test.ts (12 passed)\nPASS  test/api.test.ts (34 passed)\n\nTests: 46 passed, 46 total'),
+    tx('Green across the board. The limiter is a token-bucket keyed by API key. One note: the window size is read from env at import time, so a hot config change wouldn\'t take effect without a restart — minor. Otherwise this looks good to merge.'),
+  ], ago(13)),
+];
+
 // ---- projects / trees / files ---------------------------------------------
 export const TREE_PROJECT = [
   { name: 'src/index.ts', size: 812 }, { name: 'src/auth/middleware.ts', size: 1440 },
@@ -153,10 +162,18 @@ export const db = {
     prefs: [] as any[],
   },
   marketplaces: { common: [{ name: 'anthropic' }, { name: 'community' }], mine: [] as any[] },
+  reviewRepos: [
+    { id: 'rr_web', name: 'acme/webapp', provider: 'github', host: 'github.com', slug: 'acme/webapp', gitUrl: 'https://github.com/acme/webapp.git', baseBranch: 'main', polledAt: ago(2), pollError: null, openCount: 2, createdAt: ago(600) },
+  ] as any[],
+  reviewSessions: [
+    { id: 'rv_142', chatSessionId: 'cs_rv_142', repoId: 'rr_web', repoName: 'acme/webapp', prNumber: 142, prTitle: 'Add rate limiting to the API', prUrl: 'https://github.com/acme/webapp/pull/142', prState: 'open', authorLogin: 'jamie', mergeState: 'merged', readOnly: false, updatedAt: ago(13) },
+    { id: 'rv_139', chatSessionId: 'cs_rv_139', repoId: 'rr_web', repoName: 'acme/webapp', prNumber: 139, prTitle: 'Fix flaky nightly export test', prUrl: 'https://github.com/acme/webapp/pull/139', prState: 'open', authorLogin: 'riley', mergeState: 'none', readOnly: false, updatedAt: ago(120) },
+  ] as any[],
   // per-chat message history (also used by the socket sim to append turns)
   messages: {
     s_auth: AUTH_MSGS, s_socket: SOCKET_MSGS, s_notes: [],
     cs_backend: ROOM_MSGS, cs_design: [], cs_w_pay: WIKI_MSGS, cs_w_onboard: [],
+    cs_rv_142: REVIEW_MSGS, cs_rv_139: [],
   } as Record<string, any[]>,
 };
 

@@ -15,6 +15,8 @@ function sessionFor(id: string) {
   if (room) return { id, title: room.name, projectId: null, model: 'claude-opus-4-8', permissionMode: room.permissionMode };
   const w = db.wikiTopics.find((t) => `cs_${t.id}` === id);
   if (w) return { id, title: w.name, projectId: null, model: 'claude-opus-4-8', permissionMode: 'default' };
+  const rv = db.reviewSessions.find((x: any) => x.chatSessionId === id);
+  if (rv) return { id, title: `#${rv.prNumber} ${rv.prTitle}`, projectId: null, model: 'claude-opus-4-8', permissionMode: 'default' };
   return { id, title: 'New chat', projectId: null, model: 'claude-opus-4-8', permissionMode: 'default' };
 }
 const msgs = (id: string) => (db.messages[id] || (db.messages[id] = []));
@@ -162,6 +164,38 @@ export function route(method: string, rawPath: string, body?: any): Res {
   if (P === '/api/users/directory') return ok({ users: db.users });
   if (seg[1] === 'users' && seg[3] === 'password') return ok({});
   if (seg[1] === 'users' && seg[2] && M === 'DELETE') { db.users = db.users.filter((x) => x.id !== idAt(2)); return ok({}); }
+
+  // ---- review (PR review) ----
+  if (P === '/api/review/repos' && M === 'GET') return ok({ repos: db.reviewRepos });
+  if (P === '/api/review/repos' && M === 'POST') {
+    const slug = String(b.gitUrl || '').replace(/\.git$/, '').split('/').slice(-2).join('/') || 'repo/x';
+    const repo = { id: genId('rr'), name: b.name || slug, provider: b.provider || 'github', host: 'github.com', slug, gitUrl: b.gitUrl, baseBranch: b.baseBranch || 'main', polledAt: Date.now(), pollError: null, openCount: 0, createdAt: Date.now() };
+    db.reviewRepos.unshift(repo); return ok({ repo });
+  }
+  if (seg[1] === 'review' && seg[2] === 'repos' && seg[4] === 'poll') return ok({ ok: true, opened: 0, closed: 0 });
+  if (seg[1] === 'review' && seg[2] === 'repos' && seg[3] && M === 'DELETE') {
+    db.reviewSessions = db.reviewSessions.filter((s: any) => s.repoId !== idAt(3));
+    db.reviewRepos = db.reviewRepos.filter((r: any) => r.id !== idAt(3));
+    return ok({ ok: true });
+  }
+  if (P === '/api/review/sessions' && M === 'GET') return ok({ sessions: db.reviewSessions });
+  if (seg[1] === 'review' && seg[2] === 'sessions' && seg[4] === 'merge') {
+    const rv = db.reviewSessions.find((s: any) => s.id === idAt(3)); if (rv) rv.mergeState = 'merged';
+    return ok({ ok: true, mergeState: 'merged', output: "Merge made by the 'ort' strategy. (demo)" });
+  }
+  if (seg[1] === 'review' && seg[2] === 'sessions' && seg[3] && M === 'DELETE') {
+    db.reviewSessions = db.reviewSessions.filter((s: any) => s.id !== idAt(3)); return ok({ ok: true });
+  }
+  if (seg[1] === 'review' && seg[2] === 'sessions' && seg[3] && M === 'GET') {
+    const rv = db.reviewSessions.find((s: any) => s.id === idAt(3));
+    if (!rv) return { status: 404, data: { error: 'not found' } };
+    const repo = db.reviewRepos.find((r: any) => r.id === rv.repoId);
+    return ok({
+      review: { id: rv.id, chatSessionId: rv.chatSessionId, prNumber: rv.prNumber, prTitle: rv.prTitle, prUrl: rv.prUrl, prState: rv.prState, authorLogin: rv.authorLogin, baseRef: repo?.baseBranch || 'main', headRef: `pr-${rv.prNumber}`, mergeState: rv.mergeState, mergedAt: null },
+      repo: repo ? { id: repo.id, name: repo.name, provider: repo.provider, host: repo.host, slug: repo.slug } : null,
+      role: 'admin',
+    });
+  }
 
   // ---- admin ----
   if (P === '/api/admin/overview') return ok(ADMIN.overview());
