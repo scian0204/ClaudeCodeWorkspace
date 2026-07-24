@@ -13,12 +13,15 @@ export interface RoomSummary { id: string; name: string; ownerId: string; chatSe
 export interface PrivateSession { id: string; title: string; updatedAt: number; projectId: string | null; model: string; permissionMode: string; }
 export interface Project { id: string; scope: string; ownerId: string | null; name: string; path: string; }
 export interface WikiTopic { id: string; name: string; description: string; path: string; createdBy: string; createdAt: number; compileStatus?: string; compiledAt?: number | null; compileError?: string | null; }
+export interface ReviewRepo { id: string; name: string; provider: string; host: string; slug: string; gitUrl: string; baseBranch: string | null; polledAt: number | null; pollError: string | null; openCount: number; createdAt: number; }
+export interface ReviewSessionSummary { id: string; chatSessionId: string; repoId: string; repoName: string; prNumber: number; prTitle: string; prUrl: string; prState: string; authorLogin: string; mergeState: string; readOnly: boolean; updatedAt: number; }
+export interface ReviewMeta { reviewId: string; prNumber: number; prTitle: string; prUrl: string; prState: string; authorLogin: string; baseRef: string; headRef: string; mergeState: string; repoName: string; provider: string; }
 export interface User { id: string; username: string; role: string; displayName: string; avatarColor: string; hasClaudeToken?: boolean; claudeTokenSetAt?: number | null; }
 export interface Live { blocks: Block[]; toolMap: Record<string, number>; }
 export interface QueueState { running: { id: string; author: { id: string; name: string } } | null; waiting: { id: string; author: { id: string; name: string } }[]; }
 export interface Control { canApprove: boolean; canInterrupt: boolean; canSetMode: boolean; isOwner: boolean; delegable: string[]; }
 export interface PermReq { requestId: string; tool: string; input: any; }
-export interface Current { chatSessionId: string; kind: 'private' | 'room'; roomId?: string; wikiTopicId?: string; title: string; projectId: string | null; model: string; permissionMode: string; room?: RoomSummary; }
+export interface Current { chatSessionId: string; kind: 'private' | 'room' | 'review'; roomId?: string; wikiTopicId?: string; reviewId?: string; review?: ReviewMeta; readOnly?: boolean; title: string; projectId: string | null; model: string; permissionMode: string; room?: RoomSummary; }
 
 interface State {
   user: User | null;
@@ -26,6 +29,8 @@ interface State {
   sessions: PrivateSession[];
   rooms: RoomSummary[];
   wikiTopics: WikiTopic[];
+  reviewRepos: ReviewRepo[];
+  reviewSessions: ReviewSessionSummary[];
   wikiProgress: Record<string, string>; // topicId -> latest compile step (transient)
   projects: { common: Project[]; mine: Project[] };
   current: Current | null;
@@ -51,6 +56,11 @@ interface State {
   openPrivate: (id: string) => Promise<void>;
   openRoom: (roomId: string) => Promise<void>;
   openWiki: (topicId: string) => Promise<void>;
+  openReview: (reviewId: string) => Promise<void>;
+  newReviewRepo: (payload: { name?: string; gitUrl: string; credentialId: string; provider?: string; baseBranch?: string }) => Promise<void>;
+  deleteReviewRepo: (id: string) => Promise<void>;
+  pollReviewRepo: (id: string) => Promise<void>;
+  mergeReview: (reviewId: string) => Promise<{ mergeState: string; output: string }>;
   newSession: () => Promise<void>;
   newRoom: (name: string) => Promise<void>;
   newWikiTopic: (payload: { name: string; description: string; stagingId?: string; precompiled?: boolean }) => Promise<void>;
@@ -84,7 +94,7 @@ let wired = false;
 export const useStore = create<State>((set, get) => ({
   user: null,
   theme: (localStorage.getItem('theme') as any) || null,
-  sessions: [], rooms: [], wikiTopics: [], wikiProgress: {}, projects: { common: [], mine: [] },
+  sessions: [], rooms: [], wikiTopics: [], reviewRepos: [], reviewSessions: [], wikiProgress: {}, projects: { common: [], mine: [] },
   current: null, messages: [], live: null, turnActive: false,
   queue: { running: null, waiting: [] }, pending: [],
   control: { canApprove: true, canInterrupt: true, canSetMode: true, isOwner: true, delegable: [] },
@@ -110,7 +120,7 @@ export const useStore = create<State>((set, get) => ({
 
   logout: async () => {
     await api.post('/api/auth/logout');
-    set({ user: null, current: null, messages: [], sessions: [], rooms: [], wikiTopics: [] });
+    set({ user: null, current: null, messages: [], sessions: [], rooms: [], wikiTopics: [], reviewRepos: [], reviewSessions: [] });
   },
 
   toggleTheme: () => {
@@ -121,10 +131,16 @@ export const useStore = create<State>((set, get) => ({
   },
 
   refreshLists: async () => {
-    const [s, r, p, w] = await Promise.all([
+    const isAdmin = get().user?.role === 'admin';
+    const [s, r, p, w, rv, rr] = await Promise.all([
       api.get('/api/sessions'), api.get('/api/rooms'), api.get('/api/projects'), api.get('/api/wiki/topics'),
+      api.get('/api/review/sessions'),
+      isAdmin ? api.get('/api/review/repos') : Promise.resolve({ repos: [] }),
     ]);
-    set({ sessions: s.sessions, rooms: r.rooms, projects: { common: p.common, mine: p.mine }, wikiTopics: w.topics });
+    set({
+      sessions: s.sessions, rooms: r.rooms, projects: { common: p.common, mine: p.mine }, wikiTopics: w.topics,
+      reviewSessions: rv.sessions || [], reviewRepos: rr.repos || [],
+    });
   },
 
   openPrivate: async (id) => {
@@ -153,6 +169,44 @@ export const useStore = create<State>((set, get) => ({
       title: session.title || t?.name || 'Wiki',
       projectId: null, model: session.model || 'claude-opus-4-8', permissionMode: session.permissionMode || 'default',
     }, messages);
+  },
+
+  openReview: async (reviewId) => {
+    const { review, repo, role } = await api.get(`/api/review/sessions/${reviewId}`);
+    const { session, messages } = await api.get(`/api/sessions/${review.chatSessionId}`);
+    await join(set, get, {
+      chatSessionId: review.chatSessionId, kind: 'review', reviewId,
+      title: session.title || `#${review.prNumber}`, projectId: null,
+      model: session.model || 'claude-opus-4-8', permissionMode: session.permissionMode || 'default',
+      readOnly: role !== 'admin',
+      review: {
+        reviewId, prNumber: review.prNumber, prTitle: review.prTitle, prUrl: review.prUrl,
+        prState: review.prState, authorLogin: review.authorLogin, baseRef: review.baseRef,
+        headRef: review.headRef, mergeState: review.mergeState,
+        repoName: repo?.name || '', provider: repo?.provider || '',
+      },
+    }, messages);
+  },
+  newReviewRepo: async (payload) => {
+    await api.post('/api/review/repos', payload);
+    await get().refreshLists();
+  },
+  deleteReviewRepo: async (id) => {
+    await api.del(`/api/review/repos/${id}`);
+    await get().refreshLists();
+    const c = get().current;
+    if (c?.kind === 'review' && !get().reviewSessions.some((s) => s.id === c.reviewId)) set({ current: null, messages: [] });
+  },
+  pollReviewRepo: async (id) => {
+    await api.post(`/api/review/repos/${id}/poll`);
+    await get().refreshLists();
+  },
+  mergeReview: async (reviewId) => {
+    const r = await api.post(`/api/review/sessions/${reviewId}/merge`);
+    const c = get().current;
+    if (c?.kind === 'review' && c.reviewId === reviewId && c.review) set({ current: { ...c, review: { ...c.review, mergeState: r.mergeState } } });
+    await get().refreshLists();
+    return { mergeState: r.mergeState, output: r.output };
   },
 
   newSession: async () => {
@@ -251,13 +305,13 @@ export const useStore = create<State>((set, get) => ({
   },
   setModel: async (model) => {
     const c = get().current; if (!c) return;
-    if (c.kind === 'private') await api.patch(`/api/sessions/${c.chatSessionId}`, { model });
+    if (c.kind === 'private' || c.kind === 'review') await api.patch(`/api/sessions/${c.chatSessionId}`, { model });
     set({ current: { ...c, model } });
   },
   setMode: async (mode) => {
     const c = get().current; if (!c) return;
-    if (c.kind === 'private') await api.patch(`/api/sessions/${c.chatSessionId}`, { permissionMode: mode });
-    else await api.post(`/api/rooms/${c.roomId}/mode`, { mode });
+    if (c.kind === 'room') await api.post(`/api/rooms/${c.roomId}/mode`, { mode });
+    else await api.patch(`/api/sessions/${c.chatSessionId}`, { permissionMode: mode });
     set({ current: { ...c, permissionMode: mode } });
   },
 
@@ -387,6 +441,9 @@ function wire(set: any, get: () => State) {
   sock.on('wiki:progress', (p: any) => {
     set({ wikiProgress: { ...get().wikiProgress, [p.topicId]: p.step } });
   });
+
+  // review poller/merge changed the repos/sessions somewhere — refresh the lists (badges, new PRs)
+  sock.on('review:changed', () => { if (get().user) get().refreshLists().catch(() => {}); });
 
   sock.on('queue:update', (p: any) => { if (isCur(p.sessionId)) set({ queue: { running: p.running, waiting: p.waiting } }); });
   sock.on('presence:update', (p: any) => { if (isCur(p.sessionId)) set({ presence: p.users }); });

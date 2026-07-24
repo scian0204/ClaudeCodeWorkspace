@@ -1,5 +1,5 @@
-import { useState, useRef } from 'react';
-import { useStore } from '../lib/store';
+import { useState, useRef, useEffect } from 'react';
+import { useStore, type ReviewSessionSummary } from '../lib/store';
 import { api } from '../lib/api';
 import { Avatar, timeAgo, LangToggle } from '../lib/ui';
 import { Modal } from './Modal';
@@ -78,6 +78,8 @@ export function Sidebar() {
             )}
           </Item>
         ))}
+
+        <ReviewSection />
       </div>
 
       <div className="border-t border-line p-2.5">
@@ -259,6 +261,113 @@ function WikiCreateModal({ onClose }: { onClose: () => void }) {
         <button className="btn-primary" onClick={confirm} disabled={busy || progress !== null}>
           {busy ? t('common.creating') : files.length ? t('sidebar.confirmWithCount', { count: files.length }) : t('common.confirm')}
         </button>
+      </div>
+    </Modal>
+  );
+}
+
+function mergeBadge(state: string) {
+  return state === 'merged' ? '✅' : state === 'conflict' ? '⚠️' : '🔀';
+}
+
+// PR-review section: admin sees each watched repo with its PR sessions nested (+ poll/delete);
+// members see only the review sessions for PRs they authored (read-only).
+function ReviewSection() {
+  const { reviewRepos, reviewSessions, current, panel, setPanel, openReview, deleteReviewRepo, pollReviewRepo, user } = useStore();
+  const [showAdd, setShowAdd] = useState(false);
+  const [busyPoll, setBusyPoll] = useState<string | null>(null);
+  const isAdmin = user?.role === 'admin';
+  const t = useT();
+
+  const poll = async (id: string) => {
+    setBusyPoll(id);
+    try { await pollReviewRepo(id); } catch (e: any) { useStore.getState().setError(e.message); } finally { setBusyPoll(null); }
+  };
+
+  const sessionItem = (s: ReviewSessionSummary) => (
+    <Item key={s.id} active={panel === null && current?.reviewId === s.id} onClick={() => { setPanel(null); openReview(s.id); }}>
+      <span className="opacity-70">{mergeBadge(s.mergeState)}</span>
+      <span className={`flex-1 truncate text-[13px] ${s.prState !== 'open' ? 'line-through text-txt3' : ''}`} title={s.prTitle}>
+        <span className="text-txt3">#{s.prNumber}</span> {s.prTitle}
+      </span>
+    </Item>
+  );
+
+  return (
+    <>
+      <Section label={t('review.section')} onAdd={isAdmin ? () => setShowAdd(true) : undefined} />
+      {isAdmin ? (
+        reviewRepos.length === 0
+          ? <div className="text-[11px] text-txt3 px-2 py-1">{t('review.addRepoHint')}</div>
+          : reviewRepos.map((r) => (
+            <div key={r.id}>
+              <div className="group flex items-center gap-1.5 px-2 py-1 text-[11px] text-txt2">
+                <span className="opacity-70">📦</span>
+                <span className="flex-1 truncate font-semibold" title={`${r.host}/${r.slug}`}>{r.name}</span>
+                <span className="text-txt3 group-hover:hidden">{t('review.openCount', { count: r.openCount })}</span>
+                <button className="hidden group-hover:block hover:text-clay disabled:opacity-40" title={t('review.pollNow')}
+                  disabled={busyPoll === r.id} onClick={() => poll(r.id)}>{busyPoll === r.id ? '…' : '⟳'}</button>
+                <button className="hidden group-hover:block hover:text-danger" title={t('review.deleteRepoTitle')}
+                  onClick={() => { if (confirm(t('review.deleteRepoConfirm', { name: r.name }))) deleteReviewRepo(r.id); }}>🗑</button>
+              </div>
+              {r.pollError && <div className="px-2 pb-1 text-[10px] text-danger truncate" title={r.pollError}>{t('review.pollErrorLabel')}</div>}
+              {reviewSessions.filter((s) => s.repoId === r.id).map(sessionItem)}
+            </div>
+          ))
+      ) : (
+        reviewSessions.length === 0
+          ? <div className="text-[11px] text-txt3 px-2 py-1">{t('common.none')}</div>
+          : reviewSessions.map(sessionItem)
+      )}
+      {showAdd && <AddReviewRepoModal onClose={() => setShowAdd(false)} />}
+    </>
+  );
+}
+
+// Admin-only: register a remote to watch. Requires a merge/push-capable git credential for that host.
+function AddReviewRepoModal({ onClose }: { onClose: () => void }) {
+  const newReviewRepo = useStore((s) => s.newReviewRepo);
+  const setError = useStore((s) => s.setError);
+  const [name, setName] = useState('');
+  const [gitUrl, setGitUrl] = useState('');
+  const [baseBranch, setBaseBranch] = useState('');
+  const [credentialId, setCredentialId] = useState('');
+  const [provider, setProvider] = useState('');
+  const [creds, setCreds] = useState<any[]>([]);
+  const [busy, setBusy] = useState(false);
+  const t = useT();
+
+  useEffect(() => { api.get('/api/git-credentials').then((r) => setCreds([...(r.mine || []), ...(r.common || [])])).catch(() => {}); }, []);
+
+  const submit = async () => {
+    if (!gitUrl.trim()) { setError(t('review.gitUrlRequired')); return; }
+    if (!credentialId) { setError(t('review.credRequired')); return; }
+    setBusy(true);
+    try {
+      await newReviewRepo({ name: name.trim() || undefined, gitUrl: gitUrl.trim(), credentialId, provider: provider || undefined, baseBranch: baseBranch.trim() || undefined });
+      onClose();
+    } catch (e: any) { setError(e.message); setBusy(false); }
+  };
+
+  return (
+    <Modal open onOpenChange={(o) => { if (!o) onClose(); }} title={t('review.addRepoTitle')} width={460}>
+      <div className="text-[11px] text-txt3 mb-2">{t('review.addRepoHelp')}</div>
+      <input className="input mb-2" placeholder={t('review.repoNamePlaceholder')} value={name} onChange={(e) => setName(e.target.value)} />
+      <input className="input mb-2" placeholder={t('review.gitUrlPlaceholder')} value={gitUrl} autoFocus onChange={(e) => setGitUrl(e.target.value)} />
+      <input className="input mb-2" placeholder={t('review.baseBranchPlaceholder')} value={baseBranch} onChange={(e) => setBaseBranch(e.target.value)} />
+      <select className="input mb-2" value={credentialId} onChange={(e) => setCredentialId(e.target.value)}>
+        <option value="">{t('review.selectCred')}</option>
+        {creds.map((cr) => <option key={cr.id} value={cr.id}>[{cr.provider}] {cr.host} · {cr.username}</option>)}
+      </select>
+      <select className="input mb-3" value={provider} onChange={(e) => setProvider(e.target.value)}>
+        <option value="">{t('review.providerAuto')}</option>
+        <option value="github">GitHub</option>
+        <option value="gitlab">GitLab</option>
+        <option value="bitbucket">Bitbucket</option>
+      </select>
+      <div className="flex justify-end gap-2">
+        <button className="btn-ghost" onClick={onClose} disabled={busy}>{t('common.cancel')}</button>
+        <button className="btn-primary" onClick={submit} disabled={busy}>{busy ? t('review.cloning') : t('review.addRepoBtn')}</button>
       </div>
     </Modal>
   );
