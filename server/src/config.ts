@@ -22,6 +22,8 @@ export const config = {
   tlsKeyPath: env.TLS_KEY || '',
   tlsCertPath: env.TLS_CERT || '',
   maxConcurrentTurns: Number(env.MAX_CONCURRENT_TURNS || 3),
+  // How often (ms) to poll each watched review repo's host for open PRs. 0 disables polling.
+  reviewPollMs: Number(env.REVIEW_POLL_MS || 60_000),
   bootstrapAdminUser: env.BOOTSTRAP_ADMIN_USER || 'admin',
   bootstrapAdminPassword: env.BOOTSTRAP_ADMIN_PASSWORD || 'admin',
   codeServer: {

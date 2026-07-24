@@ -12,6 +12,7 @@ import { recordUsage } from '../usage/tracker.js';
 import { resolveClaudeAuth } from '../auth/claude-token.js';
 import { originHost } from '../lib/git-ops.js';
 import { resolveGitCred, gitIdentity, identityEnv, askpassEnv } from '../auth/git-cred.js';
+import { getReviewByChat, ensureWorktree } from '../review/manager.js';
 
 type Emit = (event: string, payload: any) => void;
 
@@ -40,7 +41,12 @@ function getWikiTopic(id: string) {
   return db.select().from(schema.wikiTopics).where(eq(schema.wikiTopics.id, id)).get();
 }
 
-function cwdFor(s: NonNullable<ReturnType<typeof getSession>>): string {
+async function cwdFor(s: NonNullable<ReturnType<typeof getSession>>): Promise<string> {
+  // review session runs inside its PR's git worktree (created lazily); local merge happens there
+  if (s.kind === 'review') {
+    const rv = getReviewByChat(s.id);
+    if (rv) return await ensureWorktree(rv);
+  }
   // wiki thread runs inside its topic's knowledge dir so Claude reads the .md base + CLAUDE.md
   if (s.wikiTopicId) {
     const t = getWikiTopic(s.wikiTopicId);
@@ -99,7 +105,7 @@ export async function probeCommands(chatSessionId: string, requesterId?: string 
   const hit = cmdCache.get(key);
   if (hit) return hit;
   const ctx: SessionContext = {
-    kind, ownerId, cwd: cwdFor(s), model: s.model || 'claude-opus-4-8',
+    kind, ownerId, cwd: await cwdFor(s), model: s.model || 'claude-opus-4-8',
     permissionMode: clampMode((s.permissionMode as PermMode) || 'default', allowBypass()), plugins,
     authToken: auth.token,
   };
@@ -134,7 +140,7 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
 
   const kind: 'user' | 'room' = s.kind === 'room' ? 'room' : 'user';
   const ownerId = kind === 'room' ? s.roomId! : s.ownerId;
-  const cwd = cwdFor(s);
+  const cwd = await cwdFor(s);
   const mode = clampMode((s.permissionMode as PermMode) || 'default', allowBypass());
   // Each turn runs under its author's token (personal: owner; room: whoever sent this message).
   const auth = resolveClaudeAuth(p.author.id);
