@@ -190,3 +190,19 @@ volumes:
 - Postgres 승격, Redis 승격(멀티프로세스 시).
 - 풀 git GUI, CRDT 실시간 협업편집(현재 범위 밖).
 - 알림(notifications) — 미정.
+
+---
+
+## 16. PR 리뷰 세션 (관리자 전용)
+
+개인·대화방·LLM Wiki와 **동일선상의 4번째 워크스페이스 엔티티**. 관리자만 생성.
+
+- **감시 저장소(reviewRepos):** 관리자가 원격지 URL + **병합권한 있는** git 자격증명(호스트 바인딩)으로 등록 → `/data/reviews/<id>/repo`에 **전체 클론**. `git_credentials` 재사용(호스트로 해석, 토큰은 URL/디스크 미노출, askpass env).
+- **PR 감지 = 폴링.** 서버가 주기(`REVIEW_POLL_MS`, 기본 60초)로 각 저장소 호스트의 열린 PR을 조회 + 수동 "지금 새로고침". 웹훅/공개 URL 불필요 → "서버 1대 상주" 모델에 적합.
+  - **호스트별 어댑터(`server/src/review/providers.ts`):** GitHub(`/repos/{slug}/pulls`, GHE는 `/api/v3`), GitLab(`/api/v4/.../merge_requests`, MR head는 `refs/merge-requests/<iid>/head`), Bitbucket Cloud(`/2.0/.../pullrequests`, Basic auth). 열린 PR마다 `review_sessions` 1개 + `chat_sessions(kind='review')` 1개를 upsert.
+- **세션 = `chat_sessions(kind='review')`.** cwd = **PR별 git 워크트리**(`wt/<pr>`, 공유 클론에서 파생, 지연 생성). HOME/토큰/플러그인은 생성자(admin) 기준(kind는 user로 매핑).
+- **열람 권한:** 관리자(쓰기) + PR 작성자(로컬 계정과 username 매칭, **읽기 전용**; 매칭 없으면 제외). `routes/sessions`·`realtime/io` 양쪽에서 게이팅 — 읽기 전용은 전송·인터럽트·승인·머지 불가.
+- **로컬 머지:** PR head를 로컬 ref로 fetch(포크는 소스 clone URL) → 워크트리를 최신 base로 `reset --hard` → `merge --no-ff`. 충돌은 트리에 남겨 리뷰(`mergeState=conflict`). **원격 push 없음**(로컬 전용, 되돌리기 안전).
+- **빌드 & 실행 · 디버깅 · 코드리뷰:** 머지 후 일반 채팅 턴으로 수행 — Claude가 워크트리(cwd)에서 Bash/Read 등으로 빌드·실행·리뷰. 별도 CI 오케스트레이션 없음.
+- **정리:** 저장소/세션 삭제 시 워크트리(`git worktree remove`)·클론 디렉터리 제거, 부팅 시 orphan 리퍼.
+- **확장 seam(미구현):** 웹훅 수신, 원격 실제 병합(push하여 PR close), GitLab/Bitbucket self-hosted 세부 대응.
