@@ -104,6 +104,11 @@ export function deleteReview(rv: Review) {
 // ── polling ──
 const polling = new Set<string>();
 
+// Grants the read-only "reader" role to the local user whose username equals the PR author's host
+// login. ponytail: trusts a free-text host login == local username (trusted-team posture, DESIGN §2);
+// the worst case is a *trusted* local member seeing a PR review they didn't author — no external
+// access. Upgrade path if watched repos take external PRs: an admin-configured host-login→user
+// mapping or verified email/SSO binding instead of the username match.
 function matchAuthor(login: string): string | null {
   if (!login) return null;
   const exact = findByUsername(login);
