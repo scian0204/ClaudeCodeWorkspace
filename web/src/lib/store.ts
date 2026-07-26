@@ -14,8 +14,8 @@ export interface PrivateSession { id: string; title: string; updatedAt: number; 
 export interface Project { id: string; scope: string; ownerId: string | null; name: string; path: string; }
 export interface WikiTopic { id: string; name: string; description: string; path: string; createdBy: string; createdAt: number; compileStatus?: string; compiledAt?: number | null; compileError?: string | null; }
 export interface ReviewRepo { id: string; name: string; provider: string; host: string; slug: string; gitUrl: string; baseBranch: string | null; polledAt: number | null; pollError: string | null; openCount: number; createdAt: number; }
-export interface ReviewSessionSummary { id: string; chatSessionId: string; repoId: string; repoName: string; prNumber: number; prTitle: string; prUrl: string; prState: string; authorLogin: string; mergeState: string; readOnly: boolean; updatedAt: number; }
-export interface ReviewMeta { reviewId: string; prNumber: number; prTitle: string; prUrl: string; prState: string; authorLogin: string; baseRef: string; headRef: string; mergeState: string; repoName: string; provider: string; }
+export interface ReviewSessionSummary { id: string; chatSessionId: string; repoId: string; repoName: string; prNumber: number; prTitle: string; prUrl: string; prState: string; authorLogin: string; mergeState: string; verdict: string; verdictSummary: string | null; readOnly: boolean; updatedAt: number; }
+export interface ReviewMeta { reviewId: string; prNumber: number; prTitle: string; prUrl: string; prState: string; authorLogin: string; baseRef: string; headRef: string; mergeState: string; verdict: string; verdictSummary: string | null; repoName: string; provider: string; }
 export interface User { id: string; username: string; role: string; displayName: string; avatarColor: string; hasClaudeToken?: boolean; claudeTokenSetAt?: number | null; }
 export interface Live { blocks: Block[]; toolMap: Record<string, number>; }
 export interface QueueState { running: { id: string; author: { id: string; name: string } } | null; waiting: { id: string; author: { id: string; name: string } }[]; }
@@ -61,6 +61,8 @@ interface State {
   deleteReviewRepo: (id: string) => Promise<void>;
   pollReviewRepo: (id: string) => Promise<void>;
   mergeReview: (reviewId: string) => Promise<{ mergeState: string; output: string }>;
+  autoReviewRun: (reviewId: string) => Promise<void>;
+  approveReview: (reviewId: string) => Promise<{ output: string }>;
   newSession: () => Promise<void>;
   newRoom: (name: string) => Promise<void>;
   newWikiTopic: (payload: { name: string; description: string; stagingId?: string; precompiled?: boolean }) => Promise<void>;
@@ -183,6 +185,7 @@ export const useStore = create<State>((set, get) => ({
         reviewId, prNumber: review.prNumber, prTitle: review.prTitle, prUrl: review.prUrl,
         prState: review.prState, authorLogin: review.authorLogin, baseRef: review.baseRef,
         headRef: review.headRef, mergeState: review.mergeState,
+        verdict: review.verdict, verdictSummary: review.verdictSummary,
         repoName: repo?.name || '', provider: repo?.provider || '',
       },
     }, messages);
@@ -207,6 +210,17 @@ export const useStore = create<State>((set, get) => ({
     if (c?.kind === 'review' && c.reviewId === reviewId && c.review) set({ current: { ...c, review: { ...c.review, mergeState: r.mergeState } } });
     await get().refreshLists();
     return { mergeState: r.mergeState, output: r.output };
+  },
+  autoReviewRun: async (reviewId) => {
+    await api.post(`/api/review/sessions/${reviewId}/auto`); // fire-and-forget; verdict streams in via review:changed
+    const c = get().current;
+    if (c?.kind === 'review' && c.reviewId === reviewId && c.review) set({ current: { ...c, review: { ...c.review, verdict: 'running' } } });
+    await get().refreshLists();
+  },
+  approveReview: async (reviewId) => {
+    const r = await api.post(`/api/review/sessions/${reviewId}/approve`);
+    await get().refreshLists();
+    return { output: r.output };
   },
 
   newSession: async () => {
@@ -442,8 +456,17 @@ function wire(set: any, get: () => State) {
     set({ wikiProgress: { ...get().wikiProgress, [p.topicId]: p.step } });
   });
 
-  // review poller/merge changed the repos/sessions somewhere — refresh the lists (badges, new PRs)
-  sock.on('review:changed', () => { if (get().user) get().refreshLists().catch(() => {}); });
+  // review poller/pipeline changed the repos/sessions — refresh lists (badges, new PRs, verdicts)
+  // and sync the currently-open review header (verdict/merge state) from the refreshed summary.
+  sock.on('review:changed', async () => {
+    if (!get().user) return;
+    await get().refreshLists().catch(() => {});
+    const c = get().current;
+    if (c?.kind === 'review' && c.reviewId && c.review) {
+      const s = get().reviewSessions.find((x) => x.id === c.reviewId);
+      if (s) set({ current: { ...c, review: { ...c.review, verdict: s.verdict, verdictSummary: s.verdictSummary, mergeState: s.mergeState, prState: s.prState } } });
+    }
+  });
 
   sock.on('queue:update', (p: any) => { if (isCur(p.sessionId)) set({ queue: { running: p.running, waiting: p.waiting } }); });
   sock.on('presence:update', (p: any) => { if (isCur(p.sessionId)) set({ presence: p.users }); });

@@ -183,6 +183,15 @@ export function route(method: string, rawPath: string, body?: any): Res {
     const rv = db.reviewSessions.find((s: any) => s.id === idAt(3)); if (rv) rv.mergeState = 'merged';
     return ok({ ok: true, mergeState: 'merged', output: "Merge made by the 'ort' strategy. (demo)" });
   }
+  if (seg[1] === 'review' && seg[2] === 'sessions' && seg[4] === 'auto') {
+    const rv = db.reviewSessions.find((s: any) => s.id === idAt(3));
+    if (rv) { rv.mergeState = 'merged'; rv.verdict = 'merge_safe'; rv.verdictSummary = '테스트 통과, 회귀 없음. 병합 가능. (demo)'; }
+    return ok({ ok: true });
+  }
+  if (seg[1] === 'review' && seg[2] === 'sessions' && seg[4] === 'approve') {
+    const rv = db.reviewSessions.find((s: any) => s.id === idAt(3)); if (rv) rv.prState = 'closed';
+    return ok({ ok: true, output: 'Pull Request successfully merged (demo)' });
+  }
   if (seg[1] === 'review' && seg[2] === 'sessions' && seg[3] && M === 'DELETE') {
     db.reviewSessions = db.reviewSessions.filter((s: any) => s.id !== idAt(3)); return ok({ ok: true });
   }
@@ -191,7 +200,7 @@ export function route(method: string, rawPath: string, body?: any): Res {
     if (!rv) return { status: 404, data: { error: 'not found' } };
     const repo = db.reviewRepos.find((r: any) => r.id === rv.repoId);
     return ok({
-      review: { id: rv.id, chatSessionId: rv.chatSessionId, prNumber: rv.prNumber, prTitle: rv.prTitle, prUrl: rv.prUrl, prState: rv.prState, authorLogin: rv.authorLogin, baseRef: repo?.baseBranch || 'main', headRef: `pr-${rv.prNumber}`, mergeState: rv.mergeState, mergedAt: null },
+      review: { id: rv.id, chatSessionId: rv.chatSessionId, prNumber: rv.prNumber, prTitle: rv.prTitle, prUrl: rv.prUrl, prState: rv.prState, authorLogin: rv.authorLogin, baseRef: repo?.baseBranch || 'main', headRef: `pr-${rv.prNumber}`, mergeState: rv.mergeState, mergedAt: null, verdict: rv.verdict, verdictSummary: rv.verdictSummary },
       repo: repo ? { id: repo.id, name: repo.name, provider: repo.provider, host: repo.host, slug: repo.slug } : null,
       role: 'admin',
     });

@@ -266,8 +266,15 @@ function WikiCreateModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-function mergeBadge(state: string) {
-  return state === 'merged' ? '✅' : state === 'conflict' ? '⚠️' : '🔀';
+function verdictBadge(verdict: string) {
+  switch (verdict) {
+    case 'running': return '⏳';
+    case 'merge_safe': return '✅';
+    case 'do_not_merge': return '⛔';
+    case 'conflict': return '⚠️';
+    case 'error': return '⚠️';
+    default: return '🔀';
+  }
 }
 
 // PR-review section: admin sees each watched repo with its PR sessions nested (+ poll/delete);
@@ -286,8 +293,8 @@ function ReviewSection() {
 
   const sessionItem = (s: ReviewSessionSummary) => (
     <Item key={s.id} active={panel === null && current?.reviewId === s.id} onClick={() => { setPanel(null); openReview(s.id); }}>
-      <span className="opacity-70">{mergeBadge(s.mergeState)}</span>
-      <span className={`flex-1 truncate text-[13px] ${s.prState !== 'open' ? 'line-through text-txt3' : ''}`} title={s.prTitle}>
+      <span className="opacity-70">{verdictBadge(s.verdict)}</span>
+      <span className={`flex-1 truncate text-[13px] ${s.prState !== 'open' ? 'line-through text-txt3' : ''}`} title={s.verdictSummary || s.prTitle}>
         <span className="text-txt3">#{s.prNumber}</span> {s.prTitle}
       </span>
     </Item>

@@ -238,36 +238,50 @@ function MenuItem({ children, onSelect }: { children: React.ReactNode; onSelect:
   return <DM.Item onSelect={onSelect} className="px-2 py-1.5 text-sm rounded cursor-pointer hover:bg-line outline-none data-[highlighted]:bg-line">{children}</DM.Item>;
 }
 
-// Review header block: PR link, local-merge state, and (admin) the "local merge" action.
-// The PR author sees a read-only badge instead of the merge button.
+const VERDICT_UI: Record<string, { key: string; color: string }> = {
+  running: { key: 'review.vRunning', color: 'var(--clay)' },
+  merge_safe: { key: 'review.vSafe', color: 'var(--ok)' },
+  do_not_merge: { key: 'review.vHold', color: 'var(--danger)' },
+  conflict: { key: 'review.vConflict', color: 'var(--danger)' },
+  error: { key: 'review.vError', color: 'var(--danger)' },
+  unknown: { key: 'review.vUnknown', color: 'var(--txt-3)' },
+  none: { key: 'review.vNone', color: 'var(--txt-3)' },
+};
+
+// Review header: PR link, base←head, the auto-pipeline VERDICT, and (admin) re-run + remote-merge.
+// The PR author sees the verdict + a read-only badge (no actions).
 function ReviewControls() {
   const c = useStore((s) => s.current)!;
-  const mergeReview = useStore((s) => s.mergeReview);
-  const setError = useStore((s) => s.setError);
-  const [busy, setBusy] = useState(false);
+  const { autoReviewRun, approveReview, setError } = useStore();
+  const [busy, setBusy] = useState<'' | 'auto' | 'approve'>('');
   const t = useT();
   const rv = c.review!;
   const readOnly = !!c.readOnly;
-  const stateLabel = rv.mergeState === 'merged' ? t('review.merged') : rv.mergeState === 'conflict' ? t('review.conflict') : t('review.notMerged');
-  const stateColor = rv.mergeState === 'merged' ? 'var(--ok)' : rv.mergeState === 'conflict' ? 'var(--danger)' : 'var(--txt-3)';
+  const v = VERDICT_UI[rv.verdict] || VERDICT_UI.none;
 
-  const merge = async () => {
-    if (!confirm(t('review.mergeConfirm', { base: rv.baseRef, head: rv.headRef }))) return;
-    setBusy(true);
-    try {
-      const r = await mergeReview(rv.reviewId);
-      setError(r.mergeState === 'conflict' ? t('review.mergeConflictMsg') : null);
-    } catch (e: any) { setError(e.message); } finally { setBusy(false); }
+  const runAuto = async () => {
+    setBusy('auto');
+    try { await autoReviewRun(rv.reviewId); setError(null); }
+    catch (e: any) { setError(e.message); } finally { setBusy(''); }
+  };
+  const approve = async () => {
+    if (!confirm(t('review.approveConfirm', { n: rv.prNumber }))) return;
+    setBusy('approve');
+    try { const r = await approveReview(rv.reviewId); setError(t('review.approveDone', { out: r.output })); }
+    catch (e: any) { setError(e.message); } finally { setBusy(''); }
   };
 
   return (
     <>
       <span className="text-txt3 text-xs font-mono truncate hidden lg:inline" title={`${rv.baseRef} ← ${rv.headRef}`}>{rv.baseRef} ← {rv.headRef}</span>
       <a className="pill" href={rv.prUrl} target="_blank" rel="noreferrer" title={rv.prUrl}>{t('review.prLink', { n: rv.prNumber })}</a>
-      <span className="text-[11px]" style={{ color: stateColor }}>{stateLabel}</span>
+      <span className="text-[11px] font-semibold" style={{ color: v.color }} title={rv.verdictSummary || ''}>{t(v.key)}</span>
       {readOnly
         ? <span className="pill" title={t('review.readOnlyHint')}>👁 {t('review.readOnly')}</span>
-        : <button className="pill" disabled={busy} onClick={merge}>{busy ? t('review.merging') : t('review.mergeBtn')}</button>}
+        : <>
+            <button className="pill" disabled={busy !== ''} onClick={runAuto} title={t('review.autoRunHint')}>{busy === 'auto' ? t('review.autoRunning') : t('review.autoRun')}</button>
+            <button className="pill" disabled={busy !== ''} onClick={approve} title={t('review.approveHint')}>{busy === 'approve' ? t('review.approving') : t('review.approve')}</button>
+          </>}
     </>
   );
 }
