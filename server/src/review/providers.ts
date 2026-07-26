@@ -106,6 +106,38 @@ export function listPulls(provider: ReviewProvider, host: string, slug: string, 
   return githubPulls(host, slug, cred);
 }
 
+async function sendJson(method: string, url: string, headers: Record<string, string>, body?: any): Promise<any> {
+  const r = await fetch(url, {
+    method,
+    headers: { 'User-Agent': UA, 'Content-Type': 'application/json', ...headers },
+    body: body != null ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(20_000),
+  });
+  const text = await r.text();
+  if (!r.ok) throw new Error(`${r.status} ${r.statusText}: ${text.slice(0, 300)}`);
+  try { return text ? JSON.parse(text) : {}; } catch { return {}; }
+}
+
+// Merge (approve) the PR on the remote — the explicit "지시 시 풀리퀘스트 허가" action. Uses the
+// merge-capable credential. Irreversible outward action; the caller gates it to admins + confirm.
+export async function mergePr(provider: ReviewProvider, host: string, slug: string, number: number, cred: HostCred): Promise<string> {
+  if (provider === 'github') {
+    const base = host === 'github.com' ? 'https://api.github.com' : `https://${host}/api/v3`;
+    const r = await sendJson('PUT', `${base}/repos/${slug}/pulls/${number}/merge`,
+      { Authorization: `Bearer ${cred.token}`, Accept: 'application/vnd.github+json' }, { merge_method: 'merge' });
+    return String(r?.message || 'merged');
+  }
+  if (provider === 'gitlab') {
+    const r = await sendJson('PUT', `https://${host}/api/v4/projects/${encodeURIComponent(slug)}/merge_requests/${number}/merge`,
+      { 'PRIVATE-TOKEN': cred.token });
+    return String(r?.state || 'merged');
+  }
+  const auth = Buffer.from(`${cred.username}:${cred.token}`).toString('base64');
+  const r = await sendJson('POST', `https://api.bitbucket.org/2.0/repositories/${slug}/pullrequests/${number}/merge`,
+    { Authorization: `Basic ${auth}` }, { type: 'merge_commit' });
+  return String(r?.state || 'merged');
+}
+
 // The refspec that fetches a PR's head into a local ref from `origin`, per provider.
 // Returns null when the head must be fetched from the fork clone URL instead (Bitbucket forks) —
 // the caller then does `git fetch <headCloneUrl> <headRef>:<prLocalRef>`.

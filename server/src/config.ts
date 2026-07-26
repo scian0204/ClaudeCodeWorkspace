@@ -24,6 +24,9 @@ export const config = {
   maxConcurrentTurns: Number(env.MAX_CONCURRENT_TURNS || 3),
   // How often (ms) to poll each watched review repo's host for open PRs. 0 disables polling.
   reviewPollMs: Number(env.REVIEW_POLL_MS || 60_000),
+  // Auto-run the review pipeline (local merge → build/run → review → verdict) when a new PR
+  // is detected. Set REVIEW_AUTO=0 to require a manual trigger instead.
+  reviewAuto: env.REVIEW_AUTO !== '0',
   bootstrapAdminUser: env.BOOTSTRAP_ADMIN_USER || 'admin',
   bootstrapAdminPassword: env.BOOTSTRAP_ADMIN_PASSWORD || 'admin',
   codeServer: {

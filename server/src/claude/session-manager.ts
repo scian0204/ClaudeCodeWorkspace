@@ -6,7 +6,7 @@ import { paths, ensure } from '../lib/paths.js';
 import { allowBypass } from '../lib/settings.js';
 import { turnLimiter, withRateLimitRetry } from './throttle.js';
 import { buildOptions, clampMode, rootsFor, type SessionContext, type PermMode } from './config-layering.js';
-import { makeCanUseTool } from './permissions.js';
+import { makeCanUseTool, makeAutoAllow } from './permissions.js';
 import { resolvePluginPaths } from '../plugins/manager.js';
 import { recordUsage } from '../usage/tracker.js';
 import { resolveClaudeAuth } from '../auth/claude-token.js';
@@ -132,6 +132,7 @@ export interface RunTurnParams {
   author: { id: string; name: string };
   text: string;
   emit: Emit;
+  onDone?: (finalText: string) => void; // review auto-pipeline: capture the verdict after the turn
 }
 
 export async function runTurn(p: RunTurnParams): Promise<void> {
@@ -169,9 +170,10 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
 
   const prompt = kind === 'room' ? `[${p.author.name}]: ${p.text}` : p.text;
   const roots = rootsFor(ctx);
-  const canUseTool = makeCanUseTool({
-    sessionId: s.id, roots, mode, emit: p.emit, signal: abort.signal,
-  });
+  // review sessions run the pipeline unattended → auto-allow tools (class-1 fence still applies)
+  const canUseTool = s.kind === 'review'
+    ? makeAutoAllow(roots)
+    : makeCanUseTool({ sessionId: s.id, roots, mode, emit: p.emit, signal: abort.signal });
 
   const blocks: Block[] = [];
   let newClaudeSessionId: string | null = s.claudeSessionId ?? null;
@@ -221,6 +223,10 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
   } finally {
     active.delete(s.id);
     release();
+    if (p.onDone) {
+      const finalText = blocks.filter((b): b is Extract<Block, { type: 'text' }> => b.type === 'text').map((b) => b.text).join('\n');
+      try { p.onDone(finalText); } catch { /* noop */ }
+    }
   }
 }
 
