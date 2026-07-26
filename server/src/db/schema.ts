@@ -166,6 +166,9 @@ export const reviewSessions = sqliteTable('review_sessions', {
   worktreePath: text('worktree_path'),                 // created lazily on first use/merge
   mergeState: text('merge_state').notNull().default('none'), // 'none' | 'merged' | 'conflict'
   mergedAt: integer('merged_at'),
+  // auto-review pipeline result: none | running | merge_safe | do_not_merge | conflict | error
+  verdict: text('verdict').notNull().default('none'),
+  verdictSummary: text('verdict_summary'),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
 });

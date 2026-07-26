@@ -13,8 +13,9 @@ import {
   resolveGitCredById, getGitCredRow, askpassEnv, identityEnv, gitIdentity, hostFromGitUrl,
 } from '../auth/git-cred.js';
 import {
-  inferProvider, slugFromUrl, listPulls, prHeadFetch, prLocalRef, type ReviewProvider, type PullInfo,
+  inferProvider, slugFromUrl, listPulls, prHeadFetch, prLocalRef, mergePr, type ReviewProvider, type PullInfo,
 } from './providers.js';
+import { enqueueTurn } from '../rooms/queue.js';
 
 type Repo = typeof schema.reviewRepos.$inferSelect;
 type Review = typeof schema.reviewSessions.$inferSelect;
@@ -117,8 +118,9 @@ function matchAuthor(login: string): string | null {
   return ci?.id ?? null;
 }
 
-// Create or refresh the review session for a PR. Returns true if a NEW session was created.
-function upsertReview(repo: Repo, pr: PullInfo): boolean {
+// Create or refresh the review session for a PR. Returns the new review id if a session was
+// created (so the caller can kick off the auto-review pipeline), else null.
+function upsertReview(repo: Repo, pr: PullInfo): string | null {
   const now = Date.now();
   const authorUserId = matchAuthor(pr.authorLogin);
   const existing = db.select().from(schema.reviewSessions)
@@ -131,21 +133,22 @@ function upsertReview(repo: Repo, pr: PullInfo): boolean {
     }).where(eq(schema.reviewSessions.id, existing.id)).run();
     db.update(schema.chatSessions).set({ title: `#${pr.number} ${pr.title}` })
       .where(eq(schema.chatSessions.id, existing.chatSessionId)).run();
-    return false;
+    return null;
   }
   const chatSessionId = newId();
+  const reviewId = newId();
   db.insert(schema.chatSessions).values({
     id: chatSessionId, ownerId: repo.createdBy, kind: 'review', roomId: null,
     title: `#${pr.number} ${pr.title}`, projectId: null, wikiTopicId: null, claudeSessionId: null,
     model: 'claude-opus-4-8', permissionMode: 'default', createdAt: now, updatedAt: now,
   }).run();
   db.insert(schema.reviewSessions).values({
-    id: newId(), repoId: repo.id, chatSessionId, prNumber: pr.number, prTitle: pr.title, prUrl: pr.url,
+    id: reviewId, repoId: repo.id, chatSessionId, prNumber: pr.number, prTitle: pr.title, prUrl: pr.url,
     prState: 'open', authorLogin: pr.authorLogin, authorUserId, baseRef: pr.baseRef, headRef: pr.headRef,
     headSha: pr.headSha, headCloneUrl: pr.headCloneUrl, worktreePath: null, mergeState: 'none',
-    mergedAt: null, createdAt: now, updatedAt: now,
+    verdict: 'none', verdictSummary: null, mergedAt: null, createdAt: now, updatedAt: now,
   }).run();
-  return true;
+  return reviewId;
 }
 
 export async function pollRepo(id: string): Promise<{ opened: number; closed: number }> {
@@ -163,7 +166,10 @@ export async function pollRepo(id: string): Promise<{ opened: number; closed: nu
     });
     const openNums = new Set(pulls.map((p) => p.number));
     let opened = 0;
-    for (const pr of pulls) if (upsertReview(repo, pr)) opened++;
+    for (const pr of pulls) {
+      const createdId = upsertReview(repo, pr);
+      if (createdId) { opened++; if (config.reviewAuto) void autoReview(createdId); } // fire-and-forget pipeline
+    }
     let closed = 0;
     for (const rv of db.select().from(schema.reviewSessions).where(eq(schema.reviewSessions.repoId, id)).all()) {
       if (rv.prState === 'open' && !openNums.has(rv.prNumber)) {
@@ -250,6 +256,94 @@ export async function localMerge(rv: Review): Promise<{ mergeState: string; outp
   return { mergeState, output: res.output };
 }
 
+// ── auto-review pipeline ──
+function setVerdict(id: string, verdict: string, summary: string | null) {
+  db.update(schema.reviewSessions).set({ verdict, verdictSummary: summary, updatedAt: Date.now() })
+    .where(eq(schema.reviewSessions.id, id)).run();
+}
+
+// Persist a system note into the review chat (shown when the session is opened).
+function postSystem(chatSessionId: string, text: string) {
+  db.insert(schema.messages).values({
+    id: newId(), sessionId: chatSessionId, role: 'assistant', authorId: null, authorName: 'Auto-Review',
+    content: JSON.stringify({ blocks: [{ type: 'text', text }] }), createdAt: Date.now(),
+  }).run();
+  db.update(schema.chatSessions).set({ updatedAt: Date.now() }).where(eq(schema.chatSessions.id, chatSessionId)).run();
+}
+
+function parseVerdict(text: string): { verdict: string; summary: string | null } {
+  const m = text.match(/VERDICT:\s*(MERGE_SAFE|DO_NOT_MERGE)/i);
+  const s = text.match(/SUMMARY:\s*(.+)/i);
+  const summary = s ? s[1].trim().slice(0, 400) : null;
+  if (!m) return { verdict: 'unknown', summary };
+  return { verdict: m[1].toUpperCase() === 'MERGE_SAFE' ? 'merge_safe' : 'do_not_merge', summary };
+}
+
+function autoPrompt(rv: Review): string {
+  return [
+    `[자동 코드리뷰] 이 워크트리는 PR #${rv.prNumber} "${rv.prTitle}"를 base 브랜치(${rv.baseRef})에 로컬 머지한 상태다.`,
+    `다음을 순서대로 수행하라:`,
+    `1) 저장소의 빌드 도구를 감지해 빌드하고, 가능하면 실행/테스트까지 돌린다.`,
+    `2) 버그·회귀·보안 문제를 찾는다.`,
+    `3) 변경분(diff)을 코드 리뷰하고 핵심 발견을 요약한다.`,
+    `4) 이 PR을 base에 병합해도 되는지 종합 판단한다.`,
+    `반드시 응답의 마지막 두 줄을 아래 형식으로 정확히 출력하라:`,
+    `VERDICT: MERGE_SAFE   (또는  VERDICT: DO_NOT_MERGE)`,
+    `SUMMARY: <한 줄 요약>`,
+  ].join('\n');
+}
+
+// Full automatic pipeline for one PR: local merge → (unattended) build/run/review turn → verdict.
+// Fire-and-forget: called on PR detection (and via the manual re-run route). Errors are recorded
+// on the session, never thrown to the caller.
+export async function autoReview(reviewId: string): Promise<void> {
+  const rv = getReview(reviewId);
+  if (!rv) return;
+  try {
+    setVerdict(rv.id, 'running', null);
+    notify();
+    const merge = await localMerge(rv);
+    if (merge.mergeState === 'conflict') {
+      setVerdict(rv.id, 'conflict', '머지 충돌 — 자동 빌드/리뷰 생략, 수동 해결 필요');
+      postSystem(rv.chatSessionId, `[자동 리뷰] PR #${rv.prNumber} 머지 충돌로 중단.\n\n${merge.output.slice(0, 800)}`);
+      notify();
+      return;
+    }
+    if (merge.mergeState !== 'merged') {
+      setVerdict(rv.id, 'error', '로컬 머지 실패');
+      notify();
+      return;
+    }
+    // hand the merged worktree to an unattended agent turn (auto-allow tools) that emits the verdict
+    const admin = getUserById(getRepo(rv.repoId)?.createdBy || '');
+    const author = { id: admin?.id || rv.repoId, name: 'Auto-Review' };
+    enqueueTurn(rv.chatSessionId, author, autoPrompt(rv), (finalText) => {
+      const { verdict, summary } = parseVerdict(finalText);
+      setVerdict(rv.id, verdict, summary);
+      notify();
+    });
+  } catch (e: any) {
+    setVerdict(rv.id, 'error', String(e?.message || e).slice(0, 300));
+    notify();
+  }
+}
+
+// Explicit "지시 시 풀리퀘스트 허가": merge the PR on the remote using the merge-capable credential.
+// Irreversible outward action — routed admin-only.
+export async function approvePr(rv: Review): Promise<{ output: string }> {
+  const repo = getRepo(rv.repoId);
+  if (!repo) throw new Error('repo not found');
+  const cred = resolveGitCredById(repo.credentialId);
+  if (!cred) throw new Error('자격증명 없음/복호화 실패');
+  const output = await mergePr(repo.provider as ReviewProvider, repo.host, repo.slug, rv.prNumber, {
+    username: cred.username, token: cred.token,
+  });
+  db.update(schema.reviewSessions).set({ prState: 'closed', updatedAt: Date.now() }).where(eq(schema.reviewSessions.id, rv.id)).run();
+  postSystem(rv.chatSessionId, `[PR 병합] 원격 병합 완료: ${output}`);
+  notify();
+  return { output };
+}
+
 // ── visibility ──
 export type ReviewRole = 'admin' | 'reader'; // null = no access; 'reader' = read-only PR author
 export function reviewRoleForChat(chatSessionId: string, user: AuthUser): ReviewRole | null {
@@ -264,7 +358,8 @@ export function reviewRoleForChat(chatSessionId: string, user: AuthUser): Review
 export interface ReviewSessionSummary {
   id: string; chatSessionId: string; repoId: string; repoName: string;
   prNumber: number; prTitle: string; prUrl: string; prState: string;
-  authorLogin: string; mergeState: string; readOnly: boolean; updatedAt: number;
+  authorLogin: string; mergeState: string; verdict: string; verdictSummary: string | null;
+  readOnly: boolean; updatedAt: number;
 }
 export function listReviewSessionsForUser(user: AuthUser): ReviewSessionSummary[] {
   const repos = new Map(listRepos().map((r) => [r.id, r]));
@@ -273,7 +368,8 @@ export function listReviewSessionsForUser(user: AuthUser): ReviewSessionSummary[
     .map((rv) => ({
       id: rv.id, chatSessionId: rv.chatSessionId, repoId: rv.repoId, repoName: repos.get(rv.repoId)?.name || '(deleted)',
       prNumber: rv.prNumber, prTitle: rv.prTitle, prUrl: rv.prUrl, prState: rv.prState,
-      authorLogin: rv.authorLogin, mergeState: rv.mergeState, readOnly: user.role !== 'admin', updatedAt: rv.updatedAt,
+      authorLogin: rv.authorLogin, mergeState: rv.mergeState, verdict: rv.verdict, verdictSummary: rv.verdictSummary,
+      readOnly: user.role !== 'admin', updatedAt: rv.updatedAt,
     }));
 }
 
