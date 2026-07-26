@@ -166,8 +166,8 @@ export const db = {
     { id: 'rr_web', name: 'acme/webapp', provider: 'github', host: 'github.com', slug: 'acme/webapp', gitUrl: 'https://github.com/acme/webapp.git', baseBranch: 'main', polledAt: ago(2), pollError: null, openCount: 2, createdAt: ago(600) },
   ] as any[],
   reviewSessions: [
-    { id: 'rv_142', chatSessionId: 'cs_rv_142', repoId: 'rr_web', repoName: 'acme/webapp', prNumber: 142, prTitle: 'Add rate limiting to the API', prUrl: 'https://github.com/acme/webapp/pull/142', prState: 'open', authorLogin: 'jamie', mergeState: 'merged', readOnly: false, updatedAt: ago(13) },
-    { id: 'rv_139', chatSessionId: 'cs_rv_139', repoId: 'rr_web', repoName: 'acme/webapp', prNumber: 139, prTitle: 'Fix flaky nightly export test', prUrl: 'https://github.com/acme/webapp/pull/139', prState: 'open', authorLogin: 'riley', mergeState: 'none', readOnly: false, updatedAt: ago(120) },
+    { id: 'rv_142', chatSessionId: 'cs_rv_142', repoId: 'rr_web', repoName: 'acme/webapp', prNumber: 142, prTitle: 'Add rate limiting to the API', prUrl: 'https://github.com/acme/webapp/pull/142', prState: 'open', authorLogin: 'jamie', mergeState: 'merged', verdict: 'merge_safe', verdictSummary: '테스트 46개 통과, 회귀 없음. 병합 가능.', readOnly: false, updatedAt: ago(13) },
+    { id: 'rv_139', chatSessionId: 'cs_rv_139', repoId: 'rr_web', repoName: 'acme/webapp', prNumber: 139, prTitle: 'Fix flaky nightly export test', prUrl: 'https://github.com/acme/webapp/pull/139', prState: 'open', authorLogin: 'riley', mergeState: 'none', verdict: 'none', verdictSummary: null, readOnly: false, updatedAt: ago(120) },
   ] as any[],
   // per-chat message history (also used by the socket sim to append turns)
   messages: {
