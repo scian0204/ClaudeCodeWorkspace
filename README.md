@@ -212,6 +212,7 @@ flowchart TB
 - **Visibility:** admins see every session; the PR author (matched to a local account by username) sees only their own, **read-only**. No matching account → no extra viewer
 - **Fully automatic pipeline** (no chat needed; `REVIEW_AUTO`, default on): on each new PR the server does the **local merge** (`--no-ff` into a per-PR git worktree; conflict → stop + flag), then runs an **unattended agent turn** that **builds & runs**, **detects bugs**, **reviews the diff**, and emits a **`VERDICT: MERGE_SAFE` / `DO_NOT_MERGE`** + one-line summary. The verdict shows on the session and the sidebar badge. A **new push to the PR** (changed head SHA, seen on the next poll) auto-re-runs the pipeline and resets the verdict; re-run manually anytime
 - Unattended turns **auto-approve tools** (isolated worktree; the class-1 path fence still applies) so build/run never blocks on a prompt
+- **Result posted back to the PR** (`REVIEW_COMMENT`, default on): when a review finishes, the verdict + summary + full review body is published as a comment on the PR itself (GitHub issue comment / GitLab MR note / Bitbucket PR comment), so re-reviews on new pushes each drop their own comment. Set `REVIEW_COMMENT=0` to keep reviews internal
 - **On instruction, approve the PR:** one admin click **merges the PR on the remote** (GitHub/GitLab/Bitbucket API) using the merge-capable credential — the only step that touches the remote, gated behind a confirm
 </details>
 
@@ -233,6 +234,7 @@ flowchart TB
 | `MAX_CONCURRENT_TURNS` | Global concurrent-turn cap for the shared key + queueing + 429 backoff | `3` |
 | `REVIEW_POLL_MS` | How often to poll each watched review repo for open PRs (0 disables) | `60000` |
 | `REVIEW_AUTO` | Auto-run the review pipeline (merge→build/run→review→verdict) on each new PR; `0` = manual trigger only | `1` |
+| `REVIEW_COMMENT` | Post the finished review (verdict + summary + body) back as a comment on the PR; `0` = keep internal | `1` |
 | `BOOTSTRAP_ADMIN_USER` / `_PASSWORD` | First-boot admin (only when there are zero users) | `admin` |
 | `CODE_SERVER_IMAGE` | Editor image | `codercom/code-server:latest` |
 | `CODE_SERVER_IDLE_MS` | Idle-container reclaim time | `1800000` |
