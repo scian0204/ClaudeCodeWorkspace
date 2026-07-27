@@ -118,22 +118,29 @@ function matchAuthor(login: string): string | null {
   return ci?.id ?? null;
 }
 
-// Create or refresh the review session for a PR. Returns the new review id if a session was
-// created (so the caller can kick off the auto-review pipeline), else null.
-function upsertReview(repo: Repo, pr: PullInfo): string | null {
+// Create or refresh the review session for a PR. Reports whether it's brand new and whether the
+// PR head moved (author pushed new commits) so the caller can (re)run the auto-review pipeline.
+interface UpsertResult { reviewId: string; isNew: boolean; headChanged: boolean }
+function upsertReview(repo: Repo, pr: PullInfo): UpsertResult {
   const now = Date.now();
   const authorUserId = matchAuthor(pr.authorLogin);
   const existing = db.select().from(schema.reviewSessions)
     .where(and(eq(schema.reviewSessions.repoId, repo.id), eq(schema.reviewSessions.prNumber, pr.number))).get();
   if (existing) {
+    // new commits pushed to the PR → head SHA changed → stale verdict, needs a fresh review
+    const headChanged = !!pr.headSha && existing.headSha !== pr.headSha;
     db.update(schema.reviewSessions).set({
       prTitle: pr.title, prUrl: pr.url, prState: 'open', baseRef: pr.baseRef, headRef: pr.headRef,
       headSha: pr.headSha, headCloneUrl: pr.headCloneUrl, authorLogin: pr.authorLogin,
-      authorUserId: authorUserId ?? existing.authorUserId, updatedAt: now,
+      authorUserId: authorUserId ?? existing.authorUserId,
+      verdict: headChanged ? 'none' : existing.verdict,
+      verdictSummary: headChanged ? null : existing.verdictSummary,
+      updatedAt: now,
     }).where(eq(schema.reviewSessions.id, existing.id)).run();
     db.update(schema.chatSessions).set({ title: `#${pr.number} ${pr.title}` })
       .where(eq(schema.chatSessions.id, existing.chatSessionId)).run();
-    return null;
+    if (headChanged) postSystem(existing.chatSessionId, `[자동 리뷰] PR #${pr.number} 새 커밋 감지 (${(pr.headSha || '').slice(0, 7)}) — 다시 리뷰합니다.`);
+    return { reviewId: existing.id, isNew: false, headChanged };
   }
   const chatSessionId = newId();
   const reviewId = newId();
@@ -148,7 +155,7 @@ function upsertReview(repo: Repo, pr: PullInfo): string | null {
     headSha: pr.headSha, headCloneUrl: pr.headCloneUrl, worktreePath: null, mergeState: 'none',
     verdict: 'none', verdictSummary: null, mergedAt: null, createdAt: now, updatedAt: now,
   }).run();
-  return reviewId;
+  return { reviewId, isNew: true, headChanged: false };
 }
 
 export async function pollRepo(id: string): Promise<{ opened: number; closed: number }> {
@@ -167,8 +174,10 @@ export async function pollRepo(id: string): Promise<{ opened: number; closed: nu
     const openNums = new Set(pulls.map((p) => p.number));
     let opened = 0;
     for (const pr of pulls) {
-      const createdId = upsertReview(repo, pr);
-      if (createdId) { opened++; if (config.reviewAuto) void autoReview(createdId); } // fire-and-forget pipeline
+      const r = upsertReview(repo, pr);
+      if (r.isNew) opened++;
+      // new PR, or the author pushed new commits → (re)run the pipeline (fire-and-forget)
+      if ((r.isNew || r.headChanged) && config.reviewAuto) void autoReview(r.reviewId);
     }
     let closed = 0;
     for (const rv of db.select().from(schema.reviewSessions).where(eq(schema.reviewSessions.repoId, id)).all()) {
