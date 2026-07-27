@@ -157,10 +157,15 @@ export async function probeUsage(chatSessionId: string, requesterId?: string | n
   if (!s) return EMPTY_USAGE;
   const kind: 'user' | 'room' = s.kind === 'room' ? 'room' : 'user';
   const ownerId = kind === 'room' ? s.roomId! : s.ownerId;
-  const auth = resolveClaudeAuth(requesterId ?? (kind === 'user' ? ownerId : null));
+  // Rate limits + subscription are account-specific to whoever probes (their own token wins in
+  // resolveClaudeAuth), so the cache MUST be keyed per requester — keying by session alone would
+  // serve one member's claude.ai plan usage to another viewer of the same room/review/session.
+  const authId = requesterId ?? (kind === 'user' ? ownerId : null);
+  const auth = resolveClaudeAuth(authId);
   if (auth.source === 'none') return EMPTY_USAGE; // mock / no token → nothing to report
 
-  const hit = usageCache.get(chatSessionId);
+  const cacheKey = `${chatSessionId}|${authId ?? 'shared'}`;
+  const hit = usageCache.get(cacheKey);
   if (hit && Date.now() - hit.at < USAGE_TTL_MS) return hit.data;
 
   const ctx: SessionContext = {
@@ -194,7 +199,7 @@ export async function probeUsage(chatSessionId: string, requesterId?: string | n
         modelScoped: (rl.model_scoped || []).map((m: any) => ({ displayName: m.display_name, utilization: m.utilization ?? null, resetsAt: m.resets_at ?? null })),
       } : null,
     };
-    usageCache.set(chatSessionId, { at: Date.now(), data });
+    usageCache.set(cacheKey, { at: Date.now(), data });
     return data;
   } catch { return EMPTY_USAGE; }
   finally { try { abort.abort(); } catch { /* noop */ } }

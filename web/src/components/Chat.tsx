@@ -297,6 +297,10 @@ function UsagePill() {
   const [loading, setLoading] = useState(false);
   const t = useT();
 
+  // Header/UsagePill isn't remounted on session switch (only ChatPane is keyed), so clear stale
+  // data when the session changes — otherwise the pill badge shows the previous session's %.
+  useEffect(() => { setData(null); }, [c.chatSessionId]);
+
   useEffect(() => {
     if (!open) return;
     let alive = true;
