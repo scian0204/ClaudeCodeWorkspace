@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as DM from '@radix-ui/react-dropdown-menu';
 import { useStore, type Block, type Msg } from '../lib/store';
 import { api } from '../lib/api';
-import { Avatar, timeAgo } from '../lib/ui';
+import { Avatar, timeAgo, useIsMobile, MobileMenuButton } from '../lib/ui';
 import { MembersDialog } from './MembersDialog';
 import { WikiExplorer } from './WikiExplorer';
 import { FileExplorer } from './FileExplorer';
@@ -32,17 +32,22 @@ export function Chat() {
   const resize = (w: number) => { const c2 = clampPanelW(w); setPanelW(c2); localStorage.setItem('wikiSourcesW', String(c2)); };
   const isWiki = !!c.wikiTopicId;
   const isReview = c.kind === 'review';
-  const cols = isWiki
-    ? (sourcesOpen ? `1fr ${panelW}px` : '1fr 44px')
-    : (viewMode === 'split' && !isReview ? '1fr 1fr' : '1fr'); // review is chat-only (no project → no editor)
+  const isMobile = useIsMobile();
+  // On a phone force chat-only: the split view and the code-server editor iframe are unusable at
+  // that width, and the wiki sources panel would crowd out the answer. Citations still render inline.
+  const vm = isMobile ? 'chat' : viewMode;
+  const showSources = isWiki && !isMobile;
+  const cols = isMobile ? '1fr'
+    : isWiki ? (sourcesOpen ? `1fr ${panelW}px` : '1fr 44px')
+    : (vm === 'split' && !isReview ? '1fr 1fr' : '1fr'); // review is chat-only (no project → no editor)
   return (
     <div className="flex flex-col min-w-0 h-full">
       <Header />
       <div className="flex-1 grid min-h-0" style={{ gridTemplateColumns: cols, gridTemplateRows: 'minmax(0, 1fr)' }}>
-        {viewMode !== 'editor' && <ChatPane key={c.chatSessionId} />}
-        {isWiki
+        {vm !== 'editor' && <ChatPane key={c.chatSessionId} />}
+        {showSources
           ? <SourcesPanel topicId={c.wikiTopicId!} open={sourcesOpen} onToggle={() => setSourcesOpen((v) => !v)} width={panelW} onResize={resize} />
-          : (viewMode !== 'chat' && <EditorPane />)}
+          : (!isWiki && vm !== 'chat' && <EditorPane />)}
       </div>
       {isWiki && <CiteHighlighter />}
     </div>
@@ -61,7 +66,8 @@ function Header() {
   const owner = c.room?.members.find((m) => m.isOwner);
 
   return (
-    <header className="flex items-center gap-2.5 px-4 py-2.5 border-b border-line bg-panel shrink-0">
+    <header className="flex items-center gap-2 md:gap-2.5 px-3 md:px-4 py-2.5 border-b border-line bg-panel shrink-0 flex-wrap">
+      <MobileMenuButton />
       <div className="font-semibold text-sm flex items-center gap-2 min-w-0">
         <span className="w-[7px] h-[7px] rounded-full bg-ok shrink-0" />
         <span className="truncate">{c.title}</span>
@@ -111,7 +117,7 @@ function Header() {
       <UsagePill />
 
       {!c.wikiTopicId && !isReview && (
-        <div className="seg">
+        <div className="seg hidden md:flex">
           {(['chat', 'split', 'editor'] as const).map((m) => (
             <button key={m} className={viewMode === m ? 'on' : ''} onClick={() => setViewMode(m)}>
               {m === 'chat' ? t('chat.viewChat') : m === 'split' ? t('chat.viewSplit') : t('chat.viewEditor')}
@@ -437,7 +443,7 @@ function WikiBanner() {
 
   return (
     <div className="border-b border-line bg-card text-xs shrink-0">
-      <div className="flex items-center gap-2 px-5 py-2">
+      <div className="flex items-center gap-2 px-3 md:px-5 py-2 flex-wrap">
         <span className="cursor-pointer" onClick={() => setOpen(!open)}>📚</span>
         <span className="font-semibold cursor-pointer" onClick={() => setOpen(!open)}>{c?.title}</span>
         {statusEl}
@@ -505,7 +511,7 @@ function ChatPane() {
   return (
     <div className={`flex flex-col min-w-0 min-h-0 ${viewMode === 'split' ? 'border-r border-line' : ''}`}>
       <WikiBanner />
-      <div ref={streamRef} className="flex-1 overflow-y-auto scrolly px-5 py-5">
+      <div ref={streamRef} className="flex-1 overflow-y-auto scrolly px-3 md:px-5 py-4 md:py-5">
         <div className="max-w-[760px] mx-auto">
           {segments.map((seg) => seg.cmd
             ? <FoldedSegment key={seg.key} seg={seg} />
@@ -682,7 +688,7 @@ function PermissionArea() {
   const { pending, control, respond } = useStore();
   if (pending.length === 0) return null;
   return (
-    <div className="px-5 pb-1 max-w-[760px] mx-auto w-full">
+    <div className="px-3 md:px-5 pb-1 max-w-[760px] mx-auto w-full">
       {pending.map((p) => (
         <div key={p.requestId} className="border rounded-lg p-3 my-2" style={{ borderColor: 'var(--warn)', background: 'var(--warn-soft)' }}>
           {p.tool === 'AskUserQuestion'
@@ -799,7 +805,7 @@ function Composer() {
   };
 
   return (
-    <div className="px-5 pb-4 pt-2 shrink-0">
+    <div className="px-3 md:px-5 pb-4 pt-2 shrink-0">
       <div className="max-w-[760px] mx-auto">
         {(queue.running || queue.waiting.length > 0 || congested) && (
           <div className="text-xs text-txt3 mb-2 flex items-center gap-2 flex-wrap">

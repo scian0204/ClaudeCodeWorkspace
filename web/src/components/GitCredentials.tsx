@@ -76,7 +76,7 @@ export function GitCredList({ scope }: { scope: 'user' | 'common' }) {
           </div>
         ))}
       </div>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <select className="input" value={provider} onChange={(e) => pickProvider(e.target.value)}>
           {PROVIDERS.map((p) => <option key={p} value={p}>{p}</option>)}
         </select>

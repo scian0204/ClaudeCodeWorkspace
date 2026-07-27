@@ -8,7 +8,7 @@ import { GitCredentialsModal } from './GitCredentials';
 import { useT } from '../lib/i18n';
 
 export function Sidebar() {
-  const { user, sessions, rooms, wikiTopics, current, openPrivate, openRoom, openWiki, newSession, newRoom, logout, setPanel, panel, deleteSession, deleteRoom, deleteWikiTopic, renameSession } = useStore();
+  const { user, sessions, rooms, wikiTopics, current, openPrivate, openRoom, openWiki, newSession, newRoom, logout, setPanel, panel, deleteSession, deleteRoom, deleteWikiTopic, renameSession, sidebarOpen, setSidebarOpen } = useStore();
   const [showRoom, setShowRoom] = useState(false);
   const [roomName, setRoomName] = useState('');
   const [showWiki, setShowWiki] = useState(false);
@@ -20,9 +20,12 @@ export function Sidebar() {
   const create = async () => { if (!roomName.trim()) return; await newRoom(roomName.trim()); setRoomName(''); setShowRoom(false); };
 
   return (
-    <aside className="bg-rail border-r border-line flex flex-col min-h-0">
+    <aside className={`bg-rail border-r border-line flex flex-col min-h-0 h-full
+      max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:w-[264px] max-md:z-50 max-md:shadow-2xl
+      max-md:transition-transform max-md:duration-200 ${sidebarOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full'}`}>
       <div className="px-3.5 pt-3.5 pb-2 relative">
-        <LangToggle className="absolute top-3 right-3 text-[11px] text-txt3 hover:text-txt border border-line rounded px-1.5 py-0.5 z-10" />
+        <button className="toolbtn md:hidden absolute top-2.5 right-2.5 z-10" aria-label={t('nav.closeMenu')} onClick={() => setSidebarOpen(false)}>✕</button>
+        <LangToggle className="absolute top-3 right-3 text-[11px] text-txt3 hover:text-txt border border-line rounded px-1.5 py-0.5 z-10 max-md:right-11" />
         <div className="flex items-center gap-2.5 mb-3.5 pr-9">
           <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" className="w-[26px] h-[26px] rounded-md shrink-0" />
           <div className="leading-tight min-w-0">

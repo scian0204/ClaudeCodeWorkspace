@@ -1,5 +1,28 @@
-import React from 'react';
+import React, { useSyncExternalStore } from 'react';
 import { t, useT, useLang, toggleLang } from './i18n';
+import { useStore } from './store';
+
+// Tailwind `md` breakpoint (768px). React needs JS to branch on viewport (e.g. force chat-only
+// layout, skip the code-server iframe) since those decisions can't be pure CSS show/hide.
+const MOBILE_MQ = '(max-width: 767px)';
+export function useIsMobile(): boolean {
+  return useSyncExternalStore(
+    (cb) => { const m = window.matchMedia(MOBILE_MQ); m.addEventListener('change', cb); return () => m.removeEventListener('change', cb); },
+    () => window.matchMedia(MOBILE_MQ).matches,
+    () => false, // SSR/first paint: assume desktop
+  );
+}
+
+// Hamburger that opens the off-canvas sidebar drawer. Hidden ≥md (sidebar is a static column there).
+// Dropped into every top bar so the drawer is reachable from any view.
+export function MobileMenuButton({ className }: { className?: string }) {
+  const setSidebarOpen = useStore((s) => s.setSidebarOpen);
+  const tr = useT();
+  return (
+    <button className={`toolbtn md:hidden shrink-0 ${className || ''}`} aria-label={tr('nav.openMenu')} title={tr('nav.openMenu')}
+      onClick={() => setSidebarOpen(true)}>☰</button>
+  );
+}
 
 export function initials(name?: string): string {
   const t = (name || '').trim();
