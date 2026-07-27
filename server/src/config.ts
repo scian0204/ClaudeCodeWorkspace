@@ -31,6 +31,9 @@ export const config = {
   // build hangs, or the SDK call stalls), abort it so the verdict resolves and the review unwedges
   // instead of sitting on 'running' forever.
   reviewTurnTimeoutMs: Number(env.REVIEW_TURN_TIMEOUT_MS || 600_000),
+  // Post the finished auto-review result back as a comment on the PR (outward action, uses the
+  // merge-capable credential). Set REVIEW_COMMENT=0 to keep reviews internal to the workspace.
+  reviewComment: env.REVIEW_COMMENT !== '0',
   // Sandbox for review build/run: PR build/test code runs in a locked-down sibling container
   // (worktree-only mount, no docker socket) instead of the app container. Requires Docker deploy
   // (DATA_VOLUME/CODE_SERVER_NETWORK); falls back to host execution otherwise.
