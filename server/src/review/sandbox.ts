@@ -46,17 +46,21 @@ export async function ensureSandbox(repoId: string, pr: number, worktreePath: st
   } catch { /* not present → create */ }
   await ensureImage(config.reviewSandbox.image);
   const vol = config.codeServer.dataVolume;
+  // Mount the whole review repo dir (reviews/<id>) at its real absolute path so the git worktree's
+  // `.git` file (which references the main clone's gitdir by absolute path) resolves and `git diff`
+  // works. Subpath keeps it scoped to this repo only — no other users' data is exposed.
+  const repoRootAbs = path.resolve(worktreePath, '..', '..'); // <data>/reviews/<id>
   const c = await docker.createContainer({
     name,
     Image: config.reviewSandbox.image,
     // stay alive a bit longer than a turn can, then self-exit; removed explicitly at turn end
     Cmd: ['sleep', String(Math.ceil(config.reviewTurnTimeoutMs / 1000) + 300)],
-    WorkingDir: '/work',
+    WorkingDir: worktreePath,
     Labels: { 'ccw.reviewsandbox': '1' },
     HostConfig: {
       NetworkMode: config.codeServer.network,
       AutoRemove: true,
-      Mounts: [{ Type: 'volume', Source: vol, Target: '/work', VolumeOptions: { Subpath: subpathOf(worktreePath) } as any }],
+      Mounts: [{ Type: 'volume', Source: vol, Target: repoRootAbs, VolumeOptions: { Subpath: subpathOf(repoRootAbs) } as any }],
       Memory: config.reviewSandbox.memBytes,
       PidsLimit: 1024,
       CapDrop: ['ALL'],
@@ -83,10 +87,10 @@ export async function cleanupSandboxOrphans(): Promise<void> {
 // Run a command inside the sandbox (TTY → raw combined stdout+stderr, no multiplex headers).
 // On timeout we return the partial output + code 124 and move on; the lingering process dies when
 // the container is removed at turn end.
-async function execInSandbox(name: string, command: string, timeoutMs: number): Promise<{ code: number; output: string }> {
+async function execInSandbox(name: string, cwd: string, command: string, timeoutMs: number): Promise<{ code: number; output: string }> {
   const MAX = 60_000;
   const exec = await docker.getContainer(name).exec({
-    Cmd: ['sh', '-lc', command], AttachStdout: true, AttachStderr: true, Tty: true, WorkingDir: '/work',
+    Cmd: ['sh', '-lc', command], AttachStdout: true, AttachStderr: true, Tty: true, WorkingDir: cwd,
   });
   const stream: any = await exec.start({ hijack: true, stdin: false, Tty: true } as any);
   let out = '';
@@ -102,7 +106,7 @@ async function execInSandbox(name: string, command: string, timeoutMs: number): 
 
 // In-process MCP server exposing the sandbox as a single `run` tool (agent-facing name:
 // mcp__sandbox__run). Async because the SDK is dynamically imported (matches session-manager).
-export async function sandboxMcpServer(containerName: string, execTimeoutMs: number) {
+export async function sandboxMcpServer(containerName: string, cwd: string, execTimeoutMs: number) {
   const { createSdkMcpServer, tool } = await import('@anthropic-ai/claude-agent-sdk');
   return createSdkMcpServer({
     name: 'sandbox',
@@ -110,10 +114,10 @@ export async function sandboxMcpServer(containerName: string, execTimeoutMs: num
     tools: [
       tool(
         'run',
-        'Run a shell command inside the isolated review sandbox container (cwd = the merged PR worktree at /work). This is the ONLY way to build/run/test the PR code; the host shell is unavailable. Returns "exit=<code>" then combined stdout/stderr.',
+        'Run a shell command inside the isolated review sandbox container (cwd = the merged PR worktree). This is the ONLY way to build/run/test the PR code; the host shell is unavailable. git works here too. Returns "exit=<code>" then combined stdout/stderr.',
         { command: z.string().describe('shell command, e.g. "npm ci && npm run build && npm test"') },
         async (args: { command: string }) => {
-          const r = await execInSandbox(containerName, String(args.command), execTimeoutMs);
+          const r = await execInSandbox(containerName, cwd, String(args.command), execTimeoutMs);
           return { content: [{ type: 'text' as const, text: `exit=${r.code}\n${r.output}` }] };
         },
       ),
