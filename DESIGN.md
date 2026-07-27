@@ -190,3 +190,20 @@ volumes:
 - Postgres 승격, Redis 승격(멀티프로세스 시).
 - 풀 git GUI, CRDT 실시간 협업편집(현재 범위 밖).
 - 알림(notifications) — 미정.
+
+---
+
+## 16. PR 리뷰 세션 (관리자 전용)
+
+개인·대화방·LLM Wiki와 **동일선상의 4번째 워크스페이스 엔티티**. 관리자만 생성.
+
+- **감시 저장소(reviewRepos):** 관리자가 원격지 URL + **병합권한 있는** git 자격증명(호스트 바인딩)으로 등록 → `/data/reviews/<id>/repo`에 **전체 클론**. `git_credentials` 재사용(호스트로 해석, 토큰은 URL/디스크 미노출, askpass env).
+- **PR 감지 = 폴링.** 서버가 주기(`REVIEW_POLL_MS`, 기본 60초)로 각 저장소 호스트의 열린 PR을 조회 + 수동 "지금 새로고침". 웹훅/공개 URL 불필요 → "서버 1대 상주" 모델에 적합.
+  - **호스트별 어댑터(`server/src/review/providers.ts`):** GitHub(`/repos/{slug}/pulls`, GHE는 `/api/v3`), GitLab(`/api/v4/.../merge_requests`, MR head는 `refs/merge-requests/<iid>/head`), Bitbucket Cloud(`/2.0/.../pullrequests`, Basic auth). 열린 PR마다 `review_sessions` 1개 + `chat_sessions(kind='review')` 1개를 upsert.
+- **세션 = `chat_sessions(kind='review')`.** cwd = **PR별 git 워크트리**(`wt/<pr>`, 공유 클론에서 파생, 지연 생성). HOME/토큰/플러그인은 생성자(admin) 기준(kind는 user로 매핑).
+- **열람 권한:** 관리자(쓰기) + PR 작성자(로컬 계정과 username 매칭, **읽기 전용**; 매칭 없으면 제외). `routes/sessions`·`realtime/io` 양쪽에서 게이팅 — 읽기 전용은 전송·인터럽트·승인·머지 불가.
+- **로컬 머지:** PR head를 로컬 ref로 fetch(포크는 소스 clone URL) → 워크트리를 최신 base로 `reset --hard` → `merge --no-ff`. 충돌은 트리에 남겨 리뷰(`mergeState=conflict`). **원격 push 없음**(로컬 전용, 되돌리기 안전).
+- **전자동 파이프라인(`REVIEW_AUTO`, 기본 on):** 새 PR 감지 시 서버가 (1) 로컬 머지 → (2) **무인 에이전트 턴** 1회 enqueue. 리뷰 세션 턴은 `makeAutoAllow`로 도구를 자동 승인(클래스1 경로 펜스는 유지)해 빌드/실행이 권한 프롬프트로 멈추지 않는다. 턴이 빌드·실행·버그감지·코드리뷰를 수행하고 마지막에 `VERDICT: MERGE_SAFE|DO_NOT_MERGE` + `SUMMARY:`를 출력 → `runTurn`의 `onDone` 콜백(FIFO 큐로 전달)이 파싱해 `review_sessions.verdict`에 저장. 머지 충돌이면 빌드/리뷰를 건너뛰고 verdict=conflict.
+- **지시 시 PR 허가(원격 병합):** 관리자 명시 액션(`POST /api/review/sessions/:id/approve`, 확인 대화)이 호스트 API(GitHub `PUT …/merge`, GitLab MR merge, Bitbucket PR merge)를 병합권한 자격증명으로 호출해 **원격에서 PR을 실제 병합**. 원격을 건드리는 유일한 단계.
+- **정리:** 저장소/세션 삭제 시 워크트리(`git worktree remove`)·클론 디렉터리 제거, 부팅 시 orphan 리퍼.
+- **확장 seam(미구현):** 웹훅 수신(현재는 폴링), self-hosted GitLab/Bitbucket 세부 대응, verdict 기반 자동 원격 병합(현재는 사람이 지시).

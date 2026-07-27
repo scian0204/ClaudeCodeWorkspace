@@ -45,6 +45,23 @@ function autoAllows(mode: PermMode, tool: string): boolean {
   return false; // default/plan -> prompt; bypass -> SDK never calls canUseTool
 }
 
+// Unattended auto-allow: used by review sessions so the automatic pipeline (build/run/tests) never
+// blocks on a human prompt. The class-1 fence still applies — path tools outside the worktree roots
+// are denied. Bash stays a soft boundary (same posture as bypass mode). No permission events emitted.
+// ponytail: SECURITY CEILING — this runs the PR's own build/test code unattended, so a hostile PR
+// can execute arbitrary Bash in the app container and read the turn's Claude token from its env (the
+// merge-capable git PAT is already withheld from review turns; see session-manager buildGitEnv skip).
+// Fine for a trusted team reviewing its own PRs. For repos that take untrusted external PRs, set
+// REVIEW_AUTO=0 (manual trigger). Upgrade path: run the build in a network/socket-less sandbox
+// container instead of the backend process.
+export function makeAutoAllow(roots: string[]) {
+  return async (toolName: string, input: any) => {
+    const v = fenceViolation(toolName, input, roots);
+    if (v) return { behavior: 'deny', message: v } as const;
+    return { behavior: 'allow', updatedInput: input } as const;
+  };
+}
+
 export function makeCanUseTool(opts: {
   sessionId: string;
   roots: string[];

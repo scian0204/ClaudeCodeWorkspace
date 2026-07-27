@@ -31,9 +31,10 @@ export function Chat() {
   });
   const resize = (w: number) => { const c2 = clampPanelW(w); setPanelW(c2); localStorage.setItem('wikiSourcesW', String(c2)); };
   const isWiki = !!c.wikiTopicId;
+  const isReview = c.kind === 'review';
   const cols = isWiki
     ? (sourcesOpen ? `1fr ${panelW}px` : '1fr 44px')
-    : (viewMode === 'split' ? '1fr 1fr' : '1fr');
+    : (viewMode === 'split' && !isReview ? '1fr 1fr' : '1fr'); // review is chat-only (no project → no editor)
   return (
     <div className="flex flex-col min-w-0 h-full">
       <Header />
@@ -56,6 +57,7 @@ function Header() {
   const t = useT();
   if (!c) return null;
   const isRoom = c.kind === 'room';
+  const isReview = c.kind === 'review';
   const owner = c.room?.members.find((m) => m.isOwner);
 
   return (
@@ -81,12 +83,14 @@ function Header() {
         </>
       )}
 
-      {!c.wikiTopicId && <ProjectMenu />}
+      {isReview && c.review && <ReviewControls />}
+
+      {!c.wikiTopicId && !isReview && <ProjectMenu />}
       {!c.wikiTopicId && c.projectId && <button className="pill" title={t('chat.projectFileExplorer')} onClick={() => setExplorer(true)}>{t('chat.filesBtn')}</button>}
       {!c.wikiTopicId && c.projectId && <button className="pill" title={t('git.title')} onClick={() => setGitOpen(true)}>{t('git.pill')}</button>}
 
       <DM.Root>
-        <DM.Trigger asChild><button className="pill">{MODELS[c.model] || c.model} ▾</button></DM.Trigger>
+        <DM.Trigger asChild><button className="pill" disabled={!!c.readOnly}>{MODELS[c.model] || c.model} ▾</button></DM.Trigger>
         <Menu>
           {Object.entries(MODELS).map(([id, label]) => (
             <MenuItem key={id} onSelect={() => setModel(id)}>{label}</MenuItem>
@@ -95,7 +99,7 @@ function Header() {
       </DM.Root>
 
       <DM.Root>
-        <DM.Trigger asChild><button className="pill" disabled={isRoom && !control.canSetMode}>{t(MODES[c.permissionMode]) || c.permissionMode} ▾</button></DM.Trigger>
+        <DM.Trigger asChild><button className="pill" disabled={(isRoom || isReview) && !control.canSetMode}>{t(MODES[c.permissionMode]) || c.permissionMode} ▾</button></DM.Trigger>
         <Menu>
           {Object.entries(MODES).map(([id, label]) => (
             <MenuItem key={id} onSelect={() => setMode(id)}>{t(label)}</MenuItem>
@@ -104,7 +108,7 @@ function Header() {
         </Menu>
       </DM.Root>
 
-      {!c.wikiTopicId && (
+      {!c.wikiTopicId && !isReview && (
         <div className="seg">
           {(['chat', 'split', 'editor'] as const).map((m) => (
             <button key={m} className={viewMode === m ? 'on' : ''} onClick={() => setViewMode(m)}>
@@ -232,6 +236,54 @@ function Menu({ children }: { children: React.ReactNode }) {
 }
 function MenuItem({ children, onSelect }: { children: React.ReactNode; onSelect: () => void }) {
   return <DM.Item onSelect={onSelect} className="px-2 py-1.5 text-sm rounded cursor-pointer hover:bg-line outline-none data-[highlighted]:bg-line">{children}</DM.Item>;
+}
+
+const VERDICT_UI: Record<string, { key: string; color: string }> = {
+  running: { key: 'review.vRunning', color: 'var(--clay)' },
+  merge_safe: { key: 'review.vSafe', color: 'var(--ok)' },
+  do_not_merge: { key: 'review.vHold', color: 'var(--danger)' },
+  conflict: { key: 'review.vConflict', color: 'var(--danger)' },
+  error: { key: 'review.vError', color: 'var(--danger)' },
+  unknown: { key: 'review.vUnknown', color: 'var(--txt-3)' },
+  none: { key: 'review.vNone', color: 'var(--txt-3)' },
+};
+
+// Review header: PR link, base←head, the auto-pipeline VERDICT, and (admin) re-run + remote-merge.
+// The PR author sees the verdict + a read-only badge (no actions).
+function ReviewControls() {
+  const c = useStore((s) => s.current)!;
+  const { autoReviewRun, approveReview, setError } = useStore();
+  const [busy, setBusy] = useState<'' | 'auto' | 'approve'>('');
+  const t = useT();
+  const rv = c.review!;
+  const readOnly = !!c.readOnly;
+  const v = VERDICT_UI[rv.verdict] || VERDICT_UI.none;
+
+  const runAuto = async () => {
+    setBusy('auto');
+    try { await autoReviewRun(rv.reviewId); setError(null); }
+    catch (e: any) { setError(e.message); } finally { setBusy(''); }
+  };
+  const approve = async () => {
+    if (!confirm(t('review.approveConfirm', { n: rv.prNumber }))) return;
+    setBusy('approve');
+    try { const r = await approveReview(rv.reviewId); setError(t('review.approveDone', { out: r.output })); }
+    catch (e: any) { setError(e.message); } finally { setBusy(''); }
+  };
+
+  return (
+    <>
+      <span className="text-txt3 text-xs font-mono truncate hidden lg:inline" title={`${rv.baseRef} ← ${rv.headRef}`}>{rv.baseRef} ← {rv.headRef}</span>
+      <a className="pill" href={rv.prUrl} target="_blank" rel="noreferrer" title={rv.prUrl}>{t('review.prLink', { n: rv.prNumber })}</a>
+      <span className="text-[11px] font-semibold" style={{ color: v.color }} title={rv.verdictSummary || ''}>{t(v.key)}</span>
+      {readOnly
+        ? <span className="pill" title={t('review.readOnlyHint')}>👁 {t('review.readOnly')}</span>
+        : <>
+            <button className="pill" disabled={busy !== '' || rv.verdict === 'running'} onClick={runAuto} title={t('review.autoRunHint')}>{busy === 'auto' || rv.verdict === 'running' ? t('review.autoRunning') : t('review.autoRun')}</button>
+            <button className="pill" disabled={busy !== ''} onClick={approve} title={t('review.approveHint')}>{busy === 'approve' ? t('review.approving') : t('review.approve')}</button>
+          </>}
+    </>
+  );
 }
 
 function WikiBanner() {
@@ -593,6 +645,7 @@ function Composer() {
   const t = useT();
   if (!c) return null;
   const isRoom = c.kind === 'room';
+  const readOnly = !!c.readOnly; // review PR author — can watch, can't send
   const wikiCompiling = !!c.wikiTopicId && store.wikiTopics.find((t) => t.id === c.wikiTopicId)?.compileStatus === 'compiling';
   const wikiStep = c.wikiTopicId ? store.wikiProgress[c.wikiTopicId] : undefined;
 
@@ -620,7 +673,7 @@ function Composer() {
     setText(m.cmd + ' '); setSel(0); taRef.current?.focus(); // fill for args; the hint ghosts in; Enter sends → CLI runs it
   };
   const submit = () => {
-    if (wikiCompiling) return;
+    if (wikiCompiling || readOnly) return;
     if (showSlash) return pick(Math.min(sel, matches.length - 1));
     if (!text.trim()) return;
     send(text.trim()); setText('');
@@ -672,9 +725,9 @@ function Composer() {
                 <span className="invisible">{text}</span><span className="text-txt3">{active!.hint}</span>
               </div>
             )}
-            <textarea ref={taRef} disabled={wikiCompiling}
+            <textarea ref={taRef} disabled={wikiCompiling || readOnly}
               className="relative z-10 w-full bg-transparent outline-none resize-none text-sm text-txt placeholder:text-txt3 disabled:opacity-50"
-              rows={2} placeholder={wikiCompiling ? t('chat.topicCompiling') : isRoom ? t('chat.roomMessagePlaceholder', { title: c.title, name: user?.displayName ?? '' }) : t('chat.messagePlaceholder')}
+              rows={2} placeholder={readOnly ? t('review.readOnlyPlaceholder') : wikiCompiling ? t('chat.topicCompiling') : isRoom ? t('chat.roomMessagePlaceholder', { title: c.title, name: user?.displayName ?? '' }) : t('chat.messagePlaceholder')}
               value={text} onChange={(e) => { setText(e.target.value); setSel(0); }}
               onKeyDown={(e) => {
                 if (showSlash && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab')) {
@@ -688,7 +741,7 @@ function Composer() {
               }} />
             <div className="flex items-center gap-2 mt-2">
               <span className="text-xs text-txt3 truncate">{wikiCompiling ? (wikiStep ? t('chat.compilingStep', { step: wikiStep }) : t('chat.compilingReady')) : turnActive ? t('chat.claudeResponding') : t('chat.composerHint')}</span>
-              <button className="ml-auto bg-clay text-white rounded-lg w-8 h-8 grid place-items-center disabled:opacity-40" disabled={wikiCompiling} onClick={submit} aria-label={t('chat.send')}>➤</button>
+              <button className="ml-auto bg-clay text-white rounded-lg w-8 h-8 grid place-items-center disabled:opacity-40" disabled={wikiCompiling || readOnly} onClick={submit} aria-label={t('chat.send')}>➤</button>
             </div>
           </div>
         </div>

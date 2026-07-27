@@ -16,6 +16,8 @@ import { wikiRoutes, reapWikiStaging, reapWikiOrphans } from './routes/wiki.js';
 import { pluginRoutes } from './routes/plugins.js';
 import { adminRoutes } from './routes/admin.js';
 import { gitCredentialRoutes } from './routes/git-credentials.js';
+import { reviewRoutes } from './routes/review.js';
+import { startReviewPoller, reapReviewOrphans } from './review/manager.js';
 import { initRealtime } from './realtime/io.js';
 import { startReaper, cleanupOrphans } from './codeserver/manager.js';
 import { isCsPath, handleHttp, handleUpgrade } from './codeserver/proxy.js';
@@ -27,6 +29,7 @@ async function main() {
   bootstrapAdmin();
   reapWikiStaging(); // clear any orphaned wiki upload staging from a prior run
   reapWikiOrphans(); // remove wiki topic dirs on disk that no longer have a DB row
+  reapReviewOrphans(); // remove review clone/worktree dirs on disk that no longer have a DB row
 
   // Serve HTTPS when a cert is supplied so PWA install works off-localhost (secure
   // context). socket.io and the /cs proxy both ride app.server, so this covers them.
@@ -59,6 +62,7 @@ async function main() {
   await app.register(pluginRoutes);
   await app.register(adminRoutes);
   await app.register(gitCredentialRoutes);
+  await app.register(reviewRoutes);
 
   app.get('/api/health', async () => ({ ok: true, mock: config.forceMock }));
 
@@ -85,6 +89,7 @@ async function main() {
   });
   await cleanupOrphans(); // clear orphans from a previous run
   startReaper();
+  startReviewPoller(); // poll each watched repo's host for open PRs → spawn/refresh review sessions
 
   await app.listen({ port: config.port, host: '0.0.0.0' });
   console.log(`[ccw] listening on ${tls ? 'https' : 'http'}://:${config.port}  forceMock=${config.forceMock}  data=${config.dataDir}`);
