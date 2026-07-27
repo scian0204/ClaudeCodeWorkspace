@@ -559,6 +559,7 @@ function MessageView({ m }: { m: Msg }) {
   const isClaude = m.role === 'assistant';
   const blocks: Block[] = isClaude ? (m.content.blocks || []) : [];
   const topicId = useStore((s) => s.current?.wikiTopicId);
+  const isRoom = useStore((s) => s.current?.kind === 'room');
   const sources = useMemo(() => (topicId && isClaude ? extractSources(blocks, topicId) : []), [blocks, topicId, isClaude]);
   const { deleteMessage, editMessage } = useStore();
   const [editing, setEditing] = useState(false);
@@ -589,6 +590,9 @@ function MessageView({ m }: { m: Msg }) {
       <div className="flex-1 min-w-0">
         <div className="text-xs text-txt2 font-semibold mb-1 flex items-center gap-2">
           {isClaude ? 'Claude' : m.authorName}
+          {!isClaude && isRoom && !m.chat && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-normal" style={{ background: 'var(--claysoft)', color: 'var(--clay)' }}>🤖 {t('chat.claudeBadge')}</span>
+          )}
           <span className="hidden group-hover:flex items-center gap-1.5 text-txt3">
             {copyText && <button className={copied ? 'text-ok' : 'hover:text-clay'} title={t('chat.copy')} onClick={copy}>{copied ? t('chat.copied') : '📋'}</button>}
             {canEdit && <button className="hover:text-clay" title={t('chat.edit')} onClick={() => { setDraft(m.content.text || ''); setEditing(true); }}>✎</button>}
@@ -768,6 +772,11 @@ function Composer() {
   const [sel, setSel] = useState(0);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const t = useT();
+  const roomId = c?.kind === 'room' ? (c.roomId ?? null) : null;
+  const [mode, setModeRaw] = useState<'chat' | 'claude'>('chat');
+  const [includeChat, setIncludeChat] = useState(false);
+  const setMode = (m: 'chat' | 'claude') => { setModeRaw(m); if (roomId) localStorage.setItem(`roomMode:${roomId}`, m); };
+  useEffect(() => { setModeRaw(roomId ? ((localStorage.getItem(`roomMode:${roomId}`) as 'chat' | 'claude') || 'chat') : 'claude'); }, [roomId]);
   if (!c) return null;
   const isRoom = c.kind === 'room';
   const readOnly = !!c.readOnly; // review PR author — can watch, can't send
@@ -801,7 +810,8 @@ function Composer() {
     if (wikiCompiling || readOnly) return;
     if (showSlash) return pick(Math.min(sel, matches.length - 1));
     if (!text.trim()) return;
-    send(text.trim()); setText('');
+    send(text.trim(), { chat: isRoom && mode === 'chat', includeChat: isRoom && mode === 'claude' && includeChat });
+    setText('');
   };
 
   return (
@@ -852,8 +862,12 @@ function Composer() {
             )}
             <textarea ref={taRef} disabled={wikiCompiling || readOnly}
               className="relative z-10 w-full bg-transparent outline-none resize-none text-sm text-txt placeholder:text-txt3 disabled:opacity-50"
-              rows={2} placeholder={readOnly ? t('review.readOnlyPlaceholder') : wikiCompiling ? t('chat.topicCompiling') : isRoom ? t('chat.roomMessagePlaceholder', { title: c.title, name: user?.displayName ?? '' }) : t('chat.messagePlaceholder')}
-              value={text} onChange={(e) => { setText(e.target.value); setSel(0); }}
+              rows={2} placeholder={readOnly ? t('review.readOnlyPlaceholder') : wikiCompiling ? t('chat.topicCompiling') : isRoom ? (mode === 'chat' ? t('chat.roomChatPlaceholder', { title: c.title }) : t('chat.roomMessagePlaceholder', { title: c.title, name: user?.displayName ?? '' })) : t('chat.messagePlaceholder')}
+              value={text} onChange={(e) => {
+                let v = e.target.value;
+                if (isRoom) { const mm = v.match(/^@(\ud074\ub85c\ub4dc|claude)\s?/i); if (mm) { v = v.slice(mm[0].length); setMode('claude'); } }
+                setText(v); setSel(0);
+              }}
               onKeyDown={(e) => {
                 if (showSlash && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab')) {
                   e.preventDefault();
@@ -864,8 +878,19 @@ function Composer() {
                 if (showSlash && e.key === 'Escape') { e.preventDefault(); setText(''); return; }
                 if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
               }} />
-            <div className="flex items-center gap-2 mt-2">
-              <span className="text-xs text-txt3 truncate">{wikiCompiling ? (wikiStep ? t('chat.compilingStep', { step: wikiStep }) : t('chat.compilingReady')) : turnActive ? t('chat.claudeResponding') : t('chat.composerHint')}</span>
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              {isRoom && (
+                <div className="flex items-center gap-1 shrink-0">
+                  <button type="button" onClick={() => setMode('chat')} className={`text-xs px-2 py-0.5 rounded-full border ${mode === 'chat' ? 'bg-clay text-white border-clay' : 'border-line text-txt2 hover:border-clay'}`}>{t('chat.modeChat')}</button>
+                  <button type="button" onClick={() => setMode('claude')} className={`text-xs px-2 py-0.5 rounded-full border ${mode === 'claude' ? 'bg-clay text-white border-clay' : 'border-line text-txt2 hover:border-clay'}`}>{t('chat.modeClaude')}</button>
+                </div>
+              )}
+              {isRoom && mode === 'claude' && (
+                <label className="flex items-center gap-1 text-xs text-txt2 shrink-0 cursor-pointer" title={t('chat.includeChatTip')}>
+                  <input type="checkbox" checked={includeChat} onChange={(e) => setIncludeChat(e.target.checked)} /> {t('chat.includeChat')}
+                </label>
+              )}
+              <span className="text-xs text-txt3 truncate">{wikiCompiling ? (wikiStep ? t('chat.compilingStep', { step: wikiStep }) : t('chat.compilingReady')) : turnActive ? t('chat.claudeResponding') : (isRoom && mode === 'chat' ? t('chat.composerHintChat') : t('chat.composerHint'))}</span>
               <button className="ml-auto bg-clay text-white rounded-lg w-8 h-8 grid place-items-center disabled:opacity-40" disabled={wikiCompiling || readOnly} onClick={submit} aria-label={t('chat.send')}>➤</button>
             </div>
           </div>

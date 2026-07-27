@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { eq } from 'drizzle-orm';
+import { eq, and, desc, gt } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { newId } from '../lib/ids.js';
 import { paths, ensure } from '../lib/paths.js';
@@ -82,15 +82,22 @@ async function buildGitEnv(cwd: string, userId: string): Promise<Record<string, 
 }
 
 function saveMessage(row: {
-  sessionId: string; role: string; authorId?: string | null; authorName?: string | null; content: any;
+  sessionId: string; role: string; authorId?: string | null; authorName?: string | null; content: any; chat?: boolean;
 }) {
   const m = {
     id: newId(), sessionId: row.sessionId, role: row.role,
     authorId: row.authorId ?? null, authorName: row.authorName ?? null,
-    content: JSON.stringify(row.content), createdAt: Date.now(),
+    content: JSON.stringify(row.content), chat: row.chat ? 1 : 0, createdAt: Date.now(),
   };
   db.insert(schema.messages).values(m).run();
   return { ...m, content: row.content };
+}
+
+// Room team chat: persist + broadcast a member message WITHOUT running a Claude turn.
+export function postChat(sessionId: string, author: { id: string; name: string }, text: string, emit: Emit) {
+  const msg = saveMessage({ sessionId, role: 'user', authorId: author.id, authorName: author.name, content: { text }, chat: true });
+  db.update(schema.chatSessions).set({ updatedAt: Date.now() }).where(eq(schema.chatSessions.id, sessionId)).run();
+  emit('message', { sessionId, message: publicMessage(msg) });
 }
 
 // Probe the real slash commands (built-in + plugin + skill) the CLI exposes for this session,
@@ -210,6 +217,7 @@ export interface RunTurnParams {
   author: { id: string; name: string };
   text: string;
   emit: Emit;
+  includeChat?: boolean; // room: prepend team chat accrued since the last Claude turn as context
   onDone?: (finalText: string) => void; // review auto-pipeline: capture the verdict after the turn
 }
 
@@ -253,6 +261,20 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
     authToken: auth.token, gitEnv, mcpServers, disallowedTools,
   };
 
+  // room + "include chat": collect team-chat accrued since Claude last saw a message,
+  // so it can catch up on the discussion. Boundary = last chat=0 user message (already in context).
+  let contextChat: { name: string; text: string }[] = [];
+  if (kind === 'room' && p.includeChat) {
+    const lastSeen = db.select({ c: schema.messages.createdAt }).from(schema.messages)
+      .where(and(eq(schema.messages.sessionId, s.id), eq(schema.messages.role, 'user'), eq(schema.messages.chat, 0)))
+      .orderBy(desc(schema.messages.createdAt)).limit(1).get();
+    const boundary = lastSeen?.c ?? 0;
+    const rows = db.select().from(schema.messages)
+      .where(and(eq(schema.messages.sessionId, s.id), eq(schema.messages.chat, 1), gt(schema.messages.createdAt, boundary)))
+      .orderBy(schema.messages.createdAt).all();
+    contextChat = rows.map((r) => ({ name: r.authorName || '?', text: (JSON.parse(r.content) as any).text || '' }));
+  }
+
   // persist + broadcast the human message (speaker prefix for multi-party rooms)
   const userMsg = saveMessage({
     sessionId: s.id, role: 'user', authorId: p.author.id, authorName: p.author.name,
@@ -270,7 +292,11 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
   active.set(s.id, { abort, blocks, author: p.author }); // blocks kept live so join can replay progress
   p.emit('turn:start', { sessionId: s.id, author: p.author });
 
-  const prompt = kind === 'room' ? `[${p.author.name}]: ${p.text}` : p.text;
+  let prompt = kind === 'room' ? `[${p.author.name}]: ${p.text}` : p.text;
+  if (contextChat.length) {
+    const convo = contextChat.map((c) => `[${c.name}]: ${c.text}`).join('\n');
+    prompt = `[\uc774\uc804 \ub300\ud654]\n${convo}\n\n[${p.author.name}]: ${p.text}`;
+  }
   const roots = rootsFor(ctx);
   // review sessions run the pipeline unattended → auto-allow tools (class-1 fence still applies)
   const canUseTool = s.kind === 'review'
@@ -337,6 +363,7 @@ function publicMessage(m: any) {
     id: m.id, sessionId: m.sessionId, role: m.role,
     authorId: m.authorId, authorName: m.authorName,
     content: typeof m.content === 'string' ? JSON.parse(m.content) : m.content,
+    chat: !!m.chat,
     createdAt: m.createdAt,
   };
 }

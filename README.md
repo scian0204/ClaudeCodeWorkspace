@@ -57,7 +57,7 @@ The Claude Code CLI is powerful, but it's tied to **one terminal — yours**. Cl
 |  | Strength | Description |
 |---|---|---|
 | 🧬 | **True session isolation** | "One deployment," but the runtime is a separate process per session. The Agent SDK injects `HOME`/`cwd`/plugins every turn, fully separating users and rooms. |
-| 👥 | **Shared rooms + fine-grained delegation** | The owner toggles per-member rights: approve, interrupt, invite, kick, transfer ownership, delete room. A FIFO queue orders multi-party turns; speaker prefixes let the model track who's talking. |
+| 👥 | **Shared rooms + fine-grained delegation** | The owner toggles per-member rights: approve, interrupt, invite, kick, transfer ownership, delete room. A FIFO queue orders multi-party turns; speaker prefixes let the model track who's talking. A composer toggle separates **team chat** from **instructions to Claude** (`@claude` to summon) so casual talk never triggers a turn. |
 | 🛡 | **Web permission prompts** | Claude pauses right before using a tool and asks the browser: allow / deny / always. The isolation deny-fence always applies, regardless of mode. |
 | 🧑‍💻 | **VS Code in the browser** | Spin up a project in a code-server container instantly. Mounts only your volume + the shared one (isolated); auto-reaped when idle. |
 | 🔌 | **Two-class plugins** | Common (admin) and personal (user) tiers. Install via git or local upload, admin-forced plugins, per-user on/off. Per-plugin detail view + one-click update. |
@@ -163,6 +163,7 @@ flowchart TB
 - **Delegable:** approve · interrupt · invite · kick · transfer ownership · delete room
 - **Owner-only (non-delegable):** changing the room's permission mode
 - Cancel queued messages, interrupt a running turn, presence indicators
+- **Chat vs. instruct:** composer toggle (💬 chat / 🤖 Claude, default chat, sticky per room). Chat is broadcast-only; type `@claude` to flip to instruct mode; optional "include chat" sends recent team talk as context
 </details>
 
 <details>

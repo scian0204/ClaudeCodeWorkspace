@@ -92,9 +92,10 @@ const sock = {
       return sock;
     }
     if (event === 'chat:send') {
-      const { sessionId, text } = args[0] || {};
-      appendMsg(sessionId, { id: `m_${rid()}`, role: 'user', authorId: db.me.id, authorName: db.me.displayName, content: { text }, createdAt: Date.now() });
+      const { sessionId, text, chat } = args[0] || {};
+      appendMsg(sessionId, { id: `m_${rid()}`, role: 'user', authorId: db.me.id, authorName: db.me.displayName, content: { text }, chat: !!chat, createdAt: Date.now() });
       deliver('message', { sessionId, message: db.messages[sessionId][db.messages[sessionId].length - 1] });
+      if (chat) return sock; // room team chat: broadcast only, no Claude turn
       deliver('turn:start', { sessionId });
       runTurn(sessionId, text);
       return sock;

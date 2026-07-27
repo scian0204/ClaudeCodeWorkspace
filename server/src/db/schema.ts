@@ -41,6 +41,7 @@ export const messages = sqliteTable('messages', {
   authorId: text('author_id'),
   authorName: text('author_name'),
   content: text('content').notNull(), // JSON
+  chat: integer('chat').notNull().default(0), // 1 = room team chat (not sent to Claude); role='user' only
   createdAt: integer('created_at').notNull(),
 });
 
