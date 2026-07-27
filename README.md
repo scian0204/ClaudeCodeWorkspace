@@ -262,6 +262,8 @@ Dockerfile · docker-compose.yml
 
 A **lightweight posture** that assumes a mutually trusted team/individual. App login + revocable session cookies gate access; agent file access is a soft fence; a human's editor terminal is isolated behind a hard container boundary with the shared key kept out. The Docker socket mount grants the app host-root-level power, so **this is not a zero-trust multi-tenant SaaS.** An auth-adapter seam is left for SSO / proxy-header extension.
 
+> **Auto-review runs PR code.** The automatic PR-review pipeline builds & runs each PR's own scripts unattended (tools auto-approved). The merge-capable git credential is withheld from those turns, but the turn's Claude token is still in the process env — so treat auto-review as *executing trusted code*. For repos that accept untrusted external PRs, set `REVIEW_AUTO=0` (review is then human-triggered) or don't watch them. A build sandbox is the upgrade path.
+
 ---
 
 ## 🛣 Roadmap

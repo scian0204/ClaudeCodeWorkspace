@@ -409,7 +409,7 @@ const ko: Dict = {
   'review.approve': '✅ PR 병합(원격)',
   'review.approving': '병합 중…',
   'review.approveHint': '병합권한 자격증명으로 원격 저장소의 PR을 실제 병합합니다 (되돌리기 어려움)',
-  'review.approveConfirm': 'PR #{n}을 원격에서 실제로 병합할까요? 되돌리기 어렵습니다.',
+  'review.approveConfirm': 'PR #{n}을 원격에서 실제로 병합할까요? verdict는 참고용 판단이니 diff를 직접 확인 후 진행하세요. 되돌리기 어렵습니다.',
   'review.approveDone': '원격 병합 완료: {out}',
 
   'git.title': 'Git 커밋 · 푸시',
@@ -784,7 +784,7 @@ const en: Dict = {
   'review.approve': '✅ Merge PR (remote)',
   'review.approving': 'Merging…',
   'review.approveHint': 'Actually merges the PR on the remote using the merge-capable credential (hard to undo)',
-  'review.approveConfirm': 'Actually merge PR #{n} on the remote? This is hard to undo.',
+  'review.approveConfirm': 'Actually merge PR #{n} on the remote? The verdict is only advisory — review the diff yourself first. This is hard to undo.',
   'review.approveDone': 'Remote merge complete: {out}',
 
   'git.title': 'Git commit & push',

@@ -293,12 +293,19 @@ function autoPrompt(rv: Review): string {
   ].join('\n');
 }
 
+// Reviews with a pipeline in flight (from local merge through the agent turn's onDone). Prevents a
+// re-run from running `git reset --hard`/merge on the worktree while a live turn is still using it.
+const autoRunning = new Set<string>();
+
 // Full automatic pipeline for one PR: local merge → (unattended) build/run/review turn → verdict.
 // Fire-and-forget: called on PR detection (and via the manual re-run route). Errors are recorded
 // on the session, never thrown to the caller.
 export async function autoReview(reviewId: string): Promise<void> {
+  if (autoRunning.has(reviewId)) return; // pipeline already in flight for this review
   const rv = getReview(reviewId);
   if (!rv) return;
+  autoRunning.add(reviewId);
+  const done = () => autoRunning.delete(reviewId);
   try {
     setVerdict(rv.id, 'running', null);
     notify();
@@ -306,25 +313,26 @@ export async function autoReview(reviewId: string): Promise<void> {
     if (merge.mergeState === 'conflict') {
       setVerdict(rv.id, 'conflict', '머지 충돌 — 자동 빌드/리뷰 생략, 수동 해결 필요');
       postSystem(rv.chatSessionId, `[자동 리뷰] PR #${rv.prNumber} 머지 충돌로 중단.\n\n${merge.output.slice(0, 800)}`);
-      notify();
+      notify(); done();
       return;
     }
     if (merge.mergeState !== 'merged') {
       setVerdict(rv.id, 'error', '로컬 머지 실패');
-      notify();
+      notify(); done();
       return;
     }
-    // hand the merged worktree to an unattended agent turn (auto-allow tools) that emits the verdict
+    // hand the merged worktree to an unattended agent turn (auto-allow tools) that emits the verdict.
+    // The guard is held until the turn's onDone so a re-run can't disturb the live worktree.
     const admin = getUserById(getRepo(rv.repoId)?.createdBy || '');
     const author = { id: admin?.id || rv.repoId, name: 'Auto-Review' };
     enqueueTurn(rv.chatSessionId, author, autoPrompt(rv), (finalText) => {
       const { verdict, summary } = parseVerdict(finalText);
       setVerdict(rv.id, verdict, summary);
-      notify();
+      notify(); done();
     });
   } catch (e: any) {
     setVerdict(rv.id, 'error', String(e?.message || e).slice(0, 300));
-    notify();
+    notify(); done();
   }
 }
 
