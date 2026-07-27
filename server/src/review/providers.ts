@@ -138,6 +138,25 @@ export async function mergePr(provider: ReviewProvider, host: string, slug: stri
   return String(r?.state || 'merged');
 }
 
+// Post a comment (issue/MR note/PR comment) on the PR using the same credential. Non-fatal for the
+// caller: used to publish the auto-review result back onto the PR when a review finishes.
+export async function postComment(provider: ReviewProvider, host: string, slug: string, number: number, cred: HostCred, body: string): Promise<void> {
+  if (provider === 'github') {
+    const base = host === 'github.com' ? 'https://api.github.com' : `https://${host}/api/v3`;
+    await sendJson('POST', `${base}/repos/${slug}/issues/${number}/comments`,
+      { Authorization: `Bearer ${cred.token}`, Accept: 'application/vnd.github+json' }, { body });
+    return;
+  }
+  if (provider === 'gitlab') {
+    await sendJson('POST', `https://${host}/api/v4/projects/${encodeURIComponent(slug)}/merge_requests/${number}/notes`,
+      { 'PRIVATE-TOKEN': cred.token }, { body });
+    return;
+  }
+  const auth = Buffer.from(`${cred.username}:${cred.token}`).toString('base64');
+  await sendJson('POST', `https://api.bitbucket.org/2.0/repositories/${slug}/pullrequests/${number}/comments`,
+    { Authorization: `Basic ${auth}` }, { content: { raw: body } });
+}
+
 // The refspec that fetches a PR's head into a local ref from `origin`, per provider.
 // Returns null when the head must be fetched from the fork clone URL instead (Bitbucket forks) —
 // the caller then does `git fetch <headCloneUrl> <headRef>:<prLocalRef>`.
