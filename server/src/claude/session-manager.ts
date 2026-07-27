@@ -13,6 +13,8 @@ import { resolveClaudeAuth } from '../auth/claude-token.js';
 import { originHost } from '../lib/git-ops.js';
 import { resolveGitCred, gitIdentity, identityEnv, askpassEnv } from '../auth/git-cred.js';
 import { getReviewByChat, ensureWorktree } from '../review/manager.js';
+import { sandboxAvailable, ensureSandbox, removeSandbox, sandboxMcpServer } from '../review/sandbox.js';
+import { config } from '../config.js';
 
 type Emit = (event: string, payload: any) => void;
 
@@ -155,10 +157,29 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
   // build/test script the PR ships. Review never pushes (the remote merge uses the host API), and
   // the local merge already ran, so no git credential is needed here.
   const gitEnv = s.kind === 'review' ? undefined : await buildGitEnv(cwd, p.author.id);
+
+  // Review turns: isolate build/run in a locked-down sandbox container and deny the host shell, so
+  // untrusted PR build/test code can't touch the app container (which holds the Docker socket).
+  // If Docker isn't available, fall back to host exec (auto-allowed) — the trusted-team ceiling.
+  let mcpServers: Record<string, any> | undefined;
+  let disallowedTools: string[] | undefined;
+  let sandboxCleanup: (() => void) | undefined;
+  if (s.kind === 'review' && sandboxAvailable()) {
+    const rv = getReviewByChat(s.id);
+    if (rv) {
+      try {
+        const cname = await ensureSandbox(rv.repoId, rv.prNumber, cwd);
+        mcpServers = { sandbox: await sandboxMcpServer(cname, config.reviewSandbox.execTimeoutMs) };
+        disallowedTools = ['Bash'];
+        sandboxCleanup = () => { void removeSandbox(rv.repoId, rv.prNumber); };
+      } catch { /* sandbox failed to start → host exec fallback */ }
+    }
+  }
+
   const ctx: SessionContext = {
     kind, ownerId, cwd, model: s.model || 'claude-opus-4-8',
     permissionMode: mode, plugins: resolvePluginPaths(kind, ownerId),
-    authToken: auth.token, gitEnv,
+    authToken: auth.token, gitEnv, mcpServers, disallowedTools,
   };
 
   // persist + broadcast the human message (speaker prefix for multi-party rooms)
@@ -232,6 +253,7 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
   } finally {
     active.delete(s.id);
     release();
+    if (sandboxCleanup) sandboxCleanup();
     if (p.onDone) {
       const finalText = blocks.filter((b): b is Extract<Block, { type: 'text' }> => b.type === 'text').map((b) => b.text).join('\n');
       try { p.onDone(finalText); } catch { /* noop */ }
