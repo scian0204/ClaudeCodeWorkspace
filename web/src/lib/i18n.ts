@@ -434,6 +434,20 @@ const ko: Dict = {
   'git.credCommon': '공용',
   'git.credNone': '{host} 자격증명 없음 — 설정 › Git 자격증명에서 등록하세요',
   'git.commitsAs': '커밋 작성자',
+
+  // usage — 세션 컨텍스트 윈도우 + claude.ai 플랜 사용 한도
+  'usage.title': '사용량',
+  'usage.contextWindow': '컨텍스트 윈도우',
+  'usage.limits': '사용 한도',
+  'usage.fiveHour': '5시간 한도',
+  'usage.weeklyAll': '주간 · 전체 모델',
+  'usage.weeklyModel': '주간 · {model}',
+  'usage.resetsInHm': '{h}시간 {m}분 후 재설정',
+  'usage.resetsInM': '{m}분 후 재설정',
+  'usage.resettingNow': '재설정 중',
+  'usage.loading': '불러오는 중…',
+  'usage.noContext': '아직 컨텍스트 데이터가 없어요 (대화를 시작하면 표시됩니다).',
+  'usage.unavailable': 'API 키 세션은 플랜 한도가 표시되지 않습니다.',
 };
 
 const en: Dict = {
@@ -809,6 +823,20 @@ const en: Dict = {
   'git.credCommon': 'Shared',
   'git.credNone': 'No credential for {host} — add one in Settings › Git credentials',
   'git.commitsAs': 'Commits as',
+
+  // usage — session context window + claude.ai plan limits
+  'usage.title': 'Usage',
+  'usage.contextWindow': 'Context window',
+  'usage.limits': 'Usage limits',
+  'usage.fiveHour': '5-hour limit',
+  'usage.weeklyAll': 'Weekly · all models',
+  'usage.weeklyModel': 'Weekly · {model}',
+  'usage.resetsInHm': 'resets in {h}h {m}m',
+  'usage.resetsInM': 'resets in {m}m',
+  'usage.resettingNow': 'resetting',
+  'usage.loading': 'Loading…',
+  'usage.noContext': 'No context data yet (starts once the conversation begins).',
+  'usage.unavailable': 'Plan limits are not shown for API-key sessions.',
 };
 
 const DICT: Record<Lang, Dict> = { ko, en };
