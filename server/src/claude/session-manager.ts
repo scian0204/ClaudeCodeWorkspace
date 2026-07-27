@@ -169,7 +169,7 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
     if (rv) {
       try {
         const cname = await ensureSandbox(rv.repoId, rv.prNumber, cwd);
-        mcpServers = { sandbox: await sandboxMcpServer(cname, config.reviewSandbox.execTimeoutMs) };
+        mcpServers = { sandbox: await sandboxMcpServer(cname, cwd, config.reviewSandbox.execTimeoutMs) };
         disallowedTools = ['Bash'];
         sandboxCleanup = () => { void removeSandbox(rv.repoId, rv.prNumber); };
       } catch { /* sandbox failed to start → host exec fallback */ }
