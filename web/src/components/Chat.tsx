@@ -108,6 +108,8 @@ function Header() {
         </Menu>
       </DM.Root>
 
+      <UsagePill />
+
       {!c.wikiTopicId && !isReview && (
         <div className="seg">
           {(['chat', 'split', 'editor'] as const).map((m) => (
@@ -236,6 +238,119 @@ function Menu({ children }: { children: React.ReactNode }) {
 }
 function MenuItem({ children, onSelect }: { children: React.ReactNode; onSelect: () => void }) {
   return <DM.Item onSelect={onSelect} className="px-2 py-1.5 text-sm rounded cursor-pointer hover:bg-line outline-none data-[highlighted]:bg-line">{children}</DM.Item>;
+}
+
+// ── session usage popover (context window + claude.ai plan rate limits) ──
+type UsageWin = { utilization: number | null; resetsAt: string | null };
+interface Usage {
+  context: { totalTokens: number; maxTokens: number; percentage: number; model: string } | null;
+  rateLimitsAvailable: boolean;
+  subscriptionType: string | null;
+  rateLimits: { fiveHour: UsageWin | null; sevenDay: UsageWin | null; modelScoped: ({ displayName: string } & UsageWin)[] } | null;
+}
+
+const fmtTokens = (n: number): string =>
+  n >= 1_000_000 ? (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M'
+  : n >= 1000 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k'
+  : String(n);
+
+function resetsIn(iso: string | null, t: (k: string, p?: any) => string): string {
+  if (!iso) return '';
+  const ms = new Date(iso).getTime() - Date.now();
+  if (ms <= 0) return t('usage.resettingNow');
+  const mins = Math.round(ms / 60000);
+  const h = Math.floor(mins / 60), m = mins % 60;
+  return h > 0 ? t('usage.resetsInHm', { h, m }) : t('usage.resetsInM', { m });
+}
+
+function UsageBar({ pct }: { pct: number }) {
+  const p = Math.max(0, Math.min(100, pct));
+  const color = p >= 90 ? 'var(--danger)' : p >= 70 ? 'var(--warn)' : 'var(--clay)';
+  return (
+    <div className="h-1.5 rounded-full bg-line overflow-hidden mt-1">
+      <div className="h-full rounded-full" style={{ width: `${p}%`, background: color }} />
+    </div>
+  );
+}
+
+function LimitRow({ label, w }: { label: string; w: UsageWin | null }) {
+  const t = useT();
+  const pct = w?.utilization ?? null;
+  return (
+    <div className="mt-2.5">
+      <div className="flex items-baseline justify-between text-xs gap-2">
+        <span className="font-medium truncate">{label}</span>
+        <span className="text-txt3 shrink-0 flex items-center gap-2">
+          {w?.resetsAt && <span className="text-[11px]">{resetsIn(w.resetsAt, t)}</span>}
+          <span className="font-mono tabular-nums">{pct != null ? `${Math.round(pct)}%` : '—'}</span>
+        </span>
+      </div>
+      <UsageBar pct={pct ?? 0} />
+    </div>
+  );
+}
+
+function UsagePill() {
+  const c = useStore((s) => s.current)!;
+  const [open, setOpen] = useState(false);
+  const [data, setData] = useState<Usage | null>(null);
+  const [loading, setLoading] = useState(false);
+  const t = useT();
+
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    setLoading(true);
+    api.get(`/api/sessions/${c.chatSessionId}/usage`)
+      .then((r) => { if (alive) setData(r.usage); })
+      .catch(() => { if (alive) setData(null); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [open, c.chatSessionId]);
+
+  const ctx = data?.context;
+  const rl = data?.rateLimits;
+  const pctLabel = ctx ? `${Math.round(ctx.percentage)}%` : '—';
+
+  return (
+    <DM.Root open={open} onOpenChange={setOpen}>
+      <DM.Trigger asChild>
+        <button className="pill" title={t('usage.title')}>◔ {pctLabel} ▾</button>
+      </DM.Trigger>
+      <DM.Portal>
+        <DM.Content sideOffset={4} align="end"
+          className="bg-panel border border-line rounded-lg p-3.5 shadow-2xl z-50 w-[320px] text-txt">
+          {/* context window */}
+          <div className="flex items-baseline justify-between text-xs gap-2">
+            <span className="font-semibold">{t('usage.contextWindow')}</span>
+            <span className="text-txt3 font-mono tabular-nums shrink-0">
+              {ctx ? `${fmtTokens(ctx.totalTokens)} / ${fmtTokens(ctx.maxTokens)} (${Math.round(ctx.percentage)}%)`
+                : loading ? t('usage.loading') : '—'}
+            </span>
+          </div>
+          {ctx
+            ? <UsageBar pct={ctx.percentage} />
+            : !loading && <div className="text-[11px] text-txt3 mt-1">{t('usage.noContext')}</div>}
+
+          <div className="border-t border-line my-3" />
+
+          {/* plan rate limits */}
+          <div className="text-[11px] uppercase tracking-wider text-txt3 mb-1">{t('usage.limits')}</div>
+          {data?.rateLimitsAvailable && rl ? (
+            <>
+              <LimitRow label={t('usage.fiveHour')} w={rl.fiveHour} />
+              <LimitRow label={t('usage.weeklyAll')} w={rl.sevenDay} />
+              {rl.modelScoped.map((m) => (
+                <LimitRow key={m.displayName} label={t('usage.weeklyModel', { model: m.displayName })} w={m} />
+              ))}
+            </>
+          ) : (
+            <div className="text-[11px] text-txt3">{loading ? t('usage.loading') : t('usage.unavailable')}</div>
+          )}
+        </DM.Content>
+      </DM.Portal>
+    </DM.Root>
+  );
 }
 
 const VERDICT_UI: Record<string, { key: string; color: string }> = {
