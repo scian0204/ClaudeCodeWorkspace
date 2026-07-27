@@ -27,6 +27,11 @@ ClaudeCode Workspace — 서버 1대 상주 Claude Code 팀 워크스페이스. 
    - 새 **REST 엔드포인트**(`api.get/post/...` 또는 raw `fetch('/api/...')`) → `web/src/demo/router.ts`에 라우트 추가 + 필요한 시드는 `web/src/demo/data.ts`.
    - 새 **socket 이벤트**(emit/on) → `web/src/demo/socket.ts`에서 처리(들어오는 이벤트는 시뮬레이션, 나가는 이벤트는 해석).
    - 검증: `npm run build:demo -w web` 후 `npx vite preview --base=/ClaudeCodeWorkspace/`로 브라우저 확인. 상세 가이드는 [web/src/demo/README.md](web/src/demo/README.md).
+9. **UI는 반응형(모바일) 필수.** 프론트(`web/`)에 사용자에게 보이는 UI를 추가/변경하면 데스크톱만 보지 말고 항상 모바일(폭 <768px = Tailwind `md` 브레이크포인트)도 함께 맞춘다. 페이지 body는 **가로 스크롤이 절대 없어야** 한다(넓은 표·코드·다이어그램은 자체 `overflow-x-auto` 컨테이너로 감싼다).
+   - 레이아웃: 고정 px 폭이나 다단 그리드를 무조건 깔지 말고 `md:` 로 분기한다(`grid-cols-1 md:grid-cols-[...]`). 사이드바성 패널은 `<md`에서 오프캔버스 드로어로 — 기존 `sidebarOpen`(store) + `useIsMobile`(`web/src/lib/ui.tsx`) 패턴 재사용.
+   - 새 상단바/헤더에는 `MobileMenuButton`(`web/src/lib/ui.tsx`)을 넣어 어느 화면에서도 드로어를 열 수 있게 한다. 모달 내부의 다단 그리드는 `<md`에서 세로로 스택.
+   - 폰에서 의미 없는 뷰(code-server iframe, split 등)는 `useIsMobile`로 모바일에서 숨기고 chat 전용으로 강제한다. 좌우 패딩은 `px-3 md:px-5`처럼 화면에 맞춰 줄인다.
+   - 검증: 데모/dev를 모바일 뷰포트(예: 375px)로 실제 확인하고, 데스크톱(≥768px)이 그대로인지도 함께 본다.
 
 ## 개발
 
