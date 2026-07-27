@@ -4,11 +4,29 @@ import { db, schema } from '../db/index.js';
 import { requireAuth } from '../auth/index.js';
 import { newId } from '../lib/ids.js';
 import { probeCommands } from '../claude/session-manager.js';
+import { reviewRoleForChat } from '../review/manager.js';
+import type { AuthUser } from '../auth/index.js';
 
 function loadMessages(sessionId: string) {
   return db.select().from(schema.messages).where(eq(schema.messages.sessionId, sessionId))
     .orderBy(schema.messages.createdAt).all()
     .map((m) => ({ ...m, content: JSON.parse(m.content) }));
+}
+
+type Chat = typeof schema.chatSessions.$inferSelect;
+// Can this user VIEW the chat? private → owner/admin; review → admin or the PR author (read-only);
+// room → unchanged (membership is gated on the room endpoints).
+function canViewChat(u: AuthUser, s: Chat): boolean {
+  if (s.kind === 'private') return s.ownerId === u.id || u.role === 'admin';
+  if (s.kind === 'review') return !!reviewRoleForChat(s.id, u);
+  return true;
+}
+// Can this user MUTATE the chat (title/model/mode, edit/delete messages)? review → admin only
+// (the PR author is read-only).
+function canEditChat(u: AuthUser, s: Chat): boolean {
+  if (s.kind === 'private') return s.ownerId === u.id || u.role === 'admin';
+  if (s.kind === 'review') return u.role === 'admin';
+  return true;
 }
 
 export async function sessionRoutes(app: FastifyInstance) {
@@ -41,7 +59,7 @@ export async function sessionRoutes(app: FastifyInstance) {
     const { id } = req.params as any;
     const s = db.select().from(schema.chatSessions).where(eq(schema.chatSessions.id, id)).get();
     if (!s) return reply.code(404).send({ error: 'not found' });
-    if (s.kind === 'private' && s.ownerId !== u.id && u.role !== 'admin') return reply.code(403).send({ error: 'forbidden' });
+    if (!canViewChat(u, s)) return reply.code(403).send({ error: 'forbidden' });
     return { session: s, messages: loadMessages(id) };
   });
 
@@ -50,7 +68,7 @@ export async function sessionRoutes(app: FastifyInstance) {
     const { id } = req.params as any;
     const s = db.select().from(schema.chatSessions).where(eq(schema.chatSessions.id, id)).get();
     if (!s) return reply.code(404).send({ error: 'not found' });
-    if (s.kind === 'private' && s.ownerId !== u.id && u.role !== 'admin') return reply.code(403).send({ error: 'forbidden' });
+    if (!canViewChat(u, s)) return reply.code(403).send({ error: 'forbidden' });
     return { messages: loadMessages(id) };
   });
 
@@ -60,7 +78,7 @@ export async function sessionRoutes(app: FastifyInstance) {
     const { id } = req.params as any;
     const s = db.select().from(schema.chatSessions).where(eq(schema.chatSessions.id, id)).get();
     if (!s) return reply.code(404).send({ error: 'not found' });
-    if (s.kind === 'private' && s.ownerId !== u.id && u.role !== 'admin') return reply.code(403).send({ error: 'forbidden' });
+    if (!canViewChat(u, s)) return reply.code(403).send({ error: 'forbidden' });
     return { commands: await probeCommands(id, u.id) };
   });
 
@@ -69,7 +87,7 @@ export async function sessionRoutes(app: FastifyInstance) {
     const { id } = req.params as any;
     const s = db.select().from(schema.chatSessions).where(eq(schema.chatSessions.id, id)).get();
     if (!s) return reply.code(404).send({ error: 'not found' });
-    if (s.kind === 'private' && s.ownerId !== u.id && u.role !== 'admin') return reply.code(403).send({ error: 'forbidden' });
+    if (!canEditChat(u, s)) return reply.code(403).send({ error: 'forbidden' });
     const b = (req.body || {}) as any;
     const patch: any = { updatedAt: Date.now() };
     for (const k of ['title', 'model', 'permissionMode', 'projectId']) if (k in b) patch[k] = b[k];
@@ -98,7 +116,7 @@ export async function sessionRoutes(app: FastifyInstance) {
     const { id, mid } = req.params as any;
     const s = db.select().from(schema.chatSessions).where(eq(schema.chatSessions.id, id)).get();
     if (!s) return reply.code(404).send({ error: 'not found' });
-    if (s.kind === 'private' && s.ownerId !== u.id && u.role !== 'admin') return reply.code(403).send({ error: 'forbidden' });
+    if (!canEditChat(u, s)) return reply.code(403).send({ error: 'forbidden' });
     db.delete(schema.messages).where(and(eq(schema.messages.id, mid), eq(schema.messages.sessionId, id))).run();
     return { ok: true };
   });
@@ -110,7 +128,7 @@ export async function sessionRoutes(app: FastifyInstance) {
     const { id, mid } = req.params as any;
     const s = db.select().from(schema.chatSessions).where(eq(schema.chatSessions.id, id)).get();
     if (!s) return reply.code(404).send({ error: 'not found' });
-    if (s.kind === 'private' && s.ownerId !== u.id && u.role !== 'admin') return reply.code(403).send({ error: 'forbidden' });
+    if (!canEditChat(u, s)) return reply.code(403).send({ error: 'forbidden' });
     const target = db.select().from(schema.messages)
       .where(and(eq(schema.messages.id, mid), eq(schema.messages.sessionId, id))).get();
     if (!target) return reply.code(404).send({ error: 'message not found' });

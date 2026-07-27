@@ -6,12 +6,13 @@ import { paths, ensure } from '../lib/paths.js';
 import { allowBypass } from '../lib/settings.js';
 import { turnLimiter, withRateLimitRetry } from './throttle.js';
 import { buildOptions, clampMode, rootsFor, type SessionContext, type PermMode } from './config-layering.js';
-import { makeCanUseTool } from './permissions.js';
+import { makeCanUseTool, makeAutoAllow } from './permissions.js';
 import { resolvePluginPaths } from '../plugins/manager.js';
 import { recordUsage } from '../usage/tracker.js';
 import { resolveClaudeAuth } from '../auth/claude-token.js';
 import { originHost } from '../lib/git-ops.js';
 import { resolveGitCred, gitIdentity, identityEnv, askpassEnv } from '../auth/git-cred.js';
+import { getReviewByChat, ensureWorktree } from '../review/manager.js';
 
 type Emit = (event: string, payload: any) => void;
 
@@ -40,7 +41,12 @@ function getWikiTopic(id: string) {
   return db.select().from(schema.wikiTopics).where(eq(schema.wikiTopics.id, id)).get();
 }
 
-function cwdFor(s: NonNullable<ReturnType<typeof getSession>>): string {
+async function cwdFor(s: NonNullable<ReturnType<typeof getSession>>): Promise<string> {
+  // review session runs inside its PR's git worktree (created lazily); local merge happens there
+  if (s.kind === 'review') {
+    const rv = getReviewByChat(s.id);
+    if (rv) return await ensureWorktree(rv);
+  }
   // wiki thread runs inside its topic's knowledge dir so Claude reads the .md base + CLAUDE.md
   if (s.wikiTopicId) {
     const t = getWikiTopic(s.wikiTopicId);
@@ -99,7 +105,7 @@ export async function probeCommands(chatSessionId: string, requesterId?: string 
   const hit = cmdCache.get(key);
   if (hit) return hit;
   const ctx: SessionContext = {
-    kind, ownerId, cwd: cwdFor(s), model: s.model || 'claude-opus-4-8',
+    kind, ownerId, cwd: await cwdFor(s), model: s.model || 'claude-opus-4-8',
     permissionMode: clampMode((s.permissionMode as PermMode) || 'default', allowBypass()), plugins,
     authToken: auth.token,
   };
@@ -126,6 +132,7 @@ export interface RunTurnParams {
   author: { id: string; name: string };
   text: string;
   emit: Emit;
+  onDone?: (finalText: string) => void; // review auto-pipeline: capture the verdict after the turn
 }
 
 export async function runTurn(p: RunTurnParams): Promise<void> {
@@ -134,11 +141,15 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
 
   const kind: 'user' | 'room' = s.kind === 'room' ? 'room' : 'user';
   const ownerId = kind === 'room' ? s.roomId! : s.ownerId;
-  const cwd = cwdFor(s);
+  const cwd = await cwdFor(s);
   const mode = clampMode((s.permissionMode as PermMode) || 'default', allowBypass());
   // Each turn runs under its author's token (personal: owner; room: whoever sent this message).
   const auth = resolveClaudeAuth(p.author.id);
-  const gitEnv = await buildGitEnv(cwd, p.author.id);
+  // SECURITY: review turns run unattended and build/run PR-controlled code with Bash auto-allowed,
+  // so never hand them the merge-capable git PAT — it would be readable from the child env by any
+  // build/test script the PR ships. Review never pushes (the remote merge uses the host API), and
+  // the local merge already ran, so no git credential is needed here.
+  const gitEnv = s.kind === 'review' ? undefined : await buildGitEnv(cwd, p.author.id);
   const ctx: SessionContext = {
     kind, ownerId, cwd, model: s.model || 'claude-opus-4-8',
     permissionMode: mode, plugins: resolvePluginPaths(kind, ownerId),
@@ -163,9 +174,10 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
 
   const prompt = kind === 'room' ? `[${p.author.name}]: ${p.text}` : p.text;
   const roots = rootsFor(ctx);
-  const canUseTool = makeCanUseTool({
-    sessionId: s.id, roots, mode, emit: p.emit, signal: abort.signal,
-  });
+  // review sessions run the pipeline unattended → auto-allow tools (class-1 fence still applies)
+  const canUseTool = s.kind === 'review'
+    ? makeAutoAllow(roots)
+    : makeCanUseTool({ sessionId: s.id, roots, mode, emit: p.emit, signal: abort.signal });
 
   const blocks: Block[] = [];
   let newClaudeSessionId: string | null = s.claudeSessionId ?? null;
@@ -215,6 +227,10 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
   } finally {
     active.delete(s.id);
     release();
+    if (p.onDone) {
+      const finalText = blocks.filter((b): b is Extract<Block, { type: 'text' }> => b.type === 'text').map((b) => b.text).join('\n');
+      try { p.onDone(finalText); } catch { /* noop */ }
+    }
   }
 }
 

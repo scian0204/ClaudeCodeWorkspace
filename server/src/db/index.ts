@@ -66,6 +66,22 @@ CREATE TABLE IF NOT EXISTS git_credentials (
   author_name TEXT, author_email TEXT, created_at INTEGER NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_git_cred_scope_owner_host ON git_credentials(scope, owner_id, host);
+CREATE TABLE IF NOT EXISTS review_repos (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, provider TEXT NOT NULL, host TEXT NOT NULL,
+  git_url TEXT NOT NULL, slug TEXT NOT NULL, credential_id TEXT NOT NULL, path TEXT NOT NULL,
+  base_branch TEXT, created_by TEXT NOT NULL, created_at INTEGER NOT NULL,
+  polled_at INTEGER, poll_error TEXT
+);
+CREATE TABLE IF NOT EXISTS review_sessions (
+  id TEXT PRIMARY KEY, repo_id TEXT NOT NULL, chat_session_id TEXT NOT NULL,
+  pr_number INTEGER NOT NULL, pr_title TEXT NOT NULL, pr_url TEXT NOT NULL,
+  pr_state TEXT NOT NULL DEFAULT 'open', author_login TEXT NOT NULL, author_user_id TEXT,
+  base_ref TEXT NOT NULL, head_ref TEXT NOT NULL, head_sha TEXT, head_clone_url TEXT,
+  worktree_path TEXT, merge_state TEXT NOT NULL DEFAULT 'none', merged_at INTEGER,
+  verdict TEXT NOT NULL DEFAULT 'none', verdict_summary TEXT,
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_review_sessions_repo_pr ON review_sessions(repo_id, pr_number);
 `;
 
 export let sqlite: Database.Database;
@@ -84,6 +100,9 @@ export function initDb() {
   // per-user Claude token (encrypted at rest)
   try { sqlite.exec("ALTER TABLE users ADD COLUMN claude_token_enc TEXT"); } catch { /* already present */ }
   try { sqlite.exec("ALTER TABLE users ADD COLUMN claude_token_set_at INTEGER"); } catch { /* already present */ }
+  // auto-review verdict (added to an already-created review_sessions table)
+  try { sqlite.exec("ALTER TABLE review_sessions ADD COLUMN verdict TEXT NOT NULL DEFAULT 'none'"); } catch { /* already present */ }
+  try { sqlite.exec("ALTER TABLE review_sessions ADD COLUMN verdict_summary TEXT"); } catch { /* already present */ }
   db = drizzle(sqlite, { schema });
   return db;
 }

@@ -7,6 +7,7 @@ import { enqueueTurn, cancelQueued, queueState, setEmitFactory } from '../rooms/
 import { interruptTurn } from '../claude/session-manager.js';
 import { respondPermission, pendingForSession, type Decision } from '../claude/permissions.js';
 import * as rooms from '../rooms/manager.js';
+import * as review from '../review/manager.js';
 
 export let io: IOServer;
 
@@ -23,10 +24,16 @@ function access(user: AuthUser, sessionId: string) {
   if (s.kind === 'room') {
     const roomId = s.roomId!;
     if (user.role !== 'admin' && !rooms.isMember(roomId, user.id)) return null;
-    return { s, kind: 'room' as const, roomId };
+    return { s, kind: 'room' as const, roomId, canWrite: true };
+  }
+  if (s.kind === 'review') {
+    // admin = full access; the PR author = read-only (can watch the stream, can't send/approve)
+    const role = review.reviewRoleForChat(s.id, user);
+    if (!role) return null;
+    return { s, kind: 'review' as const, roomId: null, canWrite: role === 'admin' };
   }
   if (user.role !== 'admin' && s.ownerId !== user.id) return null;
-  return { s, kind: 'private' as const, roomId: null };
+  return { s, kind: 'private' as const, roomId: null, canWrite: true };
 }
 
 async function presence(sessionId: string) {
@@ -43,6 +50,9 @@ export function initRealtime(httpServer: HttpServer) {
 
   // emit factory so the FIFO queue / session manager can broadcast to session rooms
   setEmitFactory((sessionId) => (event, payload) => io.to(sessionRoom(sessionId)).emit(event, payload));
+
+  // review poller / merge broadcast a "lists changed" ping so every client refreshes its review lists
+  review.setReviewBroadcast(() => io.emit('review:changed'));
 
   io.use((socket, next) => {
     const token = parseCookie(socket.handshake.headers.cookie, COOKIE);
@@ -76,6 +86,7 @@ export function initRealtime(httpServer: HttpServer) {
     socket.on('chat:send', (p: { sessionId: string; text: string }, ack?: Function) => {
       const a = access(user, p.sessionId);
       if (!a) { ack?.({ error: 'no access' }); return; }
+      if (!a.canWrite) { ack?.({ error: 'read-only' }); return; } // review PR author can't send
       if (!p.text?.trim()) { ack?.({ error: 'empty' }); return; }
       // wiki thread: block queries while the topic's knowledge base is (re)compiling
       if (a.s.wikiTopicId) {
@@ -131,6 +142,10 @@ export function initRealtime(httpServer: HttpServer) {
 function controlInfo(user: AuthUser, a: NonNullable<ReturnType<typeof access>>) {
   if (a.kind === 'private') {
     return { canApprove: true, canInterrupt: true, canSetMode: true, isOwner: true, delegable: [] as string[] };
+  }
+  if (a.kind === 'review') {
+    const w = a.canWrite; // admin=true, reader(author)=false
+    return { canApprove: w, canInterrupt: w, canSetMode: w, isOwner: w, delegable: [] as string[] };
   }
   const roomId = a.roomId!;
   return {

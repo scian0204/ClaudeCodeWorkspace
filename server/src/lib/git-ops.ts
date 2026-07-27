@@ -135,6 +135,53 @@ export async function gitFetchRemotes(dir: string, env?: Env): Promise<void> {
   } catch { /* keep whatever refs we already have */ }
 }
 
+// ── PR-review helpers: full clone, per-PR worktree, fetch arbitrary refspecs, merge ──
+
+// Full clone (all branches + history) into a fresh dir. Prompt disabled; credEnv (GIT_ASKPASS +
+// GIT_CRED_*) authenticates a private repo. Never places the token in the URL.
+export async function gitCloneFull(url: string, dir: string, env?: Env): Promise<void> {
+  await execFileP('git', ['clone', url, dir], {
+    timeout: 300_000,
+    env: baseEnv({ GIT_ASKPASS: '/bin/echo', ...(env || {}) }),
+    maxBuffer: 16 * 1024 * 1024,
+  });
+}
+
+// Fetch with an explicit argv (e.g. ['origin', 'pull/12/head:refs/ccw/pr-12']).
+export async function gitFetch(dir: string, args: string[], env?: Env): Promise<void> {
+  try { await git(dir, ['fetch', ...args], env, 300_000); }
+  catch (e: any) { throw new Error(gitErr(e)); }
+}
+
+// Detached worktree at <ref> (a per-PR checkout that shares the clone's object DB — cheap).
+export async function gitWorktreeAdd(repoDir: string, wtDir: string, ref: string, env?: Env): Promise<void> {
+  try { await git(repoDir, ['worktree', 'add', '--detach', '--force', wtDir, ref], env); }
+  catch (e: any) { throw new Error(gitErr(e)); }
+}
+
+export async function gitWorktreeRemove(repoDir: string, wtDir: string): Promise<void> {
+  try { await git(repoDir, ['worktree', 'remove', '--force', wtDir]); } catch { /* best-effort */ }
+  try { await git(repoDir, ['worktree', 'prune']); } catch { /* best-effort */ }
+}
+
+export async function gitResetHard(dir: string, ref: string, env?: Env): Promise<void> {
+  try { await git(dir, ['reset', '--hard', ref], env); }
+  catch (e: any) { throw new Error(gitErr(e)); }
+}
+
+export interface MergeResult { ok: boolean; conflict: boolean; output: string; }
+// Merge <ref> into the worktree's current HEAD (no fast-forward, so a merge commit records the review).
+// A conflict is reported (not thrown) with the working tree left in the conflicted state for review.
+export async function gitMerge(dir: string, ref: string, message: string, env?: Env): Promise<MergeResult> {
+  try {
+    const { stdout, stderr } = await git(dir, ['merge', '--no-ff', '-m', message, ref], env);
+    return { ok: true, conflict: false, output: (stdout || stderr || '').trim().slice(0, 2000) };
+  } catch (e: any) {
+    const out = `${String(e?.stdout || '')}\n${String(e?.stderr || e?.message || e)}`.trim();
+    return { ok: false, conflict: /conflict/i.test(out), output: out.slice(0, 2000) };
+  }
+}
+
 // Switch branches. `git checkout <name>` DWIMs: an existing local branch is checked out;
 // a name that only exists on a remote auto-creates a local tracking branch. Fails (surfaced)
 // if the working tree has changes that would be overwritten.
