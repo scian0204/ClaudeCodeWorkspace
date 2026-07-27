@@ -18,6 +18,7 @@ import { adminRoutes } from './routes/admin.js';
 import { gitCredentialRoutes } from './routes/git-credentials.js';
 import { reviewRoutes } from './routes/review.js';
 import { startReviewPoller, reapReviewOrphans } from './review/manager.js';
+import { cleanupSandboxOrphans } from './review/sandbox.js';
 import { initRealtime } from './realtime/io.js';
 import { startReaper, cleanupOrphans } from './codeserver/manager.js';
 import { isCsPath, handleHttp, handleUpgrade } from './codeserver/proxy.js';
@@ -88,6 +89,7 @@ async function main() {
     if (isCsPath(req.url)) handleUpgrade(req, socket, head as Buffer);
   });
   await cleanupOrphans(); // clear orphans from a previous run
+  await cleanupSandboxOrphans(); // clear leftover review build sandboxes from a previous run
   startReaper();
   startReviewPoller(); // poll each watched repo's host for open PRs → spawn/refresh review sessions
 

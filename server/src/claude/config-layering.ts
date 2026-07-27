@@ -13,6 +13,8 @@ export interface SessionContext {
   plugins: string[]; // resolved enabled plugin dir paths (common class-2 + forced + personal)
   authToken: string; // resolved Claude token for the turn's author ('' => mock/no-auth)
   gitEnv?: Record<string, string>; // git author identity + askpass creds so Claude can commit/push
+  mcpServers?: Record<string, any>; // review sandbox exposes its `run` tool here
+  disallowedTools?: string[];       // review turns deny host 'Bash' → exec only via the sandbox tool
 }
 
 export function homeFor(ctx: SessionContext): string {
@@ -68,6 +70,8 @@ export function buildOptions(ctx: SessionContext, extra: {
     includePartialMessages: true,
   };
   if (extra.resume) options.resume = extra.resume;
+  if (ctx.mcpServers) options.mcpServers = ctx.mcpServers;
+  if (ctx.disallowedTools?.length) options.disallowedTools = ctx.disallowedTools;
   if (config.claudeCodePath) options.pathToClaudeCodeExecutable = config.claudeCodePath;
   return options;
 }
