@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useStore } from '../lib/store';
 import { api } from '../lib/api';
 import { useT } from '../lib/i18n';
+import { MobileMenuButton } from '../lib/ui';
 import { GitCredList } from './GitCredentials';
 
 export function AdminPanel() {
@@ -43,11 +44,12 @@ export function AdminPanel() {
 
   return (
     <div className="h-full overflow-y-auto scrolly">
-      <div className="flex items-center gap-3 px-5 py-3 border-b border-line sticky top-0 bg-panel z-10">
+      <div className="flex items-center gap-3 px-4 md:px-5 py-3 border-b border-line sticky top-0 bg-panel z-10">
+        <MobileMenuButton />
         <button className="toolbtn" onClick={() => setPanel(null)}>←</button>
         <div className="font-semibold">{t('admin.panelTitle')}</div>
       </div>
-      <div className="max-w-[860px] mx-auto p-5 space-y-6">
+      <div className="max-w-[860px] mx-auto p-4 md:p-5 space-y-6">
         {ov && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Stat label={t('admin.statUsers')} v={ov.users} /><Stat label={t('admin.statRooms')} v={ov.rooms} />
@@ -81,7 +83,8 @@ export function AdminPanel() {
           {usage && (
             <>
               <div className="text-sm text-txt2 mb-2">{t('admin.usageTotals', { turns: usage.totals.turns, input: usage.totals.inputTokens.toLocaleString(), output: usage.totals.outputTokens.toLocaleString(), cost: usage.totals.costUsd.toFixed(4) })}</div>
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto scrolly">
+              <table className="w-full text-sm min-w-[420px]">
                 <thead><tr className="text-txt3 text-xs text-left"><th className="py-1">{t('admin.colUser')}</th><th>{t('admin.colTurns')}</th><th>in</th><th>out</th><th>$</th></tr></thead>
                 <tbody>
                   {usage.byUser.map((r: any) => (
@@ -90,6 +93,7 @@ export function AdminPanel() {
                   {usage.byUser.length === 0 && <tr><td colSpan={5} className="text-txt3 py-2">{t('common.none')}</td></tr>}
                 </tbody>
               </table>
+              </div>
             </>
           )}
         </Section>
@@ -121,7 +125,7 @@ export function AdminPanel() {
               </div>
             ))}
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <input className="input" placeholder={t('admin.usernamePlaceholder')} value={nu.username} onChange={(e) => setNu({ ...nu, username: e.target.value })} />
             <input className="input" placeholder={t('admin.displayNamePlaceholder')} value={nu.displayName} onChange={(e) => setNu({ ...nu, displayName: e.target.value })} />
             <input className="input" type="password" placeholder={t('admin.passwordPlaceholder')} value={nu.password} onChange={(e) => setNu({ ...nu, password: e.target.value })} />

@@ -17,8 +17,8 @@ export function Login() {
   };
 
   return (
-    <div className="h-full grid place-items-center bg-bg">
-      <form onSubmit={submit} className="w-[340px] bg-panel border border-line rounded-xl p-7 shadow-sm">
+    <div className="h-full grid place-items-center bg-bg p-4">
+      <form onSubmit={submit} className="w-full max-w-[340px] bg-panel border border-line rounded-xl p-6 md:p-7 shadow-sm">
         <div className="flex items-center gap-2.5 mb-5">
           <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" className="w-8 h-8 rounded-lg" />
           <div>
