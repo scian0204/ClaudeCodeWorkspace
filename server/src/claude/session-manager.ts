@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { eq, and, desc, gt } from 'drizzle-orm';
+import { eq, and, desc, gte } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { newId } from '../lib/ids.js';
 import { paths, ensure } from '../lib/paths.js';
@@ -270,7 +270,7 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
       .orderBy(desc(schema.messages.createdAt)).limit(1).get();
     const boundary = lastSeen?.c ?? 0;
     const rows = db.select().from(schema.messages)
-      .where(and(eq(schema.messages.sessionId, s.id), eq(schema.messages.chat, 1), gt(schema.messages.createdAt, boundary)))
+      .where(and(eq(schema.messages.sessionId, s.id), eq(schema.messages.chat, 1), gte(schema.messages.createdAt, boundary)))
       .orderBy(schema.messages.createdAt).all();
     contextChat = rows.map((r) => ({ name: r.authorName || '?', text: (JSON.parse(r.content) as any).text || '' }));
   }

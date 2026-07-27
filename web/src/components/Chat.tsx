@@ -566,7 +566,7 @@ function MessageView({ m }: { m: Msg }) {
   const [draft, setDraft] = useState(m.content.text || '');
   const [copied, setCopied] = useState(false);
   const t = useT();
-  const canEdit = !isClaude; // user messages can be edited → regenerate from that point
+  const canEdit = !isClaude && !m.chat; // instruct messages regenerate from that point; casual chat is delete-only
 
   const copyText = isClaude
     ? blocks.filter((b): b is Extract<Block, { type: 'text' }> => b.type === 'text').map((b) => b.text).join('\n\n')
