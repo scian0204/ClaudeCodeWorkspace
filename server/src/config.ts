@@ -27,6 +27,10 @@ export const config = {
   // Auto-run the review pipeline (local merge → build/run → review → verdict) when a new PR
   // is detected. Set REVIEW_AUTO=0 to require a manual trigger instead.
   reviewAuto: env.REVIEW_AUTO !== '0',
+  // Watchdog: max wall-clock for one auto-review turn. If it hasn't finished (e.g. the agent's
+  // build hangs, or the SDK call stalls), abort it so the verdict resolves and the review unwedges
+  // instead of sitting on 'running' forever.
+  reviewTurnTimeoutMs: Number(env.REVIEW_TURN_TIMEOUT_MS || 600_000),
   bootstrapAdminUser: env.BOOTSTRAP_ADMIN_USER || 'admin',
   bootstrapAdminPassword: env.BOOTSTRAP_ADMIN_PASSWORD || 'admin',
   codeServer: {
