@@ -318,14 +318,22 @@ export async function autoReview(reviewId: string): Promise<void> {
   const rv = getReview(reviewId);
   if (!rv) return;
   autoRunning.add(reviewId);
-  let settled = false;
   let watchdog: ReturnType<typeof setTimeout> | undefined;
+  let finalized = false;
+  // Write the final verdict once — whichever of onDone / watchdog / early-exit reaches it first wins.
+  const setFinal = (verdict: string, summary: string | null) => {
+    if (finalized) return;
+    finalized = true;
+    setVerdict(rv.id, verdict, summary);
+    notify();
+  };
+  // Release the worktree guard + fire a queued re-review. Called ONLY at real turn teardown (the
+  // turn's onDone, after its subprocess is gone) or on a pre-turn early exit — NEVER from the
+  // watchdog — so a re-run's `git reset --hard`/merge can't race a still-terminating turn on the
+  // same worktree. delete() returns false the second time, so the rerun fires at most once.
   const done = () => {
-    if (settled) return;
-    settled = true;
     if (watchdog) clearTimeout(watchdog);
-    autoRunning.delete(reviewId);
-    // a new push landed during this run → re-review the latest head now
+    if (!autoRunning.delete(reviewId)) return;
     if (rerunPending.delete(reviewId)) void autoReview(reviewId);
   };
   try {
@@ -333,42 +341,38 @@ export async function autoReview(reviewId: string): Promise<void> {
     notify();
     const merge = await localMerge(rv);
     if (merge.mergeState === 'conflict') {
-      setVerdict(rv.id, 'conflict', '머지 충돌 — 자동 빌드/리뷰 생략, 수동 해결 필요');
+      setFinal('conflict', '머지 충돌 — 자동 빌드/리뷰 생략, 수동 해결 필요');
       postSystem(rv.chatSessionId, `[자동 리뷰] PR #${rv.prNumber} 머지 충돌로 중단.\n\n${merge.output.slice(0, 800)}`);
-      notify(); done();
+      done();
       return;
     }
     if (merge.mergeState !== 'merged') {
-      setVerdict(rv.id, 'error', '로컬 머지 실패');
-      notify(); done();
+      setFinal('error', '로컬 머지 실패');
+      done();
       return;
     }
-    // hand the merged worktree to an unattended agent turn (auto-allow tools) that emits the verdict.
-    // The guard is held until the turn's onDone so a re-run can't disturb the live worktree.
     const admin = getUserById(getRepo(rv.repoId)?.createdBy || '');
     const author = { id: admin?.id || rv.repoId, name: 'Auto-Review' };
     // Fresh conversation every run — never resume the prior review. Resuming makes the model treat a
     // re-review (new commit pushed) as "same task" and rubber-stamp the stale verdict instead of
     // re-examining the updated worktree.
     db.update(schema.chatSessions).set({ claudeSessionId: null }).where(eq(schema.chatSessions.id, rv.chatSessionId)).run();
-    // watchdog: a hung turn (stalled build / stuck SDK call) must not wedge the review on 'running'
-    // forever — abort it so the verdict resolves and the guard releases.
+    // watchdog: abort a hung turn so the verdict resolves off 'running'. It only aborts + records the
+    // verdict; the guard release + any queued re-review happen in the turn's onDone (fired by the
+    // abort's teardown), so the worktree stays exclusive until the subprocess has actually exited.
     watchdog = setTimeout(() => {
-      if (settled) return;
       interruptTurn(rv.chatSessionId);
-      setVerdict(rv.id, 'error', `자동 리뷰 시간 초과(${Math.round(config.reviewTurnTimeoutMs / 60000)}분) — 중단됨`);
+      setFinal('error', `자동 리뷰 시간 초과(${Math.round(config.reviewTurnTimeoutMs / 60000)}분) — 중단됨`);
       postSystem(rv.chatSessionId, `[자동 리뷰] 시간 초과로 중단. 다시 시도하려면 "자동 리뷰 실행"을 누르세요.`);
-      notify(); done();
     }, config.reviewTurnTimeoutMs);
     enqueueTurn(rv.chatSessionId, author, autoPrompt(rv), (finalText) => {
-      if (settled) return; // watchdog already resolved it
       const { verdict, summary } = parseVerdict(finalText);
-      setVerdict(rv.id, verdict, summary);
-      notify(); done();
+      setFinal(verdict, summary);
+      done(); // real teardown: safe to release the worktree + re-review the latest head
     });
   } catch (e: any) {
-    setVerdict(rv.id, 'error', String(e?.message || e).slice(0, 300));
-    notify(); done();
+    setFinal('error', String(e?.message || e).slice(0, 300));
+    done();
   }
 }
 
