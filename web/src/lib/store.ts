@@ -388,7 +388,7 @@ function applyJoinState(set: any, get: () => State, sessionId: string, state: an
     pending: state.pending || [],
     control: state.control || get().control,
     turnActive: !!state.queue?.running || !!live,
-    ...(live ? { live } : {}),
+    live, // always set (null when no in-flight turn) so a reconnect clears any stale live blocks
   });
 }
 

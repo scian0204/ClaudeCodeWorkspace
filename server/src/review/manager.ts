@@ -305,16 +305,23 @@ function autoPrompt(rv: Review): string {
 // Reviews with a pipeline in flight (from local merge through the agent turn's onDone). Prevents a
 // re-run from running `git reset --hard`/merge on the worktree while a live turn is still using it.
 const autoRunning = new Set<string>();
+// A head change (new push) that arrived while the pipeline was already running — re-review once the
+// in-flight run finishes, so a commit pushed mid-review isn't left with a stale/old-commit verdict.
+const rerunPending = new Set<string>();
 
 // Full automatic pipeline for one PR: local merge → (unattended) build/run/review turn → verdict.
 // Fire-and-forget: called on PR detection (and via the manual re-run route). Errors are recorded
 // on the session, never thrown to the caller.
 export async function autoReview(reviewId: string): Promise<void> {
-  if (autoRunning.has(reviewId)) return; // pipeline already in flight for this review
+  if (autoRunning.has(reviewId)) { rerunPending.add(reviewId); return; } // in flight → queue a re-review
   const rv = getReview(reviewId);
   if (!rv) return;
   autoRunning.add(reviewId);
-  const done = () => autoRunning.delete(reviewId);
+  const done = () => {
+    autoRunning.delete(reviewId);
+    // a new push landed during this run → re-review the latest head now
+    if (rerunPending.delete(reviewId)) void autoReview(reviewId);
+  };
   try {
     setVerdict(rv.id, 'running', null);
     notify();
