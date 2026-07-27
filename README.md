@@ -43,7 +43,7 @@ The Claude Code CLI is powerful, but it's tied to **one terminal — yours**. Cl
 - Open **VS Code (code-server)** right there for editing, terminal, and git
 - **Commit & push** a cloned repo from the chat header (or let Claude do it) with encrypted per-user git credentials
 - Build a team **LLM Wiki** — upload docs, Claude compiles them into a queryable knowledge base
-- **Review pull requests** — admins watch a repo; each open PR spawns a session that locally merges, builds/runs, and reviews
+- **Auto-review pull requests** — each open PR auto-runs a pipeline (merge → build/run → bug + code review → a merge-safe verdict); one click merges it on the remote
 - Each user runs on **their own Claude token** (admin-common token + env as fallback); admins see everything via a **usage dashboard**
 
 > Works as a personal remote setup too — solo, it becomes a single-account "remote Claude Code".
@@ -62,7 +62,7 @@ The Claude Code CLI is powerful, but it's tied to **one terminal — yours**. Cl
 | 🪪 | **Per-user Claude tokens** | Each member registers their own token (encrypted at rest); usage and cost are attributed per person. Falls back to an admin-set common token, then env. |
 | ⑂ | **Git commit & push** | Commit (with file-level staging), push, and switch branches (local/remote) for a cloned project right from the chat header — Claude can also commit/push itself. Clones fetch full history (all branches) and can target a specific branch. HTTPS PAT credentials for GitHub/GitLab/Bitbucket are encrypted per-user (admin-common fallback), picked at clone time, resolved by host. The panel shows exactly which credential (yours vs. shared) and commit identity are in effect for the repo, so auth failures are easy to diagnose. |
 | 📚 | **LLM Wiki knowledge base** | Upload a folder of docs/images; Claude compiles them into cross-linked articles users can query in read-only threads. Import an already-compiled wiki to skip compilation. |
-| 🔀 | **PR review sessions** | Admin registers a remote (merge-capable credential required); the server polls GitHub/GitLab/Bitbucket and each open PR becomes its own review session — visible to admins and the PR's author (read-only). One click locally merges the PR into a per-PR git worktree; from there Claude builds, runs, debugs (on request) and reviews. |
+| 🔀 | **Automatic PR review** | Admin registers a remote (merge-capable credential required); the server polls GitHub/GitLab/Bitbucket and each open PR becomes a review session — visible to admins and the PR's author (read-only). Each new PR **auto-runs the whole pipeline**: local merge → build/run → bug detection + code review → a **MERGE_SAFE / DO_NOT_MERGE verdict**. On the admin's word, one click **merges the PR on the remote** using the credential. |
 | 🔑 | **Fully functional without a key** | With no token anywhere, it runs in **MOCK mode** — streaming, permissions, and tool-card UX all demoable. Ideal for evaluation, demos, CI. |
 | 🐳 | **One-shot deploy** | Multi-stage single image + `docker compose up`. code-server spawns dynamically as sibling containers (no orchestrator needed). |
 | 🗂 | **Folded context history** | Each `/clear` or `/compact` collapses the conversation above it into a stacked, timestamped toggle — history stays one click away instead of scrolling forever. |
@@ -205,13 +205,14 @@ flowchart TB
 </details>
 
 <details>
-<summary><b>PR review sessions</b></summary>
+<summary><b>Automatic PR review</b></summary>
 
 - **Admin-only** creation, parallel to personal sessions / rooms / the LLM Wiki: register a remote repo (full clone) with a **merge-capable** git credential
 - The server **polls** the host (GitHub / GitLab / Bitbucket Cloud) for open PRs on an interval (`REVIEW_POLL_MS`, default 60s) + a manual "refresh now" — each open PR becomes a review session
-- **Visibility:** admins see every session; the PR author (matched to a local account by username) sees only their own, **read-only** (watch the stream, no sending/merging). No matching account → no extra viewer
-- **Local merge:** one click fetches the PR head and merges it (`--no-ff`) into a per-PR git worktree off the shared clone; conflicts are left in the tree to resolve. Nothing is pushed back to the remote
-- After the merge, just chat: ask Claude to build, run, debug, or review — it works in the merged worktree
+- **Visibility:** admins see every session; the PR author (matched to a local account by username) sees only their own, **read-only**. No matching account → no extra viewer
+- **Fully automatic pipeline** (no chat needed; `REVIEW_AUTO`, default on): on each new PR the server does the **local merge** (`--no-ff` into a per-PR git worktree; conflict → stop + flag), then runs an **unattended agent turn** that **builds & runs**, **detects bugs**, **reviews the diff**, and emits a **`VERDICT: MERGE_SAFE` / `DO_NOT_MERGE`** + one-line summary. The verdict shows on the session and the sidebar badge; re-run anytime
+- Unattended turns **auto-approve tools** (isolated worktree; the class-1 path fence still applies) so build/run never blocks on a prompt
+- **On instruction, approve the PR:** one admin click **merges the PR on the remote** (GitHub/GitLab/Bitbucket API) using the merge-capable credential — the only step that touches the remote, gated behind a confirm
 </details>
 
 <details>
@@ -231,6 +232,7 @@ flowchart TB
 | `SESSION_SECRET` | Cookie signing secret (**must change**) | — |
 | `MAX_CONCURRENT_TURNS` | Global concurrent-turn cap for the shared key + queueing + 429 backoff | `3` |
 | `REVIEW_POLL_MS` | How often to poll each watched review repo for open PRs (0 disables) | `60000` |
+| `REVIEW_AUTO` | Auto-run the review pipeline (merge→build/run→review→verdict) on each new PR; `0` = manual trigger only | `1` |
 | `BOOTSTRAP_ADMIN_USER` / `_PASSWORD` | First-boot admin (only when there are zero users) | `admin` |
 | `CODE_SERVER_IMAGE` | Editor image | `codercom/code-server:latest` |
 | `CODE_SERVER_IDLE_MS` | Idle-container reclaim time | `1800000` |

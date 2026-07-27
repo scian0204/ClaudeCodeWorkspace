@@ -203,6 +203,7 @@ volumes:
 - **세션 = `chat_sessions(kind='review')`.** cwd = **PR별 git 워크트리**(`wt/<pr>`, 공유 클론에서 파생, 지연 생성). HOME/토큰/플러그인은 생성자(admin) 기준(kind는 user로 매핑).
 - **열람 권한:** 관리자(쓰기) + PR 작성자(로컬 계정과 username 매칭, **읽기 전용**; 매칭 없으면 제외). `routes/sessions`·`realtime/io` 양쪽에서 게이팅 — 읽기 전용은 전송·인터럽트·승인·머지 불가.
 - **로컬 머지:** PR head를 로컬 ref로 fetch(포크는 소스 clone URL) → 워크트리를 최신 base로 `reset --hard` → `merge --no-ff`. 충돌은 트리에 남겨 리뷰(`mergeState=conflict`). **원격 push 없음**(로컬 전용, 되돌리기 안전).
-- **빌드 & 실행 · 디버깅 · 코드리뷰:** 머지 후 일반 채팅 턴으로 수행 — Claude가 워크트리(cwd)에서 Bash/Read 등으로 빌드·실행·리뷰. 별도 CI 오케스트레이션 없음.
+- **전자동 파이프라인(`REVIEW_AUTO`, 기본 on):** 새 PR 감지 시 서버가 (1) 로컬 머지 → (2) **무인 에이전트 턴** 1회 enqueue. 리뷰 세션 턴은 `makeAutoAllow`로 도구를 자동 승인(클래스1 경로 펜스는 유지)해 빌드/실행이 권한 프롬프트로 멈추지 않는다. 턴이 빌드·실행·버그감지·코드리뷰를 수행하고 마지막에 `VERDICT: MERGE_SAFE|DO_NOT_MERGE` + `SUMMARY:`를 출력 → `runTurn`의 `onDone` 콜백(FIFO 큐로 전달)이 파싱해 `review_sessions.verdict`에 저장. 머지 충돌이면 빌드/리뷰를 건너뛰고 verdict=conflict.
+- **지시 시 PR 허가(원격 병합):** 관리자 명시 액션(`POST /api/review/sessions/:id/approve`, 확인 대화)이 호스트 API(GitHub `PUT …/merge`, GitLab MR merge, Bitbucket PR merge)를 병합권한 자격증명으로 호출해 **원격에서 PR을 실제 병합**. 원격을 건드리는 유일한 단계.
 - **정리:** 저장소/세션 삭제 시 워크트리(`git worktree remove`)·클론 디렉터리 제거, 부팅 시 orphan 리퍼.
-- **확장 seam(미구현):** 웹훅 수신, 원격 실제 병합(push하여 PR close), GitLab/Bitbucket self-hosted 세부 대응.
+- **확장 seam(미구현):** 웹훅 수신(현재는 폴링), self-hosted GitLab/Bitbucket 세부 대응, verdict 기반 자동 원격 병합(현재는 사람이 지시).
