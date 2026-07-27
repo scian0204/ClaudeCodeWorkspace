@@ -16,6 +16,7 @@ import {
   inferProvider, slugFromUrl, listPulls, prHeadFetch, prLocalRef, mergePr, type ReviewProvider, type PullInfo,
 } from './providers.js';
 import { enqueueTurn } from '../rooms/queue.js';
+import { interruptTurn } from '../claude/session-manager.js';
 
 type Repo = typeof schema.reviewRepos.$inferSelect;
 type Review = typeof schema.reviewSessions.$inferSelect;
@@ -317,7 +318,12 @@ export async function autoReview(reviewId: string): Promise<void> {
   const rv = getReview(reviewId);
   if (!rv) return;
   autoRunning.add(reviewId);
+  let settled = false;
+  let watchdog: ReturnType<typeof setTimeout> | undefined;
   const done = () => {
+    if (settled) return;
+    settled = true;
+    if (watchdog) clearTimeout(watchdog);
     autoRunning.delete(reviewId);
     // a new push landed during this run → re-review the latest head now
     if (rerunPending.delete(reviewId)) void autoReview(reviewId);
@@ -345,7 +351,17 @@ export async function autoReview(reviewId: string): Promise<void> {
     // re-review (new commit pushed) as "same task" and rubber-stamp the stale verdict instead of
     // re-examining the updated worktree.
     db.update(schema.chatSessions).set({ claudeSessionId: null }).where(eq(schema.chatSessions.id, rv.chatSessionId)).run();
+    // watchdog: a hung turn (stalled build / stuck SDK call) must not wedge the review on 'running'
+    // forever — abort it so the verdict resolves and the guard releases.
+    watchdog = setTimeout(() => {
+      if (settled) return;
+      interruptTurn(rv.chatSessionId);
+      setVerdict(rv.id, 'error', `자동 리뷰 시간 초과(${Math.round(config.reviewTurnTimeoutMs / 60000)}분) — 중단됨`);
+      postSystem(rv.chatSessionId, `[자동 리뷰] 시간 초과로 중단. 다시 시도하려면 "자동 리뷰 실행"을 누르세요.`);
+      notify(); done();
+    }, config.reviewTurnTimeoutMs);
     enqueueTurn(rv.chatSessionId, author, autoPrompt(rv), (finalText) => {
+      if (settled) return; // watchdog already resolved it
       const { verdict, summary } = parseVerdict(finalText);
       setVerdict(rv.id, verdict, summary);
       notify(); done();
