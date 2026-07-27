@@ -123,13 +123,13 @@ export function FileExplorer({
           ))}
         </div>
       )}
-      <div className="grid gap-2" style={{ gridTemplateColumns: '260px 1fr', height: '60vh' }}>
-        <div className="border border-line rounded overflow-auto scrolly p-1">
+      <div className="grid gap-2 h-[68vh] md:h-[60vh] grid-cols-1 grid-rows-[38%_minmax(0,1fr)] md:grid-cols-[260px_minmax(0,1fr)] md:grid-rows-1">
+        <div className="border border-line rounded overflow-auto scrolly p-1 min-h-0">
           {!tree && <div className="text-txt3 text-xs p-2">{t('fileExplorer.loading')}</div>}
           {tree && list.length === 0 && <div className="text-txt3 text-xs p-2">{t('fileExplorer.noFiles')}</div>}
           {nodes.map((n) => <TreeNode key={n.path} node={n} depth={0} onOpen={openFile} selected={sel} />)}
         </div>
-        <div className="border border-line rounded overflow-auto scrolly bg-bg min-w-0">
+        <div className="border border-line rounded overflow-auto scrolly bg-bg min-w-0 min-h-0">
           {!sel && <div className="text-txt3 text-xs p-3">{t('fileExplorer.selectFilePrompt')}</div>}
           {sel && (
             <>

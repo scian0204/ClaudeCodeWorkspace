@@ -45,6 +45,7 @@ interface State {
   viewMode: 'chat' | 'split' | 'editor';
   editorUrl: string | null;
   panel: null | 'admin' | 'plugins';
+  sidebarOpen: boolean; // mobile off-canvas drawer (ignored ≥md, sidebar is a static column there)
   error: string | null;
   commands: CmdInfo[];
 
@@ -84,6 +85,7 @@ interface State {
   setMode: (mode: string) => Promise<void>;
   reloadRoom: () => Promise<void>;
   setPanel: (p: null | 'admin' | 'plugins') => void;
+  setSidebarOpen: (open: boolean) => void;
   setError: (e: string | null) => void;
   saveClaudeToken: (token: string) => Promise<void>;
   clearClaudeToken: () => Promise<void>;
@@ -100,7 +102,7 @@ export const useStore = create<State>((set, get) => ({
   current: null, messages: [], live: null, turnActive: false,
   queue: { running: null, waiting: [] }, pending: [],
   control: { canApprove: true, canInterrupt: true, canSetMode: true, isOwner: true, delegable: [] },
-  presence: [], congested: false, viewMode: 'chat', editorUrl: null, panel: null, error: null,
+  presence: [], congested: false, viewMode: 'chat', editorUrl: null, panel: null, sidebarOpen: false, error: null,
   commands: [],
 
   bootstrap: async () => {
@@ -335,7 +337,8 @@ export const useStore = create<State>((set, get) => ({
     set({ current: { ...c, room }, rooms: get().rooms.map((r) => (r.id === room.id ? room : r)) });
   },
 
-  setPanel: (p) => set({ panel: p }),
+  setPanel: (p) => set({ panel: p, sidebarOpen: false }), // navigating a panel closes the mobile drawer
+  setSidebarOpen: (open) => set({ sidebarOpen: open }),
   setError: (e) => set({ error: e }),
 
   saveClaudeToken: async (token) => {
@@ -360,7 +363,7 @@ async function join(set: any, get: () => State, cur: Current, messages: Msg[]) {
   set({
     current: cur, messages, live: null, turnActive: false,
     queue: { running: null, waiting: [] }, pending: [], presence: [],
-    viewMode: 'chat', editorUrl: null, commands: [],
+    viewMode: 'chat', editorUrl: null, commands: [], sidebarOpen: false, // opening a thread closes the mobile drawer
   });
   // fetch the real slash commands (built-in + plugin + skill) the CLI exposes (non-blocking)
   api.get(`/api/sessions/${cur.chatSessionId}/commands`)

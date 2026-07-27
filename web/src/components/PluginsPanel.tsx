@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../lib/store';
 import { api } from '../lib/api';
 import { PluginDetail } from './PluginDetail';
+import { MobileMenuButton } from '../lib/ui';
 import { useT } from '../lib/i18n';
 
 export function PluginsPanel() {
@@ -24,11 +25,12 @@ export function PluginsPanel() {
 
   return (
     <div className="h-full overflow-y-auto scrolly">
-      <div className="flex items-center gap-3 px-5 py-3 border-b border-line sticky top-0 bg-panel z-10">
+      <div className="flex items-center gap-3 px-4 md:px-5 py-3 border-b border-line sticky top-0 bg-panel z-10">
+        <MobileMenuButton />
         <button className="toolbtn" onClick={() => setPanel(null)}>←</button>
         <div className="font-semibold">{t('plugins.title')}</div>
       </div>
-      <div className="max-w-[860px] mx-auto p-5 space-y-6">
+      <div className="max-w-[860px] mx-auto p-4 md:p-5 space-y-6">
         {/* COMMON */}
         <div className="bg-card border border-line rounded-xl p-4">
           <div className="font-semibold mb-1">{t('plugins.commonPlugins')} {isAdmin ? '' : t('plugins.commonPluginsUserNote')}</div>
@@ -104,17 +106,17 @@ function InstallForms({ scope, mkt, onChange, onErr }: { scope: 'common' | 'user
   return (
     <div className="space-y-2 border-t border-line pt-3">
       {mkt.length > 0 && <div className="text-xs text-txt3">{t('plugins.marketplaces', { names: mkt.map((m) => m.name).join(', ') })}</div>}
-      <div className="grid grid-cols-[1fr_1fr_auto] gap-1.5">
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-1.5">
         <input className="input !py-1.5 !text-xs" placeholder={t('plugins.marketNamePlaceholder')} value={mk.name} onChange={(e) => setMk({ ...mk, name: e.target.value })} />
         <input className="input !py-1.5 !text-xs" placeholder="git URL" value={mk.url} onChange={(e) => setMk({ ...mk, url: e.target.value })} />
         <button className="btn-ghost !py-1.5 !text-xs" onClick={addMk}>{t('plugins.addMarket')}</button>
       </div>
-      <div className="grid grid-cols-[1fr_1fr_auto] gap-1.5">
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-1.5">
         <input className="input !py-1.5 !text-xs" placeholder={t('plugins.pluginNamePlaceholder')} value={git.name} onChange={(e) => setGit({ ...git, name: e.target.value })} />
         <input className="input !py-1.5 !text-xs" placeholder="git repo (clone)" value={git.repo} onChange={(e) => setGit({ ...git, repo: e.target.value })} />
         <button className="btn-primary !py-1.5 !text-xs" onClick={installGit}>{t('plugins.install')}</button>
       </div>
-      <div className="grid grid-cols-[1fr_1fr_auto] gap-1.5">
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-1.5">
         <input className="input !py-1.5 !text-xs" placeholder={t('plugins.uploadNamePlaceholder')} value={upName} onChange={(e) => setUpName(e.target.value)} />
         <input ref={fileRef} type="file" accept=".tar.gz,.tgz" className="text-xs text-txt2" />
         <button className="btn-ghost !py-1.5 !text-xs" onClick={upload}>{t('plugins.uploadTarGz')}</button>
