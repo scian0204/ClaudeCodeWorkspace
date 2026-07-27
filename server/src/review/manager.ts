@@ -341,6 +341,10 @@ export async function autoReview(reviewId: string): Promise<void> {
     // The guard is held until the turn's onDone so a re-run can't disturb the live worktree.
     const admin = getUserById(getRepo(rv.repoId)?.createdBy || '');
     const author = { id: admin?.id || rv.repoId, name: 'Auto-Review' };
+    // Fresh conversation every run — never resume the prior review. Resuming makes the model treat a
+    // re-review (new commit pushed) as "same task" and rubber-stamp the stale verdict instead of
+    // re-examining the updated worktree.
+    db.update(schema.chatSessions).set({ claudeSessionId: null }).where(eq(schema.chatSessions.id, rv.chatSessionId)).run();
     enqueueTurn(rv.chatSessionId, author, autoPrompt(rv), (finalText) => {
       const { verdict, summary } = parseVerdict(finalText);
       setVerdict(rv.id, verdict, summary);
