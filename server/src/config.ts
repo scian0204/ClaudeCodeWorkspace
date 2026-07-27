@@ -27,6 +27,18 @@ export const config = {
   // Auto-run the review pipeline (local merge → build/run → review → verdict) when a new PR
   // is detected. Set REVIEW_AUTO=0 to require a manual trigger instead.
   reviewAuto: env.REVIEW_AUTO !== '0',
+  // Watchdog: max wall-clock for one auto-review turn. If it hasn't finished (e.g. the agent's
+  // build hangs, or the SDK call stalls), abort it so the verdict resolves and the review unwedges
+  // instead of sitting on 'running' forever.
+  reviewTurnTimeoutMs: Number(env.REVIEW_TURN_TIMEOUT_MS || 600_000),
+  // Sandbox for review build/run: PR build/test code runs in a locked-down sibling container
+  // (worktree-only mount, no docker socket) instead of the app container. Requires Docker deploy
+  // (DATA_VOLUME/CODE_SERVER_NETWORK); falls back to host execution otherwise.
+  reviewSandbox: {
+    image: env.REVIEW_SANDBOX_IMAGE || 'node:20-bookworm',
+    memBytes: Number(env.REVIEW_SANDBOX_MEM_MB || 4096) * 1024 * 1024,
+    execTimeoutMs: Number(env.REVIEW_SANDBOX_EXEC_TIMEOUT_MS || 300_000),
+  },
   bootstrapAdminUser: env.BOOTSTRAP_ADMIN_USER || 'admin',
   bootstrapAdminPassword: env.BOOTSTRAP_ADMIN_PASSWORD || 'admin',
   codeServer: {

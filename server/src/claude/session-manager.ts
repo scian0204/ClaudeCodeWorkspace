@@ -13,6 +13,8 @@ import { resolveClaudeAuth } from '../auth/claude-token.js';
 import { originHost } from '../lib/git-ops.js';
 import { resolveGitCred, gitIdentity, identityEnv, askpassEnv } from '../auth/git-cred.js';
 import { getReviewByChat, ensureWorktree } from '../review/manager.js';
+import { sandboxAvailable, ensureSandbox, removeSandbox, sandboxMcpServer } from '../review/sandbox.js';
+import { config } from '../config.js';
 
 type Emit = (event: string, payload: any) => void;
 
@@ -20,10 +22,15 @@ export type Block =
   | { type: 'text'; text: string }
   | { type: 'tool_use'; id: string; name: string; input: any; output?: string; isError?: boolean };
 
-interface ActiveTurn { abort: AbortController; }
+interface ActiveTurn { abort: AbortController; blocks: Block[]; author: { id: string; name: string } }
 const active = new Map<string, ActiveTurn>();
 
 export function isTurnActive(sessionId: string) { return active.has(sessionId); }
+// Snapshot of the in-flight turn so a client joining mid-turn can render progress it missed.
+export function liveTurn(sessionId: string): { blocks: Block[]; author: { id: string; name: string } } | null {
+  const t = active.get(sessionId);
+  return t ? { blocks: t.blocks, author: t.author } : null;
+}
 export function interruptTurn(sessionId: string): boolean {
   const t = active.get(sessionId);
   if (!t) return false;
@@ -150,10 +157,29 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
   // build/test script the PR ships. Review never pushes (the remote merge uses the host API), and
   // the local merge already ran, so no git credential is needed here.
   const gitEnv = s.kind === 'review' ? undefined : await buildGitEnv(cwd, p.author.id);
+
+  // Review turns: isolate build/run in a locked-down sandbox container and deny the host shell, so
+  // untrusted PR build/test code can't touch the app container (which holds the Docker socket).
+  // If Docker isn't available, fall back to host exec (auto-allowed) — the trusted-team ceiling.
+  let mcpServers: Record<string, any> | undefined;
+  let disallowedTools: string[] | undefined;
+  let sandboxCleanup: (() => void) | undefined;
+  if (s.kind === 'review' && sandboxAvailable()) {
+    const rv = getReviewByChat(s.id);
+    if (rv) {
+      try {
+        const cname = await ensureSandbox(rv.repoId, rv.prNumber, cwd);
+        mcpServers = { sandbox: await sandboxMcpServer(cname, cwd, config.reviewSandbox.execTimeoutMs) };
+        disallowedTools = ['Bash'];
+        sandboxCleanup = () => { void removeSandbox(rv.repoId, rv.prNumber); };
+      } catch { /* sandbox failed to start → host exec fallback */ }
+    }
+  }
+
   const ctx: SessionContext = {
     kind, ownerId, cwd, model: s.model || 'claude-opus-4-8',
     permissionMode: mode, plugins: resolvePluginPaths(kind, ownerId),
-    authToken: auth.token, gitEnv,
+    authToken: auth.token, gitEnv, mcpServers, disallowedTools,
   };
 
   // persist + broadcast the human message (speaker prefix for multi-party rooms)
@@ -169,7 +195,8 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
   const release = await turnLimiter.acquire();
 
   const abort = new AbortController();
-  active.set(s.id, { abort });
+  const blocks: Block[] = [];
+  active.set(s.id, { abort, blocks, author: p.author }); // blocks kept live so join can replay progress
   p.emit('turn:start', { sessionId: s.id, author: p.author });
 
   const prompt = kind === 'room' ? `[${p.author.name}]: ${p.text}` : p.text;
@@ -179,7 +206,6 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
     ? makeAutoAllow(roots)
     : makeCanUseTool({ sessionId: s.id, roots, mode, emit: p.emit, signal: abort.signal });
 
-  const blocks: Block[] = [];
   let newClaudeSessionId: string | null = s.claudeSessionId ?? null;
   let inTok = 0, outTok = 0, cost = 0;
 
@@ -227,6 +253,7 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
   } finally {
     active.delete(s.id);
     release();
+    if (sandboxCleanup) sandboxCleanup();
     if (p.onDone) {
       const finalText = blocks.filter((b): b is Extract<Block, { type: 'text' }> => b.type === 'text').map((b) => b.text).join('\n');
       try { p.onDone(finalText); } catch { /* noop */ }
