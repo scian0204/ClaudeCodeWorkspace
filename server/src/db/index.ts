@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS wiki_topics (
 );
 CREATE TABLE IF NOT EXISTS messages (
   id TEXT PRIMARY KEY, session_id TEXT NOT NULL, role TEXT NOT NULL, author_id TEXT,
-  author_name TEXT, content TEXT NOT NULL, created_at INTEGER NOT NULL
+  author_name TEXT, content TEXT NOT NULL, chat INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, created_at);
 CREATE TABLE IF NOT EXISTS rooms (
@@ -103,6 +103,8 @@ export function initDb() {
   // auto-review verdict (added to an already-created review_sessions table)
   try { sqlite.exec("ALTER TABLE review_sessions ADD COLUMN verdict TEXT NOT NULL DEFAULT 'none'"); } catch { /* already present */ }
   try { sqlite.exec("ALTER TABLE review_sessions ADD COLUMN verdict_summary TEXT"); } catch { /* already present */ }
+  // room team-chat flag (messages not sent to Claude)
+  try { sqlite.exec("ALTER TABLE messages ADD COLUMN chat INTEGER NOT NULL DEFAULT 0"); } catch { /* already present */ }
   db = drizzle(sqlite, { schema });
   return db;
 }

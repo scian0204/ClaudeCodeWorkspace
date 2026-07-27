@@ -6,7 +6,7 @@ import { t } from './i18n';
 export type Block =
   | { type: 'text'; text: string }
   | { type: 'tool_use'; id: string; name: string; input: any; output?: string; isError?: boolean };
-export interface Msg { id: string; role: string; authorId?: string | null; authorName?: string | null; content: any; createdAt: number; }
+export interface Msg { id: string; role: string; authorId?: string | null; authorName?: string | null; content: any; chat?: boolean; createdAt: number; }
 export interface CmdInfo { name: string; description: string; argumentHint: string }
 export interface Member { userId: string; displayName: string; avatarColor: string; username: string; isOwner: boolean; delegations: string[]; joinedAt: number; }
 export interface RoomSummary { id: string; name: string; ownerId: string; chatSessionId: string; permissionMode: string; members: Member[]; }
@@ -73,7 +73,7 @@ interface State {
   deleteWikiTopic: (id: string) => Promise<void>;
   deleteMessage: (id: string) => Promise<void>;
   editMessage: (id: string, text: string) => Promise<void>;
-  send: (text: string) => void;
+  send: (text: string, opts?: { chat?: boolean; includeChat?: boolean }) => void;
   cancel: (itemId: string) => void;
   interrupt: () => void;
   respond: (requestId: string, decision: 'allow' | 'deny' | 'always' | 'answer', answer?: string) => void;
@@ -276,9 +276,9 @@ export const useStore = create<State>((set, get) => ({
     getSocket().emit('chat:send', { sessionId: c.chatSessionId, text });
   },
 
-  send: (text) => {
+  send: (text, opts) => {
     const c = get().current; if (!c) return;
-    getSocket().emit('chat:send', { sessionId: c.chatSessionId, text });
+    getSocket().emit('chat:send', { sessionId: c.chatSessionId, text, chat: opts?.chat, includeChat: opts?.includeChat });
   },
   cancel: (itemId) => {
     const c = get().current; if (!c) return;

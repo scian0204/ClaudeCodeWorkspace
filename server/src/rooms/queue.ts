@@ -3,7 +3,7 @@ import { runTurn } from '../claude/session-manager.js';
 
 type Emit = (event: string, payload: any) => void;
 
-export interface QueueItem { id: string; author: { id: string; name: string }; text: string; onDone?: (finalText: string) => void; }
+export interface QueueItem { id: string; author: { id: string; name: string }; text: string; onDone?: (finalText: string) => void; includeChat?: boolean; }
 
 class SessionQueue {
   items: QueueItem[] = [];
@@ -43,7 +43,7 @@ class SessionQueue {
         this.running = item;
         this.broadcast();
         try {
-          await runTurn({ chatSessionId: this.sessionId, author: item.author, text: item.text, emit: this.emit, onDone: item.onDone });
+          await runTurn({ chatSessionId: this.sessionId, author: item.author, text: item.text, emit: this.emit, onDone: item.onDone, includeChat: item.includeChat });
         } catch (e) {
           this.emit('turn:error', { sessionId: this.sessionId, error: String((e as any)?.message || e) });
         }
@@ -66,9 +66,9 @@ function getQueue(sessionId: string): SessionQueue {
   return q;
 }
 
-export function enqueueTurn(sessionId: string, author: { id: string; name: string }, text: string, onDone?: (finalText: string) => void): string {
+export function enqueueTurn(sessionId: string, author: { id: string; name: string }, text: string, onDone?: (finalText: string) => void, includeChat?: boolean): string {
   const id = newId();
-  getQueue(sessionId).enqueue({ id, author, text, onDone });
+  getQueue(sessionId).enqueue({ id, author, text, onDone, includeChat });
   return id;
 }
 export function cancelQueued(sessionId: string, itemId: string): boolean {
