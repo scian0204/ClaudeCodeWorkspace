@@ -16,6 +16,7 @@ import {
   inferProvider, slugFromUrl, listPulls, prHeadFetch, prLocalRef, mergePr, type ReviewProvider, type PullInfo,
 } from './providers.js';
 import { enqueueTurn } from '../rooms/queue.js';
+import { interruptTurn } from '../claude/session-manager.js';
 
 type Repo = typeof schema.reviewRepos.$inferSelect;
 type Review = typeof schema.reviewSessions.$inferSelect;
@@ -118,22 +119,29 @@ function matchAuthor(login: string): string | null {
   return ci?.id ?? null;
 }
 
-// Create or refresh the review session for a PR. Returns the new review id if a session was
-// created (so the caller can kick off the auto-review pipeline), else null.
-function upsertReview(repo: Repo, pr: PullInfo): string | null {
+// Create or refresh the review session for a PR. Reports whether it's brand new and whether the
+// PR head moved (author pushed new commits) so the caller can (re)run the auto-review pipeline.
+interface UpsertResult { reviewId: string; isNew: boolean; headChanged: boolean }
+function upsertReview(repo: Repo, pr: PullInfo): UpsertResult {
   const now = Date.now();
   const authorUserId = matchAuthor(pr.authorLogin);
   const existing = db.select().from(schema.reviewSessions)
     .where(and(eq(schema.reviewSessions.repoId, repo.id), eq(schema.reviewSessions.prNumber, pr.number))).get();
   if (existing) {
+    // new commits pushed to the PR → head SHA changed → stale verdict, needs a fresh review
+    const headChanged = !!pr.headSha && existing.headSha !== pr.headSha;
     db.update(schema.reviewSessions).set({
       prTitle: pr.title, prUrl: pr.url, prState: 'open', baseRef: pr.baseRef, headRef: pr.headRef,
       headSha: pr.headSha, headCloneUrl: pr.headCloneUrl, authorLogin: pr.authorLogin,
-      authorUserId: authorUserId ?? existing.authorUserId, updatedAt: now,
+      authorUserId: authorUserId ?? existing.authorUserId,
+      verdict: headChanged ? 'none' : existing.verdict,
+      verdictSummary: headChanged ? null : existing.verdictSummary,
+      updatedAt: now,
     }).where(eq(schema.reviewSessions.id, existing.id)).run();
     db.update(schema.chatSessions).set({ title: `#${pr.number} ${pr.title}` })
       .where(eq(schema.chatSessions.id, existing.chatSessionId)).run();
-    return null;
+    if (headChanged) postSystem(existing.chatSessionId, `[자동 리뷰] PR #${pr.number} 새 커밋 감지 (${(pr.headSha || '').slice(0, 7)}) — 다시 리뷰합니다.`);
+    return { reviewId: existing.id, isNew: false, headChanged };
   }
   const chatSessionId = newId();
   const reviewId = newId();
@@ -148,7 +156,7 @@ function upsertReview(repo: Repo, pr: PullInfo): string | null {
     headSha: pr.headSha, headCloneUrl: pr.headCloneUrl, worktreePath: null, mergeState: 'none',
     verdict: 'none', verdictSummary: null, mergedAt: null, createdAt: now, updatedAt: now,
   }).run();
-  return reviewId;
+  return { reviewId, isNew: true, headChanged: false };
 }
 
 export async function pollRepo(id: string): Promise<{ opened: number; closed: number }> {
@@ -167,8 +175,10 @@ export async function pollRepo(id: string): Promise<{ opened: number; closed: nu
     const openNums = new Set(pulls.map((p) => p.number));
     let opened = 0;
     for (const pr of pulls) {
-      const createdId = upsertReview(repo, pr);
-      if (createdId) { opened++; if (config.reviewAuto) void autoReview(createdId); } // fire-and-forget pipeline
+      const r = upsertReview(repo, pr);
+      if (r.isNew) opened++;
+      // new PR, or the author pushed new commits → (re)run the pipeline (fire-and-forget)
+      if ((r.isNew || r.headChanged) && config.reviewAuto) void autoReview(r.reviewId);
     }
     let closed = 0;
     for (const rv of db.select().from(schema.reviewSessions).where(eq(schema.reviewSessions.repoId, id)).all()) {
@@ -283,7 +293,8 @@ function autoPrompt(rv: Review): string {
   return [
     `[자동 코드리뷰] 이 워크트리는 PR #${rv.prNumber} "${rv.prTitle}"를 base 브랜치(${rv.baseRef})에 로컬 머지한 상태다.`,
     `다음을 순서대로 수행하라:`,
-    `1) 저장소의 빌드 도구를 감지해 빌드하고, 가능하면 실행/테스트까지 돌린다.`,
+    `1) 빌드/실행/테스트는 반드시 격리 샌드박스 도구(mcp__sandbox__run, 없으면 사용 가능한 셸)로만 실행한다. 저장소의 빌드 도구를 감지해 빌드하고 가능하면 실행/테스트까지 돌린다.`,
+    `   단, 이 Linux 샌드박스에서 빌드 불가한 스택(.NET Framework 등 Windows 전용, 또는 툴체인 미설치)이면 빌드/실행을 생략하고 정적 리뷰만 한다. 빌드를 안 돌렸으면 통과했다고 단정하지 말고 SUMMARY에 '빌드 미실행(환경 제약)'을 명시한다.`,
     `2) 버그·회귀·보안 문제를 찾는다.`,
     `3) 변경분(diff)을 코드 리뷰하고 핵심 발견을 요약한다.`,
     `4) 이 PR을 base에 병합해도 되는지 종합 판단한다.`,
@@ -296,43 +307,73 @@ function autoPrompt(rv: Review): string {
 // Reviews with a pipeline in flight (from local merge through the agent turn's onDone). Prevents a
 // re-run from running `git reset --hard`/merge on the worktree while a live turn is still using it.
 const autoRunning = new Set<string>();
+// A head change (new push) that arrived while the pipeline was already running — re-review once the
+// in-flight run finishes, so a commit pushed mid-review isn't left with a stale/old-commit verdict.
+const rerunPending = new Set<string>();
 
 // Full automatic pipeline for one PR: local merge → (unattended) build/run/review turn → verdict.
 // Fire-and-forget: called on PR detection (and via the manual re-run route). Errors are recorded
 // on the session, never thrown to the caller.
 export async function autoReview(reviewId: string): Promise<void> {
-  if (autoRunning.has(reviewId)) return; // pipeline already in flight for this review
+  if (autoRunning.has(reviewId)) { rerunPending.add(reviewId); return; } // in flight → queue a re-review
   const rv = getReview(reviewId);
   if (!rv) return;
   autoRunning.add(reviewId);
-  const done = () => autoRunning.delete(reviewId);
+  let watchdog: ReturnType<typeof setTimeout> | undefined;
+  let finalized = false;
+  // Write the final verdict once — whichever of onDone / watchdog / early-exit reaches it first wins.
+  const setFinal = (verdict: string, summary: string | null) => {
+    if (finalized) return;
+    finalized = true;
+    setVerdict(rv.id, verdict, summary);
+    notify();
+  };
+  // Release the worktree guard + fire a queued re-review. Called ONLY at real turn teardown (the
+  // turn's onDone, after its subprocess is gone) or on a pre-turn early exit — NEVER from the
+  // watchdog — so a re-run's `git reset --hard`/merge can't race a still-terminating turn on the
+  // same worktree. delete() returns false the second time, so the rerun fires at most once.
+  const done = () => {
+    if (watchdog) clearTimeout(watchdog);
+    if (!autoRunning.delete(reviewId)) return;
+    if (rerunPending.delete(reviewId)) void autoReview(reviewId);
+  };
   try {
     setVerdict(rv.id, 'running', null);
     notify();
     const merge = await localMerge(rv);
     if (merge.mergeState === 'conflict') {
-      setVerdict(rv.id, 'conflict', '머지 충돌 — 자동 빌드/리뷰 생략, 수동 해결 필요');
+      setFinal('conflict', '머지 충돌 — 자동 빌드/리뷰 생략, 수동 해결 필요');
       postSystem(rv.chatSessionId, `[자동 리뷰] PR #${rv.prNumber} 머지 충돌로 중단.\n\n${merge.output.slice(0, 800)}`);
-      notify(); done();
+      done();
       return;
     }
     if (merge.mergeState !== 'merged') {
-      setVerdict(rv.id, 'error', '로컬 머지 실패');
-      notify(); done();
+      setFinal('error', '로컬 머지 실패');
+      done();
       return;
     }
-    // hand the merged worktree to an unattended agent turn (auto-allow tools) that emits the verdict.
-    // The guard is held until the turn's onDone so a re-run can't disturb the live worktree.
     const admin = getUserById(getRepo(rv.repoId)?.createdBy || '');
     const author = { id: admin?.id || rv.repoId, name: 'Auto-Review' };
+    // Fresh conversation every run — never resume the prior review. Resuming makes the model treat a
+    // re-review (new commit pushed) as "same task" and rubber-stamp the stale verdict instead of
+    // re-examining the updated worktree.
+    db.update(schema.chatSessions).set({ claudeSessionId: null }).where(eq(schema.chatSessions.id, rv.chatSessionId)).run();
+    // watchdog: abort a hung turn so the verdict resolves off 'running'. It only aborts + records the
+    // verdict; the guard release + any queued re-review happen in the turn's onDone (fired by the
+    // abort's teardown), so the worktree stays exclusive until the subprocess has actually exited.
+    watchdog = setTimeout(() => {
+      interruptTurn(rv.chatSessionId);
+      setFinal('error', `자동 리뷰 시간 초과(${Math.round(config.reviewTurnTimeoutMs / 60000)}분) — 중단됨`);
+      postSystem(rv.chatSessionId, `[자동 리뷰] 시간 초과로 중단. 다시 시도하려면 "자동 리뷰 실행"을 누르세요.`);
+    }, config.reviewTurnTimeoutMs);
     enqueueTurn(rv.chatSessionId, author, autoPrompt(rv), (finalText) => {
       const { verdict, summary } = parseVerdict(finalText);
-      setVerdict(rv.id, verdict, summary);
-      notify(); done();
+      setFinal(verdict, summary);
+      done(); // real teardown: safe to release the worktree + re-review the latest head
     });
   } catch (e: any) {
-    setVerdict(rv.id, 'error', String(e?.message || e).slice(0, 300));
-    notify(); done();
+    setFinal('error', String(e?.message || e).slice(0, 300));
+    done();
   }
 }
 
