@@ -279,7 +279,7 @@ function ReviewControls() {
       {readOnly
         ? <span className="pill" title={t('review.readOnlyHint')}>👁 {t('review.readOnly')}</span>
         : <>
-            <button className="pill" disabled={busy !== ''} onClick={runAuto} title={t('review.autoRunHint')}>{busy === 'auto' ? t('review.autoRunning') : t('review.autoRun')}</button>
+            <button className="pill" disabled={busy !== '' || rv.verdict === 'running'} onClick={runAuto} title={t('review.autoRunHint')}>{busy === 'auto' || rv.verdict === 'running' ? t('review.autoRunning') : t('review.autoRun')}</button>
             <button className="pill" disabled={busy !== ''} onClick={approve} title={t('review.approveHint')}>{busy === 'approve' ? t('review.approving') : t('review.approve')}</button>
           </>}
     </>

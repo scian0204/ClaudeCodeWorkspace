@@ -145,7 +145,11 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
   const mode = clampMode((s.permissionMode as PermMode) || 'default', allowBypass());
   // Each turn runs under its author's token (personal: owner; room: whoever sent this message).
   const auth = resolveClaudeAuth(p.author.id);
-  const gitEnv = await buildGitEnv(cwd, p.author.id);
+  // SECURITY: review turns run unattended and build/run PR-controlled code with Bash auto-allowed,
+  // so never hand them the merge-capable git PAT — it would be readable from the child env by any
+  // build/test script the PR ships. Review never pushes (the remote merge uses the host API), and
+  // the local merge already ran, so no git credential is needed here.
+  const gitEnv = s.kind === 'review' ? undefined : await buildGitEnv(cwd, p.author.id);
   const ctx: SessionContext = {
     kind, ownerId, cwd, model: s.model || 'claude-opus-4-8',
     permissionMode: mode, plugins: resolvePluginPaths(kind, ownerId),
