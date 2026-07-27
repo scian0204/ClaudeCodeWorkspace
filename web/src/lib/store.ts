@@ -366,14 +366,29 @@ async function join(set: any, get: () => State, cur: Current, messages: Msg[]) {
   api.get(`/api/sessions/${cur.chatSessionId}/commands`)
     .then((r) => { if (get().current?.chatSessionId === cur.chatSessionId) set({ commands: r.commands || [] }); })
     .catch(() => {});
-  sock.emit('session:join', cur.chatSessionId, (state: any) => {
-    if (state?.error) { set({ error: state.error }); return; }
-    set({
-      queue: state.queue || { running: null, waiting: [] },
-      pending: state.pending || [],
-      control: state.control || get().control,
-      turnActive: !!state.queue?.running,
-    });
+  sock.emit('session:join', cur.chatSessionId, (state: any) => applyJoinState(set, get, cur.chatSessionId, state));
+}
+
+// Apply a session:join ack: queue/pending/control + replay any in-flight turn (blocks that streamed
+// before this client joined). Shared by initial open and socket reconnect so a turn running while
+// we weren't subscribed still renders.
+function applyJoinState(set: any, get: () => State, sessionId: string, state: any) {
+  if (!state) return;
+  if (state.error) { set({ error: state.error }); return; }
+  if (get().current?.chatSessionId !== sessionId) return;
+  let live: Live | null = null;
+  const lb = state.live?.blocks;
+  if (Array.isArray(lb) && lb.length) {
+    const toolMap: Record<string, number> = {};
+    lb.forEach((b: any, i: number) => { if (b?.type === 'tool_use') toolMap[b.id] = i; });
+    live = { blocks: lb, toolMap };
+  }
+  set({
+    queue: state.queue || { running: null, waiting: [] },
+    pending: state.pending || [],
+    control: state.control || get().control,
+    turnActive: !!state.queue?.running || !!live,
+    ...(live ? { live } : {}),
   });
 }
 
@@ -381,6 +396,18 @@ function wire(set: any, get: () => State) {
   if (wired) return; wired = true;
   const sock = getSocket();
   const isCur = (sessionId: string) => get().current?.chatSessionId === sessionId;
+
+  // On (re)connect — after a network blip or server restart — re-subscribe to the open session's
+  // room and pull any messages that landed while we were disconnected. Without this, a turn that
+  // completed while the socket was down would never reach this still-open client until a manual
+  // reopen (looked like "the conversation wasn't saved").
+  sock.on('connect', () => {
+    const c = get().current; if (!c) return;
+    api.get(`/api/sessions/${c.chatSessionId}`)
+      .then((r) => { if (get().current?.chatSessionId === c.chatSessionId && Array.isArray(r.messages)) set({ messages: r.messages }); })
+      .catch(() => {});
+    sock.emit('session:join', c.chatSessionId, (state: any) => applyJoinState(set, get, c.chatSessionId, state));
+  });
 
   sock.on('message', (p: any) => {
     if (!isCur(p.sessionId)) return;

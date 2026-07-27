@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { parseCookie, userForToken, COOKIE, type AuthUser } from '../auth/index.js';
 import { enqueueTurn, cancelQueued, queueState, setEmitFactory } from '../rooms/queue.js';
-import { interruptTurn } from '../claude/session-manager.js';
+import { interruptTurn, liveTurn } from '../claude/session-manager.js';
 import { respondPermission, pendingForSession, type Decision } from '../claude/permissions.js';
 import * as rooms from '../rooms/manager.js';
 import * as review from '../review/manager.js';
@@ -73,6 +73,7 @@ export function initRealtime(httpServer: HttpServer) {
         queue: queueState(sessionId),
         pending: pendingForSession(sessionId),
         control: controlInfo(user, a),
+        live: liveTurn(sessionId), // replay in-flight turn progress to a mid-turn joiner
       };
       ack?.(state);
       await presence(sessionId);

@@ -20,10 +20,15 @@ export type Block =
   | { type: 'text'; text: string }
   | { type: 'tool_use'; id: string; name: string; input: any; output?: string; isError?: boolean };
 
-interface ActiveTurn { abort: AbortController; }
+interface ActiveTurn { abort: AbortController; blocks: Block[]; author: { id: string; name: string } }
 const active = new Map<string, ActiveTurn>();
 
 export function isTurnActive(sessionId: string) { return active.has(sessionId); }
+// Snapshot of the in-flight turn so a client joining mid-turn can render progress it missed.
+export function liveTurn(sessionId: string): { blocks: Block[]; author: { id: string; name: string } } | null {
+  const t = active.get(sessionId);
+  return t ? { blocks: t.blocks, author: t.author } : null;
+}
 export function interruptTurn(sessionId: string): boolean {
   const t = active.get(sessionId);
   if (!t) return false;
@@ -169,7 +174,8 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
   const release = await turnLimiter.acquire();
 
   const abort = new AbortController();
-  active.set(s.id, { abort });
+  const blocks: Block[] = [];
+  active.set(s.id, { abort, blocks, author: p.author }); // blocks kept live so join can replay progress
   p.emit('turn:start', { sessionId: s.id, author: p.author });
 
   const prompt = kind === 'room' ? `[${p.author.name}]: ${p.text}` : p.text;
@@ -179,7 +185,6 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
     ? makeAutoAllow(roots)
     : makeCanUseTool({ sessionId: s.id, roots, mode, emit: p.emit, signal: abort.signal });
 
-  const blocks: Block[] = [];
   let newClaudeSessionId: string | null = s.claudeSessionId ?? null;
   let inTok = 0, outTok = 0, cost = 0;
 
