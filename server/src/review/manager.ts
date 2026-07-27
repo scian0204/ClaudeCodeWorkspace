@@ -13,7 +13,8 @@ import {
   resolveGitCredById, getGitCredRow, askpassEnv, identityEnv, gitIdentity, hostFromGitUrl,
 } from '../auth/git-cred.js';
 import {
-  inferProvider, slugFromUrl, listPulls, prHeadFetch, prLocalRef, mergePr, type ReviewProvider, type PullInfo,
+  inferProvider, slugFromUrl, listPulls, prHeadFetch, prLocalRef, mergePr, postComment,
+  type ReviewProvider, type PullInfo,
 } from './providers.js';
 import { enqueueTurn } from '../rooms/queue.js';
 import { interruptTurn } from '../claude/session-manager.js';
@@ -289,6 +290,48 @@ function parseVerdict(text: string): { verdict: string; summary: string | null }
   return { verdict: m[1].toUpperCase() === 'MERGE_SAFE' ? 'merge_safe' : 'do_not_merge', summary };
 }
 
+const VERDICT_LABEL: Record<string, string> = {
+  merge_safe: '✅ 병합 가능 (MERGE_SAFE)',
+  do_not_merge: '⛔ 병합 불가 (DO_NOT_MERGE)',
+  unknown: '❔ 판정 불명 (모델이 VERDICT 미출력)',
+};
+
+// Publish a finished auto-review back onto the PR as a comment (GitHub issue comment / GitLab MR
+// note / Bitbucket PR comment), using the same merge-capable credential. Best-effort: any failure
+// is recorded as a system note in the review chat and never breaks the pipeline. Gated by
+// config.reviewComment so a deployment can keep reviews internal to the workspace.
+async function postReviewComment(rv: Review, finalText: string, verdict: string, summary: string | null) {
+  if (!config.reviewComment) return;
+  const repo = getRepo(rv.repoId);
+  if (!repo) return;
+  const cred = resolveGitCredById(repo.credentialId);
+  if (!cred) return;
+  // Strip the machine-readable VERDICT/SUMMARY trailer from the body — re-rendered as a header below.
+  const body = finalText
+    .replace(/\n*VERDICT:\s*(MERGE_SAFE|DO_NOT_MERGE)[^\n]*/i, '')
+    .replace(/\n*SUMMARY:\s*[^\n]*/i, '').trim();
+  const sha = (rv.headSha || '').slice(0, 7);
+  const md = [
+    `## 🤖 자동 코드리뷰 결과`,
+    ``,
+    `**판정:** ${VERDICT_LABEL[verdict] || verdict}`,
+    summary ? `\n> ${summary}` : ``,
+    ``,
+    `---`,
+    ``,
+    body || '(리뷰 본문 없음)',
+    ``,
+    `<sub>ClaudeCode Workspace 자동 리뷰${sha ? ` · ${sha}` : ``}</sub>`,
+  ].join('\n');
+  try {
+    await postComment(repo.provider as ReviewProvider, repo.host, repo.slug, rv.prNumber,
+      { username: cred.username, token: cred.token }, md);
+    postSystem(rv.chatSessionId, `[자동 리뷰] 결과를 PR #${rv.prNumber} 코멘트로 게시했습니다.`);
+  } catch (e: any) {
+    postSystem(rv.chatSessionId, `[자동 리뷰] PR 코멘트 게시 실패: ${String(e?.message || e).slice(0, 200)}`);
+  }
+}
+
 function autoPrompt(rv: Review): string {
   return [
     `[자동 코드리뷰] 이 워크트리는 PR #${rv.prNumber} "${rv.prTitle}"를 base 브랜치(${rv.baseRef})에 로컬 머지한 상태다.`,
@@ -322,11 +365,14 @@ export async function autoReview(reviewId: string): Promise<void> {
   let watchdog: ReturnType<typeof setTimeout> | undefined;
   let finalized = false;
   // Write the final verdict once — whichever of onDone / watchdog / early-exit reaches it first wins.
-  const setFinal = (verdict: string, summary: string | null) => {
-    if (finalized) return;
+  // Returns true only for the caller that actually set it, so onDone knows whether IT produced the
+  // real verdict (vs. the watchdog having already timed the turn out) before publishing to the PR.
+  const setFinal = (verdict: string, summary: string | null): boolean => {
+    if (finalized) return false;
     finalized = true;
     setVerdict(rv.id, verdict, summary);
     notify();
+    return true;
   };
   // Release the worktree guard + fire a queued re-review. Called ONLY at real turn teardown (the
   // turn's onDone, after its subprocess is gone) or on a pre-turn early exit — NEVER from the
@@ -368,7 +414,9 @@ export async function autoReview(reviewId: string): Promise<void> {
     }, config.reviewTurnTimeoutMs);
     enqueueTurn(rv.chatSessionId, author, autoPrompt(rv), (finalText) => {
       const { verdict, summary } = parseVerdict(finalText);
-      setFinal(verdict, summary);
+      // Only publish to the PR if THIS turn produced the verdict — if the watchdog already timed the
+      // turn out, finalText is a partial/aborted review and setFinal returns false (skip the comment).
+      if (setFinal(verdict, summary)) void postReviewComment(rv, finalText, verdict, summary);
       done(); // real teardown: safe to release the worktree + re-review the latest head
     });
   } catch (e: any) {

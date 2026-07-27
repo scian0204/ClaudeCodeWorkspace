@@ -212,6 +212,7 @@ flowchart TB
 - **열람 권한:** 관리자는 전체, PR 작성자(로컬 계정과 username 매칭)는 자기 것만 **읽기 전용**. 매칭 계정 없으면 추가 열람자 없음
 - **전자동 파이프라인**(대화 불필요, `REVIEW_AUTO` 기본 on): 새 PR마다 서버가 **로컬 머지**(공유 클론에서 파생한 PR별 워크트리에 `--no-ff`; 충돌이면 중단·표시)한 뒤, **무인 에이전트 턴**이 **빌드·실행**, **버그 감지**, **diff 코드 리뷰**를 하고 **`VERDICT: MERGE_SAFE` / `DO_NOT_MERGE`** + 한 줄 요약을 낸다. 판단은 세션·사이드바 배지에 표시. **PR에 새 커밋을 push**하면(다음 폴링에서 head SHA 변경 감지) 자동으로 다시 실행되고 판단이 초기화됨. 언제든 수동 재실행 가능
 - 무인 턴은 도구를 **자동 승인**(격리된 워크트리, 클래스1 경로 펜스는 유지)해 빌드/실행이 프롬프트로 멈추지 않음
+- **리뷰 결과를 PR에 코멘트로 게시**(`REVIEW_COMMENT`, 기본 on): 리뷰가 끝나면 판정 + 요약 + 리뷰 본문을 해당 PR의 코멘트로 게시(GitHub 이슈 코멘트 / GitLab MR 노트 / Bitbucket PR 코멘트). 새 커밋으로 재리뷰될 때마다 각자 코멘트를 남긴다. `REVIEW_COMMENT=0`이면 워크스페이스 내부에만 보관
 - **지시 시 PR 허가:** 관리자가 클릭 한 번으로 병합권한 자격증명을 써서 **원격 저장소의 PR을 실제 병합**(GitHub/GitLab/Bitbucket API) — 원격을 건드리는 유일한 단계, 확인 대화로 게이팅
 </details>
 
@@ -233,6 +234,7 @@ flowchart TB
 | `MAX_CONCURRENT_TURNS` | 공용키 전역 동시 턴 캡 + 초과 큐잉 + 429 백오프 | `3` |
 | `REVIEW_POLL_MS` | 감시 중인 리뷰 저장소의 열린 PR 폴링 주기 (0이면 비활성) | `60000` |
 | `REVIEW_AUTO` | 새 PR마다 리뷰 파이프라인(머지→빌드/실행→리뷰→판단) 자동 실행; `0`이면 수동 트리거만 | `1` |
+| `REVIEW_COMMENT` | 완료된 리뷰(판정+요약+본문)를 PR 코멘트로 게시; `0`이면 내부에만 보관 | `1` |
 | `BOOTSTRAP_ADMIN_USER` / `_PASSWORD` | 최초 부팅 admin(유저 0명일 때만) | `admin` |
 | `CODE_SERVER_IMAGE` | 편집기 이미지 | `codercom/code-server:latest` |
 | `CODE_SERVER_IDLE_MS` | 유휴 컨테이너 회수 시간 | `1800000` |
