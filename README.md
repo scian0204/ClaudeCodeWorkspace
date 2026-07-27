@@ -44,6 +44,7 @@ The Claude Code CLI is powerful, but it's tied to **one terminal — yours**. Cl
 - **Commit & push** a cloned repo from the chat header (or let Claude do it) with encrypted per-user git credentials
 - Build a team **LLM Wiki** — upload docs, Claude compiles them into a queryable knowledge base
 - **Auto-review pull requests** — each open PR auto-runs a pipeline (merge → build/run → bug + code review → a merge-safe verdict); one click merges it on the remote
+- **Live usage meter** in the chat header — per-session **context-window** fill plus your **claude.ai plan limits** (5-hour, weekly, per-model) with reset countdowns, straight from the CLI
 - Each user runs on **their own Claude token** (admin-common token + env as fallback); admins see everything via a **usage dashboard**
 
 > Works as a personal remote setup too — solo, it becomes a single-account "remote Claude Code".

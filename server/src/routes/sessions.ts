@@ -3,7 +3,7 @@ import { and, desc, eq, isNull } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { requireAuth } from '../auth/index.js';
 import { newId } from '../lib/ids.js';
-import { probeCommands } from '../claude/session-manager.js';
+import { probeCommands, probeUsage } from '../claude/session-manager.js';
 import { reviewRoleForChat } from '../review/manager.js';
 import type { AuthUser } from '../auth/index.js';
 
@@ -80,6 +80,16 @@ export async function sessionRoutes(app: FastifyInstance) {
     if (!s) return reply.code(404).send({ error: 'not found' });
     if (!canViewChat(u, s)) return reply.code(403).send({ error: 'forbidden' });
     return { commands: await probeCommands(id, u.id) };
+  });
+
+  // context-window usage + claude.ai plan rate limits (5h / weekly / per-model) for this session
+  app.get('/api/sessions/:id/usage', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    const { id } = req.params as any;
+    const s = db.select().from(schema.chatSessions).where(eq(schema.chatSessions.id, id)).get();
+    if (!s) return reply.code(404).send({ error: 'not found' });
+    if (!canViewChat(u, s)) return reply.code(403).send({ error: 'forbidden' });
+    return { usage: await probeUsage(id, u.id) };
   });
 
   app.patch('/api/sessions/:id', async (req, reply) => {

@@ -134,6 +134,77 @@ export async function probeCommands(chatSessionId: string, requesterId?: string 
   return [];
 }
 
+// ── usage probe: context-window breakdown + claude.ai plan rate limits (5h / weekly / per-model) ──
+// Same short-lived-query trick as probeCommands: resume the session so getContextUsage reflects the
+// real transcript, ask the CLI's control channel for both figures, then abort (no model tokens spent).
+// ponytail: spawns a CLI subprocess per probe — the TTL cache below keeps popover reopens free;
+// upgrade to a long-lived query per session only if this ever gets hot.
+type Win = { utilization: number | null; resetsAt: string | null };
+type ModelWin = Win & { displayName: string };
+export interface UsageInfo {
+  context: { totalTokens: number; maxTokens: number; percentage: number; model: string } | null;
+  rateLimitsAvailable: boolean;
+  subscriptionType: string | null;
+  rateLimits: { fiveHour: Win | null; sevenDay: Win | null; modelScoped: ModelWin[] } | null;
+}
+const EMPTY_USAGE: UsageInfo = { context: null, rateLimitsAvailable: false, subscriptionType: null, rateLimits: null };
+const usageCache = new Map<string, { at: number; data: UsageInfo }>();
+const USAGE_TTL_MS = 15_000;
+const win = (w: any): Win | null => (w ? { utilization: w.utilization ?? null, resetsAt: w.resets_at ?? null } : null);
+
+export async function probeUsage(chatSessionId: string, requesterId?: string | null): Promise<UsageInfo> {
+  const s = getSession(chatSessionId);
+  if (!s) return EMPTY_USAGE;
+  const kind: 'user' | 'room' = s.kind === 'room' ? 'room' : 'user';
+  const ownerId = kind === 'room' ? s.roomId! : s.ownerId;
+  // Rate limits + subscription are account-specific to whoever probes (their own token wins in
+  // resolveClaudeAuth), so the cache MUST be keyed per requester — keying by session alone would
+  // serve one member's claude.ai plan usage to another viewer of the same room/review/session.
+  const authId = requesterId ?? (kind === 'user' ? ownerId : null);
+  const auth = resolveClaudeAuth(authId);
+  if (auth.source === 'none') return EMPTY_USAGE; // mock / no token → nothing to report
+
+  const cacheKey = `${chatSessionId}|${authId ?? 'shared'}`;
+  const hit = usageCache.get(cacheKey);
+  if (hit && Date.now() - hit.at < USAGE_TTL_MS) return hit.data;
+
+  const ctx: SessionContext = {
+    kind, ownerId, cwd: await cwdFor(s), model: s.model || 'claude-opus-4-8',
+    permissionMode: clampMode((s.permissionMode as PermMode) || 'default', allowBypass()),
+    plugins: resolvePluginPaths(kind, ownerId), authToken: auth.token,
+  };
+  const abort = new AbortController();
+  const withTimeout = <T,>(p: Promise<T>): Promise<T | null> =>
+    Promise.race([p.catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), 8000))]);
+  try {
+    const { query } = await import('@anthropic-ai/claude-agent-sdk');
+    const options = buildOptions(ctx, {
+      canUseTool: async () => ({ behavior: 'deny', message: 'probe' }),
+      resume: s.claudeSessionId, abortController: abort,
+    });
+    const q: any = query({ prompt: 'ping', options });
+    const [cu, us] = await Promise.all([
+      typeof q.getContextUsage === 'function' ? withTimeout(q.getContextUsage()) : Promise.resolve(null),
+      typeof q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET === 'function'
+        ? withTimeout(q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET()) : Promise.resolve(null),
+    ]);
+    const rl = (us as any)?.rate_limits;
+    const data: UsageInfo = {
+      context: cu ? { totalTokens: (cu as any).totalTokens, maxTokens: (cu as any).maxTokens, percentage: (cu as any).percentage, model: (cu as any).model } : null,
+      rateLimitsAvailable: !!(us as any)?.rate_limits_available,
+      subscriptionType: (us as any)?.subscription_type ?? null,
+      rateLimits: rl ? {
+        fiveHour: win(rl.five_hour),
+        sevenDay: win(rl.seven_day),
+        modelScoped: (rl.model_scoped || []).map((m: any) => ({ displayName: m.display_name, utilization: m.utilization ?? null, resetsAt: m.resets_at ?? null })),
+      } : null,
+    };
+    usageCache.set(cacheKey, { at: Date.now(), data });
+    return data;
+  } catch { return EMPTY_USAGE; }
+  finally { try { abort.abort(); } catch { /* noop */ } }
+}
+
 export interface RunTurnParams {
   chatSessionId: string;
   author: { id: string; name: string };

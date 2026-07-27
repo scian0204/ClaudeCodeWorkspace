@@ -1,7 +1,7 @@
 // Routes every /api/* request to canned data / in-memory mutations for the static demo.
 // Called by the fetch + XHR interceptors in ./install. Returns a plain {status, data}.
 import {
-  db, ADMIN, GIT, COMMANDS, TREE_PROJECT, TREE_PLUGIN, WIKI_ARTICLES, WIKI_RAW, WIKI_TREE_ARTICLES,
+  db, ADMIN, GIT, COMMANDS, USAGE, TREE_PROJECT, TREE_PLUGIN, WIKI_ARTICLES, WIKI_RAW, WIKI_TREE_ARTICLES,
   fileContent, wikiFileContent, pluginDetail, EDITOR_URL, genId,
 } from './data';
 
@@ -42,6 +42,7 @@ export function route(method: string, rawPath: string, body?: any): Res {
     db.sessions.unshift(s); db.messages[s.id] = []; return ok({ session: s });
   }
   if (seg[1] === 'sessions' && seg[3] === 'commands') return ok({ commands: COMMANDS });
+  if (seg[1] === 'sessions' && seg[3] === 'usage') return ok({ usage: USAGE });
   if (seg[1] === 'sessions' && seg[3] === 'messages' && seg[5] === 'edit') {
     const list = msgs(idAt(2)); const i = list.findIndex((m) => m.id === idAt(4));
     if (i >= 0) list.splice(i); // drop the edited message and everything after (regenerate)

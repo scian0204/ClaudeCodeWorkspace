@@ -128,6 +128,21 @@ export const COMMANDS = [
   { name: 'test', description: 'Run the test suite and summarize failures', argumentHint: '[path]' },
 ];
 
+// ---- session usage (context window + plan rate limits) ---------------------
+// Matches the /api/sessions/:id/usage shape; reset timestamps are relative to now so the popover
+// shows live "resets in Xh Ym" countdowns in the static demo.
+const inMin = (m: number) => new Date(Date.now() + m * 60000).toISOString();
+export const USAGE = {
+  context: { totalTokens: 41900, maxTokens: 1_000_000, percentage: 4, model: 'claude-opus-4-8' },
+  rateLimitsAvailable: true,
+  subscriptionType: 'team',
+  rateLimits: {
+    fiveHour: { utilization: 2, resetsAt: inMin(4 * 60 + 18) },
+    sevenDay: { utilization: 59, resetsAt: inMin(18 * 60 + 28) },
+    modelScoped: [{ displayName: 'Fable', utilization: 0, resetsAt: inMin(18 * 60 + 28) }],
+  },
+};
+
 // ---- plugins / marketplaces ------------------------------------------------
 const plugin = (id: string, name: string, source: string, enabled: number, forced = 0, repo: string | null = null) => ({ id, name, source, enabled, forced, repo });
 
