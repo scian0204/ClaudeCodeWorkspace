@@ -182,6 +182,12 @@ export async function gitMerge(dir: string, ref: string, message: string, env?: 
   }
 }
 
+// List paths changed across <range> (e.g. 'origin/main...refs/ccw/pr-12'). NUL-safe.
+export async function gitDiffNames(dir: string, range: string, env?: Env): Promise<string[]> {
+  const { stdout } = await git(dir, ['diff', '--name-only', '-z', range], env);
+  return stdout.split('\0').map((s) => s.trim()).filter(Boolean);
+}
+
 // Switch branches. `git checkout <name>` DWIMs: an existing local branch is checked out;
 // a name that only exists on a remote auto-creates a local tracking branch. Fails (surfaced)
 // if the working tree has changes that would be overwritten.
