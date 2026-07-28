@@ -5,6 +5,7 @@ import { requireAuth } from '../auth/index.js';
 import { newId } from '../lib/ids.js';
 import { probeCommands, probeUsage } from '../claude/session-manager.js';
 import { reviewRoleForChat } from '../review/manager.js';
+import { cfg } from '../lib/config-registry.js';
 import type { AuthUser } from '../auth/index.js';
 
 function loadMessages(sessionId: string) {
@@ -47,7 +48,7 @@ export async function sessionRoutes(app: FastifyInstance) {
     const row = {
       id: newId(), ownerId: u.id, kind: 'private', roomId: null,
       title: title ? String(title) : '새 대화', projectId: projectId ? String(projectId) : null,
-      claudeSessionId: null, model: 'claude-opus-4-8', permissionMode: 'default',
+      claudeSessionId: null, model: cfg.str('defaultModel'), permissionMode: 'default',
       createdAt: now, updatedAt: now,
     };
     db.insert(schema.chatSessions).values(row).run();

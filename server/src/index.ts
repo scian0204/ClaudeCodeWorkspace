@@ -6,6 +6,7 @@ import cookie from '@fastify/cookie';
 import multipart from '@fastify/multipart';
 import fstatic from '@fastify/static';
 import { config } from './config.js';
+import { cfg } from './lib/config-registry.js';
 import { initDb } from './db/index.js';
 import { bootstrapAdmin, attachUser } from './auth/index.js';
 import { authRoutes } from './auth/routes.js';
@@ -41,13 +42,13 @@ async function main() {
       : null;
   const opts: FastifyServerOptions & { https?: { key: Buffer; cert: Buffer } } = {
     logger: false,
-    bodyLimit: 6 * 1024 * 1024,
+    bodyLimit: cfg.int('httpBodyLimitMB') * 1024 * 1024,
   };
   if (tls) opts.https = tls;
   const app = Fastify(opts);
   await app.register(cookie, { secret: config.sessionSecret });
   // fieldNameSize raised: wiki folder-drops carry each file's relative path in the field name
-  await app.register(multipart, { limits: { fileSize: 50 * 1024 * 1024, fieldNameSize: 16384 } });
+  await app.register(multipart, { limits: { fileSize: cfg.int('uploadMaxMB') * 1024 * 1024, fieldNameSize: 16384 } });
 
   // intercept code-server proxy before auth/routing (gated by random token per spec)
   app.addHook('onRequest', async (req, reply) => {
@@ -65,7 +66,7 @@ async function main() {
   await app.register(gitCredentialRoutes);
   await app.register(reviewRoutes);
 
-  app.get('/api/health', async () => ({ ok: true, mock: config.forceMock }));
+  app.get('/api/health', async () => ({ ok: true, mock: cfg.bool('forceMock') }));
 
   // serve built SPA (production); in dev, Vite serves the frontend on :5173
   const webDist = path.resolve(__dirname, '../../web/dist');
@@ -94,7 +95,7 @@ async function main() {
   startReviewPoller(); // poll each watched repo's host for open PRs → spawn/refresh review sessions
 
   await app.listen({ port: config.port, host: '0.0.0.0' });
-  console.log(`[ccw] listening on ${tls ? 'https' : 'http'}://:${config.port}  forceMock=${config.forceMock}  data=${config.dataDir}`);
+  console.log(`[ccw] listening on ${tls ? 'https' : 'http'}://:${config.port}  forceMock=${cfg.bool('forceMock')}  data=${config.dataDir}`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

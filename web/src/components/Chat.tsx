@@ -59,6 +59,9 @@ function Header() {
   const [showMembers, setShowMembers] = useState(false);
   const [explorer, setExplorer] = useState(false);
   const [gitOpen, setGitOpen] = useState(false);
+  // model list is admin-configurable (server registry); fetch it, fall back to the built-in defaults
+  const [models, setModels] = useState<Record<string, string>>(MODELS);
+  useEffect(() => { api.get('/api/config').then((cf) => { if (cf?.models) setModels(cf.models); }).catch(() => {}); }, []);
   const t = useT();
   if (!c) return null;
   const isRoom = c.kind === 'room';
@@ -96,9 +99,9 @@ function Header() {
       {!c.wikiTopicId && c.projectId && <button className="pill" title={t('git.title')} onClick={() => setGitOpen(true)}>{t('git.pill')}</button>}
 
       <DM.Root>
-        <DM.Trigger asChild><button className="pill" disabled={!!c.readOnly}>{MODELS[c.model] || c.model} ▾</button></DM.Trigger>
+        <DM.Trigger asChild><button className="pill" disabled={!!c.readOnly}>{models[c.model] || c.model} ▾</button></DM.Trigger>
         <Menu>
-          {Object.entries(MODELS).map(([id, label]) => (
+          {Object.entries(models).map(([id, label]) => (
             <MenuItem key={id} onSelect={() => setModel(id)}>{label}</MenuItem>
           ))}
         </Menu>

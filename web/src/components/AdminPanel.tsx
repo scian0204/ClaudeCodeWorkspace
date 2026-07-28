@@ -105,11 +105,11 @@ export function AdminPanel() {
                 <input type="checkbox" checked={settings.allowBypass} onChange={toggleBypass} />
                 {t('admin.allowBypassLabel')}
               </label>
-              <div className="text-txt3 text-xs">{t('admin.concurrentTurnCap', { max: settings.maxConcurrentTurns })}</div>
-              <div className="text-txt3 text-xs">{t('admin.codeServerImage', { image: settings.codeServer })}</div>
             </div>
           )}
         </Section>
+
+        <ConfigManager />
 
         <Section title={t('admin.userManagementTitle')}>
           <div className="space-y-1.5 mb-3">
@@ -137,6 +137,84 @@ export function AdminPanel() {
           </div>
           <button className="btn-primary mt-2" onClick={createUser}>{t('admin.createUser')}</button>
         </Section>
+      </div>
+    </div>
+  );
+}
+
+// Full config registry: every admin-manageable setting (env + hardcoded constants), grouped.
+// Driven entirely by the /api/admin/config metadata so new registry entries appear here for free.
+function ConfigManager() {
+  const t = useT();
+  const [items, setItems] = useState<any[]>([]);
+  const [edits, setEdits] = useState<Record<string, string>>({});
+  const load = async () => { const r = await api.get('/api/admin/config'); setItems(r.items); setEdits({}); };
+  useEffect(() => { load().catch((e) => useStore.getState().setError(e.message)); }, []);
+  const apply = async (fn: () => Promise<any>) => {
+    try { const r = await fn(); if (r?.items) setItems(r.items); }
+    catch (e: any) { useStore.getState().setError(e.message); }
+  };
+  const save = (key: string, value: any) => apply(async () => {
+    const r = await api.put('/api/admin/config', { key, value });
+    setEdits((e) => { const n = { ...e }; delete n[key]; return n; });
+    return r;
+  });
+  const reset = (key: string) => apply(() => api.del(`/api/admin/config/${encodeURIComponent(key)}`));
+  const groups: string[] = [...new Set(items.map((i) => i.group))];
+  return (
+    <>
+      {groups.map((g) => (
+        <Section key={g} title={t(`admin.cfgGroup.${g}`)}>
+          {(g === 'infra' || g === 'secret') && (
+            <div className="text-[11px] text-txt3 mb-2">{t(g === 'secret' ? 'admin.cfgSecretHint' : 'admin.cfgReadonlyHint')}</div>
+          )}
+          <div className="divide-y divide-line">
+            {items.filter((i) => i.group === g).map((it) => (
+              <ConfigRow key={it.key} it={it} edit={edits[it.key]}
+                onEdit={(v) => setEdits((e) => ({ ...e, [it.key]: v }))} onSave={save} onReset={reset} />
+            ))}
+          </div>
+        </Section>
+      ))}
+    </>
+  );
+}
+
+function ConfigRow({ it, edit, onEdit, onSave, onReset }: {
+  it: any; edit: string | undefined; onEdit: (v: string) => void;
+  onSave: (k: string, v: any) => void; onReset: (k: string) => void;
+}) {
+  const t = useT();
+  const cur = it.value ?? '';
+  const dirty = edit !== undefined && edit !== String(cur);
+  return (
+    <div className="flex items-center gap-2 py-2 flex-wrap">
+      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+        <span className="font-mono text-[12px] truncate">{it.key}</span>
+        {it.restart && <span className="text-[9px] uppercase bg-warnsoft text-warn px-1.5 py-0.5 rounded-full whitespace-nowrap">{t('admin.cfgRestart')}</span>}
+        {it.overridden && <button className="text-xs text-txt3 hover:text-clay" title={t('admin.cfgReset')} onClick={() => onReset(it.key)}>↺</button>}
+      </div>
+      <div className="flex items-center gap-1.5 shrink-0">
+        {it.secret ? (
+          <span className={`text-xs ${it.set ? 'text-ok' : 'text-txt3'}`}>{it.set ? t('admin.cfgSet') : t('admin.cfgDefault')}</span>
+        ) : it.readonly ? (
+          <span className="font-mono text-[11px] text-txt3">{String(it.value) || '—'}</span>
+        ) : it.type === 'bool' ? (
+          <input type="checkbox" checked={it.value === '1'} onChange={(e) => onSave(it.key, e.target.checked)} />
+        ) : it.type === 'select' ? (
+          <select className="input" value={cur} onChange={(e) => onSave(it.key, e.target.value)}>
+            {(it.options || []).map((o: string) => <option key={o} value={o}>{o}</option>)}
+          </select>
+        ) : (
+          <>
+            <input className="input w-40" type={it.type === 'int' ? 'number' : 'text'}
+              value={edit ?? String(cur)} min={it.min} max={it.max}
+              onChange={(e) => onEdit(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && dirty) onSave(it.key, edit); }} />
+            {it.unit && <span className="text-[11px] text-txt3">{it.unit}</span>}
+            {dirty && <button className="btn-primary text-xs px-2 py-1" onClick={() => onSave(it.key, edit)}>{t('admin.save')}</button>}
+          </>
+        )}
       </div>
     </div>
   );

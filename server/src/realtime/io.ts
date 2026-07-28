@@ -8,6 +8,7 @@ import { interruptTurn, liveTurn, postChat } from '../claude/session-manager.js'
 import { respondPermission, pendingForSession, type Decision } from '../claude/permissions.js';
 import * as rooms from '../rooms/manager.js';
 import * as review from '../review/manager.js';
+import { cfg } from '../lib/config-registry.js';
 
 export let io: IOServer;
 
@@ -46,7 +47,7 @@ async function presence(sessionId: string) {
 }
 
 export function initRealtime(httpServer: HttpServer) {
-  io = new IOServer(httpServer, { path: '/socket.io', maxHttpBufferSize: 5e6 });
+  io = new IOServer(httpServer, { path: '/socket.io', maxHttpBufferSize: cfg.int('socketMaxMB') * 1024 * 1024 });
 
   // emit factory so the FIFO queue / session manager can broadcast to session rooms
   setEmitFactory((sessionId) => (event, payload) => io.to(sessionRoom(sessionId)).emit(event, payload));

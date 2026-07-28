@@ -3,11 +3,12 @@ import { eq, and, gt } from 'drizzle-orm';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { db, schema } from '../db/index.js';
 import { config } from '../config.js';
+import { cfg } from '../lib/config-registry.js';
 import { newId, newToken, colorFor } from '../lib/ids.js';
 import { ensureUserLayout } from '../lib/paths.js';
 import { setUserToken, userTokenMeta } from './claude-token.js';
 
-const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+// auth session lifetime is configurable (sessionTtlDays); resolved live at login()
 
 export type Role = 'admin' | 'member';
 export interface AuthUser {
@@ -65,7 +66,7 @@ export function login(username: string, password: string): { token: string; user
   if (!u || !verifyPassword(password, u.passwordHash)) return null;
   const token = newToken();
   const now = Date.now();
-  db.insert(schema.authSessions).values({ id: token, userId: u.id, createdAt: now, expiresAt: now + SESSION_TTL_MS }).run();
+  db.insert(schema.authSessions).values({ id: token, userId: u.id, createdAt: now, expiresAt: now + cfg.int('sessionTtlDays') * 86_400_000 }).run();
   return { token, user: toAuthUser(u) };
 }
 

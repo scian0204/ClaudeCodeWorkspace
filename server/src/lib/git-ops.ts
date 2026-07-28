@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { cfg } from './config-registry.js';
 
 const execFileP = promisify(execFile);
 
@@ -12,8 +13,8 @@ export interface GitStatus {
 type Env = Record<string, string>;
 const baseEnv = (extra?: Env): Env => ({ ...process.env, GIT_TERMINAL_PROMPT: '0', ...(extra || {}) } as Env);
 
-async function git(dir: string, args: string[], env?: Env, timeout = 120_000) {
-  return execFileP('git', ['-C', dir, ...args], { env: baseEnv(env), timeout, maxBuffer: 8 * 1024 * 1024 });
+async function git(dir: string, args: string[], env?: Env, timeout = cfg.int('gitOpTimeoutMs')) {
+  return execFileP('git', ['-C', dir, ...args], { env: baseEnv(env), timeout, maxBuffer: cfg.int('gitMaxBufferMB') * 1024 * 1024 });
 }
 
 function gitErr(e: any): string {
@@ -103,7 +104,7 @@ export async function gitCommit(dir: string, opts: { message: string; files?: st
 // Push the current branch to origin, setting upstream (idempotent whether or not one exists).
 export async function gitPush(dir: string, opts: { env?: Env }): Promise<{ output: string }> {
   try {
-    const { stdout, stderr } = await git(dir, ['push', '-u', 'origin', 'HEAD'], opts.env, 180_000);
+    const { stdout, stderr } = await git(dir, ['push', '-u', 'origin', 'HEAD'], opts.env, cfg.int('gitNetworkTimeoutMs'));
     return { output: (stderr || stdout || '').trim().slice(0, 1000) };
   } catch (e: any) { throw new Error(gitErr(e)); }
 }
@@ -131,7 +132,7 @@ export async function gitFetchRemotes(dir: string, env?: Env): Promise<void> {
   if (!(await isRepo(dir))) return;
   try {
     await git(dir, ['remote', 'set-branches', 'origin', '*'], env);
-    await git(dir, ['fetch', 'origin'], env, 180_000);
+    await git(dir, ['fetch', 'origin'], env, cfg.int('gitNetworkTimeoutMs'));
   } catch { /* keep whatever refs we already have */ }
 }
 
@@ -141,7 +142,7 @@ export async function gitFetchRemotes(dir: string, env?: Env): Promise<void> {
 // GIT_CRED_*) authenticates a private repo. Never places the token in the URL.
 export async function gitCloneFull(url: string, dir: string, env?: Env): Promise<void> {
   await execFileP('git', ['clone', url, dir], {
-    timeout: 300_000,
+    timeout: cfg.int('gitNetworkTimeoutMs'),
     env: baseEnv({ GIT_ASKPASS: '/bin/echo', ...(env || {}) }),
     maxBuffer: 16 * 1024 * 1024,
   });
@@ -149,7 +150,7 @@ export async function gitCloneFull(url: string, dir: string, env?: Env): Promise
 
 // Fetch with an explicit argv (e.g. ['origin', 'pull/12/head:refs/ccw/pr-12']).
 export async function gitFetch(dir: string, args: string[], env?: Env): Promise<void> {
-  try { await git(dir, ['fetch', ...args], env, 300_000); }
+  try { await git(dir, ['fetch', ...args], env, cfg.int('gitNetworkTimeoutMs')); }
   catch (e: any) { throw new Error(gitErr(e)); }
 }
 

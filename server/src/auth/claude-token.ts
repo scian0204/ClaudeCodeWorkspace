@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { config } from '../config.js';
+import { cfg } from '../lib/config-registry.js';
 import { getSetting, setSetting } from '../lib/settings.js';
 import { encrypt, decrypt, validTokenFormat } from '../lib/secret-box.js';
 
@@ -58,7 +59,7 @@ export function getCommonToken(): string {
 // Precedence: user's own token → admin common token (DB) → env → none(mock).
 // MOCK_CLAUDE=1 forces mock regardless.
 export function resolveClaudeAuth(userId: string | null): { token: string; source: TokenSource } {
-  if (config.forceMock) return { token: '', source: 'none' };
+  if (cfg.bool('forceMock')) return { token: '', source: 'none' };
   if (userId) {
     const u = db.select().from(schema.users).where(eq(schema.users.id, userId)).get();
     if (u?.claudeTokenEnc) {

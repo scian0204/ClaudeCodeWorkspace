@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { buildOptions, type SessionContext } from '../claude/config-layering.js';
 import { resolveClaudeAuth } from '../auth/claude-token.js';
+import { cfg } from '../lib/config-registry.js';
 import { recordUsage } from '../usage/tracker.js';
 import { io } from '../realtime/io.js';
 
@@ -62,7 +63,7 @@ function compilePrompt(name: string, description: string) {
 async function runCompile(t: NonNullable<ReturnType<typeof getTopic>>) {
   const ctx: SessionContext = {
     kind: 'user', ownerId: t.createdBy, cwd: t.path,
-    model: 'claude-opus-4-8',
+    model: cfg.str('defaultModel'),
     // acceptEdits (not bypassPermissions): the always-allow canUseTool below authorizes every
     // tool, and bypass maps to --dangerously-skip-permissions which the CLI refuses under root.
     permissionMode: 'acceptEdits',
