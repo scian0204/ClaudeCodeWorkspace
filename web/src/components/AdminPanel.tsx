@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../lib/store';
 import { api } from '../lib/api';
 import { useT } from '../lib/i18n';
@@ -144,6 +144,10 @@ export function AdminPanel() {
 
 // Full config registry: every admin-manageable setting (env + hardcoded constants), grouped.
 // Driven entirely by the /api/admin/config metadata so new registry entries appear here for free.
+// Human names + descriptions come from i18n (cfg.<key> / cfgDesc.<key>) with graceful fallback.
+function cfgLabel(t: (k: string) => string, key: string) { const s = t(`cfg.${key}`); return s === `cfg.${key}` ? key : s; }
+function cfgDesc(t: (k: string) => string, key: string) { const s = t(`cfgDesc.${key}`); return s === `cfgDesc.${key}` ? '' : s; }
+
 function ConfigManager() {
   const t = useT();
   const [items, setItems] = useState<any[]>([]);
@@ -160,9 +164,23 @@ function ConfigManager() {
     return r;
   });
   const reset = (key: string) => apply(() => api.del(`/api/admin/config/${encodeURIComponent(key)}`));
+  const restart = async () => {
+    if (!confirm(t('admin.cfgRestartConfirm'))) return;
+    try { await api.post('/api/admin/restart', {}); } catch { /* the process exits mid-request */ }
+    useStore.getState().setError(t('admin.cfgRestarting'));
+    setTimeout(() => location.reload(), 4000);
+  };
   const groups: string[] = [...new Set(items.map((i) => i.group))];
+  const restartNeeded = items.some((i) => i.restart && i.overridden);
   return (
     <>
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="font-semibold">{t('admin.cfgTitle')}</div>
+        <button className="ml-auto text-xs border border-line rounded-lg px-2.5 py-1 hover:border-clay" onClick={restart}>⟳ {t('admin.cfgRestartBtn')}</button>
+      </div>
+      {restartNeeded && (
+        <div className="text-xs text-warn bg-warnsoft border border-warn rounded-lg px-3 py-2">{t('admin.cfgRestartNeeded')}</div>
+      )}
       {groups.map((g) => (
         <Section key={g} title={t(`admin.cfgGroup.${g}`)}>
           {(g === 'infra' || g === 'secret') && (
@@ -185,36 +203,142 @@ function ConfigRow({ it, edit, onEdit, onSave, onReset }: {
   onSave: (k: string, v: any) => void; onReset: (k: string) => void;
 }) {
   const t = useT();
+  const name = cfgLabel(t, it.key);
+  const desc = cfgDesc(t, it.key);
   const cur = it.value ?? '';
   const dirty = edit !== undefined && edit !== String(cur);
+  const editable = !it.readonly && !it.secret;
   return (
-    <div className="flex items-center gap-2 py-2 flex-wrap">
-      <div className="flex items-center gap-1.5 min-w-0 flex-1">
-        <span className="font-mono text-[12px] truncate">{it.key}</span>
-        {it.restart && <span className="text-[9px] uppercase bg-warnsoft text-warn px-1.5 py-0.5 rounded-full whitespace-nowrap">{t('admin.cfgRestart')}</span>}
-        {it.overridden && <button className="text-xs text-txt3 hover:text-clay" title={t('admin.cfgReset')} onClick={() => onReset(it.key)}>↺</button>}
+    <div className="py-2.5">
+      <div className="flex items-start gap-2 flex-wrap">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="font-medium text-[13px]">{name}</span>
+            <span className="font-mono text-[10px] text-txt3">{it.key}</span>
+            {it.restart && <span className="text-[9px] uppercase bg-warnsoft text-warn px-1.5 py-0.5 rounded-full whitespace-nowrap">{t('admin.cfgRestart')}</span>}
+            {it.overridden && <button className="text-xs text-txt3 hover:text-clay" title={t('admin.cfgReset')} onClick={() => onReset(it.key)}>↺</button>}
+          </div>
+          {desc && <p className="text-[11px] text-txt3 mt-0.5 leading-snug">{desc}</p>}
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {it.secret ? (
+            <span className={`text-xs ${it.set ? 'text-ok' : 'text-txt3'}`}>{it.set ? t('admin.cfgSet') : t('admin.cfgDefault')}</span>
+          ) : it.readonly ? (
+            <span className="font-mono text-[11px] text-txt3 break-all text-right max-w-[240px]">{String(it.value) || '—'}</span>
+          ) : it.image ? (
+            <ImageControl it={it} edit={edit} onEdit={onEdit} onSave={onSave} />
+          ) : it.type === 'json' ? (
+            <span className="text-[11px] text-txt3">{t('admin.cfgJsonBelow')} ↓</span>
+          ) : it.type === 'bool' ? (
+            <input type="checkbox" checked={it.value === '1'} onChange={(e) => onSave(it.key, e.target.checked)} />
+          ) : it.type === 'select' ? (
+            <select className="input" value={cur} onChange={(e) => onSave(it.key, e.target.value)}>
+              {(it.options || []).map((o: string) => <option key={o} value={o}>{o}</option>)}
+            </select>
+          ) : (
+            <>
+              <input className="input w-40" type={it.type === 'int' ? 'number' : 'text'}
+                value={edit ?? String(cur)} min={it.min} max={it.max}
+                onChange={(e) => onEdit(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && dirty) onSave(it.key, edit); }} />
+              {it.unit && <span className="text-[11px] text-txt3">{it.unit}</span>}
+              {dirty && <button className="btn-primary text-xs px-2 py-1" onClick={() => onSave(it.key, edit)}>{t('admin.save')}</button>}
+            </>
+          )}
+        </div>
       </div>
-      <div className="flex items-center gap-1.5 shrink-0">
-        {it.secret ? (
-          <span className={`text-xs ${it.set ? 'text-ok' : 'text-txt3'}`}>{it.set ? t('admin.cfgSet') : t('admin.cfgDefault')}</span>
-        ) : it.readonly ? (
-          <span className="font-mono text-[11px] text-txt3">{String(it.value) || '—'}</span>
-        ) : it.type === 'bool' ? (
-          <input type="checkbox" checked={it.value === '1'} onChange={(e) => onSave(it.key, e.target.checked)} />
-        ) : it.type === 'select' ? (
-          <select className="input" value={cur} onChange={(e) => onSave(it.key, e.target.value)}>
-            {(it.options || []).map((o: string) => <option key={o} value={o}>{o}</option>)}
-          </select>
-        ) : (
-          <>
-            <input className="input w-40" type={it.type === 'int' ? 'number' : 'text'}
-              value={edit ?? String(cur)} min={it.min} max={it.max}
-              onChange={(e) => onEdit(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && dirty) onSave(it.key, edit); }} />
-            {it.unit && <span className="text-[11px] text-txt3">{it.unit}</span>}
-            {dirty && <button className="btn-primary text-xs px-2 py-1" onClick={() => onSave(it.key, edit)}>{t('admin.save')}</button>}
-          </>
-        )}
+      {editable && it.type === 'json' && <JsonEditor it={it} onSave={onSave} />}
+    </div>
+  );
+}
+
+// Structured editor for object/array JSON settings (e.g. the model map). Object → key/value rows;
+// array → value rows; anything else → raw textarea. Local edits commit on Save.
+function JsonEditor({ it, onSave }: { it: any; onSave: (k: string, v: any) => void }) {
+  const t = useT();
+  const parsed = useMemo(() => { try { return JSON.parse(it.value ?? it.default); } catch { return null; } }, [it.value, it.default]);
+  const isArray = Array.isArray(parsed);
+  const isObj = !!parsed && !isArray && typeof parsed === 'object';
+  const [rows, setRows] = useState<Array<[string, string]>>([]);
+  const [raw, setRaw] = useState('');
+  useEffect(() => {
+    if (isArray) setRows((parsed as any[]).map((v) => ['', String(v)]));
+    else if (isObj) setRows(Object.entries(parsed as any).map(([k, v]) => [k, String(v)] as [string, string]));
+    else setRaw(it.value ?? it.default ?? '');
+  }, [it.value, it.default]);
+  if (!isArray && !isObj) {
+    return (
+      <div className="mt-2 flex flex-col gap-1.5">
+        <textarea className="input font-mono text-xs h-24" value={raw} onChange={(e) => setRaw(e.target.value)} />
+        <button className="btn-primary text-xs px-2 py-1 self-end" onClick={() => onSave(it.key, raw)}>{t('admin.save')}</button>
+      </div>
+    );
+  }
+  const commit = () => {
+    const value = isArray
+      ? rows.map(([, v]) => v).filter((x) => x !== '')
+      : Object.fromEntries(rows.filter(([k]) => k !== '').map(([k, v]) => [k, v]));
+    onSave(it.key, JSON.stringify(value));
+  };
+  return (
+    <div className="mt-2 rounded-lg border border-line bg-card p-2 space-y-1.5">
+      {rows.map((r, i) => (
+        <div key={i} className="flex items-center gap-1.5">
+          {isObj && <input className="input w-40" placeholder={t('admin.cfgKey')} value={r[0]}
+            onChange={(e) => { const n = rows.slice(); n[i] = [e.target.value, r[1]]; setRows(n); }} />}
+          <input className="input flex-1" placeholder={t('admin.cfgValue')} value={r[1]}
+            onChange={(e) => { const n = rows.slice(); n[i] = [r[0], e.target.value]; setRows(n); }} />
+          <button className="text-txt3 hover:text-danger px-1" onClick={() => setRows(rows.filter((_, j) => j !== i))}>✕</button>
+        </div>
+      ))}
+      <div className="flex items-center gap-2">
+        <button className="text-xs text-clay hover:underline" onClick={() => setRows([...rows, ['', '']])}>+ {t('admin.cfgAddRow')}</button>
+        <button className="btn-primary text-xs px-2 py-1 ml-auto" onClick={commit}>{t('admin.save')}</button>
+      </div>
+    </div>
+  );
+}
+
+// Docker image row: editable image ref + presence check + pull/update. Pull acts on the SAVED value
+// (the server allowlists it), so it's disabled while there's an unsaved edit.
+function ImageControl({ it, edit, onEdit, onSave }: {
+  it: any; edit: string | undefined; onEdit: (v: string) => void; onSave: (k: string, v: any) => void;
+}) {
+  const t = useT();
+  const cur = it.value ?? '';
+  const dirty = edit !== undefined && edit !== String(cur);
+  const [status, setStatus] = useState<any>(null);
+  const [busy, setBusy] = useState<'check' | 'pull' | null>(null);
+  useEffect(() => {
+    let live = true;
+    setBusy('check');
+    api.post('/api/admin/image/inspect', { image: cur })
+      .then((s) => { if (live) setStatus(s); })
+      .catch(() => { if (live) setStatus({ dockerUnavailable: true }); })
+      .finally(() => { if (live) setBusy(null); });
+    return () => { live = false; };
+  }, [cur]);
+  const pull = async () => {
+    setBusy('pull');
+    try { setStatus(await api.post('/api/admin/image/pull', { image: cur })); }
+    catch (e: any) { useStore.getState().setError(e.message); }
+    finally { setBusy(null); }
+  };
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <div className="flex items-center gap-1.5">
+        <input className="input w-44 md:w-48" value={edit ?? String(cur)}
+          onChange={(e) => onEdit(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && dirty) onSave(it.key, edit); }} />
+        {dirty && <button className="btn-primary text-xs px-2 py-1" onClick={() => onSave(it.key, edit)}>{t('admin.save')}</button>}
+      </div>
+      <div className="flex items-center gap-2 text-[11px]">
+        {busy === 'check' ? <span className="text-txt3">{t('admin.cfgImageChecking')}</span>
+          : status?.dockerUnavailable ? <span className="text-txt3">docker N/A</span>
+          : status?.present ? <span className="text-ok">● {t('admin.cfgImagePresent')}{status.size ? ` · ${Math.round(status.size / 1e6)}MB` : ''}</span>
+          : <span className="text-warn">○ {t('admin.cfgImageAbsent')}</span>}
+        <button className="text-clay hover:underline disabled:opacity-40" disabled={busy !== null || dirty}
+          onClick={pull}>{busy === 'pull' ? t('admin.cfgImagePulling') : t('admin.cfgImagePull')}</button>
       </div>
     </div>
   );

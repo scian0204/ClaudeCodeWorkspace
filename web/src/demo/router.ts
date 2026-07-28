@@ -226,6 +226,11 @@ export function route(method: string, rawPath: string, body?: any): Res {
     if (it) { it.value = it.default; it.overridden = false; }
     return ok({ items: ADMIN.config });
   }
+  if (P === '/api/admin/image/inspect' && M === 'POST') return ok(ADMIN.images[b.image] || { present: false });
+  if (P === '/api/admin/image/pull' && M === 'POST') {
+    const s = (ADMIN.images[b.image] ||= { present: false }); s.present = true; s.size = s.size || 402_000_000; return ok(s);
+  }
+  if (P === '/api/admin/restart' && M === 'POST') return ok({ ok: true });
   if (P === '/api/admin/claude-token') return ok({});
 
   return ok({}); // unknown → harmless empty object
