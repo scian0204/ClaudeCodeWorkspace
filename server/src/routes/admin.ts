@@ -3,7 +3,8 @@ import { requireAdmin, getUserById } from '../auth/index.js';
 import { db, schema } from '../db/index.js';
 import { usageTotals, usageByUser } from '../usage/tracker.js';
 import { getSetting, setSetting } from '../lib/settings.js';
-import { cfg, listConfigForApi, setConfigValue, resetConfigValue } from '../lib/config-registry.js';
+import { cfg, listConfigForApi, setConfigValue, resetConfigValue, imageConfigValues } from '../lib/config-registry.js';
+import { inspectImage, pullImage } from '../lib/docker-images.js';
 import { turnLimiter } from '../claude/throttle.js';
 import { setCommonToken, clearCommonToken, commonTokenMeta } from '../auth/claude-token.js';
 
@@ -60,6 +61,31 @@ export async function adminRoutes(app: FastifyInstance) {
     try { resetConfigValue(String(key)); }
     catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
     return { items: listConfigForApi() };
+  });
+
+  // ── docker image management for image-typed settings (code-server / review sandbox) ──
+  // Allowlisted to the current values of image-typed settings so an admin can only act on images
+  // the app actually uses (never an arbitrary pull via the mounted socket).
+  app.post('/api/admin/image/inspect', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    const image = String((req.body as any)?.image || '');
+    if (!imageConfigValues().includes(image)) return reply.code(400).send({ error: 'unknown image' });
+    return inspectImage(image);
+  });
+  app.post('/api/admin/image/pull', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    const image = String((req.body as any)?.image || '');
+    if (!imageConfigValues().includes(image)) return reply.code(400).send({ error: 'unknown image' });
+    try { await pullImage(image); }
+    catch (e: any) { return reply.code(500).send({ error: String(e?.message || e).slice(0, 300) }); }
+    return inspectImage(image);
+  });
+
+  // ── restart the server process; docker's restart policy (unless-stopped) brings it back ──
+  app.post('/api/admin/restart', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    setTimeout(() => { console.log('[ccw] admin-triggered restart'); process.exit(0); }, 300);
+    return { ok: true };
   });
 
   // ── admin-managed common (shared) Claude token ──
