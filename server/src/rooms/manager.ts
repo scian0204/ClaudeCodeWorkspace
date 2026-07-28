@@ -3,6 +3,7 @@ import { db, schema } from '../db/index.js';
 import { newId } from '../lib/ids.js';
 import { ensureRoomLayout } from '../lib/paths.js';
 import { getUserById, toAuthUser, type AuthUser } from '../auth/index.js';
+import { cfg } from '../lib/config-registry.js';
 
 export type Perm = 'approve' | 'interrupt' | 'invite' | 'kick' | 'delete_room' | 'transfer';
 export const DELEGABLE: Perm[] = ['approve', 'interrupt', 'invite', 'kick', 'delete_room', 'transfer'];
@@ -15,7 +16,7 @@ export function createRoom(owner: AuthUser, name: string) {
   ensureRoomLayout(roomId);
   db.insert(schema.chatSessions).values({
     id: chatSessionId, ownerId: owner.id, kind: 'room', roomId, title: name,
-    projectId: null, claudeSessionId: null, model: 'claude-opus-4-8',
+    projectId: null, claudeSessionId: null, model: cfg.str('defaultModel'),
     permissionMode: 'default', createdAt: now, updatedAt: now,
   }).run();
   db.insert(schema.rooms).values({

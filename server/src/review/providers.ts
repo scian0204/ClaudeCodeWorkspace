@@ -2,6 +2,8 @@
 // (username + PAT) that clones/fetches the repo, resolved by host. No SDKs — plain fetch against
 // each host's REST API. Self-hosted GitHub Enterprise / GitLab are covered via the host field.
 
+import { cfg } from '../lib/config-registry.js';
+
 export type ReviewProvider = 'github' | 'gitlab' | 'bitbucket';
 
 export interface PullInfo {
@@ -43,7 +45,7 @@ export function prLocalRef(prNumber: number): string { return `refs/ccw/pr-${prN
 async function getJson(url: string, headers: Record<string, string>): Promise<any> {
   // Hard timeout so a host that accepts the connection but never responds can't hang the poller
   // (which would wedge the repo's poll lock) or a synchronous createRepo request forever.
-  const r = await fetch(url, { headers: { 'User-Agent': UA, ...headers }, signal: AbortSignal.timeout(20_000) });
+  const r = await fetch(url, { headers: { 'User-Agent': UA, ...headers }, signal: AbortSignal.timeout(cfg.int('reviewHttpTimeoutMs')) });
   const text = await r.text();
   if (!r.ok) throw new Error(`${r.status} ${r.statusText}: ${text.slice(0, 300)}`);
   try { return JSON.parse(text); } catch { throw new Error(`bad JSON from ${url}`); }
@@ -52,7 +54,7 @@ async function getJson(url: string, headers: Record<string, string>): Promise<an
 // ── GitHub (+ GHE via host/api/v3) ──
 async function githubPulls(host: string, slug: string, cred: HostCred): Promise<PullInfo[]> {
   const base = host === 'github.com' ? 'https://api.github.com' : `https://${host}/api/v3`;
-  const data = await getJson(`${base}/repos/${slug}/pulls?state=open&per_page=100`, {
+  const data = await getJson(`${base}/repos/${slug}/pulls?state=open&per_page=${cfg.int('reviewMaxOpenPrs')}`, {
     Authorization: `Bearer ${cred.token}`, Accept: 'application/vnd.github+json',
   });
   return (data || []).map((p: any): PullInfo => {
@@ -69,7 +71,7 @@ async function githubPulls(host: string, slug: string, cred: HostCred): Promise<
 // ── GitLab (self-hosted or gitlab.com) ──
 async function gitlabPulls(host: string, slug: string, cred: HostCred): Promise<PullInfo[]> {
   const base = `https://${host}/api/v4`;
-  const data = await getJson(`${base}/projects/${encodeURIComponent(slug)}/merge_requests?state=opened&per_page=100`, {
+  const data = await getJson(`${base}/projects/${encodeURIComponent(slug)}/merge_requests?state=opened&per_page=${cfg.int('reviewMaxOpenPrs')}`, {
     'PRIVATE-TOKEN': cred.token,
   });
   // GitLab publishes refs/merge-requests/<iid>/head on the TARGET project, so even a fork's head
@@ -84,7 +86,7 @@ async function gitlabPulls(host: string, slug: string, cred: HostCred): Promise<
 // ── Bitbucket Cloud ──
 async function bitbucketPulls(host: string, slug: string, cred: HostCred): Promise<PullInfo[]> {
   const auth = Buffer.from(`${cred.username}:${cred.token}`).toString('base64');
-  const data = await getJson(`https://api.bitbucket.org/2.0/repositories/${slug}/pullrequests?state=OPEN&pagelen=50`, {
+  const data = await getJson(`https://api.bitbucket.org/2.0/repositories/${slug}/pullrequests?state=OPEN&pagelen=${Math.min(cfg.int('reviewMaxOpenPrs'), 50)}`, {
     Authorization: `Basic ${auth}`,
   });
   return (data?.values || []).map((p: any): PullInfo => {
@@ -111,7 +113,7 @@ async function sendJson(method: string, url: string, headers: Record<string, str
     method,
     headers: { 'User-Agent': UA, 'Content-Type': 'application/json', ...headers },
     body: body != null ? JSON.stringify(body) : undefined,
-    signal: AbortSignal.timeout(20_000),
+    signal: AbortSignal.timeout(cfg.int('reviewHttpTimeoutMs')),
   });
   const text = await r.text();
   if (!r.ok) throw new Error(`${r.status} ${r.statusText}: ${text.slice(0, 300)}`);

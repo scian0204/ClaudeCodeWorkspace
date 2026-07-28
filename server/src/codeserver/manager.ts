@@ -2,6 +2,7 @@ import path from 'node:path';
 import http from 'node:http';
 import Docker from 'dockerode';
 import { config } from '../config.js';
+import { cfg, registerApply } from '../lib/config-registry.js';
 import { newToken } from '../lib/ids.js';
 
 const docker = new Docker();
@@ -53,12 +54,12 @@ export async function open(ownerId: string, projectId: string, absProjectPath: s
   byRoute.set(routeOf(ownerId, projectId), inst);
 
   inst.starting = (async () => {
-    await ensureImage(config.codeServer.image);
+    await ensureImage(cfg.str('codeServerImage'));
     await removeIfExists(containerName);
     const vol = config.codeServer.dataVolume;
     const container = await docker.createContainer({
       name: containerName,
-      Image: config.codeServer.image,
+      Image: cfg.str('codeServerImage'),
       Cmd: ['--auth', 'none', '--bind-addr', '0.0.0.0:8080', '/home/coder/project'],
       User: '0:0',
       Labels: { 'ccw.codeserver': '1', 'ccw.owner': ownerId, 'ccw.project': projectId },
@@ -113,7 +114,7 @@ export async function killForOwner(ownerId: string) {
 
 
 // poll code-server until it answers on :8080 (avoids iframe 502 race)
-function waitReady(name: string, timeoutMs = 30000): Promise<void> {
+function waitReady(name: string, timeoutMs = cfg.int('codeServerWaitReadyMs')): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   return new Promise((resolve) => {
     const tryOnce = () => {
@@ -135,14 +136,22 @@ export async function cleanupOrphans() {
   } catch { /* docker unavailable */ }
 }
 
-export function startReaper() {
-  if (!dockerAvailable()) return;
-  setInterval(() => {
-    const now = Date.now();
-    for (const inst of [...instances.values()]) {
-      if (now - inst.lastActive > config.codeServer.idleMs) {
-        stop(inst).catch(() => {});
-      }
-    }
-  }, 60_000).unref();
+let reaperTimer: ReturnType<typeof setInterval> | null = null;
+function reaperSweep() {
+  const now = Date.now();
+  const idleMs = cfg.int('codeServerIdleMs');
+  for (const inst of [...instances.values()]) {
+    if (now - inst.lastActive > idleMs) stop(inst).catch(() => {});
+  }
 }
+export function startReaper() { scheduleReaper(); }
+// (Re)arm the reaper sweep from the live config. Called at boot and whenever codeServerReaperMs
+// changes (admin edit) so a new sweep cadence takes effect without a restart. Idle timeout is read
+// live inside the sweep, so it needs no reschedule.
+export function scheduleReaper() {
+  if (reaperTimer) { clearInterval(reaperTimer); reaperTimer = null; }
+  if (!dockerAvailable()) return;
+  reaperTimer = setInterval(reaperSweep, cfg.int('codeServerReaperMs'));
+  reaperTimer.unref();
+}
+registerApply('codeServerReaperMs', () => scheduleReaper());

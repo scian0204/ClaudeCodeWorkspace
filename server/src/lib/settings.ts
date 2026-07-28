@@ -10,6 +10,9 @@ export function setSetting(key: string, value: string) {
   if (r) db.update(schema.settings).set({ value }).where(eq(schema.settings.key, key)).run();
   else db.insert(schema.settings).values({ key, value }).run();
 }
+export function deleteSetting(key: string) {
+  db.delete(schema.settings).where(eq(schema.settings.key, key)).run();
+}
 export function allowBypass(): boolean {
   return getSetting('allow_bypass', '1') === '1';
 }
