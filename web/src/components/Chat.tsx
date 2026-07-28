@@ -765,6 +765,11 @@ const CLIENT_CMDS: { cmd: string; label: string; kind: 'ui'; run: (s: any) => vo
 ];
 type Cmd = { cmd: string; label: string; kind: 'ui' | 'cmd'; desc?: string; hint?: string; run?: (s: any) => void };
 
+// callback ref for the highlighted menu row — keeps it in view on keyboard nav (slash + @ menus).
+// Module-scope so its identity is stable: React then only re-invokes it on the row entering/leaving
+// selection, not every render. block:'nearest' is a no-op when the row is already visible.
+const scrollSel = (el: HTMLDivElement | null) => el?.scrollIntoView({ block: 'nearest' });
+
 // ── @ file/folder references ──
 // The tree endpoint lists files only; derive the folder paths from them so both are pickable.
 type Ref = { path: string; dir: boolean };
@@ -891,7 +896,7 @@ function Composer() {
               </div>
               <div className="max-h-64 overflow-y-auto scrolly">
                 {matches.map((m, i) => (
-                  <div key={m.cmd} onMouseEnter={() => setSel(i)} onClick={() => pickSlash(i)}
+                  <div key={m.cmd} ref={i === sel ? scrollSel : undefined} onMouseEnter={() => setSel(i)} onClick={() => pickSlash(i)}
                     className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer text-sm ${i === sel ? 'bg-line' : ''}`}>
                     <code className="font-mono text-clay text-xs shrink-0">{m.cmd}</code>
                     {m.hint && <code className="font-mono text-txt3 text-[11px] shrink-0">{m.hint}</code>}
@@ -912,7 +917,7 @@ function Composer() {
               </div>
               <div className="max-h-64 overflow-y-auto scrolly">
                 {atMatches.map((r, i) => (
-                  <div key={(r.dir ? 'd:' : 'f:') + r.path} onMouseEnter={() => setSel(i)} onClick={() => pickAt(i)}
+                  <div key={(r.dir ? 'd:' : 'f:') + r.path} ref={i === sel ? scrollSel : undefined} onMouseEnter={() => setSel(i)} onClick={() => pickAt(i)}
                     className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer text-sm ${i === sel ? 'bg-line' : ''}`}>
                     <span className="shrink-0">{r.dir ? '📁' : '📄'}</span>
                     <code className="font-mono text-txt2 text-xs truncate flex-1">{r.path}{r.dir ? '/' : ''}</code>

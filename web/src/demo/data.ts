@@ -85,8 +85,12 @@ const REVIEW_MSGS = [
 // ---- projects / trees / files ---------------------------------------------
 export const TREE_PROJECT = [
   { name: 'src/index.ts', size: 812 }, { name: 'src/auth/middleware.ts', size: 1440 },
-  { name: 'src/auth/tokenService.ts', size: 2210 }, { name: 'src/routes/admin.ts', size: 980 },
-  { name: 'README.md', size: 640 }, { name: 'package.json', size: 410 },
+  { name: 'src/auth/tokenService.ts', size: 2210 }, { name: 'src/auth/session.ts', size: 1320 },
+  { name: 'src/routes/admin.ts', size: 980 }, { name: 'src/routes/users.ts', size: 1160 },
+  { name: 'src/routes/health.ts', size: 220 }, { name: 'src/lib/db.ts', size: 1740 },
+  { name: 'src/lib/logger.ts', size: 560 }, { name: 'src/lib/config.ts', size: 640 },
+  { name: 'tests/auth.test.ts', size: 1980 }, { name: 'tests/routes.test.ts', size: 1520 },
+  { name: 'README.md', size: 640 }, { name: 'package.json', size: 410 }, { name: 'tsconfig.json', size: 320 },
 ];
 export const TREE_PLUGIN = [
   { name: 'plugin.json', size: 210 }, { name: 'skills/review/SKILL.md', size: 1180 },
