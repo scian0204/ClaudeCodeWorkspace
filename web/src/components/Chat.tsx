@@ -765,11 +765,39 @@ const CLIENT_CMDS: { cmd: string; label: string; kind: 'ui'; run: (s: any) => vo
 ];
 type Cmd = { cmd: string; label: string; kind: 'ui' | 'cmd'; desc?: string; hint?: string; run?: (s: any) => void };
 
+// ── @ file/folder references ──
+// The tree endpoint lists files only; derive the folder paths from them so both are pickable.
+type Ref = { path: string; dir: boolean };
+function buildRefs(files: { name: string }[]): Ref[] {
+  const dirs = new Set<string>();
+  for (const f of files) { const parts = f.name.split('/'); for (let i = 1; i < parts.length; i++) dirs.add(parts.slice(0, i).join('/')); }
+  return [...[...dirs].map((path) => ({ path, dir: true })), ...files.map((f) => ({ path: f.name, dir: false }))];
+}
+// The @-token immediately left of the caret (mid-text ok): '@' at start or after whitespace,
+// then path chars up to the caret. Returns the query + the '@' index.
+function atTokenAt(text: string, caret: number): { q: string; start: number } | null {
+  const m = text.slice(0, caret).match(/(?:^|\s)@([^\s@]*)$/);
+  return m ? { q: m[1], start: caret - m[1].length - 1 } : null;
+}
+function filterRefs(refs: Ref[], q: string, limit = 50): Ref[] {
+  const ql = q.toLowerCase();
+  const base = (p: string) => p.slice(p.lastIndexOf('/') + 1).toLowerCase();
+  return refs
+    .filter((r) => !ql || r.path.toLowerCase().includes(ql))
+    .map((r) => { const b = base(r.path); const pl = r.path.toLowerCase();
+      const score = !ql ? 0 : b.startsWith(ql) ? 0 : pl.startsWith(ql) ? 1 : b.includes(ql) ? 2 : 3; return { r, score }; })
+    .sort((a, b) => a.score - b.score || a.r.path.length - b.r.path.length || a.r.path.localeCompare(b.r.path))
+    .slice(0, limit).map((s) => s.r);
+}
+
 function Composer() {
   const store = useStore();
   const { current: c, send, queue, cancel, interrupt, turnActive, congested, user, commands } = store;
   const [text, setText] = useState('');
   const [sel, setSel] = useState(0);
+  const [caret, setCaret] = useState(0);
+  const [refs, setRefs] = useState<Ref[] | null>(null);
+  const [atClosed, setAtClosed] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const t = useT();
   const roomId = c?.kind === 'room' ? (c.roomId ?? null) : null;
@@ -801,17 +829,40 @@ function Composer() {
   const argsTyped = text.length > firstTok.length && text.slice(firstTok.length).trim().length > 0;
   const showHint = !!active?.hint && !showSlash && !argsTyped;
 
-  const pick = (i: number) => {
+  // @ file/folder reference picker — any session that has a project (not wiki knowledge queries)
+  const canRef = !c.wikiTopicId && !!c.projectId;
+  const atTok = canRef && !atClosed ? atTokenAt(text, Math.min(caret, text.length)) : null;
+  useEffect(() => { setRefs(null); }, [c.projectId]); // project switched → drop cached tree
+  useEffect(() => {
+    if (canRef && atTok && refs === null && c.projectId)
+      api.get(`/api/projects/${c.projectId}/tree`).then((r) => setRefs(buildRefs(r.files || []))).catch(() => setRefs([]));
+  }, [canRef, !!atTok, refs, c.projectId]);
+  const atMatches = atTok && refs ? filterRefs(refs, atTok.q) : [];
+  const showAt = !showSlash && !!atTok && atMatches.length > 0;
+
+  const menuOpen = showSlash || showAt;
+  const menuMatches: (Cmd | Ref)[] = showSlash ? matches : atMatches;
+
+  const pickSlash = (i: number) => {
     const m = matches[i]; if (!m) return;
     if (m.run) { m.run(store); setText(''); setSel(0); return; }
     setText(m.cmd + ' '); setSel(0); taRef.current?.focus(); // fill for args; the hint ghosts in; Enter sends → CLI runs it
   };
+  const pickAt = (i: number) => {
+    const r = atMatches[i]; if (!r || !atTok) return;
+    const insert = '@' + r.path + (r.dir ? '/' : '') + ' ';
+    const before = text.slice(0, atTok.start), after = text.slice(caret);
+    const pos = before.length + insert.length;
+    setText(before + insert + after); setSel(0); setAtClosed(false);
+    requestAnimationFrame(() => { const ta = taRef.current; if (ta) { ta.focus(); ta.setSelectionRange(pos, pos); } setCaret(pos); });
+  };
+  const pickMenu = (i: number) => (showSlash ? pickSlash(i) : pickAt(i));
   const submit = () => {
     if (wikiCompiling || readOnly) return;
-    if (showSlash) return pick(Math.min(sel, matches.length - 1));
+    if (menuOpen) return pickMenu(Math.min(sel, menuMatches.length - 1));
     if (!text.trim()) return;
     send(text.trim(), { chat: isRoom && mode === 'chat', includeChat: isRoom && mode === 'claude' && includeChat });
-    setText('');
+    setText(''); setCaret(0);
   };
 
   return (
@@ -840,7 +891,7 @@ function Composer() {
               </div>
               <div className="max-h-64 overflow-y-auto scrolly">
                 {matches.map((m, i) => (
-                  <div key={m.cmd} onMouseEnter={() => setSel(i)} onClick={() => pick(i)}
+                  <div key={m.cmd} onMouseEnter={() => setSel(i)} onClick={() => pickSlash(i)}
                     className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer text-sm ${i === sel ? 'bg-line' : ''}`}>
                     <code className="font-mono text-clay text-xs shrink-0">{m.cmd}</code>
                     {m.hint && <code className="font-mono text-txt3 text-[11px] shrink-0">{m.hint}</code>}
@@ -848,6 +899,26 @@ function Composer() {
                     <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full shrink-0"
                       style={{ background: 'var(--claysoft)', color: 'var(--clay)' }}>
                       {m.kind === 'ui' ? 'UI' : t('chat.cmdBadge')}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {showAt && (
+            <div className="absolute bottom-full mb-2 left-0 right-0 bg-panel border border-line rounded-lg shadow-2xl overflow-hidden z-40">
+              <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-txt3 border-b border-line flex justify-between">
+                <span>{t('chat.filesRef')}</span><span>{atMatches.length}</span>
+              </div>
+              <div className="max-h-64 overflow-y-auto scrolly">
+                {atMatches.map((r, i) => (
+                  <div key={(r.dir ? 'd:' : 'f:') + r.path} onMouseEnter={() => setSel(i)} onClick={() => pickAt(i)}
+                    className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer text-sm ${i === sel ? 'bg-line' : ''}`}>
+                    <span className="shrink-0">{r.dir ? '📁' : '📄'}</span>
+                    <code className="font-mono text-txt2 text-xs truncate flex-1">{r.path}{r.dir ? '/' : ''}</code>
+                    <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full shrink-0"
+                      style={{ background: 'var(--claysoft)', color: 'var(--clay)' }}>
+                      {r.dir ? t('chat.refFolder') : t('chat.refFile')}
                     </span>
                   </div>
                 ))}
@@ -863,19 +934,25 @@ function Composer() {
             <textarea ref={taRef} disabled={wikiCompiling || readOnly}
               className="relative z-10 w-full bg-transparent outline-none resize-none text-sm text-txt placeholder:text-txt3 disabled:opacity-50"
               rows={2} placeholder={readOnly ? t('review.readOnlyPlaceholder') : wikiCompiling ? t('chat.topicCompiling') : isRoom ? (mode === 'chat' ? t('chat.roomChatPlaceholder', { title: c.title }) : t('chat.roomMessagePlaceholder', { title: c.title, name: user?.displayName ?? '' })) : t('chat.messagePlaceholder')}
-              value={text} onChange={(e) => {
+              value={text}
+              onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
+              onChange={(e) => {
                 let v = e.target.value;
-                if (isRoom) { const mm = v.match(/^@(\ud074\ub85c\ub4dc|claude)\s?/i); if (mm) { v = v.slice(mm[0].length); setMode('claude'); } }
-                setText(v); setSel(0);
+                let pos = e.target.selectionStart ?? v.length;
+                if (isRoom) { const mm = v.match(/^@(\ud074\ub85c\ub4dc|claude)\s?/i); if (mm) { v = v.slice(mm[0].length); setMode('claude'); pos = Math.max(0, pos - mm[0].length); } }
+                setText(v); setSel(0); setAtClosed(false); setCaret(Math.min(pos, v.length));
               }}
               onKeyDown={(e) => {
-                if (showSlash && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab')) {
+                if (menuOpen && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab')) {
                   e.preventDefault();
                   const up = e.key === 'ArrowUp';
-                  setSel((p) => up ? (p - 1 + matches.length) % matches.length : (p + 1) % matches.length);
+                  setSel((p) => up ? (p - 1 + menuMatches.length) % menuMatches.length : (p + 1) % menuMatches.length);
                   return;
                 }
-                if (showSlash && e.key === 'Escape') { e.preventDefault(); setText(''); return; }
+                if (e.key === 'Escape') {
+                  if (showAt) { e.preventDefault(); setAtClosed(true); return; }
+                  if (showSlash) { e.preventDefault(); setText(''); return; }
+                }
                 if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
               }} />
             <div className="flex items-center gap-2 mt-2 flex-wrap">
@@ -890,7 +967,7 @@ function Composer() {
                   <input type="checkbox" checked={includeChat} onChange={(e) => setIncludeChat(e.target.checked)} /> {t('chat.includeChat')}
                 </label>
               )}
-              <span className="text-xs text-txt3 truncate">{wikiCompiling ? (wikiStep ? t('chat.compilingStep', { step: wikiStep }) : t('chat.compilingReady')) : turnActive ? t('chat.claudeResponding') : (isRoom && mode === 'chat' ? t('chat.composerHintChat') : t('chat.composerHint'))}</span>
+              <span className="text-xs text-txt3 truncate">{wikiCompiling ? (wikiStep ? t('chat.compilingStep', { step: wikiStep }) : t('chat.compilingReady')) : turnActive ? t('chat.claudeResponding') : (isRoom && mode === 'chat' ? t('chat.composerHintChat') : t(canRef ? 'chat.composerHintRef' : 'chat.composerHint'))}</span>
               <button className="ml-auto bg-clay text-white rounded-lg w-8 h-8 grid place-items-center disabled:opacity-40" disabled={wikiCompiling || readOnly} onClick={submit} aria-label={t('chat.send')}>➤</button>
             </div>
           </div>
