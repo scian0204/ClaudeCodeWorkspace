@@ -4,7 +4,7 @@ import { and, desc, eq } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { newId } from '../lib/ids.js';
 import { paths, ensure } from '../lib/paths.js';
-import { config } from '../config.js';
+import { cfg, registerApply } from '../lib/config-registry.js';
 import { getUserById, findByUsername, type AuthUser } from '../auth/index.js';
 import {
   gitCloneFull, gitFetch, gitFetchRemotes, gitWorktreeAdd, gitWorktreeRemove, gitResetHard, gitMerge, gitDiffNames,
@@ -150,7 +150,7 @@ function upsertReview(repo: Repo, pr: PullInfo): UpsertResult {
   db.insert(schema.chatSessions).values({
     id: chatSessionId, ownerId: repo.createdBy, kind: 'review', roomId: null,
     title: `#${pr.number} ${pr.title}`, projectId: null, wikiTopicId: null, claudeSessionId: null,
-    model: 'claude-opus-4-8', permissionMode: 'default', createdAt: now, updatedAt: now,
+    model: cfg.str('defaultModel'), permissionMode: 'default', createdAt: now, updatedAt: now,
   }).run();
   db.insert(schema.reviewSessions).values({
     id: reviewId, repoId: repo.id, chatSessionId, prNumber: pr.number, prTitle: pr.title, prUrl: pr.url,
@@ -180,7 +180,7 @@ export async function pollRepo(id: string): Promise<{ opened: number; closed: nu
       const r = upsertReview(repo, pr);
       if (r.isNew) opened++;
       // new PR, or the author pushed new commits → (re)run the pipeline (fire-and-forget)
-      if ((r.isNew || r.headChanged) && config.reviewAuto) void autoReview(r.reviewId);
+      if ((r.isNew || r.headChanged) && cfg.bool('reviewAuto')) void autoReview(r.reviewId);
     }
     let closed = 0;
     for (const rv of db.select().from(schema.reviewSessions).where(eq(schema.reviewSessions.repoId, id)).all()) {
@@ -202,13 +202,20 @@ export async function pollRepo(id: string): Promise<{ opened: number; closed: nu
 }
 
 let timer: ReturnType<typeof setInterval> | null = null;
+const pollTick = async () => { for (const r of listRepos()) { try { await pollRepo(r.id); } catch { /* on row */ } } };
 export function startReviewPoller() {
-  const ms = config.reviewPollMs;
-  if (timer || ms <= 0) return;
-  const tick = async () => { for (const r of listRepos()) { try { await pollRepo(r.id); } catch { /* on row */ } } };
-  timer = setInterval(() => { void tick(); }, ms);
-  setTimeout(() => { void tick(); }, 5000); // one shortly after boot
+  scheduleReviewPoller();
+  setTimeout(() => { void pollTick(); }, 5000); // one shortly after boot
 }
+// (Re)arm the poll interval from the live config. Called at boot and whenever reviewPollMs changes
+// (admin edit) so a new interval takes effect without a restart. reviewPollMs <= 0 disables polling.
+export function scheduleReviewPoller() {
+  if (timer) { clearInterval(timer); timer = null; }
+  const ms = cfg.int('reviewPollMs');
+  if (ms <= 0) return;
+  timer = setInterval(() => { void pollTick(); }, ms);
+}
+registerApply('reviewPollMs', () => scheduleReviewPoller());
 
 // ── worktree + local merge ──
 // Lazily create the per-PR worktree (detached at origin/<base>). Returns its path, or the clone
@@ -323,7 +330,7 @@ const VERDICT_LABEL: Record<string, string> = {
 // is recorded as a system note in the review chat and never breaks the pipeline. Gated by
 // config.reviewComment so a deployment can keep reviews internal to the workspace.
 async function postReviewComment(rv: Review, finalText: string, verdict: string, summary: string | null) {
-  if (!config.reviewComment) return;
+  if (!cfg.bool('reviewComment')) return;
   const repo = getRepo(rv.repoId);
   if (!repo) return;
   const cred = resolveGitCredById(repo.credentialId);
@@ -443,11 +450,12 @@ export async function autoReview(reviewId: string): Promise<void> {
     // watchdog: abort a hung turn so the verdict resolves off 'running'. It only aborts + records the
     // verdict; the guard release + any queued re-review happen in the turn's onDone (fired by the
     // abort's teardown), so the worktree stays exclusive until the subprocess has actually exited.
+    const turnTimeoutMs = cfg.int('reviewTurnTimeoutMs');
     watchdog = setTimeout(() => {
       interruptTurn(rv.chatSessionId);
-      setFinal('error', `자동 리뷰 시간 초과(${Math.round(config.reviewTurnTimeoutMs / 60000)}분) — 중단됨`);
+      setFinal('error', `자동 리뷰 시간 초과(${Math.round(turnTimeoutMs / 60000)}분) — 중단됨`);
       postSystem(rv.chatSessionId, `[자동 리뷰] 시간 초과로 중단. 다시 시도하려면 "자동 리뷰 실행"을 누르세요.`);
-    }, config.reviewTurnTimeoutMs);
+    }, turnTimeoutMs);
     enqueueTurn(rv.chatSessionId, author, autoPrompt(rv), (finalText) => {
       const { verdict, summary } = parseVerdict(finalText);
       // Only publish to the PR if THIS turn produced the verdict — if the watchdog already timed the

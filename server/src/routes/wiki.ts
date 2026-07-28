@@ -7,6 +7,7 @@ import { requireAuth, requireAdmin } from '../auth/index.js';
 import { paths, ensure } from '../lib/paths.js';
 import { newId } from '../lib/ids.js';
 import { compileTopic } from '../wiki/compile.js';
+import { cfg } from '../lib/config-registry.js';
 
 // Sanitize ONE path segment. Keep unicode filenames (Korean, Japanese, etc.); only strip path
 // separators + control chars and normalize NFD->NFC. macOS sends decomposed Hangul (U+1100 jamo),
@@ -338,7 +339,7 @@ export async function wikiRoutes(app: FastifyInstance) {
       const now = Date.now();
       const row = {
         id: newId(), ownerId: u.id, kind: 'private', roomId: null, title: t.name,
-        projectId: null, wikiTopicId: id, claudeSessionId: null, model: 'claude-opus-4-8',
+        projectId: null, wikiTopicId: id, claudeSessionId: null, model: cfg.str('defaultModel'),
         permissionMode: 'default', createdAt: now, updatedAt: now,
       };
       db.insert(schema.chatSessions).values(row).run();

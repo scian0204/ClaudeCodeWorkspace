@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { config } from '../config.js';
+import { cfg } from '../lib/config-registry.js';
 import { paths, allowedRootsFor, isInsideRoots } from '../lib/paths.js';
 
 export type PermMode = 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan';
@@ -72,7 +72,8 @@ export function buildOptions(ctx: SessionContext, extra: {
   if (extra.resume) options.resume = extra.resume;
   if (ctx.mcpServers) options.mcpServers = ctx.mcpServers;
   if (ctx.disallowedTools?.length) options.disallowedTools = ctx.disallowedTools;
-  if (config.claudeCodePath) options.pathToClaudeCodeExecutable = config.claudeCodePath;
+  const ccPath = cfg.str('claudeCodePath');
+  if (ccPath) options.pathToClaudeCodeExecutable = ccPath;
   return options;
 }
 

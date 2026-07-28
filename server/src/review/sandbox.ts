@@ -2,6 +2,7 @@ import path from 'node:path';
 import Docker from 'dockerode';
 import { z } from 'zod';
 import { config } from '../config.js';
+import { cfg } from '../lib/config-registry.js';
 
 // Per-PR build sandbox. Review turns must not run untrusted PR build/test code in the app container
 // (which has the Docker socket ≈ host root). Instead we spawn a locked-down sibling container with
@@ -44,7 +45,8 @@ export async function ensureSandbox(repoId: string, pr: number, worktreePath: st
     if (info?.State?.Running) return name;
     await docker.getContainer(name).remove({ force: true });
   } catch { /* not present → create */ }
-  await ensureImage(config.reviewSandbox.image);
+  const image = cfg.str('reviewSandboxImage');
+  await ensureImage(image);
   const vol = config.codeServer.dataVolume;
   // Mount the whole review repo dir (reviews/<id>) at its real absolute path so the git worktree's
   // `.git` file (which references the main clone's gitdir by absolute path) resolves and `git diff`
@@ -52,17 +54,17 @@ export async function ensureSandbox(repoId: string, pr: number, worktreePath: st
   const repoRootAbs = path.resolve(worktreePath, '..', '..'); // <data>/reviews/<id>
   const c = await docker.createContainer({
     name,
-    Image: config.reviewSandbox.image,
+    Image: image,
     // stay alive a bit longer than a turn can, then self-exit; removed explicitly at turn end
-    Cmd: ['sleep', String(Math.ceil(config.reviewTurnTimeoutMs / 1000) + 300)],
+    Cmd: ['sleep', String(Math.ceil(cfg.int('reviewTurnTimeoutMs') / 1000) + 300)],
     WorkingDir: worktreePath,
     Labels: { 'ccw.reviewsandbox': '1' },
     HostConfig: {
       NetworkMode: config.codeServer.network,
       AutoRemove: true,
       Mounts: [{ Type: 'volume', Source: vol, Target: repoRootAbs, VolumeOptions: { Subpath: subpathOf(repoRootAbs) } as any }],
-      Memory: config.reviewSandbox.memBytes,
-      PidsLimit: 1024,
+      Memory: cfg.int('reviewSandboxMemMB') * 1024 * 1024,
+      PidsLimit: cfg.int('reviewSandboxPidsLimit'),
       CapDrop: ['ALL'],
       SecurityOpt: ['no-new-privileges'],
     },
@@ -88,7 +90,7 @@ export async function cleanupSandboxOrphans(): Promise<void> {
 // On timeout we return the partial output + code 124 and move on; the lingering process dies when
 // the container is removed at turn end.
 async function execInSandbox(name: string, cwd: string, command: string, timeoutMs: number): Promise<{ code: number; output: string }> {
-  const MAX = 60_000;
+  const MAX = cfg.int('reviewSandboxMaxOutputBytes');
   const exec = await docker.getContainer(name).exec({
     Cmd: ['sh', '-lc', command], AttachStdout: true, AttachStderr: true, Tty: true, WorkingDir: cwd,
   });

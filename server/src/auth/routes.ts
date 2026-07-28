@@ -7,6 +7,7 @@ import {
 } from './index.js';
 import { setUserToken, clearUserToken } from './claude-token.js';
 import * as cs from '../codeserver/manager.js';
+import { cfg, publicConfig } from '../lib/config-registry.js';
 
 export async function authRoutes(app: FastifyInstance) {
   app.post('/api/auth/login', async (req, reply) => {
@@ -14,7 +15,7 @@ export async function authRoutes(app: FastifyInstance) {
     if (!username || !password) return reply.code(400).send({ error: 'username/password required' });
     const res = login(String(username), String(password));
     if (!res) return reply.code(401).send({ error: 'invalid credentials' });
-    reply.setCookie(COOKIE, res.token, { httpOnly: true, sameSite: 'lax', path: '/', maxAge: 30 * 24 * 3600 });
+    reply.setCookie(COOKIE, res.token, { httpOnly: true, sameSite: 'lax', path: '/', maxAge: cfg.int('sessionTtlDays') * 86_400 });
     return { user: authUserWithToken(res.user) };
   });
 
@@ -29,6 +30,12 @@ export async function authRoutes(app: FastifyInstance) {
   app.get('/api/auth/me', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
     return { user: authUserWithToken(u) };
+  });
+
+  // client-facing config subset (drives the model dropdown) — any authed user
+  app.get('/api/config', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    return publicConfig();
   });
 
   // ── self-service Claude token (register / update / clear) ──

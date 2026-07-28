@@ -211,7 +211,27 @@ export const ADMIN = {
       { userId: U_RILEY.id, name: 'Riley Kim', turns: 26, inputTokens: 168_400, outputTokens: 40_500, costUsd: 2.38 },
     ],
   },
-  settings: { allowBypass: false, maxConcurrentTurns: 3, codeServer: 'codercom/code-server:latest' },
+  settings: { allowBypass: false },
+  // client-facing config subset (model dropdown)
+  models: { 'claude-opus-4-8': 'Opus 4.8', 'claude-sonnet-5': 'Sonnet 5', 'claude-haiku-4-5-20251001': 'Haiku 4.5' } as Record<string, string>,
+  defaultModel: 'claude-opus-4-8',
+  // full config registry (representative subset for the demo)
+  config: [
+    { key: 'defaultModel', group: 'claude', type: 'select', options: ['claude-opus-4-8', 'claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5-20251001', 'claude-fable-5'], value: 'claude-opus-4-8', default: 'claude-opus-4-8', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'forceMock', group: 'claude', type: 'bool', value: '1', default: '0', restart: false, readonly: false, secret: false, overridden: true },
+    { key: 'maxConcurrentTurns', group: 'claude', type: 'int', value: '3', default: '3', min: 1, max: 100, restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'reviewAuto', group: 'review', type: 'bool', value: '1', default: '1', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'reviewPollMs', group: 'review', type: 'int', value: '60000', default: '60000', unit: 'ms', min: 0, restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'reviewSandboxImage', group: 'review', type: 'string', value: 'node:20-bookworm', default: 'node:20-bookworm', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'gitOpTimeoutMs', group: 'git', type: 'int', value: '120000', default: '120000', unit: 'ms', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'codeServerIdleMs', group: 'codeserver', type: 'int', value: '1800000', default: '1800000', unit: 'ms', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'sessionTtlDays', group: 'auth', type: 'int', value: '30', default: '30', unit: 'days', min: 1, max: 365, restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'httpBodyLimitMB', group: 'server', type: 'int', value: '6', default: '6', unit: 'MB', restart: true, readonly: false, secret: false, overridden: false },
+    { key: 'port', group: 'infra', type: 'int', value: '3000', default: '3000', restart: true, readonly: true, secret: false, overridden: false },
+    { key: 'dataDir', group: 'infra', type: 'string', value: '/data', default: './data', restart: true, readonly: true, secret: false, overridden: false },
+    { key: 'sessionSecret', group: 'secret', type: 'string', default: 'change-me-please', restart: true, readonly: true, secret: true, set: true },
+    { key: 'tokenEncSecret', group: 'secret', type: 'string', default: '', restart: true, readonly: true, secret: true, set: false },
+  ] as any[],
 };
 
 // ---- git credentials + a dirty repo (for the commit/push demo) ----------------

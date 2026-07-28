@@ -35,6 +35,9 @@ export function route(method: string, rawPath: string, body?: any): Res {
   if (P === '/api/auth/logout') return ok({});
   if (P === '/api/auth/me/claude-token') { db.me.hasClaudeToken = M !== 'DELETE'; db.me.claudeTokenSetAt = M !== 'DELETE' ? Date.now() : null; return ok({ user: db.me }); }
 
+  // ---- client-facing config (model dropdown) ----
+  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel });
+
   // ---- sessions ----
   if (P === '/api/sessions' && M === 'GET') return ok({ sessions: db.sessions });
   if (P === '/api/sessions' && M === 'POST') {
@@ -212,6 +215,17 @@ export function route(method: string, rawPath: string, body?: any): Res {
   if (P === '/api/admin/usage') return ok(ADMIN.usage);
   if (P === '/api/admin/settings' && M === 'GET') return ok(ADMIN.settings);
   if (P === '/api/admin/settings' && M === 'POST') { Object.assign(ADMIN.settings, b); return ok({}); }
+  if (P === '/api/admin/config' && M === 'GET') return ok({ items: ADMIN.config });
+  if (P === '/api/admin/config' && M === 'PUT') {
+    const it = ADMIN.config.find((x: any) => x.key === b.key);
+    if (it && !it.readonly) { it.value = it.type === 'bool' ? (b.value ? '1' : '0') : String(b.value); it.overridden = true; }
+    return ok({ items: ADMIN.config });
+  }
+  if (seg[1] === 'admin' && seg[2] === 'config' && seg[3] && M === 'DELETE') {
+    const it = ADMIN.config.find((x: any) => x.key === decodeURIComponent(idAt(3)));
+    if (it) { it.value = it.default; it.overridden = false; }
+    return ok({ items: ADMIN.config });
+  }
   if (P === '/api/admin/claude-token') return ok({});
 
   return ok({}); // unknown → harmless empty object
