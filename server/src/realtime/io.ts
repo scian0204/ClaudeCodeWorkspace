@@ -113,7 +113,9 @@ export function initRealtime(httpServer: HttpServer) {
       const allowed = item?.author.id === user.id
         || (a.kind === 'room' ? rooms.can(a.roomId!, user, 'interrupt') : a.s.ownerId === user.id || user.role === 'admin');
       if (!allowed) { ack?.({ error: 'forbidden' }); return; }
-      ack?.({ ok: cancelQueued(p.sessionId, p.itemId) });
+      // Same short-circuit trap as chat:interrupt: cancel must run even when the client sends no ack.
+      const ok = cancelQueued(p.sessionId, p.itemId);
+      ack?.({ ok });
     });
 
     socket.on('chat:interrupt', (p: { sessionId: string }, ack?: Function) => {
@@ -122,7 +124,10 @@ export function initRealtime(httpServer: HttpServer) {
       const allowed = a.kind === 'room' ? rooms.can(a.roomId!, user, 'interrupt')
         : (a.s.ownerId === user.id || user.role === 'admin');
       if (!allowed) { ack?.({ error: 'forbidden' }); return; }
-      ack?.({ ok: interruptTurn(p.sessionId) });
+      // interruptTurn MUST run unconditionally — clients emit without an ack callback, so
+      // `ack?.({ ok: interruptTurn(...) })` would short-circuit and never call it (stop stayed dead).
+      const ok = interruptTurn(p.sessionId);
+      ack?.({ ok });
     });
 
     socket.on('permission:respond', (p: { sessionId: string; requestId: string; decision: Decision; answer?: string }, ack?: Function) => {
