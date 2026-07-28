@@ -26,6 +26,7 @@ export interface ConfigDef {
   max?: number;         // int upper bound (clamped)
   options?: string[];   // select choices
   unit?: string;        // UI hint: 'ms' | 'MB' | 'days' | 'bytes' | ''
+  image?: boolean;      // docker image value → UI offers presence check + pull/update
 }
 
 const DEFAULT_MODELS = '{"claude-opus-4-8":"Opus 4.8","claude-sonnet-5":"Sonnet 5","claude-haiku-4-5-20251001":"Haiku 4.5"}';
@@ -49,7 +50,7 @@ export const DEFS: ConfigDef[] = [
   { key: 'reviewComment', group: 'review', type: 'bool', default: '1', env: 'REVIEW_COMMENT' },
   { key: 'reviewPollMs', group: 'review', type: 'int', default: '60000', env: 'REVIEW_POLL_MS', min: 0, max: 86400000, unit: 'ms' },
   { key: 'reviewTurnTimeoutMs', group: 'review', type: 'int', default: '600000', env: 'REVIEW_TURN_TIMEOUT_MS', min: 60000, max: 7200000, unit: 'ms' },
-  { key: 'reviewSandboxImage', group: 'review', type: 'string', default: 'node:20-bookworm', env: 'REVIEW_SANDBOX_IMAGE' },
+  { key: 'reviewSandboxImage', group: 'review', type: 'string', default: 'node:20-bookworm', env: 'REVIEW_SANDBOX_IMAGE', image: true },
   { key: 'reviewSandboxMemMB', group: 'review', type: 'int', default: '4096', env: 'REVIEW_SANDBOX_MEM_MB', min: 256, max: 131072, unit: 'MB' },
   { key: 'reviewSandboxExecTimeoutMs', group: 'review', type: 'int', default: '300000', env: 'REVIEW_SANDBOX_EXEC_TIMEOUT_MS', min: 10000, max: 3600000, unit: 'ms' },
   { key: 'reviewSandboxPidsLimit', group: 'review', type: 'int', default: '1024', min: 64, max: 65536 },
@@ -64,7 +65,7 @@ export const DEFS: ConfigDef[] = [
   { key: 'git_author_domain', group: 'git', type: 'string', default: 'ccw.local' },
 
   // code-server editors
-  { key: 'codeServerImage', group: 'codeserver', type: 'string', default: 'codercom/code-server:latest', env: 'CODE_SERVER_IMAGE' },
+  { key: 'codeServerImage', group: 'codeserver', type: 'string', default: 'codercom/code-server:latest', env: 'CODE_SERVER_IMAGE', image: true },
   { key: 'codeServerIdleMs', group: 'codeserver', type: 'int', default: '1800000', env: 'CODE_SERVER_IDLE_MS', min: 60000, max: 86400000, unit: 'ms' },
   { key: 'codeServerReaperMs', group: 'codeserver', type: 'int', default: '60000', min: 10000, max: 3600000, unit: 'ms' },
   { key: 'codeServerWaitReadyMs', group: 'codeserver', type: 'int', default: '30000', min: 5000, max: 300000, unit: 'ms' },
@@ -193,7 +194,7 @@ export function resetConfigValue(key: string): void {
 export interface ConfigItemDto {
   key: string; group: string; type: ConfigType; unit?: string;
   restart: boolean; readonly: boolean; secret: boolean;
-  min?: number; max?: number; options?: string[];
+  min?: number; max?: number; options?: string[]; image?: boolean;
   default: string; overridden: boolean;
   value?: string;   // omitted for secrets
   set?: boolean;    // secrets only: is a non-default value configured
@@ -206,12 +207,18 @@ export function listConfigForApi(): ConfigItemDto[] {
     const base: ConfigItemDto = {
       key: d.key, group: d.group, type: d.type, unit: d.unit,
       restart: !!d.restart, readonly: !!d.readonly, secret: !!d.secret,
-      min: d.min, max: d.max, options: d.options,
+      min: d.min, max: d.max, options: d.options, image: !!d.image,
       default: d.default, overridden,
     };
     if (d.secret) return { ...base, set: val !== '' && val !== d.default };
     return { ...base, value: val };
   });
+}
+
+// Current values of every image-typed setting — the allowlist for admin image pull/inspect,
+// so an admin can only act on images the app actually uses.
+export function imageConfigValues(): string[] {
+  return DEFS.filter((d) => d.image).map((d) => resolve(d.key)).filter(Boolean);
 }
 
 // Client-facing subset (any authed user): drives the model dropdown.
