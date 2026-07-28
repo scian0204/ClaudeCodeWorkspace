@@ -14,7 +14,7 @@ import { originHost } from '../lib/git-ops.js';
 import { resolveGitCred, gitIdentity, identityEnv, askpassEnv } from '../auth/git-cred.js';
 import { getReviewByChat, ensureWorktree } from '../review/manager.js';
 import { sandboxAvailable, ensureSandbox, removeSandbox, sandboxMcpServer } from '../review/sandbox.js';
-import { config } from '../config.js';
+import { cfg } from '../lib/config-registry.js';
 
 type Emit = (event: string, payload: any) => void;
 
@@ -126,7 +126,7 @@ export async function probeCommands(chatSessionId: string, requesterId?: string 
   const hit = cmdCache.get(key);
   if (hit) return hit;
   const ctx: SessionContext = {
-    kind, ownerId, cwd: await cwdFor(s), model: s.model || 'claude-opus-4-8',
+    kind, ownerId, cwd: await cwdFor(s), model: s.model || cfg.str('defaultModel'),
     permissionMode: clampMode((s.permissionMode as PermMode) || 'default', allowBypass()), plugins,
     authToken: auth.token,
   };
@@ -163,7 +163,6 @@ export interface UsageInfo {
 }
 const EMPTY_USAGE: UsageInfo = { context: null, rateLimitsAvailable: false, subscriptionType: null, rateLimits: null };
 const usageCache = new Map<string, { at: number; data: UsageInfo }>();
-const USAGE_TTL_MS = 15_000;
 const win = (w: any): Win | null => (w ? { utilization: w.utilization ?? null, resetsAt: w.resets_at ?? null } : null);
 
 export async function probeUsage(chatSessionId: string, requesterId?: string | null): Promise<UsageInfo> {
@@ -180,16 +179,16 @@ export async function probeUsage(chatSessionId: string, requesterId?: string | n
 
   const cacheKey = `${chatSessionId}|${authId ?? 'shared'}`;
   const hit = usageCache.get(cacheKey);
-  if (hit && Date.now() - hit.at < USAGE_TTL_MS) return hit.data;
+  if (hit && Date.now() - hit.at < cfg.int('usageProbeTtlMs')) return hit.data;
 
   const ctx: SessionContext = {
-    kind, ownerId, cwd: await cwdFor(s), model: s.model || 'claude-opus-4-8',
+    kind, ownerId, cwd: await cwdFor(s), model: s.model || cfg.str('defaultModel'),
     permissionMode: clampMode((s.permissionMode as PermMode) || 'default', allowBypass()),
     plugins: resolvePluginPaths(kind, ownerId), authToken: auth.token,
   };
   const abort = new AbortController();
   const withTimeout = <T,>(p: Promise<T>): Promise<T | null> =>
-    Promise.race([p.catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), 8000))]);
+    Promise.race([p.catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), cfg.int('usageProbeTimeoutMs')))]);
   try {
     const { query } = await import('@anthropic-ai/claude-agent-sdk');
     const options = buildOptions(ctx, {
@@ -255,7 +254,7 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
     if (rv) {
       try {
         const cname = await ensureSandbox(rv.repoId, rv.prNumber, cwd);
-        mcpServers = { sandbox: await sandboxMcpServer(cname, cwd, config.reviewSandbox.execTimeoutMs) };
+        mcpServers = { sandbox: await sandboxMcpServer(cname, cwd, cfg.int('reviewSandboxExecTimeoutMs')) };
         disallowedTools = ['Bash'];
         sandboxCleanup = () => { void removeSandbox(rv.repoId, rv.prNumber); };
       } catch { /* sandbox failed to start → host exec fallback */ }
@@ -263,7 +262,7 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
   }
 
   const ctx: SessionContext = {
-    kind, ownerId, cwd, model: s.model || 'claude-opus-4-8',
+    kind, ownerId, cwd, model: s.model || cfg.str('defaultModel'),
     permissionMode: mode, plugins: resolvePluginPaths(kind, ownerId),
     authToken: auth.token, gitEnv, mcpServers, disallowedTools,
   };
