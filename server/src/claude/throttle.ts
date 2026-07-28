@@ -31,18 +31,26 @@ export const turnLimiter = new Semaphore(config.maxConcurrentTurns);
 export async function withRateLimitRetry<T>(
   fn: () => Promise<T>,
   onBackoff?: (ms: number, attempt: number) => void,
+  signal?: AbortSignal,
 ): Promise<T> {
   let attempt = 0;
   while (true) {
+    if (signal?.aborted) throw new Error('interrupted');
     try {
       return await fn();
     } catch (e: any) {
+      if (signal?.aborted) throw e;
       const msg = String(e?.message || e || '');
       const is429 = e?.status === 429 || /\b429\b|rate.?limit|overloaded/i.test(msg);
       if (!is429 || attempt >= 5) throw e;
       const ms = Math.min(30_000, 1000 * 2 ** attempt);
       onBackoff?.(ms, attempt);
-      await new Promise((r) => setTimeout(r, ms));
+      // abort must cut the backoff short — otherwise "stop" waits out up to 30s of sleep
+      await new Promise<void>((resolve) => {
+        const to = setTimeout(resolve, ms);
+        signal?.addEventListener('abort', () => { clearTimeout(to); resolve(); }, { once: true });
+      });
+      if (signal?.aborted) throw new Error('interrupted');
       attempt++;
     }
   }
