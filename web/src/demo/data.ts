@@ -215,15 +215,18 @@ export const ADMIN = {
   // client-facing config subset (model dropdown)
   models: { 'claude-opus-4-8': 'Opus 4.8', 'claude-sonnet-5': 'Sonnet 5', 'claude-haiku-4-5-20251001': 'Haiku 4.5' } as Record<string, string>,
   defaultModel: 'claude-opus-4-8',
+  images: { 'node:20-bookworm': { present: true, size: 402_000_000 }, 'codercom/code-server:latest': { present: false } } as Record<string, any>,
   // full config registry (representative subset for the demo)
   config: [
     { key: 'defaultModel', group: 'claude', type: 'select', options: ['claude-opus-4-8', 'claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5-20251001', 'claude-fable-5'], value: 'claude-opus-4-8', default: 'claude-opus-4-8', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'models', group: 'claude', type: 'json', value: '{"claude-opus-4-8":"Opus 4.8","claude-sonnet-5":"Sonnet 5","claude-haiku-4-5-20251001":"Haiku 4.5"}', default: '{"claude-opus-4-8":"Opus 4.8"}', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'forceMock', group: 'claude', type: 'bool', value: '1', default: '0', restart: false, readonly: false, secret: false, overridden: true },
     { key: 'maxConcurrentTurns', group: 'claude', type: 'int', value: '3', default: '3', min: 1, max: 100, restart: false, readonly: false, secret: false, overridden: false },
     { key: 'reviewAuto', group: 'review', type: 'bool', value: '1', default: '1', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'reviewPollMs', group: 'review', type: 'int', value: '60000', default: '60000', unit: 'ms', min: 0, restart: false, readonly: false, secret: false, overridden: false },
-    { key: 'reviewSandboxImage', group: 'review', type: 'string', value: 'node:20-bookworm', default: 'node:20-bookworm', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'reviewSandboxImage', group: 'review', type: 'string', value: 'node:20-bookworm', default: 'node:20-bookworm', restart: false, readonly: false, secret: false, overridden: false, image: true },
     { key: 'gitOpTimeoutMs', group: 'git', type: 'int', value: '120000', default: '120000', unit: 'ms', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'codeServerImage', group: 'codeserver', type: 'string', value: 'codercom/code-server:latest', default: 'codercom/code-server:latest', restart: false, readonly: false, secret: false, overridden: false, image: true },
     { key: 'codeServerIdleMs', group: 'codeserver', type: 'int', value: '1800000', default: '1800000', unit: 'ms', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'sessionTtlDays', group: 'auth', type: 'int', value: '30', default: '30', unit: 'days', min: 1, max: 365, restart: false, readonly: false, secret: false, overridden: false },
     { key: 'httpBodyLimitMB', group: 'server', type: 'int', value: '6', default: '6', unit: 'MB', restart: true, readonly: false, secret: false, overridden: false },
