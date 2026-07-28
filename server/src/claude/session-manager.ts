@@ -22,7 +22,10 @@ export type Block =
   | { type: 'text'; text: string }
   | { type: 'tool_use'; id: string; name: string; input: any; output?: string; isError?: boolean };
 
-interface ActiveTurn { abort: AbortController; blocks: Block[]; author: { id: string; name: string } }
+interface ActiveTurn {
+  abort: AbortController; blocks: Block[]; author: { id: string; name: string };
+  query?: { interrupt: () => Promise<unknown> }; // live SDK handle for immediate turn-stop
+}
 const active = new Map<string, ActiveTurn>();
 
 export function isTurnActive(sessionId: string) { return active.has(sessionId); }
@@ -34,6 +37,10 @@ export function liveTurn(sessionId: string): { blocks: Block[]; author: { id: st
 export function interruptTurn(sessionId: string): boolean {
   const t = active.get(sessionId);
   if (!t) return false;
+  // abort() alone only closes the CLI's stdin and waits ~2s for the graceful path, so the model
+  // keeps streaming and "stop" feels dead. Fire the SDK's control-channel interrupt first to stop
+  // the current turn immediately; abort() below is the guaranteed subprocess-teardown fallback.
+  try { void t.query?.interrupt().catch(() => { /* fall back to abort */ }); } catch { /* noop */ }
   t.abort.abort();
   return true;
 }
@@ -289,7 +296,8 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
 
   const abort = new AbortController();
   const blocks: Block[] = [];
-  active.set(s.id, { abort, blocks, author: p.author }); // blocks kept live so join can replay progress
+  const turn: ActiveTurn = { abort, blocks, author: p.author }; // blocks kept live so join can replay progress
+  active.set(s.id, turn);
   p.emit('turn:start', { sessionId: s.id, author: p.author });
 
   let prompt = kind === 'room' ? `[${p.author.name}]: ${p.text}` : p.text;
@@ -312,8 +320,10 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
       inTok = 12; outTok = 40; cost = 0;
     } else {
       const runOnce = (resume: string | null) => withRateLimitRetry(
-        () => runReal({ ctx, prompt, canUseTool, emit: p.emit, sessionId: s.id, blocks, resume, abort }),
+        () => runReal({ ctx, prompt, canUseTool, emit: p.emit, sessionId: s.id, blocks, resume, abort,
+          onQuery: (q) => { turn.query = q; } }),
         (ms) => p.emit('turn:congested', { sessionId: s.id, backoffMs: ms }),
+        abort.signal, // a stop during rate-limit backoff must break the sleep, not wait it out
       );
       let res;
       try {
@@ -372,16 +382,19 @@ function publicMessage(m: any) {
 async function runReal(a: {
   ctx: SessionContext; prompt: string; canUseTool: any; emit: Emit; sessionId: string;
   blocks: Block[]; resume?: string | null; abort: AbortController;
+  onQuery?: (q: { interrupt: () => Promise<unknown> }) => void;
 }): Promise<{ claudeSessionId: string | null; inputTokens: number; outputTokens: number; costUsd: number }> {
   const { query } = await import('@anthropic-ai/claude-agent-sdk');
   const options = buildOptions(a.ctx, { canUseTool: a.canUseTool, resume: a.resume, abortController: a.abort });
   const q = query({ prompt: a.prompt, options });
+  a.onQuery?.(q as unknown as { interrupt: () => Promise<unknown> }); // expose for interruptTurn()
 
   let claudeSessionId: string | null = a.resume ?? null;
   let inputTokens = 0, outputTokens = 0, costUsd = 0;
   const toolIndex = new Map<string, number>();
 
   for await (const msg of q as any) {
+    if (a.abort.signal.aborted) break; // interrupted: stop emitting now, don't wait for the SDK to drain
     if (msg?.session_id) claudeSessionId = msg.session_id;
     switch (msg?.type) {
       case 'stream_event': {
@@ -424,6 +437,9 @@ async function runReal(a: {
       }
     }
   }
+  // interrupt() can end the stream cleanly (no throw); route to the aborted turn:error path so the
+  // partial is saved as interrupted and the client clears turnActive.
+  if (a.abort.signal.aborted) throw new Error('interrupted');
   return { claudeSessionId, inputTokens, outputTokens, costUsd };
 }
 
