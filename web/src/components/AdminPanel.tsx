@@ -181,19 +181,29 @@ function ConfigManager() {
       {restartNeeded && (
         <div className="text-xs text-warn bg-warnsoft border border-warn rounded-lg px-3 py-2">{t('admin.cfgRestartNeeded')}</div>
       )}
-      {groups.map((g) => (
-        <Section key={g} title={t(`admin.cfgGroup.${g}`)}>
-          {(g === 'infra' || g === 'secret') && (
-            <div className="text-[11px] text-txt3 mb-2">{t(g === 'secret' ? 'admin.cfgSecretHint' : 'admin.cfgReadonlyHint')}</div>
-          )}
-          <div className="divide-y divide-line">
-            {items.filter((i) => i.group === g).map((it) => (
-              <ConfigRow key={it.key} it={it} edit={edits[it.key]}
-                onEdit={(v) => setEdits((e) => ({ ...e, [it.key]: v }))} onSave={save} onReset={reset} />
-            ))}
-          </div>
-        </Section>
-      ))}
+      {groups.map((g) => {
+        const rows = items.filter((i) => i.group === g);
+        return (
+          <details key={g} className="group bg-card border border-line rounded-xl overflow-hidden">
+            <summary className="font-semibold px-4 py-3 cursor-pointer select-none list-none flex items-center gap-2 [&::-webkit-details-marker]:hidden">
+              <span className="text-txt3 text-xs transition-transform group-open:rotate-90">▶</span>
+              <span>{t(`admin.cfgGroup.${g}`)}</span>
+              <span className="ml-auto text-[11px] text-txt3 font-normal">{rows.length}</span>
+            </summary>
+            <div className="px-4 pb-4">
+              {(g === 'infra' || g === 'secret') && (
+                <div className="text-[11px] text-txt3 mb-2">{t(g === 'secret' ? 'admin.cfgSecretHint' : 'admin.cfgReadonlyHint')}</div>
+              )}
+              <div className="divide-y divide-line">
+                {rows.map((it) => (
+                  <ConfigRow key={it.key} it={it} edit={edits[it.key]}
+                    onEdit={(v) => setEdits((e) => ({ ...e, [it.key]: v }))} onSave={save} onReset={reset} />
+                ))}
+              </div>
+            </div>
+          </details>
+        );
+      })}
     </>
   );
 }
