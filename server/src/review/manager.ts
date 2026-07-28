@@ -7,8 +7,9 @@ import { paths, ensure } from '../lib/paths.js';
 import { config } from '../config.js';
 import { getUserById, findByUsername, type AuthUser } from '../auth/index.js';
 import {
-  gitCloneFull, gitFetch, gitFetchRemotes, gitWorktreeAdd, gitWorktreeRemove, gitResetHard, gitMerge,
+  gitCloneFull, gitFetch, gitFetchRemotes, gitWorktreeAdd, gitWorktreeRemove, gitResetHard, gitMerge, gitDiffNames,
 } from '../lib/git-ops.js';
+import { hasSourceChange } from './classify.js';
 import {
   resolveGitCredById, getGitCredRow, askpassEnv, identityEnv, gitIdentity, hostFromGitUrl,
 } from '../auth/git-cred.js';
@@ -231,16 +232,9 @@ export async function ensureWorktree(rv: Review): Promise<string> {
   return wt;
 }
 
-// Fetch the PR head, reset the worktree to the freshest base, then merge (no-ff). Conflicts are
-// left in the working tree for review (mergeState='conflict'), not treated as an error.
-export async function localMerge(rv: Review): Promise<{ mergeState: string; output: string }> {
-  const repo = getRepo(rv.repoId);
-  if (!repo) throw new Error('repo not found');
-  const cred = resolveGitCredById(repo.credentialId);
-  const env = cred ? askpassEnv(cred) : undefined;
-  const wt = await ensureWorktree(rv);
-  if (wt === repo.path) throw new Error('워크트리를 만들 수 없습니다 (clone/base 확인)');
-
+// Fetch the PR head into its local ref (no worktree/merge). Shared by the changed-file probe and
+// the local merge. Returns the local ref name.
+async function fetchPrHead(repo: Repo, rv: Review, env?: Record<string, string>): Promise<string> {
   const pr: PullInfo = {
     number: rv.prNumber, title: rv.prTitle, url: rv.prUrl, authorLogin: rv.authorLogin,
     baseRef: rv.baseRef, headRef: rv.headRef, headSha: rv.headSha, headCloneUrl: rv.headCloneUrl,
@@ -251,6 +245,34 @@ export async function localMerge(rv: Review): Promise<{ mergeState: string; outp
     if (spec) await gitFetch(repo.path, ['origin', spec.refspec], env);
     else await gitFetch(repo.path, [rv.headCloneUrl!, `${rv.headRef}:${localRef}`], env); // bitbucket fork
   } catch (e: any) { throw new Error(`PR head fetch 실패: ${String(e?.message || e).slice(0, 300)}`); }
+  return localRef;
+}
+
+// Read the PR's changed files without merging (fetch head + diff vs base). Returns null if it can't
+// be determined — the caller then falls back to the full pipeline rather than wrongly skipping.
+async function prChangedFiles(rv: Review): Promise<string[] | null> {
+  const repo = getRepo(rv.repoId);
+  if (!repo) return null;
+  const cred = resolveGitCredById(repo.credentialId);
+  const env = cred ? askpassEnv(cred) : undefined;
+  try {
+    const localRef = await fetchPrHead(repo, rv, env);
+    const base = rv.baseRef || repo.baseBranch || 'HEAD';
+    return await gitDiffNames(repo.path, `origin/${base}...${localRef}`, env);
+  } catch { return null; }
+}
+
+// Fetch the PR head, reset the worktree to the freshest base, then merge (no-ff). Conflicts are
+// left in the working tree for review (mergeState='conflict'), not treated as an error.
+export async function localMerge(rv: Review): Promise<{ mergeState: string; output: string }> {
+  const repo = getRepo(rv.repoId);
+  if (!repo) throw new Error('repo not found');
+  const cred = resolveGitCredById(repo.credentialId);
+  const env = cred ? askpassEnv(cred) : undefined;
+  const wt = await ensureWorktree(rv);
+  if (wt === repo.path) throw new Error('워크트리를 만들 수 없습니다 (clone/base 확인)');
+
+  const localRef = await fetchPrHead(repo, rv, env);
 
   const base = rv.baseRef || repo.baseBranch || 'HEAD';
   const user = getUserById(repo.createdBy);
@@ -386,6 +408,20 @@ export async function autoReview(reviewId: string): Promise<void> {
   try {
     setVerdict(rv.id, 'running', null);
     notify();
+    // Read the diff first: a PR that changes only non-source files (docs, assets) needs no local
+    // merge or sandbox build/run. Review it lightweight and mark merge-safe. On any probe failure
+    // (files === null) fall through to the full pipeline rather than wrongly skipping a code PR.
+    const files = await prChangedFiles(rv);
+    if (files && files.length && !hasSourceChange(files)) {
+      const list = files.slice(0, 30).map((f) => `- ${f}`).join('\n')
+        + (files.length > 30 ? `\n… 외 ${files.length - 30}개` : '');
+      setFinal('merge_safe', '문서/비소스 파일 변경만 있어 머지·빌드·실행을 생략했습니다.');
+      postSystem(rv.chatSessionId, `[자동 리뷰] PR #${rv.prNumber} 소스 변경 없음 (문서/비소스 ${files.length}개) — 머지·빌드·실행 생략.\n\n${list}`);
+      void postReviewComment(rv, `문서/비소스 파일만 변경되어 자동 빌드·실행을 생략했습니다.\n\n변경 파일:\n${list}`,
+        'merge_safe', '문서/비소스 파일 변경만 있어 머지·빌드·실행을 생략했습니다.');
+      done();
+      return;
+    }
     const merge = await localMerge(rv);
     if (merge.mergeState === 'conflict') {
       setFinal('conflict', '머지 충돌 — 자동 빌드/리뷰 생략, 수동 해결 필요');
