@@ -44,6 +44,7 @@ interface State {
   presence: { id: string; name: string; color: string }[];
   congested: boolean;
   sessionImportEnabled: boolean; // admin feature flag (from /api/config)
+  llmProvidersEnabled: boolean;  // admin feature flag (from /api/config) — gates the LLM provider UI
   viewMode: 'chat' | 'split' | 'editor';
   editorUrl: string | null;
   panel: null | 'admin' | 'plugins' | 'me';
@@ -110,7 +111,7 @@ export const useStore = create<State>((set, get) => ({
   current: null, messages: [], live: null, turnActive: false,
   queue: { running: null, waiting: [] }, pending: [],
   control: { canApprove: true, canInterrupt: true, canSetMode: true, isOwner: true, delegable: [] },
-  presence: [], congested: false, sessionImportEnabled: true, viewMode: 'chat', editorUrl: null, panel: null, sidebarOpen: false, error: null,
+  presence: [], congested: false, sessionImportEnabled: true, llmProvidersEnabled: true, viewMode: 'chat', editorUrl: null, panel: null, sidebarOpen: false, error: null,
   commands: [],
 
   bootstrap: async () => {
@@ -154,6 +155,7 @@ export const useStore = create<State>((set, get) => ({
       sessions: s.sessions, rooms: r.rooms, projects: { common: p.common, mine: p.mine }, wikiTopics: w.topics,
       reviewSessions: rv.sessions || [], reviewRepos: rr.repos || [],
       sessionImportEnabled: cf.sessionImportEnabled !== false,
+      llmProvidersEnabled: cf.llmProvidersEnabled !== false,
     });
   },
 

@@ -67,6 +67,12 @@ CREATE TABLE IF NOT EXISTS git_credentials (
   author_name TEXT, author_email TEXT, created_at INTEGER NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_git_cred_scope_owner_host ON git_credentials(scope, owner_id, host);
+CREATE TABLE IF NOT EXISTS llm_providers (
+  id TEXT PRIMARY KEY, scope TEXT NOT NULL, owner_id TEXT NOT NULL,
+  type TEXT NOT NULL, config_enc TEXT NOT NULL,
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_providers_scope_owner ON llm_providers(scope, owner_id);
 CREATE TABLE IF NOT EXISTS review_repos (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, provider TEXT NOT NULL, host TEXT NOT NULL,
   git_url TEXT NOT NULL, slug TEXT NOT NULL, credential_id TEXT NOT NULL, path TEXT NOT NULL,

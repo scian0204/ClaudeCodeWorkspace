@@ -1,12 +1,33 @@
 // Routes every /api/* request to canned data / in-memory mutations for the static demo.
 // Called by the fetch + XHR interceptors in ./install. Returns a plain {status, data}.
 import {
-  db, ADMIN, ATTACHMENTS, GIT, COMMANDS, USAGE, TREE_PROJECT, TREE_PLUGIN, WIKI_ARTICLES, WIKI_RAW, WIKI_TREE_ARTICLES,
+  db, ADMIN, ATTACHMENTS, GIT, PROVIDERS, COMMANDS, USAGE, TREE_PROJECT, TREE_PLUGIN, WIKI_ARTICLES, WIKI_RAW, WIKI_TREE_ARTICLES,
   fileContent, wikiFileContent, pluginDetail, EDITOR_URL, genId,
 } from './data';
 
 type Res = { status: number; data: any };
 const ok = (data: any = {}): Res => ({ status: 200, data });
+
+// mirror the server's provider status shape + minimal per-type validation (so the demo shows errors)
+function providerStatus(type: string, c: any) {
+  return {
+    type,
+    fields: {
+      baseUrl: c.baseUrl || '', region: c.region || '', projectId: c.projectId || '', model: c.model || '',
+      hasAuthToken: !!c.authToken, hasApiKey: !!c.apiKey, hasAccessKeyId: !!c.accessKeyId,
+      hasSecretKey: !!c.secretKey, hasSessionToken: !!c.sessionToken, hasBearerToken: !!c.bearerToken,
+    },
+  };
+}
+function providerError(type: string, c: any): string | null {
+  if (type === 'custom' && !(c.baseUrl || '').trim()) return 'custom: base URL required (Anthropic-compatible endpoint)';
+  if (type === 'bedrock') {
+    if (!(c.region || '').trim()) return 'bedrock: AWS region required';
+    if (!(c.bearerToken || '').trim() && !((c.accessKeyId || '').trim() && (c.secretKey || '').trim())) return 'bedrock: provide a bearer token, or an access key id + secret key';
+  }
+  if (type === 'vertex' && (!(c.region || '').trim() || !(c.projectId || '').trim())) return 'vertex: region + project id required';
+  return null;
+}
 
 function sessionFor(id: string) {
   const s = db.sessions.find((x) => x.id === id);
@@ -39,7 +60,21 @@ export function route(method: string, rawPath: string, body?: any): Res {
   if (P === '/api/auth/me/avatar') { db.me.avatar = M === 'DELETE' ? null : (b.avatarDataUrl || db.me.avatar); return ok({ user: db.me }); }
 
   // ---- client-facing config (model dropdown) ----
-  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true });
+  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, llmProvidersEnabled: true });
+
+  // ---- llm provider override (user self-service + admin common) ----
+  if (P === '/api/auth/me/provider' || P === '/api/admin/provider') {
+    const scope: 'user' | 'common' = P.includes('/admin/') ? 'common' : 'user';
+    if (M === 'DELETE') { PROVIDERS[scope] = null; return ok({ provider: null }); }
+    if (M === 'PUT') {
+      const type = String(b.type || ''); const c = b.config || {};
+      const err = providerError(type, c);
+      if (err) return { status: 400, data: { error: err } };
+      PROVIDERS[scope] = providerStatus(type, c);
+      return ok({ provider: PROVIDERS[scope] });
+    }
+    return ok({ provider: PROVIDERS[scope] }); // GET
+  }
 
   // ---- sessions ----
   if (P === '/api/sessions' && M === 'GET') return ok({ sessions: db.sessions });

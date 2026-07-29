@@ -64,7 +64,8 @@ Claude Code CLI는 강력하지만 **내 터미널 하나**에 묶여 있습니�
 | 🧑‍💻 | **브라우저 속 VS Code** | 프로젝트를 code-server 컨테이너로 즉시 배포. 자기 볼륨 + 공통만 마운트(격리), 유휴 시 자동 회수 |
 | 🔌 | **2-클래스 플러그인** | 공통(관리자)·개인(유저) 티어. git·로컬 업로드 설치, 관리자 필수강제, 유저별 on/off. 플러그인별 상세 보기 + 원클릭 업데이트 |
 | 🪪 | **유저별 Claude 토큰** | 멤버가 각자 토큰 등록(암호화 저장), 사용량·비용을 개인별로 귀속. 관리자 공통 토큰 → env 순으로 폴백 |
-| 👤 | **마이페이지** | 프로필 이미지(업로드/제거, 본인 사이드바·마이페이지에 표시)·Claude 토큰·Git 자격증명·개인 프로젝트 관리(생성/삭제/새 대화에서 열기)를 한 페이지에 모은 유저별 설정 화면 |
+| 🔀 | **LLM Provider 대체** | 기본 Claude 인증 토큰 대신 다른 LLM 백엔드로 턴을 실행(유저별 또는 관리자 공용, 암호화 저장). **Amazon Bedrock**·**Google Vertex AI**의 Claude 모델은 네이티브 지원, **OpenAI/ChatGPT/로컬 LLM**은 Anthropic 호환 프록시 base URL(LiteLLM·claude-code-router·Ollama shim 등)로 연결. 해석 순서: 유저 provider → 유저 토큰 → 공용 provider → 공용 토큰 → MOCK. 설정하지 않으면 기존 Claude 토큰 방식 그대로. `llmProvidersEnabled`로 게이팅 |
+| 👤 | **마이페이지** | 프로필 이미지(업로드/제거, 본인 사이드바·마이페이지에 표시)·Claude 토큰·LLM Provider 대체·Git 자격증명·개인 프로젝트 관리(생성/삭제/새 대화에서 열기)를 한 페이지에 모은 유저별 설정 화면 |
 | ⑂ | **Git 커밋 & 푸시** | 클론한 프로젝트를 채팅 헤더에서 바로 커밋(파일 단위 스테이징)·푸시·브랜치 전환(로컬/원격) — Claude가 직접 커밋/푸시도 가능. 클론은 전체 히스토리(모든 브랜치)를 받으며 특정 브랜치를 지정할 수 있음. GitHub/GitLab/Bitbucket용 HTTPS PAT 자격증명을 유저별로 암호화 저장(관리자 공용 폴백), 클론 시 선택, 호스트로 해석. 해당 저장소에 실제 적용되는 자격증명(내 것/공용)과 커밋 작성자를 패널에서 바로 확인 — 인증 실패 원인 파악이 쉬움 |
 | 📚 | **LLM Wiki 지식 기반** | 문서/이미지 폴더를 올리면 Claude가 상호링크된 아티클로 컴파일, 유저는 읽기 전용 스레드로 질의. 이미 컴파일된 위키는 임포트로 컴파일 생략 |
 | 🔀 | **자동 PR 리뷰** | 관리자가 원격지를 등록(병합권한 자격증명 필요), 서버가 GitHub/GitLab/Bitbucket을 폴링해 열린 PR마다 리뷰 세션 생성 — 관리자와 PR 작성자(읽기 전용)만 열람. 새 PR마다 **파이프라인 전자동**: 로컬 머지 → 빌드/실행 → 버그 감지·코드 리뷰 → **MERGE_SAFE / DO_NOT_MERGE 판단**. 관리자 지시 시 한 번 클릭으로 자격증명을 써서 **원격에서 PR 병합** |
@@ -206,6 +207,18 @@ flowchart TB
 </details>
 
 <details>
+<summary><b>LLM Provider 대체 (Bedrock / Vertex / custom base URL)</b></summary>
+
+- 런타임은 Claude CLI(Anthropic 와이어 포맷). provider 프로필(유저별 또는 관리자 공용 폴백)이 턴마다 알맞은 env를 구성 — 기본 Claude 토큰 경로 위에 얹는 **추가 오버라이드**
+- **anthropic** — Claude 토큰 고정/사용(`ANTHROPIC_API_KEY` / `CLAUDE_CODE_OAUTH_TOKEN`). 토큰을 비워 저장하면 마이페이지의 Claude 토큰을 그대로 사용
+- **bedrock** — 네이티브: `CLAUDE_CODE_USE_BEDROCK=1` + 리전 + 자격증명(`AWS_BEARER_TOKEN_BEDROCK`, 또는 Access Key ID/Secret(+Session Token)) + 모델 ID
+- **vertex** — 네이티브(최소): `CLAUDE_CODE_USE_VERTEX=1` + 리전 + 프로젝트 ID, 자격증명은 호스트의 GCP 기본 자격증명(ADC) 사용
+- **custom** — `ANTHROPIC_BASE_URL`(+ 선택 Bearer 토큰/모델). **OpenAI/ChatGPT/로컬 LLM은 이 경로**로: Anthropic↔OpenAI를 변환하는 프록시(LiteLLM·claude-code-router·Ollama Anthropic 호환 shim)를 base URL로 지정. 앱이 OpenAI 와이어 포맷을 직접 말하지는 못함
+- 해석 순서: 유저 provider → 유저 Claude 토큰 → 공용 provider → 공용 Claude 토큰/env → MOCK. **provider가 없으면 기존 토큰 경로 그대로 동작(무회귀)**
+- base URL·토큰·키 등 설정은 암호화 저장, API는 비밀값을 절대 반환하지 않음(설정 여부만). `llmProvidersEnabled`로 게이팅
+</details>
+
+<details>
 <summary><b>LLM Wiki (팀 지식 기반)</b></summary>
 
 - 관리자가 문서/이미지 폴더를 업로드 → Claude가 `raw/` 소스를 읽어 `wiki/` 아티클 + `_index.md`로 **자동 컴파일**(멀티모달, 이미지 전사 포함)
@@ -286,6 +299,7 @@ Dockerfile · docker-compose.yml
 ## 🛣 로드맵
 
 - [x] 유저별 Claude 토큰 (개인 + 관리자 공통 + env 폴백)
+- [x] LLM Provider 대체 (Bedrock / Vertex 네이티브 · OpenAI/로컬은 Anthropic 호환 프록시)
 - [ ] SSO / 프록시 헤더 인증 어댑터
 - [ ] Postgres · Redis 승격 (멀티프로세스 스케일)
 - [ ] CRDT 실시간 협업 편집

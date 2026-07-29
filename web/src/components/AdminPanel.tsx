@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import { useT } from '../lib/i18n';
 import { MobileMenuButton } from '../lib/ui';
 import { GitCredList } from './GitCredentials';
+import { LlmProviderForm } from './LlmProvider';
 
 // Tab bar model — append here to add a tab (e.g. resource cleanup, approvals, processes, LLM providers).
 // `label` is an i18n key resolved at render.
@@ -26,6 +27,7 @@ export function AdminPanel() {
   const [nu, setNu] = useState({ username: '', password: '', role: 'member', displayName: '', claudeToken: '' });
   const [commonTok, setCommonTok] = useState('');
   const [tab, setTab] = useState<AdminTab>('overview');
+  const llmProvidersEnabled = useStore((s) => s.llmProvidersEnabled);
   const t = useT();
 
   const load = async () => {
@@ -103,6 +105,13 @@ export function AdminPanel() {
               </div>
               <div className="text-[11px] text-txt3 mt-1.5">{t('admin.commonTokenHint', { key: 'ANTHROPIC_API_KEY' })}</div>
             </Section>
+
+            {llmProvidersEnabled && (
+              <Section title={t('admin.commonProviderTitle')}>
+                <div className="text-[11px] text-txt3 mb-2">{t('admin.commonProviderHint')}</div>
+                <LlmProviderForm scope="common" />
+              </Section>
+            )}
 
             <Section title={t('admin.gitCredsTitle')}>
               <div className="text-[11px] text-txt3 mb-2">{t('admin.gitCredsHint')}</div>

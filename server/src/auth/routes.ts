@@ -8,6 +8,7 @@ import {
   toAuthUser, hashPassword, authUserWithToken, getUserById,
 } from './index.js';
 import { setUserToken, clearUserToken } from './claude-token.js';
+import { getProvider, setProvider, clearProvider } from './provider.js';
 import * as cs from '../codeserver/manager.js';
 import { cfg, publicConfig } from '../lib/config-registry.js';
 import { paths, ensureUserLayout } from '../lib/paths.js';
@@ -85,6 +86,26 @@ export async function authRoutes(app: FastifyInstance) {
     const u = requireAuth(req, reply); if (!u) return;
     clearUserToken(u.id);
     return { user: authUserWithToken(u) };
+  });
+
+  // ── self-service LLM provider override (get status / set / clear) — never returns secrets ──
+  app.get('/api/auth/me/provider', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    if (!cfg.bool('llmProvidersEnabled')) return reply.code(404).send({ error: 'llm providers disabled' });
+    return { provider: getProvider('user', u.id) };
+  });
+  app.put('/api/auth/me/provider', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    if (!cfg.bool('llmProvidersEnabled')) return reply.code(404).send({ error: 'llm providers disabled' });
+    const { type, config } = (req.body || {}) as any;
+    try { return { provider: setProvider('user', u.id, type, config) }; }
+    catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
+  });
+  app.delete('/api/auth/me/provider', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    if (!cfg.bool('llmProvidersEnabled')) return reply.code(404).send({ error: 'llm providers disabled' });
+    clearProvider('user', u.id);
+    return { provider: null };
   });
 
   // ── self-service avatar (upload / remove) — multipart single image ──

@@ -177,6 +177,19 @@ export const reviewSessions = sqliteTable('review_sessions', {
   updatedAt: integer('updated_at').notNull(),
 });
 
+// LLM provider override, encrypted at rest. Mirrors the git-credential model: a per-user profile
+// overrides an admin-managed common profile. When set, it replaces the default Anthropic-token auth
+// for the turn (bedrock / vertex / custom-base-URL). One profile per user + one common (unique index).
+export const llmProviders = sqliteTable('llm_providers', {
+  id: text('id').primaryKey(),
+  scope: text('scope').notNull(),        // 'user' | 'common'
+  ownerId: text('owner_id').notNull(),   // user id for 'user'; '' for 'common' (keeps the unique index working)
+  type: text('type').notNull(),          // 'anthropic' | 'bedrock' | 'vertex' | 'custom'
+  configEnc: text('config_enc').notNull(), // AES-GCM blob of the provider config JSON (fields + secrets)
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
 // Git remote credentials (HTTPS PAT), encrypted at rest. Mirrors the Claude-token model:
 // per-user creds override an admin-managed common cred, resolved by remote host.
 export const gitCredentials = sqliteTable('git_credentials', {

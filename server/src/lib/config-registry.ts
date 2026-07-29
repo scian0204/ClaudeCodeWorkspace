@@ -80,6 +80,7 @@ export const DEFS: ConfigDef[] = [
   // feature flags (live — toggle without restart)
   { key: 'sessionImportEnabled', group: 'features', type: 'bool', default: '1' },
   { key: 'resourceCleanupEnabled', group: 'features', type: 'bool', default: '1' },
+  { key: 'llmProvidersEnabled', group: 'features', type: 'bool', default: '1' },
   { key: 'avatarMaxMB', group: 'features', type: 'int', default: '5', min: 1, max: 50, unit: 'MB' },
   { key: 'attachmentMaxMB', group: 'features', type: 'int', default: '20', min: 1, max: 200, unit: 'MB' },
   { key: 'attachmentMaxCount', group: 'features', type: 'int', default: '10', min: 1, max: 50 },
@@ -232,8 +233,8 @@ export function imageConfigValues(): string[] {
 }
 
 // Client-facing subset (any authed user): drives the model dropdown.
-export function publicConfig(): { models: Record<string, string>; defaultModel: string; defaultEffort: string; sessionImportEnabled: boolean } {
+export function publicConfig(): { models: Record<string, string>; defaultModel: string; defaultEffort: string; sessionImportEnabled: boolean; llmProvidersEnabled: boolean } {
   let models: Record<string, string>;
   try { models = JSON.parse(cfg.str('models')); } catch { models = JSON.parse(DEFAULT_MODELS); }
-  return { models, defaultModel: cfg.str('defaultModel'), defaultEffort: cfg.str('defaultEffort'), sessionImportEnabled: cfg.bool('sessionImportEnabled') };
+  return { models, defaultModel: cfg.str('defaultModel'), defaultEffort: cfg.str('defaultEffort'), sessionImportEnabled: cfg.bool('sessionImportEnabled'), llmProvidersEnabled: cfg.bool('llmProvidersEnabled') };
 }

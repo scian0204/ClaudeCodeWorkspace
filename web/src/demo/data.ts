@@ -196,6 +196,20 @@ export const db = {
   } as Record<string, any[]>,
 };
 
+// LLM provider override (demo): per-scope status (type + non-secret fields; booleans for secrets).
+// Seeded with a user-scope custom (LiteLLM proxy) profile so the My Page section shows a configured
+// state; the common scope starts empty. Mutated in place by the router's PUT/DELETE handlers.
+export const PROVIDERS: Record<'user' | 'common', any> = {
+  user: {
+    type: 'custom',
+    fields: {
+      baseUrl: 'http://litellm:4000', region: '', projectId: '', model: 'gpt-4o',
+      hasAuthToken: true, hasApiKey: false, hasAccessKeyId: false, hasSecretKey: false, hasSessionToken: false, hasBearerToken: false,
+    },
+  },
+  common: null,
+};
+
 // prompt attachments (demo): server-assigned name → { url: data URL, isImage }. Populated by the XHR
 // upload interceptor (install.ts), read back by the socket mock so image thumbnails render inline.
 export const ATTACHMENTS = new Map<string, { url: string; isImage: boolean }>();

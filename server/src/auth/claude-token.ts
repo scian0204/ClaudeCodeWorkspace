@@ -48,6 +48,13 @@ export function commonTokenMeta(): TokenMeta {
   return { hasToken: has, setAt: enc && at ? at : null };
 }
 
+// Decrypted per-user token, '' if unset/corrupt. Mirrors getCommonToken (used by the provider resolver).
+export function getUserToken(userId: string): string {
+  const u = db.select().from(schema.users).where(eq(schema.users.id, userId)).get();
+  if (u?.claudeTokenEnc) { try { return decrypt(u.claudeTokenEnc); } catch { /* corrupt/rekeyed */ } }
+  return '';
+}
+
 // Decrypted shared token: admin-set (DB) first, else legacy env. '' if neither.
 export function getCommonToken(): string {
   const enc = getSetting(COMMON_ENC, '');

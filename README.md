@@ -64,7 +64,8 @@ The Claude Code CLI is powerful, but it's tied to **one terminal — yours**. Cl
 | 🧑‍💻 | **VS Code in the browser** | Spin up a project in a code-server container instantly. Mounts only your volume + the shared one (isolated); auto-reaped when idle. |
 | 🔌 | **Two-class plugins** | Common (admin) and personal (user) tiers. Install via git or local upload, admin-forced plugins, per-user on/off. Per-plugin detail view + one-click update. |
 | 🪪 | **Per-user Claude tokens** | Each member registers their own token (encrypted at rest); usage and cost are attributed per person. Falls back to an admin-set common token, then env. |
-| 👤 | **My Page** | One per-user settings page consolidating profile image (upload/remove, shown in your own sidebar and My Page), Claude token, git credentials, and personal-project management (create / delete / open in a new chat). |
+| 🔀 | **LLM provider override** | Optionally run turns against a non-default LLM backend instead of the Claude token, per-user or admin-common (encrypted at rest). **Amazon Bedrock** and **Google Vertex AI** Claude models are supported natively; **OpenAI/ChatGPT/local LLMs** connect through an Anthropic-compatible proxy base URL (e.g. LiteLLM, claude-code-router, an Ollama shim). Resolution: user provider → user token → common provider → common token → MOCK. Leave it unset and the default Claude-token path is unchanged. Gated by `llmProvidersEnabled`. |
+| 👤 | **My Page** | One per-user settings page consolidating profile image (upload/remove, shown in your own sidebar and My Page), Claude token, LLM provider override, git credentials, and personal-project management (create / delete / open in a new chat). |
 | ⑂ | **Git commit & push** | Commit (with file-level staging), push, and switch branches (local/remote) for a cloned project right from the chat header — Claude can also commit/push itself. Clones fetch full history (all branches) and can target a specific branch. HTTPS PAT credentials for GitHub/GitLab/Bitbucket are encrypted per-user (admin-common fallback), picked at clone time, resolved by host. The panel shows exactly which credential (yours vs. shared) and commit identity are in effect for the repo, so auth failures are easy to diagnose. |
 | 📚 | **LLM Wiki knowledge base** | Upload a folder of docs/images; Claude compiles them into cross-linked articles users can query in read-only threads. Import an already-compiled wiki to skip compilation. |
 | 🔀 | **Automatic PR review** | Admin registers a remote (merge-capable credential required); the server polls GitHub/GitLab/Bitbucket and each open PR becomes a review session — visible to admins and the PR's author (read-only). Each new PR **auto-runs the whole pipeline**: local merge → build/run → bug detection + code review → a **MERGE_SAFE / DO_NOT_MERGE verdict**. On the admin's word, one click **merges the PR on the remote** using the credential. |
@@ -206,6 +207,18 @@ flowchart TB
 </details>
 
 <details>
+<summary><b>LLM provider override (Bedrock / Vertex / custom base URL)</b></summary>
+
+- The runtime is the Claude CLI (Anthropic wire format). A provider profile (per-user, or admin-common as fallback) builds the right env for the turn — an **additive override** on top of the default Claude-token path
+- **anthropic** — pin/keep a Claude token (`ANTHROPIC_API_KEY` / `CLAUDE_CODE_OAUTH_TOKEN`); leave the token blank to just use your saved Claude token
+- **bedrock** — native: `CLAUDE_CODE_USE_BEDROCK=1` + region + a credential (`AWS_BEARER_TOKEN_BEDROCK`, or an access key id/secret (+session token)) + model id
+- **vertex** — native but minimal: `CLAUDE_CODE_USE_VERTEX=1` + region + project id, using the host's GCP Application Default Credentials (ADC)
+- **custom** — `ANTHROPIC_BASE_URL` (+ optional bearer token + model). **This is the path for OpenAI/ChatGPT/local LLMs**: point it at a proxy that translates Anthropic↔OpenAI (LiteLLM, claude-code-router, an Ollama Anthropic-compat shim). The app cannot speak OpenAI's wire format directly
+- Resolution order: user provider → user Claude token → common provider → common Claude token/env → MOCK. **When no provider is configured, auth resolves exactly as before** — the default token path does not regress
+- Config (base URL, tokens, keys) is encrypted at rest; the API never returns secrets (only which fields are set). Gated by the `llmProvidersEnabled` flag
+</details>
+
+<details>
 <summary><b>LLM Wiki (team knowledge base)</b></summary>
 
 - Admin uploads a folder of docs/images → Claude reads the `raw/` sources and **auto-compiles** them into `wiki/` articles + `_index.md` (multimodal — images transcribed too)
@@ -286,6 +299,7 @@ A **lightweight posture** that assumes a mutually trusted team/individual. App l
 ## 🛣 Roadmap
 
 - [x] Per-user Claude tokens (personal + admin-common + env fallback)
+- [x] LLM provider override (Bedrock / Vertex native · OpenAI/local via Anthropic-compatible proxy)
 - [ ] SSO / proxy-header auth adapter
 - [ ] Postgres · Redis promotion (multi-process scale)
 - [ ] CRDT real-time collaborative editing

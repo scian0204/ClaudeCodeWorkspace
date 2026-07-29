@@ -11,7 +11,7 @@ import { buildOptions, clampMode, rootsFor, type SessionContext, type PermMode }
 import { makeCanUseTool, makeAutoAllow } from './permissions.js';
 import { resolvePluginPaths } from '../plugins/manager.js';
 import { recordUsage } from '../usage/tracker.js';
-import { resolveClaudeAuth } from '../auth/claude-token.js';
+import { resolveProvider } from '../auth/provider.js';
 import { originHost } from '../lib/git-ops.js';
 import { resolveGitCred, gitIdentity, identityEnv, askpassEnv } from '../auth/git-cred.js';
 import { getReviewByChat, ensureWorktree } from '../review/manager.js';
@@ -120,9 +120,9 @@ export async function probeCommands(chatSessionId: string, requesterId?: string 
   if (!s) return [];
   const kind: 'user' | 'room' = s.kind === 'room' ? 'room' : 'user';
   const ownerId = kind === 'room' ? s.roomId! : s.ownerId;
-  // Probe with the viewer's token (or the owner's for a private session); no token => nothing to probe.
-  const auth = resolveClaudeAuth(requesterId ?? (kind === 'user' ? ownerId : null));
-  if (auth.source === 'none') return [];
+  // Probe with the viewer's auth (or the owner's for a private session); none => nothing to probe.
+  const prov = resolveProvider(requesterId ?? (kind === 'user' ? ownerId : null));
+  if (prov.source === 'none') return [];
   const plugins = resolvePluginPaths(kind, ownerId);
   const key = `${chatSessionId}|${plugins.join(',')}`;
   const hit = cmdCache.get(key);
@@ -131,7 +131,7 @@ export async function probeCommands(chatSessionId: string, requesterId?: string 
     kind, ownerId, cwd: await cwdFor(s), model: s.model || cfg.str('defaultModel'),
     effort: (s.effort || cfg.str('defaultEffort')) as SessionContext['effort'],
     permissionMode: clampMode((s.permissionMode as PermMode) || 'default', allowBypass()), plugins,
-    authToken: auth.token,
+    authToken: '', providerEnv: prov.env, providerModel: prov.model,
   };
   const abort = new AbortController();
   try {
@@ -173,12 +173,12 @@ export async function probeUsage(chatSessionId: string, requesterId?: string | n
   if (!s) return EMPTY_USAGE;
   const kind: 'user' | 'room' = s.kind === 'room' ? 'room' : 'user';
   const ownerId = kind === 'room' ? s.roomId! : s.ownerId;
-  // Rate limits + subscription are account-specific to whoever probes (their own token wins in
-  // resolveClaudeAuth), so the cache MUST be keyed per requester — keying by session alone would
+  // Rate limits + subscription are account-specific to whoever probes (their own auth wins in
+  // resolveProvider), so the cache MUST be keyed per requester — keying by session alone would
   // serve one member's claude.ai plan usage to another viewer of the same room/review/session.
   const authId = requesterId ?? (kind === 'user' ? ownerId : null);
-  const auth = resolveClaudeAuth(authId);
-  if (auth.source === 'none') return EMPTY_USAGE; // mock / no token → nothing to report
+  const prov = resolveProvider(authId);
+  if (prov.source === 'none') return EMPTY_USAGE; // mock / no auth → nothing to report
 
   const cacheKey = `${chatSessionId}|${authId ?? 'shared'}`;
   const hit = usageCache.get(cacheKey);
@@ -188,7 +188,7 @@ export async function probeUsage(chatSessionId: string, requesterId?: string | n
     kind, ownerId, cwd: await cwdFor(s), model: s.model || cfg.str('defaultModel'),
     effort: (s.effort || cfg.str('defaultEffort')) as SessionContext['effort'],
     permissionMode: clampMode((s.permissionMode as PermMode) || 'default', allowBypass()),
-    plugins: resolvePluginPaths(kind, ownerId), authToken: auth.token,
+    plugins: resolvePluginPaths(kind, ownerId), authToken: '', providerEnv: prov.env, providerModel: prov.model,
   };
   const abort = new AbortController();
   const withTimeout = <T,>(p: Promise<T>): Promise<T | null> =>
@@ -240,8 +240,9 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
   const ownerId = kind === 'room' ? s.roomId! : s.ownerId;
   const cwd = await cwdFor(s);
   const mode = clampMode((s.permissionMode as PermMode) || 'default', allowBypass());
-  // Each turn runs under its author's token (personal: owner; room: whoever sent this message).
-  const auth = resolveClaudeAuth(p.author.id);
+  // Each turn runs under its author's auth (personal: owner; room: whoever sent this message).
+  // resolveProvider layers an optional LLM-provider override on top of the default Claude-token path.
+  const prov = resolveProvider(p.author.id);
   // SECURITY: review turns run unattended and build/run PR-controlled code with Bash auto-allowed,
   // so never hand them the merge-capable git PAT — it would be readable from the child env by any
   // build/test script the PR ships. Review never pushes (the remote merge uses the host API), and
@@ -270,7 +271,7 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
     kind, ownerId, cwd, model: s.model || cfg.str('defaultModel'),
     effort: (s.effort || cfg.str('defaultEffort')) as SessionContext['effort'],
     permissionMode: mode, plugins: resolvePluginPaths(kind, ownerId),
-    authToken: auth.token, gitEnv, mcpServers, disallowedTools,
+    authToken: '', providerEnv: prov.env, providerModel: prov.model, gitEnv, mcpServers, disallowedTools,
   };
 
   // room + "include chat": collect team-chat accrued since Claude last saw a message,
@@ -337,7 +338,7 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
   let inTok = 0, outTok = 0, cost = 0;
 
   try {
-    if (auth.source === 'none') {
+    if (prov.source === 'none') {
       await runMock({ ctx, prompt: p.text, canUseTool, emit: p.emit, sessionId: s.id, blocks, signal: abort.signal });
       inTok = 12; outTok = 40; cost = 0;
     } else {

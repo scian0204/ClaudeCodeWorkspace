@@ -3,6 +3,7 @@ import { useStore } from '../lib/store';
 import { useT } from '../lib/i18n';
 import { MobileMenuButton, Avatar, avatarUrl } from '../lib/ui';
 import { GitCredList } from './GitCredentials';
+import { LlmProviderForm } from './LlmProvider';
 
 function fmtDate(ms?: number | null) {
   if (!ms) return '';
@@ -18,6 +19,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 // Structure mirrors AdminPanel (sticky header + max-w content + Section cards).
 export function MyPage() {
   const setPanel = useStore((s) => s.setPanel);
+  const llmProvidersEnabled = useStore((s) => s.llmProvidersEnabled);
   const t = useT();
   return (
     <div className="h-full overflow-y-auto scrolly">
@@ -29,6 +31,12 @@ export function MyPage() {
       <div className="max-w-[860px] mx-auto p-4 md:p-5 space-y-6">
         <Section title={t('mypage.profile')}><ProfileSection /></Section>
         <Section title={t('mypage.claudeToken')}><TokenSection /></Section>
+        {llmProvidersEnabled && (
+          <Section title={t('mypage.llmProvider')}>
+            <div className="text-xs text-txt2 bg-claysoft border border-line rounded-lg px-3 py-2 mb-3">{t('provider.intro')}</div>
+            <LlmProviderForm scope="user" />
+          </Section>
+        )}
         <Section title={t('mypage.gitCreds')}>
           <div className="text-xs text-txt2 bg-claysoft border border-line rounded-lg px-3 py-2 mb-3">{t('gitcred.notice')}</div>
           <GitCredList scope="user" />
