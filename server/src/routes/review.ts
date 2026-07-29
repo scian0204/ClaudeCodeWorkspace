@@ -19,6 +19,7 @@ export async function reviewRoutes(app: FastifyInstance) {
         name: b.name ? String(b.name) : undefined, gitUrl: String(b.gitUrl),
         credentialId: String(b.credentialId), provider: b.provider ? String(b.provider) : undefined,
         baseBranch: b.baseBranch ? String(b.baseBranch) : undefined,
+        sandboxImage: b.sandboxImage ? String(b.sandboxImage) : undefined,
       });
       return { repo: review.listRepoSummaries().find((r) => r.id === repo.id) };
     } catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
