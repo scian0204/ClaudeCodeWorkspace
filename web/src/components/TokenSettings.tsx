@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useStore } from '../lib/store';
 import { Modal } from './Modal';
 import { useT } from '../lib/i18n';
+import { IconDot } from '../lib/icons';
 
 function fmtDate(ms?: number | null) {
   if (!ms) return '';
@@ -46,7 +47,7 @@ export function MyTokenModal({ open, onClose, nag }: { open: boolean; onClose: (
 
       {has ? (
         <div className="text-sm mb-3 flex items-center gap-2">
-          <span className="text-ok">●</span>
+          <IconDot className="text-ok" />
           <span>{t('token.registered')}{user?.claudeTokenSetAt ? ` · ${fmtDate(user.claudeTokenSetAt)}` : ''}</span>
           <button className="ml-auto text-xs text-txt3 hover:text-danger" disabled={busy} onClick={clear}>{t('common.delete')}</button>
         </div>

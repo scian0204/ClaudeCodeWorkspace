@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { useT } from '../lib/i18n';
+import { IconPencil } from '../lib/icons';
 
 export interface GitCredMeta {
   id: string; scope: 'user' | 'common'; provider: string; host: string;
@@ -69,7 +70,7 @@ export function GitCredList({ scope }: { scope: 'user' | 'common' }) {
             <span className="text-[10px] bg-claysoft text-clay px-1.5 py-0.5 rounded-full">{c.provider}</span>
             <span className="font-mono text-xs">{c.host}</span>
             <span className="text-txt3 text-xs">· {c.username}</span>
-            {c.authorEmail && <span className="text-txt3 text-[11px] truncate">✎ {c.authorEmail}</span>}
+            {c.authorEmail && <span className="text-txt3 text-[11px] truncate inline-flex items-center gap-1"><IconPencil size={11} className="shrink-0" />{c.authorEmail}</span>}
             <span className="text-txt3 text-[10px] ml-auto">{fmtDate(c.setAt)}</span>
             <button className="text-xs text-txt3 hover:text-danger" onClick={() => del(c.id)}>{t('common.delete')}</button>
           </div>

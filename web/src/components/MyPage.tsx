@@ -5,6 +5,7 @@ import { useT } from '../lib/i18n';
 import { MobileMenuButton, Avatar, avatarUrl } from '../lib/ui';
 import { GitCredList } from './GitCredentials';
 import { LlmProviderForm } from './LlmProvider';
+import { IconArrowLeft, IconDot, IconFolder } from '../lib/icons';
 
 function fmtDate(ms?: number | null) {
   if (!ms) return '';
@@ -27,7 +28,7 @@ export function MyPage() {
     <div className="h-full overflow-y-auto scrolly">
       <div className="flex items-center gap-3 px-4 md:px-5 py-3 border-b border-line sticky top-0 bg-panel z-10">
         <MobileMenuButton />
-        <button className="toolbtn" onClick={() => setPanel(null)}>←</button>
+        <button className="toolbtn" aria-label={t('common.back')} onClick={() => setPanel(null)}><IconArrowLeft /></button>
         <div className="font-semibold">{t('mypage.title')}</div>
       </div>
       <div className="max-w-[860px] mx-auto p-4 md:p-5 space-y-6">
@@ -126,7 +127,7 @@ function TokenSection() {
     <>
       {has ? (
         <div className="text-sm mb-3 flex items-center gap-2">
-          <span className="text-ok">●</span>
+          <IconDot className="text-ok" />
           <span>{t('token.registered')}{user?.claudeTokenSetAt ? ` · ${fmtDate(user.claudeTokenSetAt)}` : ''}</span>
           <button className="ml-auto text-xs text-txt3 hover:text-danger" disabled={busy} onClick={clear}>{t('common.delete')}</button>
         </div>
@@ -182,7 +183,7 @@ function ProjectsSection() {
         {projects.mine.length === 0 && <div className="text-xs text-txt3">{t('mypage.noProjects')}</div>}
         {projects.mine.map((p) => (
           <div key={p.id} className="flex items-center gap-2 text-sm border-b border-line py-1.5">
-            <span className="opacity-70">📁</span>
+            <span className="opacity-70"><IconFolder size={15} /></span>
             <span className="flex-1 truncate" title={p.path}>{p.name}</span>
             <button className="text-xs text-txt3 hover:text-clay" onClick={() => openInChat(p.id)}>{t('mypage.openInChat')}</button>
             <button className="text-xs text-txt3 hover:text-danger" onClick={() => del(p.id, p.name)}>{t('common.delete')}</button>

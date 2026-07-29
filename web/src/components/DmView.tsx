@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useStore, type DmChannel } from '../lib/store';
 import { Avatar, avatarUrl, MobileMenuButton } from '../lib/ui';
 import { useT } from '../lib/i18n';
+import { IconUsers } from '../lib/icons';
 
 // Channel display name: the other person for a DM, the group name for a group.
 function channelLabel(ch: DmChannel, meId: string | undefined, t: (k: string) => string): string {
@@ -59,7 +60,7 @@ export function DmView() {
       <div className="flex items-center gap-2.5 px-3 md:px-5 py-2.5 border-b border-line shrink-0">
         <MobileMenuButton />
         {ch.kind === 'group'
-          ? <div className="avatar" style={{ width: 28, height: 28, fontSize: 14, background: 'var(--line2, #888)' }}>👥</div>
+          ? <div className="avatar" style={{ width: 28, height: 28, background: 'var(--line2, #888)' }}><IconUsers size={15} /></div>
           : <Avatar name={other?.displayName} color={other?.avatarColor} src={avatarUrl(other && { id: other.userId, avatar: other.avatar })} />}
         <div className="min-w-0 flex-1">
           <div className="font-semibold text-sm truncate">{label}</div>

@@ -9,6 +9,7 @@ import { MyPage } from './MyPage';
 import { MyTokenModal } from './TokenSettings';
 import { MobileMenuButton } from '../lib/ui';
 import { useT } from '../lib/i18n';
+import { IconX } from '../lib/icons';
 
 function Empty() {
   const newSession = useStore((s) => s.newSession);
@@ -32,10 +33,11 @@ function Empty() {
 }
 
 function Toast({ msg, onClose }: { msg: string; onClose: () => void }) {
+  const t = useT();
   return (
     <div className="fixed bottom-5 left-1/2 -translate-x-1/2 bg-card border border-danger text-danger text-sm rounded-lg px-4 py-2 shadow-lg z-[60] flex items-center gap-3">
       <span>{msg}</span>
-      <button className="text-txt3 hover:text-txt" onClick={onClose}>✕</button>
+      <button className="text-txt3 hover:text-txt" aria-label={t('common.close')} onClick={onClose}><IconX size={15} /></button>
     </div>
   );
 }

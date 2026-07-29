@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { useT } from '../lib/i18n';
+import { IconDot, IconDotOutline } from '../lib/icons';
 
 // Provider override profile. Mirrors GitCredList: self-contained (its own load/save, api direct),
 // secrets stay in local state only and are cleared after save (GET never returns them).
@@ -88,9 +89,9 @@ export function LlmProviderForm({ scope }: { scope: 'user' | 'common' }) {
     <div className="space-y-3">
       <div className="text-sm flex items-center gap-2">
         {status
-          ? <><span className="text-ok">●</span><span className="min-w-0 truncate">{t('provider.setAs')}: {summary()}</span>
+          ? <><IconDot className="text-ok" /><span className="min-w-0 truncate">{t('provider.setAs')}: {summary()}</span>
               <button className="ml-auto text-xs text-txt3 hover:text-danger shrink-0" disabled={busy} onClick={clear}>{t('common.delete')}</button></>
-          : <><span className="text-txt3">○</span><span className="text-txt3">{t('provider.notSet')}</span></>}
+          : <><IconDotOutline className="text-txt3" /><span className="text-txt3">{t('provider.notSet')}</span></>}
       </div>
 
       <label className="block text-xs text-txt2">{t('provider.type')}

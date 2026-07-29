@@ -6,6 +6,10 @@ import { MobileMenuButton, timeAgo } from '../lib/ui';
 import { GitCredList } from './GitCredentials';
 import { LlmProviderForm } from './LlmProvider';
 import { RequestInfo } from './MyPage';
+import {
+  IconArrowLeft, IconDot, IconDotOutline, IconRefresh, IconChevronRight, IconChevronDown,
+  IconRotateCcw, IconX, IconPlus,
+} from '../lib/icons';
 
 // Tab bar model — append here to add a tab (e.g. resource cleanup, approvals, processes, LLM providers).
 // `label` is an i18n key resolved at render.
@@ -68,7 +72,7 @@ export function AdminPanel() {
     <div className="h-full overflow-y-auto scrolly">
       <div className="flex items-center gap-3 px-4 md:px-5 py-3 border-b border-line sticky top-0 bg-panel z-10">
         <MobileMenuButton />
-        <button className="toolbtn" onClick={() => setPanel(null)}>←</button>
+        <button className="toolbtn" aria-label={t('common.back')} onClick={() => setPanel(null)}><IconArrowLeft /></button>
         <div className="font-semibold">{t('admin.panelTitle')}</div>
       </div>
       {/* Tab bar — scrolls horizontally inside its own container so it never widens the page on mobile. */}
@@ -106,9 +110,9 @@ export function AdminPanel() {
             <Section title={t('admin.commonTokenTitle')}>
               <div className="text-sm mb-2 flex items-center gap-2">
                 {ov?.commonToken?.hasToken
-                  ? <><span className="text-ok">●</span><span>{t('admin.registered')}{ov.commonToken.setAt ? ` · ${new Date(ov.commonToken.setAt).toLocaleDateString()}` : ' (env)'}</span>
+                  ? <><IconDot className="text-ok" /><span>{t('admin.registered')}{ov.commonToken.setAt ? ` · ${new Date(ov.commonToken.setAt).toLocaleDateString()}` : ' (env)'}</span>
                       <button className="ml-auto text-xs text-txt3 hover:text-danger" onClick={clearCommon}>{t('common.delete')}</button></>
-                  : <><span className="text-warn">●</span><span className="text-txt2">{t('admin.notSet')}</span></>}
+                  : <><IconDot className="text-warn" /><span className="text-txt2">{t('admin.notSet')}</span></>}
               </div>
               <div className="flex gap-2">
                 <input className="input flex-1" type="password" placeholder={t('admin.commonTokenPlaceholder')} value={commonTok}
@@ -291,7 +295,7 @@ function ConfigManager() {
     <>
       <div className="flex items-center gap-2 flex-wrap">
         <div className="font-semibold">{t('admin.cfgTitle')}</div>
-        <button className="ml-auto text-xs border border-line rounded-lg px-2.5 py-1 hover:border-clay" onClick={restart}>⟳ {t('admin.cfgRestartBtn')}</button>
+        <button className="ml-auto text-xs border border-line rounded-lg px-2.5 py-1 hover:border-clay inline-flex items-center gap-1.5" onClick={restart}><IconRefresh size={13} />{t('admin.cfgRestartBtn')}</button>
       </div>
       {restartNeeded && (
         <div className="text-xs text-warn bg-warnsoft border border-warn rounded-lg px-3 py-2">{t('admin.cfgRestartNeeded')}</div>
@@ -301,7 +305,7 @@ function ConfigManager() {
         return (
           <details key={g} className="group bg-card border border-line rounded-xl overflow-hidden">
             <summary className="font-semibold px-4 py-3 cursor-pointer select-none list-none flex items-center gap-2 [&::-webkit-details-marker]:hidden">
-              <span className="text-txt3 text-xs transition-transform group-open:rotate-90">▶</span>
+              <span className="text-txt3 transition-transform group-open:rotate-90 inline-flex"><IconChevronRight size={14} /></span>
               <span>{t(`admin.cfgGroup.${g}`)}</span>
               <span className="ml-auto text-[11px] text-txt3 font-normal">{rows.length}</span>
             </summary>
@@ -341,7 +345,7 @@ function ConfigRow({ it, edit, onEdit, onSave, onReset }: {
             <span className="font-medium text-[13px]">{name}</span>
             <span className="font-mono text-[10px] text-txt3">{it.key}</span>
             {it.restart && <span className="text-[9px] uppercase bg-warnsoft text-warn px-1.5 py-0.5 rounded-full whitespace-nowrap">{t('admin.cfgRestart')}</span>}
-            {it.overridden && <button className="text-xs text-txt3 hover:text-clay" title={t('admin.cfgReset')} onClick={() => onReset(it.key)}>↺</button>}
+            {it.overridden && <button className="text-txt3 hover:text-clay" title={t('admin.cfgReset')} aria-label={t('admin.cfgReset')} onClick={() => onReset(it.key)}><IconRotateCcw size={14} /></button>}
           </div>
           {desc && <p className="text-[11px] text-txt3 mt-0.5 leading-snug">{desc}</p>}
         </div>
@@ -353,7 +357,7 @@ function ConfigRow({ it, edit, onEdit, onSave, onReset }: {
           ) : it.image ? (
             <ImageControl it={it} edit={edit} onEdit={onEdit} onSave={onSave} />
           ) : it.type === 'json' ? (
-            <span className="text-[11px] text-txt3">{t('admin.cfgJsonBelow')} ↓</span>
+            <span className="text-[11px] text-txt3 inline-flex items-center gap-1">{t('admin.cfgJsonBelow')}<IconChevronDown size={12} /></span>
           ) : it.type === 'bool' ? (
             <input type="checkbox" checked={it.value === '1'} onChange={(e) => onSave(it.key, e.target.checked)} />
           ) : it.type === 'select' ? (
@@ -413,11 +417,11 @@ function JsonEditor({ it, onSave }: { it: any; onSave: (k: string, v: any) => vo
             onChange={(e) => { const n = rows.slice(); n[i] = [e.target.value, r[1]]; setRows(n); }} />}
           <input className="input flex-1" placeholder={t('admin.cfgValue')} value={r[1]}
             onChange={(e) => { const n = rows.slice(); n[i] = [r[0], e.target.value]; setRows(n); }} />
-          <button className="text-txt3 hover:text-danger px-1" onClick={() => setRows(rows.filter((_, j) => j !== i))}>✕</button>
+          <button className="text-txt3 hover:text-danger px-1" aria-label={t('common.delete')} onClick={() => setRows(rows.filter((_, j) => j !== i))}><IconX size={14} /></button>
         </div>
       ))}
       <div className="flex items-center gap-2">
-        <button className="text-xs text-clay hover:underline" onClick={() => setRows([...rows, ['', '']])}>+ {t('admin.cfgAddRow')}</button>
+        <button className="text-xs text-clay hover:underline inline-flex items-center gap-1" onClick={() => setRows([...rows, ['', '']])}><IconPlus size={13} />{t('admin.cfgAddRow')}</button>
         <button className="btn-primary text-xs px-2 py-1 ml-auto" onClick={commit}>{t('admin.save')}</button>
       </div>
     </div>
@@ -460,8 +464,8 @@ function ImageControl({ it, edit, onEdit, onSave }: {
       <div className="flex items-center gap-2 text-[11px]">
         {busy === 'check' ? <span className="text-txt3">{t('admin.cfgImageChecking')}</span>
           : status?.dockerUnavailable ? <span className="text-txt3">docker N/A</span>
-          : status?.present ? <span className="text-ok">● {t('admin.cfgImagePresent')}{status.size ? ` · ${Math.round(status.size / 1e6)}MB` : ''}</span>
-          : <span className="text-warn">○ {t('admin.cfgImageAbsent')}</span>}
+          : status?.present ? <span className="text-ok inline-flex items-center gap-1"><IconDot size={10} />{t('admin.cfgImagePresent')}{status.size ? ` · ${Math.round(status.size / 1e6)}MB` : ''}</span>
+          : <span className="text-warn inline-flex items-center gap-1"><IconDotOutline size={10} />{t('admin.cfgImageAbsent')}</span>}
         <button className="text-clay hover:underline disabled:opacity-40" disabled={busy !== null || dirty}
           onClick={pull}>{busy === 'pull' ? t('admin.cfgImagePulling') : t('admin.cfgImagePull')}</button>
       </div>
@@ -502,8 +506,8 @@ function ProcessesManager() {
     <div className="space-y-4">
       <div className="flex items-center gap-2 flex-wrap">
         <div className="font-semibold">{t('admin.proc.title')}</div>
-        <button className="ml-auto text-xs border border-line rounded-lg px-2.5 py-1 hover:border-clay disabled:opacity-40"
-          disabled={disabled} onClick={() => load()}>⟳ {t('admin.proc.refresh')}</button>
+        <button className="ml-auto text-xs border border-line rounded-lg px-2.5 py-1 hover:border-clay disabled:opacity-40 inline-flex items-center gap-1.5"
+          disabled={disabled} onClick={() => load()}><IconRefresh size={13} />{t('admin.proc.refresh')}</button>
       </div>
       <p className="text-[11px] text-txt3 leading-snug">{t('admin.proc.intro')}</p>
 
@@ -666,8 +670,8 @@ function CleanupManager() {
     <div className="space-y-4">
       <div className="flex items-center gap-2 flex-wrap">
         <div className="font-semibold">{t('admin.cleanup.title')}</div>
-        <button className="ml-auto text-xs border border-line rounded-lg px-2.5 py-1 hover:border-clay disabled:opacity-40"
-          disabled={disabled} onClick={() => load()}>⟳ {t('admin.cleanup.rescan')}</button>
+        <button className="ml-auto text-xs border border-line rounded-lg px-2.5 py-1 hover:border-clay disabled:opacity-40 inline-flex items-center gap-1.5"
+          disabled={disabled} onClick={() => load()}><IconRefresh size={13} />{t('admin.cleanup.rescan')}</button>
       </div>
       <p className="text-[11px] text-txt3 leading-snug">{t('admin.cleanup.intro')}</p>
 
@@ -702,7 +706,7 @@ function CleanupManager() {
               {(data.images || []).map((im: any) => (
                 <tr key={im.ref} className="border-t border-line first:border-0">
                   <td className="py-1.5 pr-2 font-mono text-[11px] break-all">{im.ref}</td>
-                  <td className="pr-2">{im.present ? <span className="text-ok">● {t('admin.cleanup.present')}</span> : <span className="text-txt3">○ {t('admin.cleanup.absent')}</span>}</td>
+                  <td className="pr-2">{im.present ? <span className="text-ok inline-flex items-center gap-1"><IconDot size={10} />{t('admin.cleanup.present')}</span> : <span className="text-txt3 inline-flex items-center gap-1"><IconDotOutline size={10} />{t('admin.cleanup.absent')}</span>}</td>
                   <td className="text-txt3">{im.size ? fmtBytes(im.size) : ''}</td>
                 </tr>
               ))}

@@ -12,6 +12,11 @@ import { SourcesPanel, CiteHighlighter } from './SourcesPanel';
 import { extractSources, markCitations, type WikiSource } from '../lib/wikiCite';
 import { md } from '../lib/md';
 import { useT } from '../lib/i18n';
+import {
+  IconChevronDown, IconChevronRight, IconChevronUp, IconTheme, IconFolder, IconFile, IconTrash,
+  IconGauge, IconEye, IconBook, IconArchive, IconSparkle, IconCopy, IconPencil, IconHelp,
+  IconTerminal, IconX, IconPaperclip, IconSend,
+} from '../lib/icons';
 
 const MODELS: Record<string, string> = {
   'claude-opus-4-8': 'Opus 4.8', 'claude-sonnet-5': 'Sonnet 5', 'claude-haiku-4-5-20251001': 'Haiku 4.5',
@@ -101,7 +106,7 @@ function Header() {
       {!c.wikiTopicId && c.projectId && <button className="pill" title={t('git.title')} onClick={() => setGitOpen(true)}>{t('git.pill')}</button>}
 
       <DM.Root>
-        <DM.Trigger asChild><button className="pill" disabled={!!c.readOnly}>{models[c.model] || c.model} ▾</button></DM.Trigger>
+        <DM.Trigger asChild><button className="pill" disabled={!!c.readOnly}>{models[c.model] || c.model}<IconChevronDown size={14} /></button></DM.Trigger>
         <Menu>
           {Object.entries(models).map(([id, label]) => (
             <MenuItem key={id} onSelect={() => setModel(id)}>{label}</MenuItem>
@@ -110,7 +115,7 @@ function Header() {
       </DM.Root>
 
       <DM.Root>
-        <DM.Trigger asChild><button className="pill" disabled={!!c.readOnly} title={t('cfg.defaultEffort')}>{t('effort.' + c.effort)} ▾</button></DM.Trigger>
+        <DM.Trigger asChild><button className="pill" disabled={!!c.readOnly} title={t('cfg.defaultEffort')}>{t('effort.' + c.effort)}<IconChevronDown size={14} /></button></DM.Trigger>
         <Menu>
           {EFFORTS.map((lvl) => (
             <MenuItem key={lvl} onSelect={() => setEffort(lvl)}>{t('effort.' + lvl)}</MenuItem>
@@ -119,7 +124,7 @@ function Header() {
       </DM.Root>
 
       <DM.Root>
-        <DM.Trigger asChild><button className="pill" disabled={(isRoom || isReview) && !control.canSetMode}>{t(MODES[c.permissionMode]) || c.permissionMode} ▾</button></DM.Trigger>
+        <DM.Trigger asChild><button className="pill" disabled={(isRoom || isReview) && !control.canSetMode}>{t(MODES[c.permissionMode]) || c.permissionMode}<IconChevronDown size={14} /></button></DM.Trigger>
         <Menu>
           {Object.entries(MODES).map(([id, label]) => (
             <MenuItem key={id} onSelect={() => setMode(id)}>{t(label)}</MenuItem>
@@ -139,7 +144,7 @@ function Header() {
           ))}
         </div>
       )}
-      <button className="toolbtn" title={t('chat.toggleTheme')} onClick={toggleTheme}>◐</button>
+      <button className="toolbtn" title={t('chat.toggleTheme')} aria-label={t('chat.toggleTheme')} onClick={toggleTheme}><IconTheme /></button>
 
       {gitOpen && c.projectId && <GitPanel projectId={c.projectId} open={gitOpen} onClose={() => setGitOpen(false)} />}
       {showMembers && c.room && <MembersDialog open={showMembers} onClose={() => setShowMembers(false)} />}
@@ -205,7 +210,7 @@ function ProjectMenu() {
 
   return (
     <DM.Root open={menuOpen} onOpenChange={setMenuOpen}>
-      <DM.Trigger asChild><button className="pill">📁 {cur ? cur.name : t('chat.project')} ▾</button></DM.Trigger>
+      <DM.Trigger asChild><button className="pill"><IconFolder size={14} />{cur ? cur.name : t('chat.project')}<IconChevronDown size={14} /></button></DM.Trigger>
       <Menu>
         {list.length === 0 && <div className="px-2 py-1 text-[11px] text-txt3">{t('chat.noProjects')}</div>}
         {list.map((p) => (
@@ -214,8 +219,8 @@ function ProjectMenu() {
               <span className="text-[10px] text-txt3">[{p.tag}]</span>
               <span className="flex-1 truncate">{p.name}</span>
             </button>
-            <button title={t('common.delete')} className="text-txt3 hover:text-danger opacity-50 group-hover:opacity-100 px-0.5 shrink-0"
-              onClick={() => removeProject(p)}>🗑</button>
+            <button title={t('common.delete')} aria-label={t('common.delete')} className="text-txt3 hover:text-danger opacity-50 group-hover:opacity-100 px-0.5 shrink-0"
+              onClick={() => removeProject(p)}><IconTrash size={14} /></button>
           </div>
         ))}
         <div className="border-t border-line my-1" />
@@ -339,7 +344,7 @@ function UsagePill() {
   return (
     <DM.Root open={open} onOpenChange={setOpen}>
       <DM.Trigger asChild>
-        <button className="pill" title={t('usage.title')}>◔ {pctLabel} ▾</button>
+        <button className="pill" title={t('usage.title')}><IconGauge size={14} />{pctLabel}<IconChevronDown size={14} /></button>
       </DM.Trigger>
       <DM.Portal>
         <DM.Content sideOffset={4} align="end"
@@ -416,7 +421,7 @@ function ReviewControls() {
       <a className="pill" href={rv.prUrl} target="_blank" rel="noreferrer" title={rv.prUrl}>{t('review.prLink', { n: rv.prNumber })}</a>
       <span className="text-[11px] font-semibold" style={{ color: v.color }} title={rv.verdictSummary || ''}>{t(v.key)}</span>
       {readOnly
-        ? <span className="pill" title={t('review.readOnlyHint')}>👁 {t('review.readOnly')}</span>
+        ? <span className="pill" title={t('review.readOnlyHint')}><IconEye size={14} />{t('review.readOnly')}</span>
         : <>
             <button className="pill" disabled={busy !== '' || rv.verdict === 'running'} onClick={runAuto} title={t('review.autoRunHint')}>{busy === 'auto' || rv.verdict === 'running' ? t('review.autoRunning') : t('review.autoRun')}</button>
             <button className="pill" disabled={busy !== ''} onClick={approve} title={t('review.approveHint')}>{busy === 'approve' ? t('review.approving') : t('review.approve')}</button>
@@ -458,14 +463,14 @@ function WikiBanner() {
   return (
     <div className="border-b border-line bg-card text-xs shrink-0">
       <div className="flex items-center gap-2 px-3 md:px-5 py-2 flex-wrap">
-        <span className="cursor-pointer" onClick={() => setOpen(!open)}>📚</span>
+        <span className="cursor-pointer" onClick={() => setOpen(!open)}><IconBook size={15} /></span>
         <span className="font-semibold cursor-pointer" onClick={() => setOpen(!open)}>{c?.title}</span>
         {statusEl}
         {files && <span className="text-txt3">· {source === 'raw' ? t('chat.rawCount', { count: files.length }) : t('chat.articleCount', { count: files.length })}</span>}
         <div className="ml-auto flex items-center gap-2">
           <button className="text-txt3 hover:text-clay" onClick={() => setExplorer(true)}>{t('chat.fileExplorerBtn')}</button>
           {isAdmin && <button className="text-txt3 hover:text-clay disabled:opacity-40" disabled={status === 'compiling'} onClick={recompile}>{t('chat.recompile')}</button>}
-          <span className="cursor-pointer text-txt3" onClick={() => setOpen(!open)}>{open ? '▲' : '▼'}</span>
+          <span className="cursor-pointer text-txt3" onClick={() => setOpen(!open)}>{open ? <IconChevronUp size={15} /> : <IconChevronDown size={15} />}</span>
         </div>
       </div>
       {explorer && <WikiExplorer topicId={topicId} onClose={() => setExplorer(false)} />}
@@ -553,8 +558,8 @@ function FoldedSegment({ seg }: { seg: Segment }) {
   return (
     <div className="border border-line rounded-lg my-3 bg-card overflow-hidden">
       <div className="flex items-center gap-2 px-3 py-2 cursor-pointer text-xs select-none" onClick={() => setOpen(!open)}>
-        <span className="text-txt3">{open ? '▼' : '▶'}</span>
-        <span className="text-clay">🗂</span>
+        <span className="text-txt3">{open ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}</span>
+        <span className="text-clay"><IconArchive size={14} /></span>
         <code className="font-mono text-clay">/{seg.cmd}</code>
         <span className="font-semibold text-txt2">{label}</span>
         <span className="text-txt3 font-mono truncate">{range}</span>
@@ -606,12 +611,12 @@ function MessageView({ m }: { m: Msg }) {
         <div className="text-xs text-txt2 font-semibold mb-1 flex items-center gap-2">
           {isClaude ? 'Claude' : m.authorName}
           {!isClaude && isRoom && !m.chat && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-normal" style={{ background: 'var(--claysoft)', color: 'var(--clay)' }}>🤖 {t('chat.claudeBadge')}</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-normal inline-flex items-center gap-1" style={{ background: 'var(--claysoft)', color: 'var(--clay)' }}><IconSparkle size={11} />{t('chat.claudeBadge')}</span>
           )}
           <span className="hidden group-hover:flex items-center gap-1.5 text-txt3">
-            {copyText && <button className={copied ? 'text-ok' : 'hover:text-clay'} title={t('chat.copy')} onClick={copy}>{copied ? t('chat.copied') : '📋'}</button>}
-            {canEdit && <button className="hover:text-clay" title={t('chat.edit')} onClick={() => { setDraft(m.content.text || ''); setEditing(true); }}>✎</button>}
-            <button className="hover:text-danger" title={t('common.delete')} onClick={() => { if (confirm(t('chat.deleteMessageConfirm'))) deleteMessage(m.id); }}>🗑</button>
+            {copyText && <button className={copied ? 'text-ok' : 'hover:text-clay'} title={t('chat.copy')} aria-label={t('chat.copy')} onClick={copy}>{copied ? t('chat.copied') : <IconCopy size={14} />}</button>}
+            {canEdit && <button className="hover:text-clay" title={t('chat.edit')} aria-label={t('chat.edit')} onClick={() => { setDraft(m.content.text || ''); setEditing(true); }}><IconPencil size={14} /></button>}
+            <button className="hover:text-danger" title={t('common.delete')} aria-label={t('common.delete')} onClick={() => { if (confirm(t('chat.deleteMessageConfirm'))) deleteMessage(m.id); }}><IconTrash size={14} /></button>
           </span>
         </div>
         {editing ? (
@@ -694,7 +699,7 @@ function ToolCard({ b }: { b: Extract<Block, { type: 'tool_use' }> }) {
   return (
     <div className="border border-line rounded-lg my-2 overflow-hidden bg-card">
       <div className="flex items-center gap-2 px-3 py-2 cursor-pointer text-xs" onClick={() => setOpen(!open)}>
-        <span className="text-clay">{isAsk ? '❓' : '⌘'}</span>
+        <span className="text-clay">{isAsk ? <IconHelp size={14} /> : <IconTerminal size={14} />}</span>
         <span className="font-semibold">{isAsk ? t('chat.question') : b.name}</span>
         <code className="font-mono text-txt2 truncate flex-1">{String(cmd)}</code>
         <span className="text-[11px] flex items-center gap-1" style={{ color: status.color }}>{status.text}</span>
@@ -755,7 +760,7 @@ function AskQuestion({ p, canApprove, respond }: { p: any; canApprove: boolean; 
     <div className="flex flex-col gap-3">
       {qs.map((q, qi) => (
         <div key={qi}>
-          <div className="text-xs font-semibold mb-1.5" style={{ color: 'var(--warn)' }}>❓ {q.question}</div>
+          <div className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: 'var(--warn)' }}><IconHelp size={14} className="shrink-0" />{q.question}</div>
           <div className="flex flex-col gap-1.5">
             {(q.options || []).map((o: any, oi: number) => (
               <button key={oi} className="text-left border border-line rounded-md px-3 py-2 bg-card hover:bg-line transition"
@@ -825,10 +830,10 @@ function AttachmentList({ atts, sessionId, onRemove }: { atts: Attachment[]; ses
         <div key={a.name} className="relative border border-line rounded-lg overflow-hidden bg-card flex items-center max-w-full">
           {a.isImage
             ? <img src={srcOf(a)} alt={a.name} title={a.name} className="w-16 h-16 object-cover" loading="lazy" />
-            : <span className="flex items-center gap-1.5 px-2.5 py-2 text-xs text-txt2 max-w-[180px]"><span>📄</span><span className="truncate">{a.name}</span></span>}
+            : <span className="flex items-center gap-1.5 px-2.5 py-2 text-xs text-txt2 max-w-[180px]"><IconFile size={14} className="shrink-0" /><span className="truncate">{a.name}</span></span>}
           {onRemove && (
-            <button type="button" onClick={() => onRemove(a.name)} title={t('chat.attachRemove')}
-              className="absolute top-0.5 right-0.5 w-4 h-4 grid place-items-center rounded-full bg-black/60 text-white text-[11px] leading-none">×</button>
+            <button type="button" onClick={() => onRemove(a.name)} title={t('chat.attachRemove')} aria-label={t('chat.attachRemove')}
+              className="absolute top-0.5 right-0.5 w-4 h-4 grid place-items-center rounded-full bg-black/60 text-white leading-none"><IconX size={11} /></button>
           )}
         </div>
       ))}
@@ -967,7 +972,7 @@ function Composer() {
             {queue.waiting.map((w) => (
               <span key={w.id} className="bg-rail border border-line rounded-full px-2.5 py-0.5 text-txt2 flex items-center gap-1">
                 {t('chat.authorWaiting', { name: w.author.name })}
-                {(w.author.id === user?.id) && <button className="text-danger" title={t('common.cancel')} onClick={() => cancel(w.id)}>✕</button>}
+                {(w.author.id === user?.id) && <button className="text-danger" title={t('common.cancel')} aria-label={t('common.cancel')} onClick={() => cancel(w.id)}><IconX size={13} /></button>}
               </span>
             ))}
             {congested && <span className="text-warn">{t('chat.congested')}</span>}
@@ -1004,7 +1009,7 @@ function Composer() {
                 {atMatches.map((r, i) => (
                   <div key={(r.dir ? 'd:' : 'f:') + r.path} ref={i === sel ? scrollSel : undefined} onMouseEnter={() => setSel(i)} onClick={() => pickAt(i)}
                     className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer text-sm ${i === sel ? 'bg-line' : ''}`}>
-                    <span className="shrink-0">{r.dir ? '📁' : '📄'}</span>
+                    <span className="shrink-0 text-txt3">{r.dir ? <IconFolder size={14} /> : <IconFile size={14} />}</span>
                     <code className="font-mono text-txt2 text-xs truncate flex-1">{r.path}{r.dir ? '/' : ''}</code>
                     <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full shrink-0"
                       style={{ background: 'var(--claysoft)', color: 'var(--clay)' }}>
@@ -1065,9 +1070,9 @@ function Composer() {
               <span className="text-xs text-txt3 truncate">{wikiCompiling ? (wikiStep ? t('chat.compilingStep', { step: wikiStep }) : t('chat.compilingReady')) : turnActive ? t('chat.claudeResponding') : (isRoom && mode === 'chat' ? t('chat.composerHintChat') : t(canRef ? 'chat.composerHintRef' : 'chat.composerHint'))}</span>
               <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => { void uploadPicked(Array.from(e.target.files || [])); }} />
               {canAttach && (
-                <button type="button" className="ml-auto toolbtn shrink-0 disabled:opacity-40" disabled={!!uploading} title={t('chat.attach')} aria-label={t('chat.attach')} onClick={() => fileRef.current?.click()}>📎</button>
+                <button type="button" className="ml-auto toolbtn shrink-0 disabled:opacity-40" disabled={!!uploading} title={t('chat.attach')} aria-label={t('chat.attach')} onClick={() => fileRef.current?.click()}><IconPaperclip size={16} /></button>
               )}
-              <button className={`${canAttach ? '' : 'ml-auto '}bg-clay text-white rounded-lg w-8 h-8 grid place-items-center disabled:opacity-40`} disabled={wikiCompiling || readOnly || !!uploading} onClick={submit} aria-label={t('chat.send')}>➤</button>
+              <button className={`${canAttach ? '' : 'ml-auto '}bg-clay text-white rounded-lg w-8 h-8 grid place-items-center disabled:opacity-40`} disabled={wikiCompiling || readOnly || !!uploading} onClick={submit} aria-label={t('chat.send')}><IconSend size={16} /></button>
             </div>
           </div>
         </div>

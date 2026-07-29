@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import { t, useT, useLang, toggleLang } from './i18n';
 import { useStore } from './store';
+import { IconMenu, IconSparkle } from './icons';
 
 // Tailwind `md` breakpoint (768px). React needs JS to branch on viewport (e.g. force chat-only
 // layout, skip the code-server iframe) since those decisions can't be pure CSS show/hide.
@@ -20,7 +21,7 @@ export function MobileMenuButton({ className }: { className?: string }) {
   const tr = useT();
   return (
     <button className={`toolbtn md:hidden shrink-0 ${className || ''}`} aria-label={tr('nav.openMenu')} title={tr('nav.openMenu')}
-      onClick={() => setSidebarOpen(true)}>☰</button>
+      onClick={() => setSidebarOpen(true)}><IconMenu /></button>
   );
 }
 
@@ -38,7 +39,7 @@ export function Avatar({ name, color, size = 28, claude = false, src }: { name?:
   const style: React.CSSProperties = { width: size, height: size, fontSize: size * 0.4, background: claude ? 'var(--clay)' : color || '#5b6b8c' };
   // On load failure, fall through to the initials badge instead of a broken-image icon.
   if (src && !claude && !imgErr) return <img src={src} alt={name || ''} onError={() => setImgErr(true)} className="avatar object-cover shrink-0" style={{ width: size, height: size }} />;
-  return <div className="avatar" style={style}>{claude ? '✳' : initials(name)}</div>;
+  return <div className="avatar" style={style}>{claude ? <IconSparkle size={size * 0.5} /> : initials(name)}</div>;
 }
 
 // Build the <img> src for a user's avatar: the API stream (cache-busted by the version token),

@@ -6,6 +6,11 @@ import { Modal } from './Modal';
 import { ImportSessionModal } from './ImportSessionModal';
 import { UploadProgress } from './UploadProgress';
 import { useT } from '../lib/i18n';
+import {
+  IconX, IconDownload, IconMessage, IconPencil, IconTrash, IconUsers, IconClock, IconWarning,
+  IconBook, IconPuzzle, IconSliders, IconLogout, IconFile, IconBox, IconRefresh, IconPlus,
+  IconCheckCircle, IconBan, IconGitBranch, IconCheckSquare, IconSquare,
+} from '../lib/icons';
 
 export function Sidebar() {
   const { user, sessions, rooms, wikiTopics, current, openPrivate, openRoom, openWiki, newSession, newRoom, logout, setPanel, panel, deleteSession, deleteRoom, deleteWikiTopic, renameSession, sidebarOpen, setSidebarOpen, sessionImportEnabled, pendingRequestCount, channels, activeChannelId, openChannel, dmEnabled } = useStore();
@@ -26,7 +31,7 @@ export function Sidebar() {
       max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:w-[264px] max-md:z-50 max-md:shadow-2xl
       max-md:transition-transform max-md:duration-200 ${sidebarOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full'}`}>
       <div className="px-3.5 pt-3.5 pb-2 relative">
-        <button className="toolbtn md:hidden absolute top-2.5 right-2.5 z-10" aria-label={t('nav.closeMenu')} onClick={() => setSidebarOpen(false)}>✕</button>
+        <button className="toolbtn md:hidden absolute top-2.5 right-2.5 z-10" aria-label={t('nav.closeMenu')} onClick={() => setSidebarOpen(false)}><IconX /></button>
         <LangToggle className="absolute top-3 right-3 text-[11px] text-txt3 hover:text-txt border border-line rounded px-1.5 py-0.5 z-10 max-md:right-11" />
         <div className="flex items-center gap-2.5 mb-3.5 pr-9">
           <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" className="w-[26px] h-[26px] rounded-md shrink-0" />
@@ -40,17 +45,17 @@ export function Sidebar() {
 
       <div className="flex-1 overflow-y-auto scrolly px-2 pb-1">
         <Section label={t('sidebar.personal')} onAdd={() => newSession()}
-          extra={sessionImportEnabled ? <button className="cursor-pointer text-[13px] leading-none" title={t('import.button')} onClick={() => setImportOpen(true)}>📥</button> : undefined} />
+          extra={sessionImportEnabled ? <button className="cursor-pointer leading-none text-txt3 hover:text-txt" title={t('import.button')} aria-label={t('import.button')} onClick={() => setImportOpen(true)}><IconDownload size={15} /></button> : undefined} />
         {sessions.length === 0 && <div className="text-[11px] text-txt3 px-2 py-1">{t('common.none')}</div>}
         {sessions.map((s) => (
           <Item key={s.id} active={panel === null && current?.chatSessionId === s.id} onClick={() => { setPanel(null); openPrivate(s.id); }}>
-            <span className="opacity-70">💬</span>
+            <span className="opacity-70"><IconMessage size={15} /></span>
             <span className="flex-1 truncate text-[13px]">{s.title}</span>
             <span className="text-[11px] text-txt3 group-hover:hidden">{timeAgo(s.updatedAt)}</span>
-            <button className="hidden group-hover:block text-txt3 hover:text-clay text-xs px-1" title={t('sidebar.renameChatTitle')}
-              onClick={(e) => { e.stopPropagation(); const nt = prompt(t('sidebar.renameChatPrompt'), s.title); if (nt && nt.trim() && nt.trim() !== s.title) renameSession(s.id, nt.trim()); }}>✎</button>
-            <button className="hidden group-hover:block text-txt3 hover:text-danger text-xs px-1" title={t('sidebar.deleteChatTitle')}
-              onClick={(e) => { e.stopPropagation(); if (confirm(t('sidebar.deleteChatConfirm', { title: s.title }))) deleteSession(s.id); }}>🗑</button>
+            <button className="hidden group-hover:block text-txt3 hover:text-clay px-1" title={t('sidebar.renameChatTitle')} aria-label={t('sidebar.renameChatTitle')}
+              onClick={(e) => { e.stopPropagation(); const nt = prompt(t('sidebar.renameChatPrompt'), s.title); if (nt && nt.trim() && nt.trim() !== s.title) renameSession(s.id, nt.trim()); }}><IconPencil size={14} /></button>
+            <button className="hidden group-hover:block text-txt3 hover:text-danger px-1" title={t('sidebar.deleteChatTitle')} aria-label={t('sidebar.deleteChatTitle')}
+              onClick={(e) => { e.stopPropagation(); if (confirm(t('sidebar.deleteChatConfirm', { title: s.title }))) deleteSession(s.id); }}><IconTrash size={14} /></button>
           </Item>
         ))}
 
@@ -66,8 +71,8 @@ export function Sidebar() {
                   style={{ background: m.avatarColor, borderColor: 'var(--rail)' }}>{m.displayName.slice(0, 2).toUpperCase()}</span>
               ))}
             </span>
-            <button className="hidden group-hover:block text-txt3 hover:text-danger text-xs px-1" title={t('sidebar.deleteRoomTitle')}
-              onClick={(e) => { e.stopPropagation(); if (confirm(t('sidebar.deleteRoomConfirm', { name: r.name }))) deleteRoom(r.id); }}>🗑</button>
+            <button className="hidden group-hover:block text-txt3 hover:text-danger px-1" title={t('sidebar.deleteRoomTitle')} aria-label={t('sidebar.deleteRoomTitle')}
+              onClick={(e) => { e.stopPropagation(); if (confirm(t('sidebar.deleteRoomConfirm', { name: r.name }))) deleteRoom(r.id); }}><IconTrash size={14} /></button>
           </Item>
         ))}
 
@@ -79,7 +84,7 @@ export function Sidebar() {
             return (
               <Item key={ch.id} active={panel === null && activeChannelId === ch.id} onClick={() => openChannel(ch.id)}>
                 {ch.kind === 'group'
-                  ? <span className="w-[18px] h-[18px] rounded-full grid place-items-center text-[10px] shrink-0" style={{ background: 'var(--line2, #888)' }}>👥</span>
+                  ? <span className="w-[18px] h-[18px] rounded-full grid place-items-center shrink-0 text-white" style={{ background: 'var(--line2, #888)' }}><IconUsers size={11} /></span>
                   : <Avatar name={other?.displayName} color={other?.avatarColor} src={avatarUrl(other && { id: other.userId, avatar: other.avatar })} size={18} />}
                 <span className="flex-1 truncate text-[13px]">{channelLabel(ch)}</span>
                 {ch.unread > 0 && <span className="text-[10px] bg-clay text-white px-1.5 py-0.5 rounded-full font-semibold min-w-[18px] text-center">{ch.unread}</span>}
@@ -92,12 +97,12 @@ export function Sidebar() {
         {wikiTopics.length === 0 && <div className="text-[11px] text-txt3 px-2 py-1">{isAdmin ? t('sidebar.createTopicHint') : t('common.none')}</div>}
         {wikiTopics.map((wt) => (
           <Item key={wt.id} active={panel === null && current?.wikiTopicId === wt.id} onClick={() => { setPanel(null); openWiki(wt.id); }}>
-            <span className="opacity-70">{wt.compileStatus === 'compiling' ? '⏳' : wt.compileStatus === 'error' ? '⚠️' : '📚'}</span>
+            <span className="opacity-70">{wt.compileStatus === 'compiling' ? <IconClock size={15} /> : wt.compileStatus === 'error' ? <IconWarning size={15} className="text-warn" /> : <IconBook size={15} />}</span>
             <span className="flex-1 truncate text-[13px]">{wt.name}</span>
             {wt.compileStatus === 'compiling' && <span className="text-[10px] text-txt3 group-hover:hidden">{t('sidebar.compiling')}</span>}
             {isAdmin && (
-              <button className="hidden group-hover:block text-txt3 hover:text-danger text-xs px-1" title={t('sidebar.deleteTopicTitle')}
-                onClick={(e) => { e.stopPropagation(); if (confirm(t('sidebar.deleteTopicConfirm', { name: wt.name }))) deleteWikiTopic(wt.id); }}>🗑</button>
+              <button className="hidden group-hover:block text-txt3 hover:text-danger px-1" title={t('sidebar.deleteTopicTitle')} aria-label={t('sidebar.deleteTopicTitle')}
+                onClick={(e) => { e.stopPropagation(); if (confirm(t('sidebar.deleteTopicConfirm', { name: wt.name }))) deleteWikiTopic(wt.id); }}><IconTrash size={14} /></button>
             )}
           </Item>
         ))}
@@ -113,16 +118,16 @@ export function Sidebar() {
           <span className="text-[10px] bg-claysoft text-clay px-1.5 py-0.5 rounded-full font-semibold">{user?.role}</span>
         </button>
         <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full hover:bg-line text-left text-[13px] text-txt2" onClick={() => setPanel('plugins')}>
-          <span className="w-7 text-center">🧩</span> {t('sidebar.plugins')}
+          <span className="w-7 grid place-items-center"><IconPuzzle size={17} /></span> {t('sidebar.plugins')}
         </button>
         {user?.role === 'admin' && (
           <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full hover:bg-line text-left text-[13px] text-txt2" onClick={() => setPanel('admin')}>
-            <span className="w-7 text-center">🛠</span> {t('sidebar.adminPanel')}
+            <span className="w-7 grid place-items-center"><IconSliders size={17} /></span> {t('sidebar.adminPanel')}
             {pendingRequestCount > 0 && <span className="ml-auto text-[10px] bg-warnsoft text-warn px-1.5 py-0.5 rounded-full whitespace-nowrap">{pendingRequestCount}</span>}
           </button>
         )}
         <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full hover:bg-line text-left text-[13px] text-txt2" onClick={() => logout()}>
-          <span className="w-7 text-center">↩</span> {t('sidebar.logout')}
+          <span className="w-7 grid place-items-center"><IconLogout size={17} /></span> {t('sidebar.logout')}
         </button>
       </div>
 
@@ -254,10 +259,10 @@ function WikiCreateModal({ onClose }: { onClose: () => void }) {
         {files.length === 0 && <div className="text-[11px] text-txt3 px-2 py-1.5">{t('sidebar.noFilesUploaded')}</div>}
         {files.map((f) => (
           <div key={f.name} className="flex items-center gap-2 px-2 py-1.5 text-xs">
-            <span>📄</span>
+            <IconFile size={14} className="text-txt3 shrink-0" />
             <span className="flex-1 truncate" title={f.name}>{f.name}</span>
             <span className="text-txt3 text-[11px]">{fmtSize(f.size)}</span>
-            <button className="text-txt3 hover:text-danger" title={t('common.delete')} onClick={() => removeFile(f.name)}>🗑</button>
+            <button className="text-txt3 hover:text-danger" title={t('common.delete')} aria-label={t('common.delete')} onClick={() => removeFile(f.name)}><IconTrash size={14} /></button>
           </div>
         ))}
       </div>
@@ -323,7 +328,7 @@ function NewChannelModal({ onClose }: { onClose: () => void }) {
             onClick={() => (mode === 'dm' ? startDm(d.id) : toggle(d.id))}>
             <Avatar name={d.displayName} color={d.avatarColor} src={avatarUrl(d)} size={24} />
             <span className="flex-1 truncate text-[13px]">{d.displayName}</span>
-            {mode === 'group' && <span className={`text-sm ${picked.has(d.id) ? 'text-clay' : 'text-txt3'}`}>{picked.has(d.id) ? '☑' : '☐'}</span>}
+            {mode === 'group' && <span className={picked.has(d.id) ? 'text-clay' : 'text-txt3'}>{picked.has(d.id) ? <IconCheckSquare size={16} /> : <IconSquare size={16} />}</span>}
           </button>
         ))}
       </div>
@@ -341,12 +346,12 @@ function NewChannelModal({ onClose }: { onClose: () => void }) {
 
 function verdictBadge(verdict: string) {
   switch (verdict) {
-    case 'running': return '⏳';
-    case 'merge_safe': return '✅';
-    case 'do_not_merge': return '⛔';
-    case 'conflict': return '⚠️';
-    case 'error': return '⚠️';
-    default: return '🔀';
+    case 'running': return <IconClock size={15} className="text-clay" />;
+    case 'merge_safe': return <IconCheckCircle size={15} className="text-ok" />;
+    case 'do_not_merge': return <IconBan size={15} className="text-danger" />;
+    case 'conflict': return <IconWarning size={15} className="text-warn" />;
+    case 'error': return <IconWarning size={15} className="text-danger" />;
+    default: return <IconGitBranch size={15} className="text-txt3" />;
   }
 }
 
@@ -383,15 +388,15 @@ function ReviewSection() {
           : reviewRepos.map((r) => (
             <div key={r.id}>
               <div className="group flex items-center gap-1.5 px-2 py-1 text-[11px] text-txt2">
-                <span className="opacity-70">📦</span>
+                <span className="opacity-70"><IconBox size={14} /></span>
                 <span className="flex-1 truncate font-semibold" title={`${r.host}/${r.slug}`}>{r.name}</span>
                 <span className="text-txt3 group-hover:hidden">{t('review.openCount', { count: r.openCount })}</span>
-                <button className="hidden group-hover:block hover:text-clay disabled:opacity-40" title={t('review.pollNow')}
-                  disabled={busyPoll === r.id} onClick={() => poll(r.id)}>{busyPoll === r.id ? '…' : '⟳'}</button>
-                <button className="hidden group-hover:block hover:text-clay" title={t('review.editRepoTitle')}
-                  onClick={() => setEditRepo(r)}>✎</button>
-                <button className="hidden group-hover:block hover:text-danger" title={t('review.deleteRepoTitle')}
-                  onClick={() => { if (confirm(t('review.deleteRepoConfirm', { name: r.name }))) deleteReviewRepo(r.id); }}>🗑</button>
+                <button className="hidden group-hover:block hover:text-clay disabled:opacity-40" title={t('review.pollNow')} aria-label={t('review.pollNow')}
+                  disabled={busyPoll === r.id} onClick={() => poll(r.id)}>{busyPoll === r.id ? '…' : <IconRefresh size={13} />}</button>
+                <button className="hidden group-hover:block hover:text-clay" title={t('review.editRepoTitle')} aria-label={t('review.editRepoTitle')}
+                  onClick={() => setEditRepo(r)}><IconPencil size={13} /></button>
+                <button className="hidden group-hover:block hover:text-danger" title={t('review.deleteRepoTitle')} aria-label={t('review.deleteRepoTitle')}
+                  onClick={() => { if (confirm(t('review.deleteRepoConfirm', { name: r.name }))) deleteReviewRepo(r.id); }}><IconTrash size={13} /></button>
               </div>
               {r.pollError && <div className="px-2 pb-1 text-[10px] text-danger truncate" title={r.pollError}>{t('review.pollErrorLabel')}</div>}
               {reviewSessions.filter((s) => s.repoId === r.id).map(sessionItem)}
@@ -509,7 +514,7 @@ function Section({ label, onAdd, extra }: { label: string; onAdd?: () => void; e
       {label}
       <span className="flex items-center gap-1.5">
         {extra}
-        {onAdd && <span className="cursor-pointer text-sm leading-none" onClick={onAdd}>＋</span>}
+        {onAdd && <span className="cursor-pointer leading-none text-txt3 hover:text-txt" onClick={onAdd}><IconPlus size={15} /></span>}
       </span>
     </div>
   );
