@@ -141,6 +141,13 @@ export function route(method: string, rawPath: string, body?: any): Res {
   if (seg[1] === 'wiki' && seg[2] === 'topics' && seg[3] && M === 'DELETE') { db.wikiTopics = db.wikiTopics.filter((x) => x.id !== idAt(3)); return ok({}); }
   if (seg[1] === 'wiki' && seg[2] === 'staging') return ok({ files: [] });
 
+  // ---- local session import ----
+  if (seg[1] === 'import' && seg[2] === 'staging' && seg[4] === 'files' && M === 'POST') return ok({ files: [{ name: 'src/index.ts', size: 100 }] });
+  if (seg[1] === 'import' && seg[2] === 'staging' && seg[4] === 'file' && M === 'DELETE') return ok({ files: [] });
+  if (seg[1] === 'import' && seg[2] === 'staging' && seg[4] === 'sessions' && M === 'GET') return ok({ found: true, originalCwd: 'C:\\dev\\Demo', projectTail: 'Demo', sessions: [{ uuid: 'demo-uuid', title: '데모 세션', mtime: 1, msgCount: 3 }] });
+  if (seg[1] === 'import' && seg[2] === 'staging' && seg[3] && seg.length === 4 && M === 'DELETE') return ok({ ok: true });
+  if (seg[1] === 'import' && seg[2] === 'sessions' && M === 'POST') return ok({ project: { id: 'p-demo', name: 'Demo' }, sessions: [{ id: 'imp1', title: '데모 세션' }] });
+
   // ---- plugins / marketplaces ----
   if (P === '/api/plugins' && M === 'GET') return ok({ common: db.plugins.common, mine: db.plugins.mine, prefs: db.plugins.prefs });
   if (P === '/api/marketplaces' && M === 'GET') return ok({ common: db.marketplaces.common, mine: db.marketplaces.mine });

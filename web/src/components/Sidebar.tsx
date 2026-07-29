@@ -5,6 +5,7 @@ import { Avatar, timeAgo, LangToggle } from '../lib/ui';
 import { Modal } from './Modal';
 import { MyTokenModal } from './TokenSettings';
 import { GitCredentialsModal } from './GitCredentials';
+import { ImportSessionModal } from './ImportSessionModal';
 import { useT } from '../lib/i18n';
 
 export function Sidebar() {
@@ -14,6 +15,7 @@ export function Sidebar() {
   const [showWiki, setShowWiki] = useState(false);
   const [showToken, setShowToken] = useState(false);
   const [showGitCreds, setShowGitCreds] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const isAdmin = user?.role === 'admin';
   const t = useT();
 
@@ -37,7 +39,8 @@ export function Sidebar() {
       </div>
 
       <div className="flex-1 overflow-y-auto scrolly px-2 pb-1">
-        <Section label={t('sidebar.personal')} onAdd={() => newSession()} />
+        <Section label={t('sidebar.personal')} onAdd={() => newSession()}
+          extra={<button className="cursor-pointer text-[13px] leading-none" title={t('import.button')} onClick={() => setImportOpen(true)}>📥</button>} />
         {sessions.length === 0 && <div className="text-[11px] text-txt3 px-2 py-1">{t('common.none')}</div>}
         {sessions.map((s) => (
           <Item key={s.id} active={panel === null && current?.chatSessionId === s.id} onClick={() => { setPanel(null); openPrivate(s.id); }}>
@@ -121,6 +124,7 @@ export function Sidebar() {
       </Modal>
 
       {showWiki && <WikiCreateModal onClose={() => setShowWiki(false)} />}
+      {importOpen && <ImportSessionModal onClose={() => setImportOpen(false)} />}
       <MyTokenModal open={showToken} onClose={() => setShowToken(false)} />
       <GitCredentialsModal open={showGitCreds} onClose={() => setShowGitCreds(false)} />
     </aside>
@@ -383,10 +387,14 @@ function AddReviewRepoModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-function Section({ label, onAdd }: { label: string; onAdd?: () => void }) {
+function Section({ label, onAdd, extra }: { label: string; onAdd?: () => void; extra?: React.ReactNode }) {
   return (
     <div className="text-[11px] tracking-wider uppercase text-txt3 px-2 pt-3 pb-1 font-semibold flex justify-between items-center">
-      {label}{onAdd && <span className="cursor-pointer text-sm leading-none" onClick={onAdd}>＋</span>}
+      {label}
+      <span className="flex items-center gap-1.5">
+        {extra}
+        {onAdd && <span className="cursor-pointer text-sm leading-none" onClick={onAdd}>＋</span>}
+      </span>
     </div>
   );
 }

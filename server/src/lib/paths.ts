@@ -21,6 +21,8 @@ export const paths = {
   wikiTopic: (id: string) => path.join(D, 'wiki', id),
   wikiStagingRoot: path.join(D, 'wiki', '.staging'),
   wikiStaging: (sid: string) => path.join(D, 'wiki', '.staging', sid),
+  importStagingRoot: path.join(D, '.import-staging'),
+  importStaging: (sid: string) => path.join(D, '.import-staging', sid),
   reviews: path.join(D, 'reviews'),
   reviewRepo: (id: string) => path.join(D, 'reviews', id, 'repo'),      // the full clone
   reviewWorktrees: (id: string) => path.join(D, 'reviews', id, 'wt'),   // per-PR worktrees root
