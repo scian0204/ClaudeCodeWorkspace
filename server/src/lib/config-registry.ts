@@ -74,6 +74,9 @@ export const DEFS: ConfigDef[] = [
   { key: 'sessionTtlDays', group: 'auth', type: 'int', default: '30', min: 1, max: 365, unit: 'days' },
   { key: 'allow_bypass', group: 'auth', type: 'bool', default: '1' },
 
+  // feature flags (live — toggle without restart)
+  { key: 'sessionImportEnabled', group: 'features', type: 'bool', default: '1' },
+
   // server limits (read once at server construction → restart to apply)
   { key: 'httpBodyLimitMB', group: 'server', type: 'int', default: '6', min: 1, max: 1024, unit: 'MB', restart: true },
   { key: 'uploadMaxMB', group: 'server', type: 'int', default: '200', min: 1, max: 4096, unit: 'MB', restart: true },
@@ -222,8 +225,8 @@ export function imageConfigValues(): string[] {
 }
 
 // Client-facing subset (any authed user): drives the model dropdown.
-export function publicConfig(): { models: Record<string, string>; defaultModel: string } {
+export function publicConfig(): { models: Record<string, string>; defaultModel: string; sessionImportEnabled: boolean } {
   let models: Record<string, string>;
   try { models = JSON.parse(cfg.str('models')); } catch { models = JSON.parse(DEFAULT_MODELS); }
-  return { models, defaultModel: cfg.str('defaultModel') };
+  return { models, defaultModel: cfg.str('defaultModel'), sessionImportEnabled: cfg.bool('sessionImportEnabled') };
 }

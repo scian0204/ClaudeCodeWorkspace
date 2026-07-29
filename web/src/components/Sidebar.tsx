@@ -10,7 +10,7 @@ import { UploadProgress } from './UploadProgress';
 import { useT } from '../lib/i18n';
 
 export function Sidebar() {
-  const { user, sessions, rooms, wikiTopics, current, openPrivate, openRoom, openWiki, newSession, newRoom, logout, setPanel, panel, deleteSession, deleteRoom, deleteWikiTopic, renameSession, sidebarOpen, setSidebarOpen } = useStore();
+  const { user, sessions, rooms, wikiTopics, current, openPrivate, openRoom, openWiki, newSession, newRoom, logout, setPanel, panel, deleteSession, deleteRoom, deleteWikiTopic, renameSession, sidebarOpen, setSidebarOpen, sessionImportEnabled } = useStore();
   const [showRoom, setShowRoom] = useState(false);
   const [roomName, setRoomName] = useState('');
   const [showWiki, setShowWiki] = useState(false);
@@ -41,7 +41,7 @@ export function Sidebar() {
 
       <div className="flex-1 overflow-y-auto scrolly px-2 pb-1">
         <Section label={t('sidebar.personal')} onAdd={() => newSession()}
-          extra={<button className="cursor-pointer text-[13px] leading-none" title={t('import.button')} onClick={() => setImportOpen(true)}>📥</button>} />
+          extra={sessionImportEnabled ? <button className="cursor-pointer text-[13px] leading-none" title={t('import.button')} onClick={() => setImportOpen(true)}>📥</button> : undefined} />
         {sessions.length === 0 && <div className="text-[11px] text-txt3 px-2 py-1">{t('common.none')}</div>}
         {sessions.map((s) => (
           <Item key={s.id} active={panel === null && current?.chatSessionId === s.id} onClick={() => { setPanel(null); openPrivate(s.id); }}>
@@ -125,7 +125,7 @@ export function Sidebar() {
       </Modal>
 
       {showWiki && <WikiCreateModal onClose={() => setShowWiki(false)} />}
-      {importOpen && <ImportSessionModal onClose={() => setImportOpen(false)} />}
+      {importOpen && sessionImportEnabled && <ImportSessionModal onClose={() => setImportOpen(false)} />}
       <MyTokenModal open={showToken} onClose={() => setShowToken(false)} />
       <GitCredentialsModal open={showGitCreds} onClose={() => setShowGitCreds(false)} />
     </aside>

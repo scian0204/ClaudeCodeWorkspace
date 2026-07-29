@@ -36,7 +36,7 @@ export function route(method: string, rawPath: string, body?: any): Res {
   if (P === '/api/auth/me/claude-token') { db.me.hasClaudeToken = M !== 'DELETE'; db.me.claudeTokenSetAt = M !== 'DELETE' ? Date.now() : null; return ok({ user: db.me }); }
 
   // ---- client-facing config (model dropdown) ----
-  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel });
+  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, sessionImportEnabled: true });
 
   // ---- sessions ----
   if (P === '/api/sessions' && M === 'GET') return ok({ sessions: db.sessions });

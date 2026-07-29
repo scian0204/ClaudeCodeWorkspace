@@ -47,6 +47,14 @@ function uniqueDir(root: string, name: string): { dir: string; name: string } {
 // whitelist the slot segment — never trust the client to name a staging subdir (traversal)
 function slotOf(q: any): 'claude' | 'project' { return q?.slot === 'claude' ? 'claude' : 'project'; }
 
+// feature flag gate — admins can disable local session import entirely (admin panel: features).
+// Returns true (and sends 403) when disabled, so callers can `if (importOff(reply)) return;`.
+function importOff(reply: any): boolean {
+  if (cfg.bool('sessionImportEnabled')) return false;
+  reply.code(403).send({ error: 'session import is disabled' });
+  return true;
+}
+
 // staged import uploads that never got confirmed (crash between upload and confirm) are transient —
 // wipe the whole staging area at startup. Nothing in it survives a restart anyway.
 export function reapImportStaging() {
@@ -58,6 +66,7 @@ export async function importRoutes(app: FastifyInstance) {
   // field name (folder drops), so nested trees at any depth are recreated. Per-user (requireAuth).
   app.post('/api/import/staging/:sid/files', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
+    if (importOff(reply)) return;
     const { sid } = req.params as any;
     if (!validSid(sid)) return reply.code(400).send({ error: 'bad staging id' });
     const slot = slotOf(req.query);
@@ -77,6 +86,7 @@ export async function importRoutes(app: FastifyInstance) {
   // remove one staged file by relative path — path in ?path= so nested paths survive
   app.delete('/api/import/staging/:sid/file', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
+    if (importOff(reply)) return;
     const { sid } = req.params as any;
     if (!validSid(sid)) return reply.code(400).send({ error: 'bad staging id' });
     const slot = slotOf(req.query);
@@ -89,6 +99,7 @@ export async function importRoutes(app: FastifyInstance) {
   // discard the whole staging area — cancel
   app.delete('/api/import/staging/:sid', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
+    if (importOff(reply)) return;
     const { sid } = req.params as any;
     if (!validSid(sid)) return reply.code(400).send({ error: 'bad staging id' });
     try { fs.rmSync(paths.importStaging(sid), { recursive: true, force: true }); } catch { /* noop */ }
@@ -98,6 +109,7 @@ export async function importRoutes(app: FastifyInstance) {
   // list the discovered Claude sessions in the uploaded .claude slot (before confirm)
   app.get('/api/import/staging/:sid/sessions', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
+    if (importOff(reply)) return;
     const { sid } = req.params as any;
     if (!validSid(sid)) return reply.code(400).send({ error: 'bad staging id' });
     const claudeSlot = path.join(paths.importStaging(sid), 'claude');
@@ -112,6 +124,7 @@ export async function importRoutes(app: FastifyInstance) {
   // destination path; client paths are never trusted.
   app.post('/api/import/sessions', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
+    if (importOff(reply)) return;
     const body = (req.body || {}) as any;
     const sid = String(body.sid || '');
     if (!validSid(sid)) return reply.code(400).send({ error: 'bad staging id' });
