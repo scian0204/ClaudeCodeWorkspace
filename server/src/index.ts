@@ -14,6 +14,7 @@ import { sessionRoutes } from './routes/sessions.js';
 import { roomRoutes } from './routes/rooms.js';
 import { projectRoutes } from './routes/projects.js';
 import { wikiRoutes, reapWikiStaging, reapWikiOrphans } from './routes/wiki.js';
+import { importRoutes, reapImportStaging } from './routes/import.js';
 import { pluginRoutes } from './routes/plugins.js';
 import { adminRoutes } from './routes/admin.js';
 import { gitCredentialRoutes } from './routes/git-credentials.js';
@@ -30,6 +31,7 @@ async function main() {
   initDb();
   bootstrapAdmin();
   reapWikiStaging(); // clear any orphaned wiki upload staging from a prior run
+  reapImportStaging(); // clear any orphaned session-import staging from a prior run
   reapWikiOrphans(); // remove wiki topic dirs on disk that no longer have a DB row
   reapReviewOrphans(); // remove review clone/worktree dirs on disk that no longer have a DB row
 
@@ -61,6 +63,7 @@ async function main() {
   await app.register(roomRoutes);
   await app.register(projectRoutes);
   await app.register(wikiRoutes);
+  await app.register(importRoutes);
   await app.register(pluginRoutes);
   await app.register(adminRoutes);
   await app.register(gitCredentialRoutes);
