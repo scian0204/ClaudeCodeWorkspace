@@ -136,6 +136,22 @@ export async function cleanupOrphans() {
   } catch { /* docker unavailable */ }
 }
 
+// Admin "clean editors": remove EVERY spawned code-server container and drop the in-memory registry
+// so the idle reaper's map never points at a container that's gone. Returns how many were removed;
+// degrades to 0 when Docker is unavailable. (Clears tracking first, then does the labeled sweep — a
+// bare label sweep would leave stale Instance/route entries behind.)
+export async function removeAllEditors(): Promise<number> {
+  instances.clear();
+  byRoute.clear();
+  if (!dockerAvailable()) return 0;
+  let removed = 0;
+  try {
+    const list = await docker.listContainers({ all: true, filters: { label: ['ccw.codeserver=1'] } });
+    for (const c of list) { try { await docker.getContainer(c.Id).remove({ force: true }); removed++; } catch { /* ignore */ } }
+  } catch { /* docker unavailable */ }
+  return removed;
+}
+
 let reaperTimer: ReturnType<typeof setInterval> | null = null;
 function reaperSweep() {
   const now = Date.now();

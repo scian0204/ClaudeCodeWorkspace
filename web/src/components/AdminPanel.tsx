@@ -13,6 +13,7 @@ const TABS = [
   { key: 'providers', label: 'admin.tab.providers' },
   { key: 'usage', label: 'admin.tab.usage' },
   { key: 'config', label: 'admin.tab.config' },
+  { key: 'resources', label: 'admin.tab.resources' },
 ] as const;
 type AdminTab = (typeof TABS)[number]['key'];
 
@@ -147,6 +148,8 @@ export function AdminPanel() {
             <ConfigManager />
           </>
         )}
+
+        {tab === 'resources' && <CleanupManager />}
 
         {tab === 'users' && (
           <Section title={t('admin.userManagementTitle')}>
@@ -391,6 +394,149 @@ function ImageControl({ it, edit, onEdit, onSave }: {
       </div>
     </div>
   );
+}
+
+// Resource cleanup: read-only inventory + per-resource clean actions + a double-confirmed full reset.
+// Every list/table scrolls inside its own overflow-x-auto container so mobile never gets a body scroll.
+function fmtBytes(n: number): string {
+  if (!n) return '0';
+  const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0; let v = n;
+  while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+  return `${v.toFixed(i > 0 && v < 10 ? 1 : 0)}${u[i]}`;
+}
+
+function CleanupManager() {
+  const t = useT();
+  const [data, setData] = useState<any>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const load = async () => { try { setData(await api.get('/api/admin/cleanup')); } catch (e: any) { useStore.getState().setError(e.message); } };
+  useEffect(() => { load(); }, []);
+
+  const run = async (action: string) => {
+    setBusy(action);
+    try {
+      const r = await api.post('/api/admin/cleanup', { action });
+      setData(r);
+      const s = r.summary || {};
+      if (action === 'full-reset') {
+        alert(t('admin.cleanup.fullResetDone', {
+          editors: s.editors?.removed ?? 0, sandboxes: s.sandboxes?.removed ?? 0,
+          images: s.danglingImages?.removed ?? 0, dirs: s.orphanDirs?.removed ?? 0, rows: s.orphanRows?.removed ?? 0,
+        }));
+      } else {
+        alert(t('admin.cleanup.removed', { n: s.removed ?? 0 }));
+      }
+    } catch (e: any) { useStore.getState().setError(e.message); }
+    finally { setBusy(null); }
+  };
+  const act = (action: string, confirmKey: string) => { if (confirm(t(confirmKey))) void run(action); };
+  const fullReset = () => {
+    if (!confirm(t('admin.cleanup.fullResetConfirm1'))) return;
+    const typed = prompt(t('admin.cleanup.fullResetConfirm2'));
+    if (typed !== t('admin.cleanup.fullResetKeyword')) return;
+    void run('full-reset');
+  };
+
+  if (!data) return <div className="text-sm text-txt3">{t('admin.cleanup.rescanning')}</div>;
+  if (data.enabled === false) {
+    return <div className="text-xs text-warn bg-warnsoft border border-warn rounded-lg px-3 py-2">{t('admin.cleanup.disabledNote')}</div>;
+  }
+  const disabled = busy !== null;
+  const na = data.dockerUnavailable;
+  const rows = data.orphanRows || {};
+  const dirs = data.orphanDirs || {};
+  const rowDefs: [string, number][] = [
+    ['admin.cleanup.rowMessages', rows.messages], ['admin.cleanup.rowReviewSessions', rows.reviewSessions],
+    ['admin.cleanup.rowRoomMembers', rows.roomMembers], ['admin.cleanup.rowUsage', rows.usage],
+    ['admin.cleanup.rowPluginPrefs', rows.pluginPrefs],
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="font-semibold">{t('admin.cleanup.title')}</div>
+        <button className="ml-auto text-xs border border-line rounded-lg px-2.5 py-1 hover:border-clay disabled:opacity-40"
+          disabled={disabled} onClick={() => load()}>⟳ {t('admin.cleanup.rescan')}</button>
+      </div>
+      <p className="text-[11px] text-txt3 leading-snug">{t('admin.cleanup.intro')}</p>
+
+      {/* containers */}
+      <Section title={`${t('admin.cleanup.containers')}${na ? ` · ${t('admin.cleanup.dockerNa')}` : ''}`}>
+        <div className="overflow-x-auto scrolly">
+          <table className="w-full text-sm min-w-[420px]">
+            <tbody>
+              {(data.containers || []).map((c: any) => (
+                <tr key={c.id} className="border-t border-line first:border-0">
+                  <td className="py-1.5 pr-2">{c.kind === 'editor' ? t('admin.cleanup.kindEditor') : t('admin.cleanup.kindSandbox')}</td>
+                  <td className="pr-2 font-mono text-[11px] break-all">{c.name || c.id}</td>
+                  <td className="pr-2 text-txt3">{c.state}</td>
+                  <td>{c.orphan && <span className="text-[10px] bg-warnsoft text-warn px-1.5 py-0.5 rounded-full">{t('admin.cleanup.orphanBadge')}</span>}</td>
+                </tr>
+              ))}
+              {(data.containers || []).length === 0 && <tr><td className="py-1.5 text-txt3">{na ? t('admin.cleanup.dockerNa') : t('admin.cleanup.none')}</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex gap-2 flex-wrap mt-3">
+          <button className="btn-danger text-xs" disabled={disabled} onClick={() => act('editors', 'admin.cleanup.confirmEditors')}>{t('admin.cleanup.cleanEditors')}</button>
+          <button className="btn-danger text-xs" disabled={disabled} onClick={() => act('sandboxes', 'admin.cleanup.confirmSandboxes')}>{t('admin.cleanup.cleanSandboxes')}</button>
+        </div>
+      </Section>
+
+      {/* images */}
+      <Section title={t('admin.cleanup.images')}>
+        <div className="overflow-x-auto scrolly">
+          <table className="w-full text-sm min-w-[420px]">
+            <tbody>
+              {(data.images || []).map((im: any) => (
+                <tr key={im.ref} className="border-t border-line first:border-0">
+                  <td className="py-1.5 pr-2 font-mono text-[11px] break-all">{im.ref}</td>
+                  <td className="pr-2">{im.present ? <span className="text-ok">● {t('admin.cleanup.present')}</span> : <span className="text-txt3">○ {t('admin.cleanup.absent')}</span>}</td>
+                  <td className="text-txt3">{im.size ? fmtBytes(im.size) : ''}</td>
+                </tr>
+              ))}
+              {(data.images || []).length === 0 && <tr><td className="py-1.5 text-txt3">{t('admin.cleanup.none')}</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap mt-3">
+          <span className="text-sm">{t('admin.cleanup.dangling')}:</span>
+          <span className="text-sm text-txt2">{na ? t('admin.cleanup.dockerNa') : t('admin.cleanup.danglingCount', { count: data.danglingImages?.count ?? 0, size: fmtBytes(data.danglingImages?.size ?? 0) })}</span>
+          <button className="btn-danger text-xs ml-auto" disabled={disabled || na} onClick={() => act('dangling-images', 'admin.cleanup.confirmDangling')}>{t('admin.cleanup.cleanDangling')}</button>
+        </div>
+      </Section>
+
+      {/* orphan dirs */}
+      <Section title={t('admin.cleanup.orphanDirs')}>
+        <div className="space-y-1.5 text-sm">
+          <DirRow label={t('admin.cleanup.reviewDirs')} g={dirs.reviewDirs} />
+          <DirRow label={t('admin.cleanup.attachmentDirs')} g={dirs.attachmentDirs} />
+          <DirRow label={t('admin.cleanup.homeDirs')} g={dirs.homeDirs} />
+        </div>
+        <button className="btn-danger text-xs mt-3" disabled={disabled} onClick={() => act('orphan-dirs', 'admin.cleanup.confirmOrphanDirs')}>{t('admin.cleanup.cleanOrphanDirs')}</button>
+      </Section>
+
+      {/* orphan DB rows */}
+      <Section title={t('admin.cleanup.orphanRows')}>
+        <div className="space-y-1.5 text-sm">
+          {rowDefs.map(([k, v]) => (
+            <div key={k} className="flex items-center gap-2"><span className="text-txt2">{t(k)}</span><span className="ml-auto tabular-nums">{v ?? 0}</span></div>
+          ))}
+        </div>
+        <button className="btn-danger text-xs mt-3" disabled={disabled} onClick={() => act('orphan-rows', 'admin.cleanup.confirmOrphanRows')}>{t('admin.cleanup.cleanOrphanRows')}</button>
+      </Section>
+
+      {/* full reset */}
+      <div className="bg-card border border-danger rounded-xl p-4">
+        <div className="font-semibold text-danger mb-1">{t('admin.cleanup.fullReset')}</div>
+        <p className="text-[11px] text-txt3 leading-snug mb-3">{t('admin.cleanup.fullResetNote')}</p>
+        <button className="btn-danger" disabled={disabled} onClick={fullReset}>{t('admin.cleanup.fullReset')}</button>
+      </div>
+    </div>
+  );
+}
+function DirRow({ label, g }: { label: string; g?: { count: number; size: number } }) {
+  return <div className="flex items-center gap-2"><span className="text-txt2">{label}</span><span className="ml-auto tabular-nums">{g?.count ?? 0}{g?.size ? ` · ${fmtBytes(g.size)}` : ''}</span></div>;
 }
 
 function Stat({ label, v }: { label: string; v: any }) {

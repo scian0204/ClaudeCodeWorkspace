@@ -5,6 +5,7 @@ import { usageTotals, usageByUser } from '../usage/tracker.js';
 import { getSetting, setSetting } from '../lib/settings.js';
 import { cfg, listConfigForApi, setConfigValue, resetConfigValue, imageConfigValues } from '../lib/config-registry.js';
 import { inspectImage, pullImage } from '../lib/docker-images.js';
+import { scanResources, runCleanup } from '../admin/cleanup.js';
 import { turnLimiter } from '../claude/throttle.js';
 import { setCommonToken, clearCommonToken, commonTokenMeta } from '../auth/claude-token.js';
 
@@ -79,6 +80,26 @@ export async function adminRoutes(app: FastifyInstance) {
     try { await pullImage(image); }
     catch (e: any) { return reply.code(500).send({ error: String(e?.message || e).slice(0, 300) }); }
     return inspectImage(image);
+  });
+
+  // ── resource cleanup (spawned containers / dangling images / orphaned dirs+rows) ──
+  // Read-only scan on GET; destructive actions on POST. Both gated by resourceCleanupEnabled — the
+  // server is the real gate (UI hiding is cosmetic). Scans never delete; actions only ever touch
+  // app-spawned containers, dangling images, and genuine orphans — never live user data.
+  app.get('/api/admin/cleanup', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    if (!cfg.bool('resourceCleanupEnabled')) return { enabled: false };
+    try { return { enabled: true, ...(await scanResources()) }; }
+    catch (e: any) { return reply.code(500).send({ error: String(e?.message || e).slice(0, 300) }); }
+  });
+  app.post('/api/admin/cleanup', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    if (!cfg.bool('resourceCleanupEnabled')) return reply.code(403).send({ error: 'resource cleanup disabled' });
+    const action = String((req.body as any)?.action || '');
+    try {
+      const summary = await runCleanup(action);
+      return { enabled: true, summary, ...(await scanResources()) };
+    } catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
   });
 
   // ── restart the server process; docker's restart policy (unless-stopped) brings it back ──

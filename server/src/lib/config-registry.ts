@@ -79,6 +79,7 @@ export const DEFS: ConfigDef[] = [
 
   // feature flags (live — toggle without restart)
   { key: 'sessionImportEnabled', group: 'features', type: 'bool', default: '1' },
+  { key: 'resourceCleanupEnabled', group: 'features', type: 'bool', default: '1' },
   { key: 'avatarMaxMB', group: 'features', type: 'int', default: '5', min: 1, max: 50, unit: 'MB' },
   { key: 'attachmentMaxMB', group: 'features', type: 'int', default: '20', min: 1, max: 200, unit: 'MB' },
   { key: 'attachmentMaxCount', group: 'features', type: 'int', default: '10', min: 1, max: 50 },

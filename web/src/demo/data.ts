@@ -216,6 +216,44 @@ export const ADMIN = {
     ],
   },
   settings: { allowBypass: false },
+  // resource cleanup: a plausible inventory + an in-place mutator so the demo actions actually clear
+  // the counts they target (matches the server's scan → action → rescan shape).
+  cleanup: {
+    enabled: true,
+    dockerUnavailable: false,
+    containers: [
+      { id: 'a1b2c3d4e5f6', name: 'ccw-cs-u_demo-p_web', state: 'running', kind: 'editor', createdAt: ago(30), orphan: false },
+      { id: 'f6e5d4c3b2a1', name: 'ccw-cs-u_ghost-p_old', state: 'exited', kind: 'editor', createdAt: ago(4000), orphan: true },
+      { id: '0099aabbccdd', name: 'ccw-rvsbx-rr_web-142', state: 'running', kind: 'sandbox', createdAt: ago(12), orphan: false },
+    ] as any[],
+    images: [
+      { ref: 'codercom/code-server:latest', present: true, size: 512_000_000 },
+      { ref: 'node:20-bookworm', present: true, size: 402_000_000 },
+    ] as any[],
+    danglingImages: { count: 3, size: 268_000_000 },
+    orphanDirs: {
+      reviewDirs: { count: 1, size: 84_000_000 },
+      attachmentDirs: { count: 2, size: 1_500_000 },
+      homeDirs: { count: 0, size: 0 },
+    },
+    orphanRows: { messages: 12, reviewSessions: 1, roomMembers: 0, usage: 4, pluginPrefs: 2 },
+  },
+  runCleanup(action: string) {
+    const c = ADMIN.cleanup;
+    const editors = () => { const n = c.containers.filter((x: any) => x.kind === 'editor').length; c.containers = c.containers.filter((x: any) => x.kind !== 'editor'); return n; };
+    const sandboxes = () => { const n = c.containers.filter((x: any) => x.kind === 'sandbox').length; c.containers = c.containers.filter((x: any) => x.kind !== 'sandbox'); return n; };
+    const dangling = () => { const n = c.danglingImages.count; c.danglingImages = { count: 0, size: 0 }; return n; };
+    const dirs = () => { const n = c.orphanDirs.reviewDirs.count + c.orphanDirs.attachmentDirs.count; c.orphanDirs.reviewDirs = { count: 0, size: 0 }; c.orphanDirs.attachmentDirs = { count: 0, size: 0 }; return n; };
+    const rows = () => { const r = c.orphanRows; const n = r.messages + r.reviewSessions + r.roomMembers + r.usage + r.pluginPrefs; c.orphanRows = { messages: 0, reviewSessions: 0, roomMembers: 0, usage: 0, pluginPrefs: 0 }; return n; };
+    let summary: any = { removed: 0 };
+    if (action === 'editors') summary = { removed: editors() };
+    else if (action === 'sandboxes') summary = { removed: sandboxes() };
+    else if (action === 'dangling-images') summary = { removed: dangling() };
+    else if (action === 'orphan-dirs') summary = { removed: dirs() };
+    else if (action === 'orphan-rows') summary = { removed: rows() };
+    else if (action === 'full-reset') summary = { editors: { removed: editors() }, sandboxes: { removed: sandboxes() }, danglingImages: { removed: dangling() }, orphanDirs: { removed: dirs() }, orphanRows: { removed: rows() } };
+    return { summary, ...c }; // c already carries enabled: true
+  },
   // client-facing config subset (model dropdown)
   models: { 'claude-opus-4-8': 'Opus 4.8', 'claude-sonnet-5': 'Sonnet 5', 'claude-haiku-4-5-20251001': 'Haiku 4.5' } as Record<string, string>,
   defaultModel: 'claude-opus-4-8',
@@ -238,6 +276,7 @@ export const ADMIN = {
     { key: 'codeServerIdleMs', group: 'codeserver', type: 'int', value: '1800000', default: '1800000', unit: 'ms', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'attachmentMaxMB', group: 'features', type: 'int', value: '20', default: '20', unit: 'MB', min: 1, max: 200, restart: false, readonly: false, secret: false, overridden: false },
     { key: 'attachmentMaxCount', group: 'features', type: 'int', value: '10', default: '10', min: 1, max: 50, restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'resourceCleanupEnabled', group: 'features', type: 'bool', value: '1', default: '1', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'sessionTtlDays', group: 'auth', type: 'int', value: '30', default: '30', unit: 'days', min: 1, max: 365, restart: false, readonly: false, secret: false, overridden: false },
     { key: 'httpBodyLimitMB', group: 'server', type: 'int', value: '6', default: '6', unit: 'MB', restart: true, readonly: false, secret: false, overridden: false },
     { key: 'port', group: 'infra', type: 'int', value: '3000', default: '3000', restart: true, readonly: true, secret: false, overridden: false },

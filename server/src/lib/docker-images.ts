@@ -33,3 +33,25 @@ export async function pullImage(image: string): Promise<void> {
     });
   });
 }
+
+// Dangling images = untagged leftover layers (`<none>:<none>`) from rebuilds/pulls. Never a tagged
+// image the app references, so reporting/pruning them is always safe.
+export async function listDanglingImages(): Promise<{ count: number; size: number; dockerUnavailable?: boolean }> {
+  try {
+    const imgs = await docker.listImages({ filters: { dangling: ['true'] } as any });
+    return { count: imgs.length, size: imgs.reduce((a, i) => a + (i.Size || 0), 0) };
+  } catch {
+    return { count: 0, size: 0, dockerUnavailable: true };
+  }
+}
+
+// Prune ONLY dangling images (the `dangling=true` filter guarantees tagged images are untouched).
+export async function pruneDanglingImages(): Promise<{ removed: number; reclaimed: number; dockerUnavailable?: boolean }> {
+  try {
+    const res: any = await docker.pruneImages({ filters: { dangling: ['true'] } as any });
+    const removed = (res?.ImagesDeleted || []).filter((d: any) => d?.Deleted).length;
+    return { removed, reclaimed: res?.SpaceReclaimed || 0 };
+  } catch {
+    return { removed: 0, reclaimed: 0, dockerUnavailable: true };
+  }
+}
