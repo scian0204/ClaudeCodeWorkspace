@@ -67,6 +67,7 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
   const [step, setStep] = useState<'project' | 'tree' | 'claude' | 'sessions'>('project');
   const [collected, setCollected] = useState<Collected[]>([]);
   const [checked, setChecked] = useState<Record<string, boolean>>({});
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [progress, setProgress] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -178,15 +179,21 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
     const files = fileRels(node);
     const all = files.length > 0 && files.every((r) => checked[r]);
     const some = files.some((r) => checked[r]);
+    const isCollapsed = !!collapsed[node.rel];
+    const toggleCollapse = () => setCollapsed((p) => ({ ...p, [node.rel]: !p[node.rel] }));
     return (
       <div key={node.rel}>
-        <label style={pad} className="flex items-center gap-2 px-2 py-1 text-xs font-medium hover:bg-line/50 cursor-pointer">
+        <div style={pad} className="flex items-center gap-2 px-2 py-1 text-xs font-medium hover:bg-line/50">
+          <button type="button" className="shrink-0 w-3 text-txt3 leading-none" onClick={toggleCollapse}
+            aria-label={isCollapsed ? t('common.expand') : t('common.collapse')}>{isCollapsed ? '▸' : '▾'}</button>
           <input type="checkbox" checked={all} ref={(el) => { if (el) el.indeterminate = some && !all; }}
             onChange={(e) => toggleDir(node, e.target.checked)} />
-          <span className="opacity-70">📁</span>
-          <span className="flex-1 truncate" title={node.rel}>{node.name}</span>
-        </label>
-        {sortChildren(node.children).map((c) => renderNode(c, depth + 1))}
+          <span className="flex-1 flex items-center gap-2 min-w-0 cursor-pointer" onClick={toggleCollapse}>
+            <span className="opacity-70">📁</span>
+            <span className="flex-1 truncate" title={node.rel}>{node.name}</span>
+          </span>
+        </div>
+        {!isCollapsed && sortChildren(node.children).map((c) => renderNode(c, depth + 1))}
       </div>
     );
   };
