@@ -18,7 +18,11 @@ import {
 
 const execFileP = promisify(execFile);
 
-function safeName(n: string) { return String(n).replace(/[^a-zA-Z0-9._ -]/g, '').trim() || 'project'; }
+function safeName(n: string) {
+  // Charset keeps '.', so guard all-dots (e.g. '..') which would path.join up to the parent dir.
+  const s = String(n).replace(/[^a-zA-Z0-9._ -]/g, '').trim();
+  return !s || /^\.+$/.test(s) ? 'project' : s;
+}
 
 // only http(s)/git/ssh remotes — no file:// (local-fs exfil) or other schemes
 function validGitUrl(url: string) {

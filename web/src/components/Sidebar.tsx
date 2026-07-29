@@ -1,10 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { useStore, type ReviewSessionSummary, type ReviewRepo } from '../lib/store';
 import { api, type UploadState } from '../lib/api';
-import { Avatar, timeAgo, LangToggle } from '../lib/ui';
+import { Avatar, avatarUrl, timeAgo, LangToggle } from '../lib/ui';
 import { Modal } from './Modal';
-import { MyTokenModal } from './TokenSettings';
-import { GitCredentialsModal } from './GitCredentials';
 import { ImportSessionModal } from './ImportSessionModal';
 import { UploadProgress } from './UploadProgress';
 import { useT } from '../lib/i18n';
@@ -14,8 +12,6 @@ export function Sidebar() {
   const [showRoom, setShowRoom] = useState(false);
   const [roomName, setRoomName] = useState('');
   const [showWiki, setShowWiki] = useState(false);
-  const [showToken, setShowToken] = useState(false);
-  const [showGitCreds, setShowGitCreds] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const isAdmin = user?.role === 'admin';
   const t = useT();
@@ -90,17 +86,11 @@ export function Sidebar() {
       </div>
 
       <div className="border-t border-line p-2.5">
-        <div className="flex items-center gap-2.5 px-2 py-1.5 rounded-md">
-          <Avatar name={user?.displayName} color={user?.avatarColor} />
-          <div className="flex-1 text-[13px]">{user?.displayName}</div>
+        <button className={`flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full text-left ${panel === 'me' ? 'bg-claysoft' : 'hover:bg-line'}`} onClick={() => setPanel('me')}>
+          <Avatar name={user?.displayName} color={user?.avatarColor} src={avatarUrl(user)} />
+          <div className="flex-1 text-[13px] min-w-0 truncate">{user?.displayName}</div>
+          {!user?.hasClaudeToken && <span className="text-[10px] bg-warnsoft text-warn px-1.5 py-0.5 rounded-full whitespace-nowrap">{t('sidebar.tokenUnregistered')}</span>}
           <span className="text-[10px] bg-claysoft text-clay px-1.5 py-0.5 rounded-full font-semibold">{user?.role}</span>
-        </div>
-        <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full hover:bg-line text-left text-[13px] text-txt2" onClick={() => setShowToken(true)}>
-          <span className="w-7 text-center">🔑</span> {t('sidebar.myToken')}
-          {!user?.hasClaudeToken && <span className="ml-auto text-[10px] bg-warnsoft text-warn px-1.5 py-0.5 rounded-full">{t('sidebar.tokenUnregistered')}</span>}
-        </button>
-        <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full hover:bg-line text-left text-[13px] text-txt2" onClick={() => setShowGitCreds(true)}>
-          <span className="w-7 text-center">🔀</span> {t('sidebar.gitCreds')}
         </button>
         <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full hover:bg-line text-left text-[13px] text-txt2" onClick={() => setPanel('plugins')}>
           <span className="w-7 text-center">🧩</span> {t('sidebar.plugins')}
@@ -126,8 +116,6 @@ export function Sidebar() {
 
       {showWiki && <WikiCreateModal onClose={() => setShowWiki(false)} />}
       {importOpen && sessionImportEnabled && <ImportSessionModal onClose={() => setImportOpen(false)} />}
-      <MyTokenModal open={showToken} onClose={() => setShowToken(false)} />
-      <GitCredentialsModal open={showGitCreds} onClose={() => setShowGitCreds(false)} />
     </aside>
   );
 }

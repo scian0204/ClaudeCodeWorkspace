@@ -16,7 +16,7 @@ export interface WikiTopic { id: string; name: string; description: string; path
 export interface ReviewRepo { id: string; name: string; provider: string; host: string; slug: string; gitUrl: string; baseBranch: string | null; sandboxImage: string | null; polledAt: number | null; pollError: string | null; openCount: number; createdAt: number; }
 export interface ReviewSessionSummary { id: string; chatSessionId: string; repoId: string; repoName: string; prNumber: number; prTitle: string; prUrl: string; prState: string; authorLogin: string; mergeState: string; verdict: string; verdictSummary: string | null; readOnly: boolean; updatedAt: number; }
 export interface ReviewMeta { reviewId: string; prNumber: number; prTitle: string; prUrl: string; prState: string; authorLogin: string; baseRef: string; headRef: string; mergeState: string; verdict: string; verdictSummary: string | null; repoName: string; provider: string; }
-export interface User { id: string; username: string; role: string; displayName: string; avatarColor: string; hasClaudeToken?: boolean; claudeTokenSetAt?: number | null; }
+export interface User { id: string; username: string; role: string; displayName: string; avatarColor: string; avatar?: string | null; hasClaudeToken?: boolean; claudeTokenSetAt?: number | null; }
 export interface Live { blocks: Block[]; toolMap: Record<string, number>; }
 export interface QueueState { running: { id: string; author: { id: string; name: string } } | null; waiting: { id: string; author: { id: string; name: string } }[]; }
 export interface Control { canApprove: boolean; canInterrupt: boolean; canSetMode: boolean; isOwner: boolean; delegable: string[]; }
@@ -45,7 +45,7 @@ interface State {
   sessionImportEnabled: boolean; // admin feature flag (from /api/config)
   viewMode: 'chat' | 'split' | 'editor';
   editorUrl: string | null;
-  panel: null | 'admin' | 'plugins';
+  panel: null | 'admin' | 'plugins' | 'me';
   sidebarOpen: boolean; // mobile off-canvas drawer (ignored ≥md, sidebar is a static column there)
   error: string | null;
   commands: CmdInfo[];
@@ -84,14 +84,17 @@ interface State {
   openEditor: () => Promise<void>;
   setProject: (projectId: string | null) => Promise<void>;
   deleteProject: (projectId: string) => Promise<void>;
+  createProject: (name: string) => Promise<void>;
   setModel: (model: string) => Promise<void>;
   setMode: (mode: string) => Promise<void>;
   reloadRoom: () => Promise<void>;
-  setPanel: (p: null | 'admin' | 'plugins') => void;
+  setPanel: (p: null | 'admin' | 'plugins' | 'me') => void;
   setSidebarOpen: (open: boolean) => void;
   setError: (e: string | null) => void;
   saveClaudeToken: (token: string) => Promise<void>;
   clearClaudeToken: () => Promise<void>;
+  uploadAvatar: (file: File) => Promise<void>;
+  clearAvatar: () => Promise<void>;
 }
 
 const emptyLive = (): Live => ({ blocks: [], toolMap: {} });
@@ -334,6 +337,10 @@ export const useStore = create<State>((set, get) => ({
     if (c && c.projectId === projectId) set({ current: { ...c, projectId: null }, editorUrl: null });
     await get().refreshLists();
   },
+  createProject: async (name) => {
+    await api.post('/api/projects', { name }); // scope defaults to 'user' (owned by requester)
+    await get().refreshLists();
+  },
   setModel: async (model) => {
     const c = get().current; if (!c) return;
     if (c.kind === 'private' || c.kind === 'review') await api.patch(`/api/sessions/${c.chatSessionId}`, { model });
@@ -362,6 +369,17 @@ export const useStore = create<State>((set, get) => ({
   },
   clearClaudeToken: async () => {
     const { user } = await api.del('/api/auth/me/claude-token');
+    set({ user });
+  },
+
+  uploadAvatar: async (file) => {
+    const form = new FormData();
+    form.append('avatar', file, file.name);
+    const { user } = await api.upload('/api/auth/me/avatar', form);
+    set({ user });
+  },
+  clearAvatar: async () => {
+    const { user } = await api.del('/api/auth/me/avatar');
     set({ user });
   },
 }));

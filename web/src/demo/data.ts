@@ -10,7 +10,7 @@ export const COLORS = { clay: '#c8613a', blue: '#5b6b8c', green: '#5b8c6b', purp
 // ---- users -----------------------------------------------------------------
 export const ME = {
   id: 'u_admin', username: 'admin', role: 'admin', displayName: 'Demo Admin',
-  avatarColor: COLORS.clay, hasClaudeToken: true, claudeTokenSetAt: ago(60 * 24 * 3) as number | null,
+  avatarColor: COLORS.clay, avatar: null as string | null, hasClaudeToken: true, claudeTokenSetAt: ago(60 * 24 * 3) as number | null,
 };
 const U_JAMIE = { id: 'u_jamie', username: 'jamie', role: 'member', displayName: 'Jamie Park', avatarColor: COLORS.blue };
 const U_RILEY = { id: 'u_riley', username: 'riley', role: 'member', displayName: 'Riley Kim', avatarColor: COLORS.green };

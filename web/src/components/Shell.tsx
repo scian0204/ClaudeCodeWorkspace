@@ -4,6 +4,7 @@ import { Sidebar } from './Sidebar';
 import { Chat } from './Chat';
 import { AdminPanel } from './AdminPanel';
 import { PluginsPanel } from './PluginsPanel';
+import { MyPage } from './MyPage';
 import { MyTokenModal } from './TokenSettings';
 import { MobileMenuButton } from '../lib/ui';
 import { useT } from '../lib/i18n';
@@ -59,7 +60,7 @@ export function Shell() {
       {sidebarOpen && <div className="fixed inset-0 bg-black/40 z-40 md:hidden" onClick={() => setSidebarOpen(false)} />}
       <Sidebar />
       <main className="min-w-0 min-h-0 h-full bg-panel flex flex-col">
-        {panel === 'admin' ? <AdminPanel /> : panel === 'plugins' ? <PluginsPanel /> : current ? <Chat /> : <Empty />}
+        {panel === 'admin' ? <AdminPanel /> : panel === 'plugins' ? <PluginsPanel /> : panel === 'me' ? <MyPage /> : current ? <Chat /> : <Empty />}
       </main>
       {error && <Toast msg={error} onClose={() => setError(null)} />}
       <MyTokenModal open={showNag} nag onClose={() => setNagDismissed(true)} />

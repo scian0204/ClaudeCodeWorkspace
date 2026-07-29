@@ -11,9 +11,22 @@ function patchFetch() {
     if (!path.startsWith('/api/')) return real(input, init);
     const method = init?.method || (typeof input === 'object' && !(input instanceof URL) ? input.method : 'GET') || 'GET';
     let body: any = init?.body;
-    if (body instanceof FormData) { const o: any = {}; body.forEach((v, k) => { o[k] = v instanceof File ? v.name : v; }); body = o; }
-    const { status, data } = route(method, path, body);
-    return Promise.resolve(new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } }));
+    const respond = (r: { status: number; data: any }) =>
+      new Response(JSON.stringify(r.data), { status: r.status, headers: { 'Content-Type': 'application/json' } });
+    if (body instanceof FormData) {
+      // avatar upload: read the picked image into a data URL so the demo can render it inline
+      const av = body.get('avatar');
+      if (av instanceof File && path.startsWith('/api/auth/me/avatar')) {
+        return new Promise<Response>((resolve) => {
+          const fr = new FileReader();
+          fr.onload = () => resolve(respond(route(method, path, { avatarDataUrl: fr.result })));
+          fr.onerror = () => resolve(respond(route(method, path, {})));
+          fr.readAsDataURL(av);
+        });
+      }
+      const o: any = {}; body.forEach((v, k) => { o[k] = v instanceof File ? v.name : v; }); body = o;
+    }
+    return Promise.resolve(respond(route(method, path, body)));
   }) as typeof fetch;
 }
 

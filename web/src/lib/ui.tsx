@@ -1,4 +1,4 @@
-import React, { useSyncExternalStore } from 'react';
+import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import { t, useT, useLang, toggleLang } from './i18n';
 import { useStore } from './store';
 
@@ -32,9 +32,20 @@ export function initials(name?: string): string {
   return (parts[0][0] + parts[1][0]).toUpperCase();
 }
 
-export function Avatar({ name, color, size = 28, claude = false }: { name?: string; color?: string; size?: number; claude?: boolean }) {
+export function Avatar({ name, color, size = 28, claude = false, src }: { name?: string; color?: string; size?: number; claude?: boolean; src?: string }) {
+  const [imgErr, setImgErr] = useState(false);
+  useEffect(() => setImgErr(false), [src]); // a new src gets a fresh chance to load
   const style: React.CSSProperties = { width: size, height: size, fontSize: size * 0.4, background: claude ? 'var(--clay)' : color || '#5b6b8c' };
+  // On load failure, fall through to the initials badge instead of a broken-image icon.
+  if (src && !claude && !imgErr) return <img src={src} alt={name || ''} onError={() => setImgErr(true)} className="avatar object-cover shrink-0" style={{ width: size, height: size }} />;
   return <div className="avatar" style={style}>{claude ? '✳' : initials(name)}</div>;
+}
+
+// Build the <img> src for a user's avatar: the API stream (cache-busted by the version token),
+// or a data: URL passed straight through (the static demo stashes the picked image inline).
+export function avatarUrl(u?: { id: string; avatar?: string | null } | null): string | undefined {
+  if (!u?.avatar) return undefined;
+  return u.avatar.startsWith('data:') ? u.avatar : `/api/users/${u.id}/avatar?v=${encodeURIComponent(u.avatar)}`;
 }
 
 export function timeAgo(ts: number): string {

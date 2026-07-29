@@ -34,6 +34,9 @@ export function route(method: string, rawPath: string, body?: any): Res {
   if (P === '/api/auth/login') return ok({ user: db.me });
   if (P === '/api/auth/logout') return ok({});
   if (P === '/api/auth/me/claude-token') { db.me.hasClaudeToken = M !== 'DELETE'; db.me.claudeTokenSetAt = M !== 'DELETE' ? Date.now() : null; return ok({ user: db.me }); }
+  // avatar: store the picked image inline as a data URL (install.ts reads the File → b.avatarDataUrl);
+  // avatarUrl() renders a data: URL directly, so no GET stream is needed in the demo.
+  if (P === '/api/auth/me/avatar') { db.me.avatar = M === 'DELETE' ? null : (b.avatarDataUrl || db.me.avatar); return ok({ user: db.me }); }
 
   // ---- client-facing config (model dropdown) ----
   if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, sessionImportEnabled: true });

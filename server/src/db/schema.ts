@@ -10,6 +10,7 @@ export const users = sqliteTable('users', {
   createdAt: integer('created_at').notNull(),
   claudeTokenEnc: text('claude_token_enc'),        // AES-GCM blob of the user's Claude token
   claudeTokenSetAt: integer('claude_token_set_at'), // when it was registered (display only)
+  avatar: text('avatar'),                          // version token (set-time millis) for cache-busting; null = no avatar (file lives at <userHome>/avatar.<ext>)
 });
 
 export const authSessions = sqliteTable('auth_sessions', {

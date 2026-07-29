@@ -200,7 +200,6 @@ const ko: Dict = {
   'sidebar.compiling': '컴파일…',
   'sidebar.deleteTopicTitle': '주제 삭제',
   'sidebar.deleteTopicConfirm': '"{name}" 주제를 삭제할까요? (스레드/기록 + 업로드 파일 전부 영구 삭제, 복구 불가)',
-  'sidebar.myToken': '내 토큰',
   'sidebar.tokenUnregistered': '미등록',
   'sidebar.plugins': '플러그인',
   'sidebar.adminPanel': '관리자 패널',
@@ -325,6 +324,7 @@ const ko: Dict = {
   'cfg.sessionTtlDays': '세션 수명', 'cfgDesc.sessionTtlDays': '로그인 세션/쿠키 유효 기간(일)',
   'cfg.allow_bypass': 'bypass 허용', 'cfgDesc.allow_bypass': '전체 허용 모드 허용(끄면 편집 자동승인이 천장)',
   'cfg.sessionImportEnabled': '로컬 세션 가져오기', 'cfgDesc.sessionImportEnabled': '사용자가 로컬 프로젝트+~/.claude 세션을 개인 세션으로 업로드하는 기능 (끄면 버튼 숨김 + API 차단)',
+  'cfg.avatarMaxMB': '아바타 최대 크기', 'cfgDesc.avatarMaxMB': '마이페이지에서 업로드하는 프로필 이미지의 최대 파일 크기 (전역 요청 본문 한도 httpBodyLimitMB 이하여야 실제로 적용됨)',
   'cfg.httpBodyLimitMB': '요청 본문 상한', 'cfgDesc.httpBodyLimitMB': 'HTTP 요청 최대 본문 크기',
   'cfg.uploadMaxMB': '업로드 상한', 'cfgDesc.uploadMaxMB': '멀티파트 업로드 최대 파일 크기',
   'cfg.socketMaxMB': '소켓 메시지 상한', 'cfgDesc.socketMaxMB': 'socket.io 최대 인바운드 메시지 크기',
@@ -423,6 +423,18 @@ const ko: Dict = {
   'token.close': '닫기',
   'token.save': '저장',
 
+  // my page
+  'mypage.title': '👤 마이페이지',
+  'mypage.profile': '프로필',
+  'mypage.claudeToken': 'Claude 토큰',
+  'mypage.gitCreds': 'Git 자격증명',
+  'mypage.projects': '내 프로젝트',
+  'mypage.uploadAvatar': '이미지 업로드',
+  'mypage.removeAvatar': '이미지 제거',
+  'mypage.noProjects': '아직 개인 프로젝트가 없습니다.',
+  'mypage.openInChat': '새 대화에서 열기',
+  'mypage.projectNamePlaceholder': '새 프로젝트 이름',
+
   // fileExplorer
   'fileExplorer.loading': '불러오는 중…',
   'fileExplorer.noFiles': '파일 없음',
@@ -447,7 +459,6 @@ const ko: Dict = {
   'wikiSources.resize': '드래그해서 폭 조절',
 
   // git credentials
-  'sidebar.gitCreds': 'Git 자격증명',
   'gitcred.title': 'Git 자격증명',
   'gitcred.notice': '원격 저장소(GitHub·GitLab·Bitbucket)에 클론/푸시할 때 쓰는 HTTPS 개인 액세스 토큰(PAT)입니다. 토큰은 암호화되어 저장되며 다시 표시되지 않습니다.',
   'gitcred.none': '등록된 자격증명이 없습니다.',
@@ -718,7 +729,6 @@ const en: Dict = {
   'sidebar.compiling': 'Compiling…',
   'sidebar.deleteTopicTitle': 'Delete topic',
   'sidebar.deleteTopicConfirm': 'Delete topic "{name}"? (all threads/history + uploaded files permanently deleted, unrecoverable)',
-  'sidebar.myToken': 'My token',
   'sidebar.tokenUnregistered': 'Not registered',
   'sidebar.plugins': 'Plugins',
   'sidebar.adminPanel': 'Admin panel',
@@ -843,6 +853,7 @@ const en: Dict = {
   'cfg.sessionTtlDays': 'Session lifetime', 'cfgDesc.sessionTtlDays': 'Login session + cookie lifetime (days)',
   'cfg.allow_bypass': 'Allow bypass', 'cfgDesc.allow_bypass': 'Allow all-bypass mode (off caps at accept-edits)',
   'cfg.sessionImportEnabled': 'Local session import', 'cfgDesc.sessionImportEnabled': 'Let users upload a local project + ~/.claude session as a private session (off hides the button + blocks the API)',
+  'cfg.avatarMaxMB': 'Max avatar size', 'cfgDesc.avatarMaxMB': 'Maximum file size of the profile image uploaded on My Page (must stay ≤ the global request body limit httpBodyLimitMB to take effect)',
   'cfg.httpBodyLimitMB': 'Request body limit', 'cfgDesc.httpBodyLimitMB': 'Max HTTP request body size',
   'cfg.uploadMaxMB': 'Upload limit', 'cfgDesc.uploadMaxMB': 'Max multipart upload file size',
   'cfg.socketMaxMB': 'Socket message cap', 'cfgDesc.socketMaxMB': 'socket.io max inbound message size',
@@ -941,6 +952,18 @@ const en: Dict = {
   'token.close': 'Close',
   'token.save': 'Save',
 
+  // my page
+  'mypage.title': '👤 My Page',
+  'mypage.profile': 'Profile',
+  'mypage.claudeToken': 'Claude Token',
+  'mypage.gitCreds': 'Git Credentials',
+  'mypage.projects': 'My Projects',
+  'mypage.uploadAvatar': 'Upload image',
+  'mypage.removeAvatar': 'Remove image',
+  'mypage.noProjects': 'No personal projects yet.',
+  'mypage.openInChat': 'Open in a new chat',
+  'mypage.projectNamePlaceholder': 'New project name',
+
   // fileExplorer
   'fileExplorer.loading': 'Loading…',
   'fileExplorer.noFiles': 'No files',
@@ -965,7 +988,6 @@ const en: Dict = {
   'wikiSources.resize': 'Drag to resize',
 
   // git credentials
-  'sidebar.gitCreds': 'Git credentials',
   'gitcred.title': 'Git credentials',
   'gitcred.notice': 'HTTPS personal access tokens (PAT) used to clone/push to remote repos (GitHub, GitLab, Bitbucket). Tokens are stored encrypted and never shown again.',
   'gitcred.none': 'No credentials yet.',
