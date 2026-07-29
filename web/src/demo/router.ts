@@ -180,7 +180,7 @@ export function route(method: string, rawPath: string, body?: any): Res {
   if (P === '/api/review/repos' && M === 'GET') return ok({ repos: db.reviewRepos });
   if (P === '/api/review/repos' && M === 'POST') {
     const slug = String(b.gitUrl || '').replace(/\.git$/, '').split('/').slice(-2).join('/') || 'repo/x';
-    const repo = { id: genId('rr'), name: b.name || slug, provider: b.provider || 'github', host: 'github.com', slug, gitUrl: b.gitUrl, baseBranch: b.baseBranch || 'main', polledAt: Date.now(), pollError: null, openCount: 0, createdAt: Date.now() };
+    const repo = { id: genId('rr'), name: b.name || slug, provider: b.provider || 'github', host: 'github.com', slug, gitUrl: b.gitUrl, baseBranch: b.baseBranch || 'main', sandboxImage: b.sandboxImage || null, polledAt: Date.now(), pollError: null, openCount: 0, createdAt: Date.now() };
     db.reviewRepos.unshift(repo); return ok({ repo });
   }
   if (seg[1] === 'review' && seg[2] === 'repos' && seg[4] === 'poll') return ok({ ok: true, opened: 0, closed: 0 });

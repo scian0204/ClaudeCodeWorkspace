@@ -142,6 +142,7 @@ export const reviewRepos = sqliteTable('review_repos', {
   credentialId: text('credential_id').notNull(), // git_credentials.id — merge/push-capable cred
   path: text('path').notNull(),              // local full-clone dir
   baseBranch: text('base_branch'),           // default base for PRs whose base ref we can't read
+  sandboxImage: text('sandbox_image'),       // per-repo review build image; null → global reviewSandboxImage
   createdBy: text('created_by').notNull(),   // admin uid (owner of the review chat sessions)
   createdAt: integer('created_at').notNull(),
   polledAt: integer('polled_at'),            // last successful poll

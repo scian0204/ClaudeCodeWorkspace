@@ -43,7 +43,7 @@ export function getReviewByChat(chatSessionId: string) {
 
 // ── repo lifecycle ──
 export async function createRepo(admin: AuthUser, p: {
-  name?: string; gitUrl: string; credentialId: string; provider?: string; baseBranch?: string;
+  name?: string; gitUrl: string; credentialId: string; provider?: string; baseBranch?: string; sandboxImage?: string;
 }): Promise<Repo> {
   const gitUrl = (p.gitUrl || '').trim();
   const host = hostFromGitUrl(gitUrl);
@@ -72,8 +72,8 @@ export async function createRepo(admin: AuthUser, p: {
   const now = Date.now();
   const row: Repo = {
     id, name: (p.name || slug).trim(), provider, host, gitUrl, slug, credentialId: p.credentialId,
-    path: dir, baseBranch: p.baseBranch?.trim() || null, createdBy: admin.id, createdAt: now,
-    polledAt: null, pollError: null,
+    path: dir, baseBranch: p.baseBranch?.trim() || null, sandboxImage: p.sandboxImage?.trim() || null,
+    createdBy: admin.id, createdAt: now, polledAt: null, pollError: null,
   };
   db.insert(schema.reviewRepos).values(row).run();
   await pollRepo(id).catch(() => { /* error recorded on the row */ });
@@ -516,13 +516,13 @@ export function listReviewSessionsForUser(user: AuthUser): ReviewSessionSummary[
 
 export interface ReviewRepoSummary {
   id: string; name: string; provider: string; host: string; slug: string; gitUrl: string;
-  baseBranch: string | null; polledAt: number | null; pollError: string | null;
+  baseBranch: string | null; sandboxImage: string | null; polledAt: number | null; pollError: string | null;
   openCount: number; createdAt: number;
 }
 export function listRepoSummaries(): ReviewRepoSummary[] {
   return listRepos().map((r) => ({
     id: r.id, name: r.name, provider: r.provider, host: r.host, slug: r.slug, gitUrl: r.gitUrl,
-    baseBranch: r.baseBranch, polledAt: r.polledAt, pollError: r.pollError, createdAt: r.createdAt,
+    baseBranch: r.baseBranch, sandboxImage: r.sandboxImage, polledAt: r.polledAt, pollError: r.pollError, createdAt: r.createdAt,
     openCount: db.select().from(schema.reviewSessions)
       .where(and(eq(schema.reviewSessions.repoId, r.id), eq(schema.reviewSessions.prState, 'open'))).all().length,
   }));

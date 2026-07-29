@@ -338,6 +338,7 @@ function AddReviewRepoModal({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState('');
   const [gitUrl, setGitUrl] = useState('');
   const [baseBranch, setBaseBranch] = useState('');
+  const [sandboxImage, setSandboxImage] = useState('');
   const [credentialId, setCredentialId] = useState('');
   const [provider, setProvider] = useState('');
   const [creds, setCreds] = useState<any[]>([]);
@@ -351,7 +352,7 @@ function AddReviewRepoModal({ onClose }: { onClose: () => void }) {
     if (!credentialId) { setError(t('review.credRequired')); return; }
     setBusy(true);
     try {
-      await newReviewRepo({ name: name.trim() || undefined, gitUrl: gitUrl.trim(), credentialId, provider: provider || undefined, baseBranch: baseBranch.trim() || undefined });
+      await newReviewRepo({ name: name.trim() || undefined, gitUrl: gitUrl.trim(), credentialId, provider: provider || undefined, baseBranch: baseBranch.trim() || undefined, sandboxImage: sandboxImage.trim() || undefined });
       onClose();
     } catch (e: any) { setError(e.message); setBusy(false); }
   };
@@ -362,6 +363,8 @@ function AddReviewRepoModal({ onClose }: { onClose: () => void }) {
       <input className="input mb-2" placeholder={t('review.repoNamePlaceholder')} value={name} onChange={(e) => setName(e.target.value)} />
       <input className="input mb-2" placeholder={t('review.gitUrlPlaceholder')} value={gitUrl} autoFocus onChange={(e) => setGitUrl(e.target.value)} />
       <input className="input mb-2" placeholder={t('review.baseBranchPlaceholder')} value={baseBranch} onChange={(e) => setBaseBranch(e.target.value)} />
+      <input className="input mb-1" placeholder={t('review.sandboxImagePlaceholder')} value={sandboxImage} onChange={(e) => setSandboxImage(e.target.value)} />
+      <div className="text-[11px] text-txt3 mb-2">{t('review.sandboxImageHint')}</div>
       <select className="input mb-2" value={credentialId} onChange={(e) => setCredentialId(e.target.value)}>
         <option value="">{t('review.selectCred')}</option>
         {creds.map((cr) => <option key={cr.id} value={cr.id}>[{cr.provider}] {cr.host} · {cr.username}</option>)}
