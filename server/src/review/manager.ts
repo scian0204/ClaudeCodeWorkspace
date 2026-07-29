@@ -43,7 +43,7 @@ export function getReviewByChat(chatSessionId: string) {
 
 // ── repo lifecycle ──
 export async function createRepo(admin: AuthUser, p: {
-  name?: string; gitUrl: string; credentialId: string; provider?: string; baseBranch?: string;
+  name?: string; gitUrl: string; credentialId: string; provider?: string; baseBranch?: string; sandboxImage?: string;
 }): Promise<Repo> {
   const gitUrl = (p.gitUrl || '').trim();
   const host = hostFromGitUrl(gitUrl);
@@ -72,11 +72,42 @@ export async function createRepo(admin: AuthUser, p: {
   const now = Date.now();
   const row: Repo = {
     id, name: (p.name || slug).trim(), provider, host, gitUrl, slug, credentialId: p.credentialId,
-    path: dir, baseBranch: p.baseBranch?.trim() || null, createdBy: admin.id, createdAt: now,
-    polledAt: null, pollError: null,
+    path: dir, baseBranch: p.baseBranch?.trim() || null, sandboxImage: p.sandboxImage?.trim() || null,
+    createdBy: admin.id, createdAt: now, polledAt: null, pollError: null,
   };
   db.insert(schema.reviewRepos).values(row).run();
   await pollRepo(id).catch(() => { /* error recorded on the row */ });
+  return getRepo(id)!;
+}
+
+// Edit a registered repo in place — only non-destructive fields (no re-clone). gitUrl/provider/host
+// are immutable (changing them means a different repo → delete + re-add). credentialId, when given,
+// re-validates host binding + scope exactly like createRepo. baseBranch/sandboxImage: '' clears to null.
+export async function updateRepo(admin: AuthUser, id: string, p: {
+  name?: string; baseBranch?: string; sandboxImage?: string; credentialId?: string;
+}): Promise<Repo> {
+  const repo = getRepo(id);
+  if (!repo) throw new Error('저장소를 찾을 수 없습니다');
+  const patch: Partial<Repo> = {};
+  if (p.name !== undefined) {
+    const n = p.name.trim();
+    if (!n) throw new Error('저장소 이름이 필요합니다');
+    patch.name = n;
+  }
+  if (p.baseBranch !== undefined) patch.baseBranch = p.baseBranch.trim() || null;
+  if (p.sandboxImage !== undefined) patch.sandboxImage = p.sandboxImage.trim() || null;
+  if (p.credentialId) {
+    const credRow = getGitCredRow(p.credentialId);
+    if (!credRow) throw new Error('자격증명을 찾을 수 없습니다');
+    if (!(credRow.scope === 'common' || (credRow.scope === 'user' && credRow.ownerId === admin.id)))
+      throw new Error('사용할 수 없는 자격증명입니다');
+    if (credRow.host !== repo.host) throw new Error('자격증명 호스트가 저장소 URL과 일치하지 않습니다');
+    patch.credentialId = p.credentialId;
+  }
+  if (Object.keys(patch).length) {
+    db.update(schema.reviewRepos).set(patch).where(eq(schema.reviewRepos.id, id)).run();
+    notify();
+  }
   return getRepo(id)!;
 }
 
@@ -516,13 +547,13 @@ export function listReviewSessionsForUser(user: AuthUser): ReviewSessionSummary[
 
 export interface ReviewRepoSummary {
   id: string; name: string; provider: string; host: string; slug: string; gitUrl: string;
-  baseBranch: string | null; polledAt: number | null; pollError: string | null;
+  baseBranch: string | null; sandboxImage: string | null; polledAt: number | null; pollError: string | null;
   openCount: number; createdAt: number;
 }
 export function listRepoSummaries(): ReviewRepoSummary[] {
   return listRepos().map((r) => ({
     id: r.id, name: r.name, provider: r.provider, host: r.host, slug: r.slug, gitUrl: r.gitUrl,
-    baseBranch: r.baseBranch, polledAt: r.polledAt, pollError: r.pollError, createdAt: r.createdAt,
+    baseBranch: r.baseBranch, sandboxImage: r.sandboxImage, polledAt: r.polledAt, pollError: r.pollError, createdAt: r.createdAt,
     openCount: db.select().from(schema.reviewSessions)
       .where(and(eq(schema.reviewSessions.repoId, r.id), eq(schema.reviewSessions.prState, 'open'))).all().length,
   }));

@@ -1,8 +1,10 @@
 import path from 'node:path';
 import Docker from 'dockerode';
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { config } from '../config.js';
 import { cfg } from '../lib/config-registry.js';
+import { db, schema } from '../db/index.js';
 
 // Per-PR build sandbox. Review turns must not run untrusted PR build/test code in the app container
 // (which has the Docker socket ≈ host root). Instead we spawn a locked-down sibling container with
@@ -45,7 +47,9 @@ export async function ensureSandbox(repoId: string, pr: number, worktreePath: st
     if (info?.State?.Running) return name;
     await docker.getContainer(name).remove({ force: true });
   } catch { /* not present → create */ }
-  const image = cfg.str('reviewSandboxImage');
+  // per-repo image override; falls back to the global default when unset (blank → node/etc. per admin config)
+  const repoRow = db.select().from(schema.reviewRepos).where(eq(schema.reviewRepos.id, repoId)).get();
+  const image = repoRow?.sandboxImage?.trim() || cfg.str('reviewSandboxImage');
   await ensureImage(image);
   const vol = config.codeServer.dataVolume;
   // Mount the whole review repo dir (reviews/<id>) at its real absolute path so the git worktree's

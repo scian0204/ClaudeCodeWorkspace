@@ -182,7 +182,7 @@ export const db = {
   },
   marketplaces: { common: [{ name: 'anthropic' }, { name: 'community' }], mine: [] as any[] },
   reviewRepos: [
-    { id: 'rr_web', name: 'acme/webapp', provider: 'github', host: 'github.com', slug: 'acme/webapp', gitUrl: 'https://github.com/acme/webapp.git', baseBranch: 'main', polledAt: ago(2), pollError: null, openCount: 2, createdAt: ago(600) },
+    { id: 'rr_web', name: 'acme/webapp', provider: 'github', host: 'github.com', slug: 'acme/webapp', gitUrl: 'https://github.com/acme/webapp.git', baseBranch: 'main', sandboxImage: null, polledAt: ago(2), pollError: null, openCount: 2, createdAt: ago(600) },
   ] as any[],
   reviewSessions: [
     { id: 'rv_142', chatSessionId: 'cs_rv_142', repoId: 'rr_web', repoName: 'acme/webapp', prNumber: 142, prTitle: 'Add rate limiting to the API', prUrl: 'https://github.com/acme/webapp/pull/142', prState: 'open', authorLogin: 'jamie', mergeState: 'merged', verdict: 'merge_safe', verdictSummary: '테스트 46개 통과, 회귀 없음. 병합 가능.', readOnly: false, updatedAt: ago(13) },
