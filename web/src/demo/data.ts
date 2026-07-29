@@ -188,6 +188,11 @@ export const db = {
     { id: 'rv_142', chatSessionId: 'cs_rv_142', repoId: 'rr_web', repoName: 'acme/webapp', prNumber: 142, prTitle: 'Add rate limiting to the API', prUrl: 'https://github.com/acme/webapp/pull/142', prState: 'open', authorLogin: 'jamie', mergeState: 'merged', verdict: 'merge_safe', verdictSummary: '테스트 46개 통과, 회귀 없음. 병합 가능.', readOnly: false, updatedAt: ago(13) },
     { id: 'rv_139', chatSessionId: 'cs_rv_139', repoId: 'rr_web', repoName: 'acme/webapp', prNumber: 139, prTitle: 'Fix flaky nightly export test', prUrl: 'https://github.com/acme/webapp/pull/139', prState: 'open', authorLogin: 'riley', mergeState: 'none', verdict: 'none', verdictSummary: null, readOnly: false, updatedAt: ago(120) },
   ] as any[],
+  // member request → admin approval queue (approval workflow demo)
+  requests: [
+    { id: 'req_1', requesterId: U_JAMIE.id, type: 'common_project', payload: JSON.stringify({ name: 'shared-tools' }), reason: '팀 공용 스크립트 저장소가 필요합니다', status: 'pending', reviewerId: null, decidedAt: null, result: null, createdAt: ago(30), updatedAt: ago(30) },
+    { id: 'req_2', requesterId: U_RILEY.id, type: 'role_upgrade', payload: '{}', reason: '리뷰 담당이라 관리자 권한이 필요해요', status: 'approved', reviewerId: ME.id, decidedAt: ago(200), result: 'riley 권한을 admin으로 승격', createdAt: ago(300), updatedAt: ago(200) },
+  ] as any[],
   // per-chat message history (also used by the socket sim to append turns)
   messages: {
     s_auth: AUTH_MSGS, s_socket: SOCKET_MSGS, s_notes: [],
@@ -347,6 +352,13 @@ export const EDITOR_URL = 'data:text/html;charset=utf-8,' + encodeURIComponent(
      <div style="margin:12px 0 6px;color:#e6e6e6;font-weight:600">VS Code (code-server)</div>
      <div style="font-size:12px;color:#8a8a8a;line-height:1.6">In the full app this pane is a live code-server container — editor, terminal and git in the browser. It needs a backend, so the static demo shows this placeholder.</div>
    </div></body>`);
+
+// requestable admin actions (mirrors the server registry projection from /api/requests/actions)
+export const REQUEST_ACTIONS = [
+  { type: 'common_project', label: 'common_project', fields: [{ key: 'name', type: 'text', required: true }] },
+  { type: 'wiki_topic', label: 'wiki_topic', fields: [{ key: 'name', type: 'text', required: true }, { key: 'description', type: 'textarea', required: false }] },
+  { type: 'role_upgrade', label: 'role_upgrade', fields: [] as any[] },
+];
 
 // helpers used by the router for mutations
 export const genId = (p: string) => `${p}_${Date.now().toString(36)}${Math.floor(Math.random() * 1e4).toString(36)}`;

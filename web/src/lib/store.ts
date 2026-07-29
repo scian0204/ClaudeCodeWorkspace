@@ -18,6 +18,8 @@ export interface ReviewRepo { id: string; name: string; provider: string; host: 
 export interface ReviewSessionSummary { id: string; chatSessionId: string; repoId: string; repoName: string; prNumber: number; prTitle: string; prUrl: string; prState: string; authorLogin: string; mergeState: string; verdict: string; verdictSummary: string | null; readOnly: boolean; updatedAt: number; }
 export interface ReviewMeta { reviewId: string; prNumber: number; prTitle: string; prUrl: string; prState: string; authorLogin: string; baseRef: string; headRef: string; mergeState: string; verdict: string; verdictSummary: string | null; repoName: string; provider: string; }
 export interface User { id: string; username: string; role: string; displayName: string; avatarColor: string; avatar?: string | null; hasClaudeToken?: boolean; claudeTokenSetAt?: number | null; }
+export interface AdminRequest { id: string; requesterId: string; type: string; payload: string; reason: string; status: 'pending' | 'approved' | 'rejected'; reviewerId: string | null; decidedAt: number | null; result: string | null; createdAt: number; updatedAt: number; }
+export interface RequestAction { type: string; label: string; fields: { key: string; type: 'text' | 'textarea'; required: boolean }[]; }
 export interface Live { blocks: Block[]; toolMap: Record<string, number>; }
 export interface QueueState { running: { id: string; author: { id: string; name: string } } | null; waiting: { id: string; author: { id: string; name: string } }[]; }
 export interface Control { canApprove: boolean; canInterrupt: boolean; canSetMode: boolean; isOwner: boolean; delegable: string[]; }
@@ -45,6 +47,9 @@ interface State {
   congested: boolean;
   sessionImportEnabled: boolean; // admin feature flag (from /api/config)
   llmProvidersEnabled: boolean;  // admin feature flag (from /api/config) — gates the LLM provider UI
+  approvalsEnabled: boolean;     // admin feature flag (from /api/config) — gates the member-request UI
+  requests: AdminRequest[];      // member: own requests; admin: all
+  pendingRequestCount: number;   // admins only — drives the sidebar admin-panel badge
   viewMode: 'chat' | 'split' | 'editor';
   editorUrl: string | null;
   panel: null | 'admin' | 'plugins' | 'me';
@@ -57,6 +62,9 @@ interface State {
   logout: () => Promise<void>;
   toggleTheme: () => void;
   refreshLists: () => Promise<void>;
+  refreshRequests: () => Promise<void>;
+  submitRequest: (type: string, payload: Record<string, string>, reason: string) => Promise<void>;
+  decideRequest: (id: string, approve: boolean, note?: string) => Promise<void>;
   openPrivate: (id: string) => Promise<void>;
   openRoom: (roomId: string) => Promise<void>;
   openWiki: (topicId: string) => Promise<void>;
@@ -111,7 +119,7 @@ export const useStore = create<State>((set, get) => ({
   current: null, messages: [], live: null, turnActive: false,
   queue: { running: null, waiting: [] }, pending: [],
   control: { canApprove: true, canInterrupt: true, canSetMode: true, isOwner: true, delegable: [] },
-  presence: [], congested: false, sessionImportEnabled: true, llmProvidersEnabled: true, viewMode: 'chat', editorUrl: null, panel: null, sidebarOpen: false, error: null,
+  presence: [], congested: false, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, panel: null, sidebarOpen: false, error: null,
   commands: [],
 
   bootstrap: async () => {
@@ -133,7 +141,7 @@ export const useStore = create<State>((set, get) => ({
 
   logout: async () => {
     await api.post('/api/auth/logout');
-    set({ user: null, current: null, messages: [], sessions: [], rooms: [], wikiTopics: [], reviewRepos: [], reviewSessions: [] });
+    set({ user: null, current: null, messages: [], sessions: [], rooms: [], wikiTopics: [], reviewRepos: [], reviewSessions: [], requests: [], pendingRequestCount: 0 });
   },
 
   toggleTheme: () => {
@@ -156,7 +164,27 @@ export const useStore = create<State>((set, get) => ({
       reviewSessions: rv.sessions || [], reviewRepos: rr.repos || [],
       sessionImportEnabled: cf.sessionImportEnabled !== false,
       llmProvidersEnabled: cf.llmProvidersEnabled !== false,
+      approvalsEnabled: cf.approvalsEnabled !== false,
     });
+    await get().refreshRequests();
+  },
+
+  refreshRequests: async () => {
+    const u = get().user; if (!u) return;
+    if (!get().approvalsEnabled) { set({ requests: [], pendingRequestCount: 0 }); return; }
+    try {
+      const { requests } = await api.get('/api/requests');
+      const list: AdminRequest[] = requests || [];
+      set({ requests: list, pendingRequestCount: u.role === 'admin' ? list.filter((x) => x.status === 'pending').length : 0 });
+    } catch { set({ requests: [], pendingRequestCount: 0 }); }
+  },
+  submitRequest: async (type, payload, reason) => {
+    await api.post('/api/requests', { type, payload, reason });
+    await get().refreshRequests();
+  },
+  decideRequest: async (id, approve, note) => {
+    await api.post(`/api/requests/${id}/decide`, { approve, note });
+    await get().refreshRequests();
   },
 
   openPrivate: async (id) => {
@@ -539,6 +567,9 @@ function wire(set: any, get: () => State) {
       if (s) set({ current: { ...c, review: { ...c.review, verdict: s.verdict, verdictSummary: s.verdictSummary, mergeState: s.mergeState, prState: s.prState } } });
     }
   });
+
+  // member request submitted/decided (broadcast to all) — refresh own list + admin pending badge
+  sock.on('requests:changed', () => { if (get().user) void get().refreshRequests(); });
 
   sock.on('queue:update', (p: any) => { if (isCur(p.sessionId)) set({ queue: { running: p.running, waiting: p.waiting } }); });
   sock.on('presence:update', (p: any) => { if (isCur(p.sessionId)) set({ presence: p.users }); });

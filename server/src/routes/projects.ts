@@ -43,6 +43,21 @@ async function cloneRepo(url: string, dir: string, credEnv?: Record<string, stri
   });
 }
 
+// Create a shared common project (empty working dir, no git). Reused by the member-request approval
+// framework (admin/requests.ts `common_project` action) so approval creates a project the exact same
+// way the admin route does — same sanitizer, same paths root. Throws on a duplicate common name.
+export function createCommonProject(name: string) {
+  const nm = safeName(name);
+  const existing = db.select().from(schema.projects)
+    .where(and(eq(schema.projects.scope, 'common'), eq(schema.projects.name, nm))).get();
+  if (existing) throw new Error(`이미 존재하는 공통 프로젝트: ${nm}`);
+  const dir = path.join(paths.commonProjects, nm);
+  ensure(dir);
+  const row = { id: newId(), scope: 'common', ownerId: null, name: nm, path: dir, createdAt: Date.now() };
+  db.insert(schema.projects).values(row).run();
+  return row;
+}
+
 function canAccess(u: AuthUser, p: NonNullable<ReturnType<typeof getProject>>): boolean {
   if (u.role === 'admin') return true;
   if (p.scope === 'common') return true;

@@ -190,6 +190,24 @@ export const llmProviders = sqliteTable('llm_providers', {
   updatedAt: integer('updated_at').notNull(),
 });
 
+// Member request → admin approval. A generic queue: a member submits a request for an admin-only
+// action (type = an action registry key in admin/requests.ts), an admin approves/rejects it, and on
+// approval the server runs the action. `payload` is the action's JSON args; `result` holds the
+// execution output or error. See server/src/admin/requests.ts for the action registry.
+export const adminRequests = sqliteTable('admin_requests', {
+  id: text('id').primaryKey(),
+  requesterId: text('requester_id').notNull(),
+  type: text('type').notNull(),                 // action registry key
+  payload: text('payload').notNull().default('{}'), // JSON args for the action
+  reason: text('reason').notNull().default(''),
+  status: text('status').notNull().default('pending'), // 'pending' | 'approved' | 'rejected'
+  reviewerId: text('reviewer_id'),              // admin uid; null until decided
+  decidedAt: integer('decided_at'),
+  result: text('result'),                       // execution result or error (set on approve)
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
 // Git remote credentials (HTTPS PAT), encrypted at rest. Mirrors the Claude-token model:
 // per-user creds override an admin-managed common cred, resolved by remote host.
 export const gitCredentials = sqliteTable('git_credentials', {

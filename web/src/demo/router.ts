@@ -2,7 +2,7 @@
 // Called by the fetch + XHR interceptors in ./install. Returns a plain {status, data}.
 import {
   db, ADMIN, ATTACHMENTS, GIT, PROVIDERS, COMMANDS, USAGE, TREE_PROJECT, TREE_PLUGIN, WIKI_ARTICLES, WIKI_RAW, WIKI_TREE_ARTICLES,
-  fileContent, wikiFileContent, pluginDetail, EDITOR_URL, genId,
+  REQUEST_ACTIONS, fileContent, wikiFileContent, pluginDetail, EDITOR_URL, genId,
 } from './data';
 
 type Res = { status: number; data: any };
@@ -60,7 +60,30 @@ export function route(method: string, rawPath: string, body?: any): Res {
   if (P === '/api/auth/me/avatar') { db.me.avatar = M === 'DELETE' ? null : (b.avatarDataUrl || db.me.avatar); return ok({ user: db.me }); }
 
   // ---- client-facing config (model dropdown) ----
-  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, llmProvidersEnabled: true });
+  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true });
+
+  // ---- member requests (approval workflow) ----
+  if (P === '/api/requests/actions') return ok({ actions: REQUEST_ACTIONS });
+  if (P === '/api/requests' && M === 'GET') return ok({ requests: db.requests }); // demo me is admin → all
+  if (P === '/api/requests' && M === 'POST') {
+    const req = { id: genId('req'), requesterId: db.me.id, type: String(b.type || ''), payload: JSON.stringify(b.payload || {}), reason: String(b.reason || ''), status: 'pending', reviewerId: null, decidedAt: null, result: null, createdAt: Date.now(), updatedAt: Date.now() };
+    db.requests.unshift(req); return ok({ request: req });
+  }
+  if (seg[1] === 'requests' && seg[3] === 'decide' && M === 'POST') {
+    const r: any = db.requests.find((x: any) => x.id === idAt(2));
+    if (!r) return { status: 404, data: { error: 'not found' } };
+    if (r.status !== 'pending') return { status: 400, data: { error: 'already decided' } };
+    const approve = !!b.approve;
+    r.status = approve ? 'approved' : 'rejected'; r.reviewerId = db.me.id; r.decidedAt = Date.now(); r.updatedAt = Date.now();
+    if (approve) {
+      const payload = (() => { try { return JSON.parse(r.payload || '{}'); } catch { return {}; } })();
+      r.result = r.type === 'common_project' ? `공통 프로젝트 생성됨: ${payload.name || ''}`
+        : r.type === 'wiki_topic' ? `위키 주제 생성됨: ${payload.name || ''}`
+        : r.type === 'role_upgrade' ? `${db.me.username} 권한을 admin으로 승격`
+        : '완료 (demo)';
+    } else { r.result = b.note ? String(b.note) : null; }
+    return ok({ request: r });
+  }
 
   // ---- llm provider override (user self-service + admin common) ----
   if (P === '/api/auth/me/provider' || P === '/api/admin/provider') {

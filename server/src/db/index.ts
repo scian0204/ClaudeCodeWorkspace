@@ -89,6 +89,14 @@ CREATE TABLE IF NOT EXISTS review_sessions (
   created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_review_sessions_repo_pr ON review_sessions(repo_id, pr_number);
+CREATE TABLE IF NOT EXISTS admin_requests (
+  id TEXT PRIMARY KEY, requester_id TEXT NOT NULL, type TEXT NOT NULL,
+  payload TEXT NOT NULL DEFAULT '{}', reason TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'pending', reviewer_id TEXT,
+  decided_at INTEGER, result TEXT,
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_admin_requests_requester ON admin_requests(requester_id, created_at);
 `;
 
 export let sqlite: Database.Database;

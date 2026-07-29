@@ -118,6 +118,26 @@ function groundingDoc(name: string, description: string) {
     `- 사용자가 명시적으로 요청하지 않는 한 파일을 수정/생성하지 마라 (읽기 전용 질의).\n`;
 }
 
+// Create an empty wiki topic (no staged sources) and kick off compilation. Reused by the
+// member-request approval framework (admin/requests.ts `wiki_topic` action) — createdBy is the
+// requesting member, so an approved topic is attributed to whoever asked for it.
+export function createWikiTopic(opts: { name: string; description?: string; createdBy: string }) {
+  const name = String(opts.name || '').trim() || '새 주제';
+  const description = String(opts.description || '');
+  const id = newId();
+  const dir = paths.wikiTopic(id);
+  const rawDir = path.join(dir, 'raw');
+  ensure(dir); ensure(rawDir);
+  fs.writeFileSync(path.join(dir, 'CLAUDE.md'), groundingDoc(name, description));
+  const row = {
+    id, name, description, path: dir, createdBy: opts.createdBy, createdAt: Date.now(),
+    compileStatus: 'idle' as const, compiledAt: null, compileError: null,
+  };
+  db.insert(schema.wikiTopics).values(row).run();
+  void compileTopic(id); // async; status via 'wiki:status' socket
+  return row;
+}
+
 export async function wikiRoutes(app: FastifyInstance) {
   // list topics (any authenticated user)
   app.get('/api/wiki/topics', async (req, reply) => {

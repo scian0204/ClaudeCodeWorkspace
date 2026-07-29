@@ -5,11 +5,13 @@ import { useT } from '../lib/i18n';
 import { MobileMenuButton } from '../lib/ui';
 import { GitCredList } from './GitCredentials';
 import { LlmProviderForm } from './LlmProvider';
+import { RequestInfo } from './MyPage';
 
 // Tab bar model — append here to add a tab (e.g. resource cleanup, approvals, processes, LLM providers).
 // `label` is an i18n key resolved at render.
 const TABS = [
   { key: 'overview', label: 'admin.tab.overview' },
+  { key: 'requests', label: 'admin.tab.requests' },
   { key: 'users', label: 'admin.tab.users' },
   { key: 'providers', label: 'admin.tab.providers' },
   { key: 'usage', label: 'admin.tab.usage' },
@@ -28,13 +30,17 @@ export function AdminPanel() {
   const [commonTok, setCommonTok] = useState('');
   const [tab, setTab] = useState<AdminTab>('overview');
   const llmProvidersEnabled = useStore((s) => s.llmProvidersEnabled);
+  const approvalsEnabled = useStore((s) => s.approvalsEnabled);
+  const pendingRequestCount = useStore((s) => s.pendingRequestCount);
   const t = useT();
+  const tabs = TABS.filter((tb) => tb.key !== 'requests' || approvalsEnabled);
 
   const load = async () => {
     const [o, u, s, us] = await Promise.all([
       api.get('/api/admin/overview'), api.get('/api/admin/usage'), api.get('/api/admin/settings'), api.get('/api/users'),
     ]);
     setOv(o); setUsage(u); setSettings(s); setUsers(us.users);
+    void useStore.getState().refreshRequests(); // keep the requests tab + badge fresh on open
   };
   useEffect(() => { load().catch((e) => useStore.getState().setError(e.message)); }, []);
 
@@ -67,10 +73,13 @@ export function AdminPanel() {
       {/* Tab bar — scrolls horizontally inside its own container so it never widens the page on mobile. */}
       <div className="border-b border-line overflow-x-auto scrolly">
         <div className="flex gap-1 px-4 md:px-5">
-          {TABS.map((tb) => (
+          {tabs.map((tb) => (
             <button key={tb.key} onClick={() => setTab(tb.key)}
-              className={`shrink-0 px-3 py-2.5 text-sm whitespace-nowrap border-b-2 ${tab === tb.key ? 'border-clay text-clay' : 'border-transparent text-txt3 hover:text-txt'}`}>
+              className={`shrink-0 px-3 py-2.5 text-sm whitespace-nowrap border-b-2 flex items-center gap-1.5 ${tab === tb.key ? 'border-clay text-clay' : 'border-transparent text-txt3 hover:text-txt'}`}>
               {t(tb.label)}
+              {tb.key === 'requests' && pendingRequestCount > 0 && (
+                <span className="text-[10px] bg-warnsoft text-warn px-1.5 py-0.5 rounded-full">{pendingRequestCount}</span>
+              )}
             </button>
           ))}
         </div>
@@ -88,6 +97,8 @@ export function AdminPanel() {
             {!ov?.forceMock && ov?.commonToken && !ov.commonToken.hasToken && <div className="text-xs text-warn bg-warnsoft border border-warn rounded-lg px-3 py-2">{t('admin.commonTokenUnsetWarning')}</div>}
           </>
         )}
+
+        {tab === 'requests' && <RequestsTab users={users} />}
 
         {tab === 'providers' && (
           <>
@@ -190,6 +201,56 @@ export function AdminPanel() {
         )}
       </div>
     </div>
+  );
+}
+
+// Member request approvals: pending requests (approve/reject) + decided history. Approving runs the
+// action server-side and surfaces its result; rejecting asks for a note. Refreshes live via the
+// requests:changed socket event.
+function RequestsTab({ users }: { users: any[] }) {
+  const requests = useStore((s) => s.requests);
+  const decideRequest = useStore((s) => s.decideRequest);
+  const t = useT();
+  const [busy, setBusy] = useState<string | null>(null);
+  const nameFor = (id: string) => users.find((u) => u.id === id)?.displayName || id;
+  const pending = requests.filter((r) => r.status === 'pending');
+  const decided = requests.filter((r) => r.status !== 'pending');
+
+  const decide = async (id: string, approve: boolean, note?: string) => {
+    setBusy(id);
+    try { await decideRequest(id, approve, note); }
+    catch (e: any) { useStore.getState().setError(e.message); }
+    finally { setBusy(null); }
+  };
+  const reject = (id: string) => { const note = prompt(t('requests.rejectPrompt')); if (note === null) return; void decide(id, false, note || undefined); };
+
+  return (
+    <>
+      <Section title={t('requests.pendingTitle')}>
+        {pending.length === 0 && <div className="text-xs text-txt3">{t('requests.noPending')}</div>}
+        <div className="space-y-2">
+          {pending.map((r) => (
+            <div key={r.id} className="flex items-start gap-2 border-b border-line pb-2 last:border-0 flex-wrap">
+              <RequestInfo r={r} requesterName={nameFor(r.requesterId)} />
+              <div className="flex gap-2 shrink-0">
+                <button className="btn-primary text-xs px-2 py-1" disabled={busy === r.id} onClick={() => decide(r.id, true)}>{t('requests.approve')}</button>
+                <button className="btn-ghost text-xs px-2 py-1" disabled={busy === r.id} onClick={() => reject(r.id)}>{t('requests.reject')}</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Section>
+      <Section title={t('requests.historyTitle')}>
+        {decided.length === 0 && <div className="text-xs text-txt3">{t('common.none')}</div>}
+        <div className="space-y-1.5">
+          {decided.map((r) => (
+            <div key={r.id} className="flex items-start gap-2 border-b border-line py-1.5 last:border-0">
+              <RequestInfo r={r} requesterName={nameFor(r.requesterId)} />
+            </div>
+          ))}
+        </div>
+      </Section>
+    </>
   );
 }
 

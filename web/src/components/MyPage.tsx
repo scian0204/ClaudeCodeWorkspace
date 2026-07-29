@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react';
-import { useStore } from '../lib/store';
+import { useEffect, useRef, useState } from 'react';
+import { useStore, type AdminRequest, type RequestAction } from '../lib/store';
+import { api } from '../lib/api';
 import { useT } from '../lib/i18n';
 import { MobileMenuButton, Avatar, avatarUrl } from '../lib/ui';
 import { GitCredList } from './GitCredentials';
@@ -20,6 +21,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export function MyPage() {
   const setPanel = useStore((s) => s.setPanel);
   const llmProvidersEnabled = useStore((s) => s.llmProvidersEnabled);
+  const approvalsEnabled = useStore((s) => s.approvalsEnabled);
   const t = useT();
   return (
     <div className="h-full overflow-y-auto scrolly">
@@ -30,6 +32,12 @@ export function MyPage() {
       </div>
       <div className="max-w-[860px] mx-auto p-4 md:p-5 space-y-6">
         <Section title={t('mypage.profile')}><ProfileSection /></Section>
+        {approvalsEnabled && (
+          <Section title={t('mypage.requests')}>
+            <div className="text-xs text-txt2 bg-claysoft border border-line rounded-lg px-3 py-2 mb-3">{t('requests.intro')}</div>
+            <RequestsSection />
+          </Section>
+        )}
         <Section title={t('mypage.claudeToken')}><TokenSection /></Section>
         {llmProvidersEnabled && (
           <Section title={t('mypage.llmProvider')}>
@@ -185,6 +193,112 @@ function ProjectsSection() {
         <input className="input flex-1" placeholder={t('mypage.projectNamePlaceholder')} value={name} disabled={busy}
           onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && create()} />
         <button className="btn-primary" disabled={busy} onClick={create}>{t('common.create')}</button>
+      </div>
+    </>
+  );
+}
+
+// ── shared request presentation (reused by the admin › requests tab) ──
+// Friendly labels fall back to the raw registry key so a new action shows up even before i18n lands.
+export function reqTypeLabel(t: (k: string) => string, type: string) { const s = t(`requests.action.${type}`); return s === `requests.action.${type}` ? type : s; }
+export function reqFieldLabel(t: (k: string) => string, key: string) { const s = t(`requests.field.${key}`); return s === `requests.field.${key}` ? key : s; }
+export function reqStatusMeta(t: (k: string) => string, status: string) {
+  if (status === 'approved') return { label: t('requests.status.approved'), cls: 'bg-oksoft text-ok' };
+  if (status === 'rejected') return { label: t('requests.status.rejected'), cls: 'bg-dangersoft text-danger' };
+  return { label: t('requests.status.pending'), cls: 'bg-warnsoft text-warn' };
+}
+export function RequestStatusBadge({ status }: { status: string }) {
+  const t = useT();
+  const m = reqStatusMeta(t, status);
+  return <span className={`text-[10px] px-1.5 py-0.5 rounded-full whitespace-nowrap ${m.cls}`}>{m.label}</span>;
+}
+// Read-only summary of a request (type + status + payload + reason + result). Shared by both panels.
+export function RequestInfo({ r, requesterName }: { r: AdminRequest; requesterName?: string }) {
+  const t = useT();
+  let payload: Record<string, string> = {};
+  try { payload = JSON.parse(r.payload || '{}'); } catch { /* keep empty */ }
+  const entries = Object.entries(payload).filter(([, v]) => typeof v === 'string' && v);
+  return (
+    <div className="min-w-0 flex-1">
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <span className="font-medium text-[13px]">{reqTypeLabel(t, r.type)}</span>
+        <RequestStatusBadge status={r.status} />
+        {requesterName && <span className="text-[11px] text-txt3">· {requesterName}</span>}
+        <span className="ml-auto text-[10px] text-txt3">{fmtDate(r.createdAt)}</span>
+      </div>
+      {entries.length > 0 && (
+        <div className="text-[11px] text-txt3 mt-0.5 break-words">
+          {entries.map(([k, v]) => `${reqFieldLabel(t, k)}: ${v}`).join(' · ')}
+        </div>
+      )}
+      {r.reason && <div className="text-[11px] text-txt2 mt-0.5 break-words">{t('requests.reasonLabel')}: {r.reason}</div>}
+      {r.result && <div className="text-[11px] mt-0.5 break-words text-txt2">{t('requests.resultLabel')}: {r.result}</div>}
+    </div>
+  );
+}
+
+// "My Requests" — submit a request for an admin-only action (form driven by /api/requests/actions),
+// then track your own submissions with live status badges + the execution result.
+function RequestsSection() {
+  const user = useStore((s) => s.user);
+  const requests = useStore((s) => s.requests);
+  const submitRequest = useStore((s) => s.submitRequest);
+  const setError = useStore((s) => s.setError);
+  const t = useT();
+  const [actions, setActions] = useState<RequestAction[]>([]);
+  const [type, setType] = useState('');
+  const [fields, setFields] = useState<Record<string, string>>({});
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api.get('/api/requests/actions')
+      .then((r) => { setActions(r.actions || []); if (r.actions?.[0]) setType(r.actions[0].type); })
+      .catch(() => {});
+  }, []);
+  useEffect(() => { setFields({}); }, [type]); // reset payload when the chosen action changes
+
+  const action = actions.find((a) => a.type === type);
+  const mine = requests.filter((r) => r.requesterId === user?.id); // own only (admins see all in the store)
+
+  const submit = async () => {
+    if (!action) return;
+    for (const f of action.fields) if (f.required && !(fields[f.key] || '').trim()) { setError(t('requests.fillRequired')); return; }
+    setBusy(true);
+    try { await submitRequest(type, fields, reason.trim()); setFields({}); setReason(''); }
+    catch (e: any) { setError(e.message); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <>
+      <div className="space-y-2 mb-4">
+        <select className="input" value={type} onChange={(e) => setType(e.target.value)}>
+          {actions.length === 0 && <option value="">{t('requests.noActions')}</option>}
+          {actions.map((a) => <option key={a.type} value={a.type}>{reqTypeLabel(t, a.type)}</option>)}
+        </select>
+        {action?.fields.map((f) => (
+          f.type === 'textarea'
+            ? <textarea key={f.key} className="input resize-none" rows={2}
+                placeholder={reqFieldLabel(t, f.key) + (f.required ? ' *' : '')} value={fields[f.key] || ''}
+                onChange={(e) => setFields((s) => ({ ...s, [f.key]: e.target.value }))} />
+            : <input key={f.key} className="input"
+                placeholder={reqFieldLabel(t, f.key) + (f.required ? ' *' : '')} value={fields[f.key] || ''}
+                onChange={(e) => setFields((s) => ({ ...s, [f.key]: e.target.value }))} />
+        ))}
+        <textarea className="input resize-none" rows={2} placeholder={t('requests.reasonPlaceholder')}
+          value={reason} onChange={(e) => setReason(e.target.value)} />
+        <div className="flex justify-end">
+          <button className="btn-primary" disabled={busy || !type} onClick={submit}>{busy ? '…' : t('requests.submit')}</button>
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        {mine.length === 0 && <div className="text-xs text-txt3">{t('requests.none')}</div>}
+        {mine.map((r) => (
+          <div key={r.id} className="flex items-start gap-2 border-b border-line py-1.5">
+            <RequestInfo r={r} />
+          </div>
+        ))}
       </div>
     </>
   );
