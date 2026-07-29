@@ -4,7 +4,7 @@ import { api } from '../lib/api';
 import { PluginDetail } from './PluginDetail';
 import { MobileMenuButton } from '../lib/ui';
 import { useT } from '../lib/i18n';
-import { IconArrowLeft, IconPuzzle, IconCheck } from '../lib/icons';
+import { IconArrowLeft, IconPuzzle, IconCheck, IconLock } from '../lib/icons';
 
 export function PluginsPanel() {
   const setPanel = useStore((s) => s.setPanel);
@@ -29,7 +29,7 @@ export function PluginsPanel() {
       <div className="flex items-center gap-3 px-4 md:px-5 py-3 border-b border-line sticky top-0 bg-panel z-10">
         <MobileMenuButton />
         <button className="toolbtn" aria-label={t('common.back')} onClick={() => setPanel(null)}><IconArrowLeft /></button>
-        <div className="font-semibold">{t('plugins.title')}</div>
+        <div className="font-semibold inline-flex items-center gap-1.5"><IconPuzzle size={16} />{t('plugins.title')}</div>
       </div>
       <div className="max-w-[860px] mx-auto p-4 md:p-5 space-y-6">
         {/* COMMON */}
@@ -51,7 +51,7 @@ export function PluginsPanel() {
                       <button className="text-xs text-txt3 hover:text-danger" onClick={async () => { await api.del(`/api/plugins/${p.id}`); load(); }}>{t('common.delete')}</button>
                     </>
                   ) : (
-                    p.forced ? <span className="text-[11px] text-clay">{t('plugins.required')}</span>
+                    p.forced ? <span className="text-[11px] text-clay inline-flex items-center gap-1"><IconLock size={11} />{t('plugins.required')}</span>
                       : <Toggle on={pref} label={t('plugins.usePref')} onClick={async () => { await api.post(`/api/plugins/${p.id}/pref`, { enabled: !pref }).catch(err); load(); }} />
                   )}
                 </Row>

@@ -5,7 +5,7 @@ import { md } from '../lib/md';
 import { useT } from '../lib/i18n';
 import { isImage, isMarkdown, resolveRelAsset } from './FileExplorer';
 import { citeId, extractSources, resolveRealPath, useCite, type WikiSource } from '../lib/wikiCite';
-import { IconPaperclip, IconChevronRight, IconImage, IconFile } from '../lib/icons';
+import { IconPaperclip, IconChevronRight, IconImage, IconFile, IconArrowLeft, IconEye, IconTerminal } from '../lib/icons';
 
 // Toggles the `.on` class on every in-text citation mark matching the hovered source, so hovering
 // a panel row lights up its mentions in the answer (and vice-versa). Marks are non-React DOM.
@@ -146,12 +146,12 @@ function CitePreview({ topicId, src, onBack }: { topicId: string; src: WikiSourc
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <div className="flex items-center gap-2 px-2.5 py-1.5 border-b border-line shrink-0 text-xs">
-        <button className="text-txt3 hover:text-clay" onClick={onBack}>{t('wikiSources.back')}</button>
+        <button className="text-txt3 hover:text-clay inline-flex items-center gap-1" onClick={onBack}><IconArrowLeft size={13} />{t('wikiSources.back')}</button>
         <span className="font-mono truncate flex-1" title={`${real.dir}/${real.path}`}>{base}</span>
         <span className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'var(--claysoft)', color: 'var(--clay)' }}>{real.dir}</span>
         {isMarkdown(real.path) && !isImage(real.path) && !notFound && (
-          <button className="shrink-0 px-1.5 py-0.5 rounded border border-line hover:text-clay" onClick={() => setRaw(!raw)}>
-            {raw ? t('fileExplorer.rendered') : t('fileExplorer.source')}
+          <button className="shrink-0 px-1.5 py-0.5 rounded border border-line hover:text-clay inline-flex items-center gap-1" onClick={() => setRaw(!raw)}>
+            {raw ? <><IconEye size={12} />{t('fileExplorer.rendered')}</> : <><IconTerminal size={12} />{t('fileExplorer.source')}</>}
           </button>
         )}
       </div>

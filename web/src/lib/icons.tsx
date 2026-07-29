@@ -91,10 +91,19 @@ export const IconBox = (p: IconProps) => (
 export const IconArchive = (p: IconProps) => (
   <Svg {...p}><rect x="2" y="3" width="20" height="5" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" /><path d="M10 12h4" /></Svg>
 );
+export const IconLink = (p: IconProps) => (
+  <Svg {...p}><path d="M9 17H7A5 5 0 0 1 7 7h2" /><path d="M15 7h2a5 5 0 0 1 0 10h-2" /><path d="M8 12h8" /></Svg>
+);
 
 // ── people / comms ──
+export const IconUser = (p: IconProps) => (
+  <Svg {...p}><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></Svg>
+);
 export const IconUsers = (p: IconProps) => (
   <Svg {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></Svg>
+);
+export const IconCrown = (p: IconProps) => (
+  <Svg {...p}><path d="M3 7l4.5 4L12 4l4.5 7L21 7l-1.8 11H4.8z" /><path d="M4 21h16" /></Svg>
 );
 export const IconMessage = (p: IconProps) => (
   <Svg {...p}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></Svg>
@@ -110,6 +119,12 @@ export const IconLock = (p: IconProps) => (
 );
 
 // ── status / verdict ──
+export const IconShield = (p: IconProps) => (
+  <Svg {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></Svg>
+);
+export const IconBolt = (p: IconProps) => (
+  <Svg {...p}><path d="M13 2 3 14h9l-1 8 10-12h-9z" /></Svg>
+);
 export const IconWarning = (p: IconProps) => (
   <Svg {...p}><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><path d="M12 9v4" /><path d="M12 17h.01" /></Svg>
 );

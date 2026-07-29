@@ -3,7 +3,7 @@ import { useStore } from '../lib/store';
 import { md } from '../lib/md';
 import { useT } from '../lib/i18n';
 import { Modal } from './Modal';
-import { IconChevronDown, IconChevronRight, IconFolder, IconFile } from '../lib/icons';
+import { IconChevronDown, IconChevronRight, IconFolder, IconFile, IconEye, IconTerminal } from '../lib/icons';
 
 export const isImage = (n: string) => /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(n);
 export const isMarkdown = (n: string) => /\.(md|markdown)$/i.test(n);
@@ -159,8 +159,8 @@ export function FileExplorer({
               <div className="sticky top-0 bg-card border-b border-line px-3 py-1.5 text-xs font-mono flex items-center gap-2">
                 <span className="truncate flex-1">{sel}</span>
                 {isMarkdown(sel) && !isImage(sel) && (
-                  <button className="shrink-0 px-1.5 py-0.5 rounded border border-line hover:text-clay" onClick={() => setMdRaw(!mdRaw)}>
-                    {mdRaw ? t('fileExplorer.rendered') : t('fileExplorer.source')}
+                  <button className="shrink-0 px-1.5 py-0.5 rounded border border-line hover:text-clay inline-flex items-center gap-1" onClick={() => setMdRaw(!mdRaw)}>
+                    {mdRaw ? <><IconEye size={12} />{t('fileExplorer.rendered')}</> : <><IconTerminal size={12} />{t('fileExplorer.source')}</>}
                   </button>
                 )}
               </div>

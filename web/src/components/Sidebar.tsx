@@ -9,7 +9,7 @@ import { useT } from '../lib/i18n';
 import {
   IconX, IconDownload, IconMessage, IconPencil, IconTrash, IconUsers, IconClock, IconWarning,
   IconBook, IconPuzzle, IconSliders, IconLogout, IconFile, IconBox, IconRefresh, IconPlus,
-  IconCheckCircle, IconBan, IconGitBranch, IconCheckSquare, IconSquare,
+  IconCheckCircle, IconBan, IconGitBranch, IconCheckSquare, IconSquare, IconFolder,
 } from '../lib/icons';
 
 export function Sidebar() {
@@ -40,7 +40,7 @@ export function Sidebar() {
             <div className="text-[11px] text-txt3 truncate">{t('sidebar.teamName', { name: user?.displayName ?? '' })}</div>
           </div>
         </div>
-        <button className="btn-primary w-full flex items-center justify-center gap-2 !py-2" onClick={() => newSession()}>{t('sidebar.newChat')}</button>
+        <button className="btn-primary w-full flex items-center justify-center gap-2 !py-2" onClick={() => newSession()}><IconPlus size={16} />{t('sidebar.newChat')}</button>
       </div>
 
       <div className="flex-1 overflow-y-auto scrolly px-2 pb-1">
@@ -243,7 +243,7 @@ function WikiCreateModal({ onClose }: { onClose: () => void }) {
         onDragLeave={() => setDragOver(false)}
         onDrop={onDrop}
         className={`border-2 border-dashed rounded-lg px-3 py-4 text-center mb-2 transition-colors ${dragOver ? 'border-clay bg-claysoft' : 'border-line'}`}>
-        <div className="text-xs text-txt2 mb-2">{t(precompiled ? 'sidebar.dropZonePrecompiled' : 'sidebar.dropZone')}</div>
+        <div className="text-xs text-txt2 mb-2 inline-flex items-center gap-1"><IconFolder size={14} />{t(precompiled ? 'sidebar.dropZonePrecompiled' : 'sidebar.dropZone')}</div>
         <div className="flex justify-center gap-2">
           <button className="btn-ghost !py-1 !text-xs" disabled={progress !== null} onClick={() => fileRef.current?.click()}>{t('sidebar.chooseFiles')}</button>
           <button className="btn-ghost !py-1 !text-xs" disabled={progress !== null} onClick={() => dirRef.current?.click()}>{t('sidebar.chooseFolder')}</button>

@@ -15,14 +15,19 @@ import { useT } from '../lib/i18n';
 import {
   IconChevronDown, IconChevronRight, IconChevronUp, IconTheme, IconFolder, IconFile, IconTrash,
   IconGauge, IconEye, IconBook, IconArchive, IconSparkle, IconCopy, IconPencil, IconHelp,
-  IconTerminal, IconX, IconPaperclip, IconSend,
+  IconTerminal, IconX, IconPaperclip, IconSend, IconShield, IconBolt, IconCheckSquare, IconCrown,
+  IconGitBranch, IconClock, IconCheckCircle, IconBan, IconWarning, IconLink, IconRotateCcw,
+  IconCheck, IconRefresh, IconSquare, IconDownload, IconPlus, IconMessage,
 } from '../lib/icons';
 
 const MODELS: Record<string, string> = {
   'claude-opus-4-8': 'Opus 4.8', 'claude-sonnet-5': 'Sonnet 5', 'claude-haiku-4-5-20251001': 'Haiku 4.5',
 };
-const MODES: Record<string, string> = {
-  default: 'chat.modeDefault', acceptEdits: 'chat.modeAcceptEdits', bypassPermissions: 'chat.modeBypass', plan: 'chat.modePlan',
+const MODES: Record<string, { key: string; Icon: typeof IconCheck }> = {
+  default: { key: 'chat.modeDefault', Icon: IconShield },
+  acceptEdits: { key: 'chat.modeAcceptEdits', Icon: IconPencil },
+  bypassPermissions: { key: 'chat.modeBypass', Icon: IconBolt },
+  plan: { key: 'chat.modePlan', Icon: IconCheckSquare },
 };
 const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
 
@@ -74,6 +79,7 @@ function Header() {
   const isRoom = c.kind === 'room';
   const isReview = c.kind === 'review';
   const owner = c.room?.members.find((m) => m.isOwner);
+  const modeUi = MODES[c.permissionMode];
 
   return (
     <header className="flex items-center gap-2 md:gap-2.5 px-3 md:px-4 py-2.5 border-b border-line bg-panel shrink-0 flex-wrap">
@@ -81,7 +87,7 @@ function Header() {
       <div className="font-semibold text-sm flex items-center gap-2 min-w-0">
         <span className="w-[7px] h-[7px] rounded-full bg-ok shrink-0" />
         <span className="truncate">{c.title}</span>
-        <span className="text-txt3 text-xs font-mono truncate hidden md:inline">{c.wikiTopicId ? t('chat.knowledgeQuery') : (c.projectId ? '' : t('chat.noProject'))}</span>
+        <span className="text-txt3 text-xs font-mono truncate hidden md:inline-flex items-center gap-1">{c.wikiTopicId ? <><IconBook size={12} />{t('chat.knowledgeQuery')}</> : (c.projectId ? '' : t('chat.noProject'))}</span>
       </div>
       <div className="flex-1" />
 
@@ -95,15 +101,15 @@ function Header() {
                 {m.displayName.slice(0, 2).toUpperCase()}</span>
             ))}
           </div>
-          <button className="pill" onClick={() => setShowMembers(true)}>{t('chat.ownerMembers', { owner: owner?.displayName || t('chat.roomOwner') })}</button>
+          <button className="pill inline-flex items-center gap-1" onClick={() => setShowMembers(true)}><IconCrown size={13} />{t('chat.ownerMembers', { owner: owner?.displayName || t('chat.roomOwner') })}</button>
         </>
       )}
 
       {isReview && c.review && <ReviewControls />}
 
       {!c.wikiTopicId && !isReview && <ProjectMenu />}
-      {!c.wikiTopicId && c.projectId && <button className="pill" title={t('chat.projectFileExplorer')} onClick={() => setExplorer(true)}>{t('chat.filesBtn')}</button>}
-      {!c.wikiTopicId && c.projectId && <button className="pill" title={t('git.title')} onClick={() => setGitOpen(true)}>{t('git.pill')}</button>}
+      {!c.wikiTopicId && c.projectId && <button className="pill inline-flex items-center gap-1" title={t('chat.projectFileExplorer')} onClick={() => setExplorer(true)}><IconFolder size={13} />{t('chat.filesBtn')}</button>}
+      {!c.wikiTopicId && c.projectId && <button className="pill inline-flex items-center gap-1" title={t('git.title')} onClick={() => setGitOpen(true)}><IconGitBranch size={13} />{t('git.pill')}</button>}
 
       <DM.Root>
         <DM.Trigger asChild><button className="pill" disabled={!!c.readOnly}>{models[c.model] || c.model}<IconChevronDown size={14} /></button></DM.Trigger>
@@ -124,10 +130,10 @@ function Header() {
       </DM.Root>
 
       <DM.Root>
-        <DM.Trigger asChild><button className="pill" disabled={(isRoom || isReview) && !control.canSetMode}>{t(MODES[c.permissionMode]) || c.permissionMode}<IconChevronDown size={14} /></button></DM.Trigger>
+        <DM.Trigger asChild><button className="pill" disabled={(isRoom || isReview) && !control.canSetMode}>{modeUi ? <span className="inline-flex items-center gap-1"><modeUi.Icon size={13} />{t(modeUi.key)}</span> : c.permissionMode}<IconChevronDown size={14} /></button></DM.Trigger>
         <Menu>
-          {Object.entries(MODES).map(([id, label]) => (
-            <MenuItem key={id} onSelect={() => setMode(id)}>{t(label)}</MenuItem>
+          {Object.entries(MODES).map(([id, m]) => (
+            <MenuItem key={id} onSelect={() => setMode(id)}><span className="inline-flex items-center gap-1.5"><m.Icon size={14} />{t(m.key)}</span></MenuItem>
           ))}
           {isRoom && !control.canSetMode && <div className="px-2 py-1 text-[11px] text-txt3">{t('chat.ownerOnlyMode')}</div>}
         </Menu>
@@ -242,8 +248,8 @@ function ProjectMenu() {
               {creds.map((cr) => <option key={cr.id} value={cr.id}>[{cr.provider}] {cr.host} · {cr.username}</option>)}
             </select>
           )}
-          <button className="btn-ghost !py-1 !text-xs" disabled={busy} onClick={create}>
-            {busy ? t('common.creating') : gitUrl.trim() ? t('chat.cloneCreate') : t('chat.createBtn')}
+          <button className="btn-ghost !py-1 !text-xs inline-flex items-center gap-1" disabled={busy} onClick={create}>
+            {busy ? t('common.creating') : gitUrl.trim() ? <><IconDownload size={13} />{t('chat.cloneCreate')}</> : <><IconPlus size={13} />{t('chat.createBtn')}</>}
           </button>
         </div>
       </Menu>
@@ -382,12 +388,12 @@ function UsagePill() {
   );
 }
 
-const VERDICT_UI: Record<string, { key: string; color: string }> = {
-  running: { key: 'review.vRunning', color: 'var(--clay)' },
-  merge_safe: { key: 'review.vSafe', color: 'var(--ok)' },
-  do_not_merge: { key: 'review.vHold', color: 'var(--danger)' },
-  conflict: { key: 'review.vConflict', color: 'var(--danger)' },
-  error: { key: 'review.vError', color: 'var(--danger)' },
+const VERDICT_UI: Record<string, { key: string; color: string; Icon?: typeof IconCheck }> = {
+  running: { key: 'review.vRunning', color: 'var(--clay)', Icon: IconClock },
+  merge_safe: { key: 'review.vSafe', color: 'var(--ok)', Icon: IconCheckCircle },
+  do_not_merge: { key: 'review.vHold', color: 'var(--danger)', Icon: IconBan },
+  conflict: { key: 'review.vConflict', color: 'var(--danger)', Icon: IconWarning },
+  error: { key: 'review.vError', color: 'var(--danger)', Icon: IconWarning },
   unknown: { key: 'review.vUnknown', color: 'var(--txt-3)' },
   none: { key: 'review.vNone', color: 'var(--txt-3)' },
 };
@@ -418,13 +424,13 @@ function ReviewControls() {
   return (
     <>
       <span className="text-txt3 text-xs font-mono truncate hidden lg:inline" title={`${rv.baseRef} ← ${rv.headRef}`}>{rv.baseRef} ← {rv.headRef}</span>
-      <a className="pill" href={rv.prUrl} target="_blank" rel="noreferrer" title={rv.prUrl}>{t('review.prLink', { n: rv.prNumber })}</a>
-      <span className="text-[11px] font-semibold" style={{ color: v.color }} title={rv.verdictSummary || ''}>{t(v.key)}</span>
+      <a className="pill inline-flex items-center gap-1" href={rv.prUrl} target="_blank" rel="noreferrer" title={rv.prUrl}><IconLink size={13} />{t('review.prLink', { n: rv.prNumber })}</a>
+      <span className="text-[11px] font-semibold inline-flex items-center gap-1" style={{ color: v.color }} title={rv.verdictSummary || ''}>{v.Icon && <v.Icon size={12} />}{t(v.key)}</span>
       {readOnly
-        ? <span className="pill" title={t('review.readOnlyHint')}><IconEye size={14} />{t('review.readOnly')}</span>
+        ? <span className="pill inline-flex items-center gap-1" title={t('review.readOnlyHint')}><IconEye size={14} />{t('review.readOnly')}</span>
         : <>
-            <button className="pill" disabled={busy !== '' || rv.verdict === 'running'} onClick={runAuto} title={t('review.autoRunHint')}>{busy === 'auto' || rv.verdict === 'running' ? t('review.autoRunning') : t('review.autoRun')}</button>
-            <button className="pill" disabled={busy !== ''} onClick={approve} title={t('review.approveHint')}>{busy === 'approve' ? t('review.approving') : t('review.approve')}</button>
+            <button className="pill inline-flex items-center gap-1" disabled={busy !== '' || rv.verdict === 'running'} onClick={runAuto} title={t('review.autoRunHint')}><IconRotateCcw size={13} />{busy === 'auto' || rv.verdict === 'running' ? t('review.autoRunning') : t('review.autoRun')}</button>
+            <button className="pill inline-flex items-center gap-1" disabled={busy !== ''} onClick={approve} title={t('review.approveHint')}><IconCheckCircle size={13} />{busy === 'approve' ? t('review.approving') : t('review.approve')}</button>
           </>}
     </>
   );
@@ -455,9 +461,9 @@ function WikiBanner() {
   const recompile = () => api.post(`/api/wiki/topics/${topicId}/recompile`).catch((e) => useStore.getState().setError(e.message));
 
   const statusEl =
-    status === 'compiling' ? <span className="text-clay">{t('chat.compiling')}</span>
-      : status === 'error' ? <span className="text-danger" title={topic?.compileError || ''}>{t('chat.compileError')}</span>
-      : status === 'done' ? <span className="text-ok">{t('chat.compiled')}{topic?.compiledAt ? ` · ${timeAgo(topic.compiledAt)}` : ''}</span>
+    status === 'compiling' ? <span className="text-clay inline-flex items-center gap-1"><IconClock size={13} />{t('chat.compiling')}</span>
+      : status === 'error' ? <span className="text-danger inline-flex items-center gap-1" title={topic?.compileError || ''}><IconWarning size={13} />{t('chat.compileError')}</span>
+      : status === 'done' ? <span className="text-ok inline-flex items-center gap-1"><IconCheck size={13} />{t('chat.compiled')}{topic?.compiledAt ? ` · ${timeAgo(topic.compiledAt)}` : ''}</span>
       : <span className="text-txt3">{t('chat.notCompiled')}</span>;
 
   return (
@@ -468,8 +474,8 @@ function WikiBanner() {
         {statusEl}
         {files && <span className="text-txt3">· {source === 'raw' ? t('chat.rawCount', { count: files.length }) : t('chat.articleCount', { count: files.length })}</span>}
         <div className="ml-auto flex items-center gap-2">
-          <button className="text-txt3 hover:text-clay" onClick={() => setExplorer(true)}>{t('chat.fileExplorerBtn')}</button>
-          {isAdmin && <button className="text-txt3 hover:text-clay disabled:opacity-40" disabled={status === 'compiling'} onClick={recompile}>{t('chat.recompile')}</button>}
+          <button className="text-txt3 hover:text-clay inline-flex items-center gap-1" onClick={() => setExplorer(true)}><IconFolder size={13} />{t('chat.fileExplorerBtn')}</button>
+          {isAdmin && <button className="text-txt3 hover:text-clay disabled:opacity-40 inline-flex items-center gap-1" disabled={status === 'compiling'} onClick={recompile}><IconRefresh size={13} />{t('chat.recompile')}</button>}
           <span className="cursor-pointer text-txt3" onClick={() => setOpen(!open)}>{open ? <IconChevronUp size={15} /> : <IconChevronDown size={15} />}</span>
         </div>
       </div>
@@ -614,7 +620,7 @@ function MessageView({ m }: { m: Msg }) {
             <span className="text-[10px] px-1.5 py-0.5 rounded-full font-normal inline-flex items-center gap-1" style={{ background: 'var(--claysoft)', color: 'var(--clay)' }}><IconSparkle size={11} />{t('chat.claudeBadge')}</span>
           )}
           <span className="hidden group-hover:flex items-center gap-1.5 text-txt3">
-            {copyText && <button className={copied ? 'text-ok' : 'hover:text-clay'} title={t('chat.copy')} aria-label={t('chat.copy')} onClick={copy}>{copied ? t('chat.copied') : <IconCopy size={14} />}</button>}
+            {copyText && <button className={copied ? 'text-ok inline-flex items-center gap-1' : 'hover:text-clay'} title={t('chat.copy')} aria-label={t('chat.copy')} onClick={copy}>{copied ? <><IconCheck size={13} />{t('chat.copied')}</> : <IconCopy size={14} />}</button>}
             {canEdit && <button className="hover:text-clay" title={t('chat.edit')} aria-label={t('chat.edit')} onClick={() => { setDraft(m.content.text || ''); setEditing(true); }}><IconPencil size={14} /></button>}
             <button className="hover:text-danger" title={t('common.delete')} aria-label={t('common.delete')} onClick={() => { if (confirm(t('chat.deleteMessageConfirm'))) deleteMessage(m.id); }}><IconTrash size={14} /></button>
           </span>
@@ -636,7 +642,7 @@ function MessageView({ m }: { m: Msg }) {
               <AttachmentList atts={m.content.attachments} sessionId={sessionId} />
             )}
             {isClaude && <BlockList blocks={blocks} sources={sources} />}
-            {m.content.interrupted && <div className="text-[11px] text-warn mt-1">{t('chat.interrupted')}</div>}
+            {m.content.interrupted && <div className="text-[11px] text-warn mt-1 inline-flex items-center gap-1"><IconSquare size={12} />{t('chat.interrupted')}</div>}
           </>
         )}
       </div>
@@ -691,18 +697,18 @@ function ToolCard({ b }: { b: Extract<Block, { type: 'tool_use' }> }) {
   const cmd = isAsk
     ? (b.input?.questions?.[0]?.question || t('chat.question'))
     : (b.input?.command || b.input?.file_path || b.input?.path || JSON.stringify(b.input || {}).slice(0, 80));
-  const status =
+  const status: { text: string; color: string; Icon?: typeof IconCheck } =
     b.output == null ? { text: t('chat.toolRunning'), color: 'var(--txt-3)' }
-    : isAsk ? (cancelled ? { text: t('chat.cancelled'), color: 'var(--txt-3)' } : { text: t('chat.selected'), color: 'var(--ok)' })
-    : b.isError ? { text: t('chat.toolError'), color: 'var(--danger)' }
-    : { text: t('chat.toolDone'), color: 'var(--ok)' };
+    : isAsk ? (cancelled ? { text: t('chat.cancelled'), color: 'var(--txt-3)' } : { text: t('chat.selected'), color: 'var(--ok)', Icon: IconCheck })
+    : b.isError ? { text: t('chat.toolError'), color: 'var(--danger)', Icon: IconX }
+    : { text: t('chat.toolDone'), color: 'var(--ok)', Icon: IconCheck };
   return (
     <div className="border border-line rounded-lg my-2 overflow-hidden bg-card">
       <div className="flex items-center gap-2 px-3 py-2 cursor-pointer text-xs" onClick={() => setOpen(!open)}>
         <span className="text-clay">{isAsk ? <IconHelp size={14} /> : <IconTerminal size={14} />}</span>
         <span className="font-semibold">{isAsk ? t('chat.question') : b.name}</span>
         <code className="font-mono text-txt2 truncate flex-1">{String(cmd)}</code>
-        <span className="text-[11px] flex items-center gap-1" style={{ color: status.color }}>{status.text}</span>
+        <span className="text-[11px] flex items-center gap-1" style={{ color: status.color }}>{status.Icon && <status.Icon size={12} />}{status.text}</span>
       </div>
       {open && b.output != null && (
         <div className="border-t border-line px-3 py-2 font-mono text-xs text-txt2 whitespace-pre-wrap bg-bg max-h-64 overflow-auto scrolly">{b.output}</div>
@@ -731,7 +737,7 @@ function ToolApproval({ p, canApprove, respond }: { p: any; canApprove: boolean;
   const t = useT();
   return (
     <>
-      <div className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: 'var(--warn)' }}>{t('chat.toolApprovalRequest', { tool: p.tool })}</div>
+      <div className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: 'var(--warn)' }}><IconWarning size={14} />{t('chat.toolApprovalRequest', { tool: p.tool })}</div>
       <code className="font-mono text-xs bg-card px-1.5 py-1 rounded border border-line block truncate">{p.input?.command || p.input?.file_path || JSON.stringify(p.input)}</code>
       {canApprove ? (
         <div className="flex gap-2 mt-2.5">
@@ -965,7 +971,7 @@ function Composer() {
       <div className="max-w-[760px] mx-auto">
         {(queue.running || queue.waiting.length > 0 || congested) && (
           <div className="text-xs text-txt3 mb-2 flex items-center gap-2 flex-wrap">
-            {queue.running && <span>{t('chat.authorWorking', { name: queue.running.author.name })}</span>}
+            {queue.running && <span className="inline-flex items-center gap-1"><IconClock size={12} />{t('chat.authorWorking', { name: queue.running.author.name })}</span>}
             {turnActive && (
               <button className="text-danger hover:underline" onClick={interrupt}>{t('chat.interruptShort')}</button>
             )}
@@ -1058,8 +1064,8 @@ function Composer() {
             <div className="flex items-center gap-2 mt-2 flex-wrap">
               {isRoom && (
                 <div className="flex items-center gap-1 shrink-0">
-                  <button type="button" onClick={() => setMode('chat')} className={`text-xs px-2 py-0.5 rounded-full border ${mode === 'chat' ? 'bg-clay text-white border-clay' : 'border-line text-txt2 hover:border-clay'}`}>{t('chat.modeChat')}</button>
-                  <button type="button" onClick={() => setMode('claude')} className={`text-xs px-2 py-0.5 rounded-full border ${mode === 'claude' ? 'bg-clay text-white border-clay' : 'border-line text-txt2 hover:border-clay'}`}>{t('chat.modeClaude')}</button>
+                  <button type="button" onClick={() => setMode('chat')} className={`text-xs px-2 py-0.5 rounded-full border inline-flex items-center gap-1 ${mode === 'chat' ? 'bg-clay text-white border-clay' : 'border-line text-txt2 hover:border-clay'}`}><IconMessage size={12} />{t('chat.modeChat')}</button>
+                  <button type="button" onClick={() => setMode('claude')} className={`text-xs px-2 py-0.5 rounded-full border inline-flex items-center gap-1 ${mode === 'claude' ? 'bg-clay text-white border-clay' : 'border-line text-txt2 hover:border-clay'}`}><IconSparkle size={12} />{t('chat.modeClaude')}</button>
                 </div>
               )}
               {isRoom && mode === 'claude' && (
@@ -1067,7 +1073,7 @@ function Composer() {
                   <input type="checkbox" checked={includeChat} onChange={(e) => setIncludeChat(e.target.checked)} /> {t('chat.includeChat')}
                 </label>
               )}
-              <span className="text-xs text-txt3 truncate">{wikiCompiling ? (wikiStep ? t('chat.compilingStep', { step: wikiStep }) : t('chat.compilingReady')) : turnActive ? t('chat.claudeResponding') : (isRoom && mode === 'chat' ? t('chat.composerHintChat') : t(canRef ? 'chat.composerHintRef' : 'chat.composerHint'))}</span>
+              <span className="text-xs text-txt3 truncate inline-flex items-center gap-1 min-w-0">{wikiCompiling ? <><IconClock size={12} /><span className="truncate">{wikiStep ? t('chat.compilingStep', { step: wikiStep }) : t('chat.compilingReady')}</span></> : turnActive ? t('chat.claudeResponding') : (isRoom && mode === 'chat' ? t('chat.composerHintChat') : t(canRef ? 'chat.composerHintRef' : 'chat.composerHint'))}</span>
               <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => { void uploadPicked(Array.from(e.target.files || [])); }} />
               {canAttach && (
                 <button type="button" className="ml-auto toolbtn shrink-0 disabled:opacity-40" disabled={!!uploading} title={t('chat.attach')} aria-label={t('chat.attach')} onClick={() => fileRef.current?.click()}><IconPaperclip size={16} /></button>

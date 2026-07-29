@@ -9,7 +9,7 @@ import { MyPage } from './MyPage';
 import { MyTokenModal } from './TokenSettings';
 import { MobileMenuButton } from '../lib/ui';
 import { useT } from '../lib/i18n';
-import { IconX } from '../lib/icons';
+import { IconX, IconPlus } from '../lib/icons';
 
 function Empty() {
   const newSession = useStore((s) => s.newSession);
@@ -25,7 +25,7 @@ function Empty() {
         <div>
           <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" className="w-16 h-16 mx-auto mb-3" />
           <div className="text-txt2 mb-4">{t('shell.emptyHint')}</div>
-          <button className="btn-primary" onClick={() => newSession()}>{t('shell.newConversation')}</button>
+          <button className="btn-primary inline-flex items-center gap-1.5" onClick={() => newSession()}><IconPlus size={16} />{t('shell.newConversation')}</button>
         </div>
       </div>
     </div>

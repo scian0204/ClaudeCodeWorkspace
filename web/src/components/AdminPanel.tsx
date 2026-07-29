@@ -8,7 +8,7 @@ import { LlmProviderForm } from './LlmProvider';
 import { RequestInfo } from './MyPage';
 import {
   IconArrowLeft, IconDot, IconDotOutline, IconRefresh, IconChevronRight, IconChevronDown,
-  IconRotateCcw, IconX, IconPlus,
+  IconRotateCcw, IconX, IconPlus, IconSliders,
 } from '../lib/icons';
 
 // Tab bar model — append here to add a tab (e.g. resource cleanup, approvals, processes, LLM providers).
@@ -73,7 +73,7 @@ export function AdminPanel() {
       <div className="flex items-center gap-3 px-4 md:px-5 py-3 border-b border-line sticky top-0 bg-panel z-10">
         <MobileMenuButton />
         <button className="toolbtn" aria-label={t('common.back')} onClick={() => setPanel(null)}><IconArrowLeft /></button>
-        <div className="font-semibold">{t('admin.panelTitle')}</div>
+        <div className="font-semibold inline-flex items-center gap-1.5"><IconSliders size={16} />{t('admin.panelTitle')}</div>
       </div>
       {/* Tab bar — scrolls horizontally inside its own container so it never widens the page on mobile. */}
       <div className="border-b border-line overflow-x-auto scrolly">

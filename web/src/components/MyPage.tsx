@@ -5,7 +5,7 @@ import { useT } from '../lib/i18n';
 import { MobileMenuButton, Avatar, avatarUrl } from '../lib/ui';
 import { GitCredList } from './GitCredentials';
 import { LlmProviderForm } from './LlmProvider';
-import { IconArrowLeft, IconDot, IconFolder } from '../lib/icons';
+import { IconArrowLeft, IconDot, IconFolder, IconUser } from '../lib/icons';
 
 function fmtDate(ms?: number | null) {
   if (!ms) return '';
@@ -29,7 +29,7 @@ export function MyPage() {
       <div className="flex items-center gap-3 px-4 md:px-5 py-3 border-b border-line sticky top-0 bg-panel z-10">
         <MobileMenuButton />
         <button className="toolbtn" aria-label={t('common.back')} onClick={() => setPanel(null)}><IconArrowLeft /></button>
-        <div className="font-semibold">{t('mypage.title')}</div>
+        <div className="font-semibold inline-flex items-center gap-1.5"><IconUser size={16} />{t('mypage.title')}</div>
       </div>
       <div className="max-w-[860px] mx-auto p-4 md:p-5 space-y-6">
         <Section title={t('mypage.profile')}><ProfileSection /></Section>
