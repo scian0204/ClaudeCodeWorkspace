@@ -64,6 +64,7 @@ type Dict = Record<string, string>;
 const ko: Dict = {
   // common / shared
   'common.cancel': '취소',
+  'common.save': '저장',
   'common.create': '만들기',
   'common.delete': '삭제',
   'common.confirm': '확인',
@@ -470,6 +471,10 @@ const ko: Dict = {
   'review.addRepoTitle': '코드리뷰 저장소 추가',
   'review.addRepoHelp': '원격지를 클론하고 열린 PR을 주기적으로 조회합니다. 병합권한이 있는 자격증명이 필요합니다.',
   'review.repoNamePlaceholder': '이름 (선택 — 비우면 저장소 경로)',
+  'review.repoNameRequired': '저장소 이름이 필요합니다',
+  'review.editRepoTitle': '리뷰 저장소 편집',
+  'review.saving': '저장 중…',
+  'review.credKeep': '자격증명 유지 (변경하려면 선택)',
   'review.gitUrlPlaceholder': '원격 저장소 URL (https/ssh)',
   'review.baseBranchPlaceholder': '기본 브랜치 (선택, 예: main)',
   'review.sandboxImagePlaceholder': '리뷰 빌드 이미지 (선택, 예: node:20-bookworm)',
@@ -571,6 +576,7 @@ const ko: Dict = {
 const en: Dict = {
   // common / shared
   'common.cancel': 'Cancel',
+  'common.save': 'Save',
   'common.create': 'Create',
   'common.delete': 'Delete',
   'common.confirm': 'Confirm',
@@ -977,6 +983,10 @@ const en: Dict = {
   'review.addRepoTitle': 'Add code-review repo',
   'review.addRepoHelp': 'Clones the remote and polls its open PRs. A merge-capable credential is required.',
   'review.repoNamePlaceholder': 'Name (optional — defaults to repo path)',
+  'review.repoNameRequired': 'Repository name is required',
+  'review.editRepoTitle': 'Edit review repository',
+  'review.saving': 'Saving…',
+  'review.credKeep': 'Keep credential (select to change)',
   'review.gitUrlPlaceholder': 'Remote repository URL (https/ssh)',
   'review.baseBranchPlaceholder': 'Default base branch (optional, e.g. main)',
   'review.sandboxImagePlaceholder': 'Review build image (optional, e.g. node:20-bookworm)',

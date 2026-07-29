@@ -60,6 +60,7 @@ interface State {
   openWiki: (topicId: string) => Promise<void>;
   openReview: (reviewId: string) => Promise<void>;
   newReviewRepo: (payload: { name?: string; gitUrl: string; credentialId: string; provider?: string; baseBranch?: string; sandboxImage?: string }) => Promise<void>;
+  updateReviewRepo: (id: string, payload: { name?: string; baseBranch?: string; sandboxImage?: string; credentialId?: string }) => Promise<void>;
   deleteReviewRepo: (id: string) => Promise<void>;
   pollReviewRepo: (id: string) => Promise<void>;
   mergeReview: (reviewId: string) => Promise<{ mergeState: string; output: string }>;
@@ -198,6 +199,10 @@ export const useStore = create<State>((set, get) => ({
   },
   newReviewRepo: async (payload) => {
     await api.post('/api/review/repos', payload);
+    await get().refreshLists();
+  },
+  updateReviewRepo: async (id, payload) => {
+    await api.patch(`/api/review/repos/${id}`, payload);
     await get().refreshLists();
   },
   deleteReviewRepo: async (id) => {

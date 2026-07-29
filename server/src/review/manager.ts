@@ -80,6 +80,37 @@ export async function createRepo(admin: AuthUser, p: {
   return getRepo(id)!;
 }
 
+// Edit a registered repo in place — only non-destructive fields (no re-clone). gitUrl/provider/host
+// are immutable (changing them means a different repo → delete + re-add). credentialId, when given,
+// re-validates host binding + scope exactly like createRepo. baseBranch/sandboxImage: '' clears to null.
+export async function updateRepo(admin: AuthUser, id: string, p: {
+  name?: string; baseBranch?: string; sandboxImage?: string; credentialId?: string;
+}): Promise<Repo> {
+  const repo = getRepo(id);
+  if (!repo) throw new Error('저장소를 찾을 수 없습니다');
+  const patch: Partial<Repo> = {};
+  if (p.name !== undefined) {
+    const n = p.name.trim();
+    if (!n) throw new Error('저장소 이름이 필요합니다');
+    patch.name = n;
+  }
+  if (p.baseBranch !== undefined) patch.baseBranch = p.baseBranch.trim() || null;
+  if (p.sandboxImage !== undefined) patch.sandboxImage = p.sandboxImage.trim() || null;
+  if (p.credentialId) {
+    const credRow = getGitCredRow(p.credentialId);
+    if (!credRow) throw new Error('자격증명을 찾을 수 없습니다');
+    if (!(credRow.scope === 'common' || (credRow.scope === 'user' && credRow.ownerId === admin.id)))
+      throw new Error('사용할 수 없는 자격증명입니다');
+    if (credRow.host !== repo.host) throw new Error('자격증명 호스트가 저장소 URL과 일치하지 않습니다');
+    patch.credentialId = p.credentialId;
+  }
+  if (Object.keys(patch).length) {
+    db.update(schema.reviewRepos).set(patch).where(eq(schema.reviewRepos.id, id)).run();
+    notify();
+  }
+  return getRepo(id)!;
+}
+
 export function deleteRepo(id: string) {
   const repo = getRepo(id); if (!repo) return;
   const rows = db.select().from(schema.reviewSessions).where(eq(schema.reviewSessions.repoId, id)).all();

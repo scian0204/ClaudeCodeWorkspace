@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useStore, type ReviewSessionSummary } from '../lib/store';
+import { useStore, type ReviewSessionSummary, type ReviewRepo } from '../lib/store';
 import { api, type UploadState } from '../lib/api';
 import { Avatar, timeAgo, LangToggle } from '../lib/ui';
 import { Modal } from './Modal';
@@ -282,6 +282,7 @@ function verdictBadge(verdict: string) {
 function ReviewSection() {
   const { reviewRepos, reviewSessions, current, panel, setPanel, openReview, deleteReviewRepo, pollReviewRepo, user } = useStore();
   const [showAdd, setShowAdd] = useState(false);
+  const [editRepo, setEditRepo] = useState<ReviewRepo | null>(null);
   const [busyPoll, setBusyPoll] = useState<string | null>(null);
   const isAdmin = user?.role === 'admin';
   const t = useT();
@@ -314,6 +315,8 @@ function ReviewSection() {
                 <span className="text-txt3 group-hover:hidden">{t('review.openCount', { count: r.openCount })}</span>
                 <button className="hidden group-hover:block hover:text-clay disabled:opacity-40" title={t('review.pollNow')}
                   disabled={busyPoll === r.id} onClick={() => poll(r.id)}>{busyPoll === r.id ? '…' : '⟳'}</button>
+                <button className="hidden group-hover:block hover:text-clay" title={t('review.editRepoTitle')}
+                  onClick={() => setEditRepo(r)}>✎</button>
                 <button className="hidden group-hover:block hover:text-danger" title={t('review.deleteRepoTitle')}
                   onClick={() => { if (confirm(t('review.deleteRepoConfirm', { name: r.name }))) deleteReviewRepo(r.id); }}>🗑</button>
               </div>
@@ -327,6 +330,7 @@ function ReviewSection() {
           : reviewSessions.map(sessionItem)
       )}
       {showAdd && <AddReviewRepoModal onClose={() => setShowAdd(false)} />}
+      {editRepo && <EditReviewRepoModal repo={editRepo} onClose={() => setEditRepo(null)} />}
     </>
   );
 }
@@ -378,6 +382,49 @@ function AddReviewRepoModal({ onClose }: { onClose: () => void }) {
       <div className="flex justify-end gap-2">
         <button className="btn-ghost" onClick={onClose} disabled={busy}>{t('common.cancel')}</button>
         <button className="btn-primary" onClick={submit} disabled={busy}>{busy ? t('review.cloning') : t('review.addRepoBtn')}</button>
+      </div>
+    </Modal>
+  );
+}
+
+// Admin-only: edit a registered repo's non-destructive fields (name / base branch / build image / credential).
+// gitUrl/provider are immutable here — changing them means a different repo (delete + re-add).
+function EditReviewRepoModal({ repo, onClose }: { repo: ReviewRepo; onClose: () => void }) {
+  const updateReviewRepo = useStore((s) => s.updateReviewRepo);
+  const setError = useStore((s) => s.setError);
+  const [name, setName] = useState(repo.name);
+  const [baseBranch, setBaseBranch] = useState(repo.baseBranch || '');
+  const [sandboxImage, setSandboxImage] = useState(repo.sandboxImage || '');
+  const [credentialId, setCredentialId] = useState('');
+  const [creds, setCreds] = useState<any[]>([]);
+  const [busy, setBusy] = useState(false);
+  const t = useT();
+
+  useEffect(() => { api.get('/api/git-credentials').then((r) => setCreds([...(r.mine || []), ...(r.common || [])])).catch(() => {}); }, []);
+
+  const submit = async () => {
+    if (!name.trim()) { setError(t('review.repoNameRequired')); return; }
+    setBusy(true);
+    try {
+      await updateReviewRepo(repo.id, { name: name.trim(), baseBranch: baseBranch.trim(), sandboxImage: sandboxImage.trim(), credentialId: credentialId || undefined });
+      onClose();
+    } catch (e: any) { setError(e.message); setBusy(false); }
+  };
+
+  return (
+    <Modal open onOpenChange={(o) => { if (!o) onClose(); }} title={t('review.editRepoTitle')} width={460}>
+      <div className="text-[11px] text-txt3 mb-2" title={`${repo.host}/${repo.slug}`}>{repo.host}/{repo.slug}</div>
+      <input className="input mb-2" placeholder={t('review.repoNamePlaceholder')} value={name} onChange={(e) => setName(e.target.value)} />
+      <input className="input mb-2" placeholder={t('review.baseBranchPlaceholder')} value={baseBranch} onChange={(e) => setBaseBranch(e.target.value)} />
+      <input className="input mb-1" placeholder={t('review.sandboxImagePlaceholder')} value={sandboxImage} onChange={(e) => setSandboxImage(e.target.value)} />
+      <div className="text-[11px] text-txt3 mb-2">{t('review.sandboxImageHint')}</div>
+      <select className="input mb-3" value={credentialId} onChange={(e) => setCredentialId(e.target.value)}>
+        <option value="">{t('review.credKeep')}</option>
+        {creds.filter((cr) => cr.host === repo.host).map((cr) => <option key={cr.id} value={cr.id}>[{cr.provider}] {cr.host} · {cr.username}</option>)}
+      </select>
+      <div className="flex justify-end gap-2">
+        <button className="btn-ghost" onClick={onClose} disabled={busy}>{t('common.cancel')}</button>
+        <button className="btn-primary" onClick={submit} disabled={busy}>{busy ? t('review.saving') : t('common.save')}</button>
       </div>
     </Modal>
   );
