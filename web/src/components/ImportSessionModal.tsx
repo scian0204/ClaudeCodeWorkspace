@@ -53,6 +53,12 @@ function buildTree(rels: string[]): TreeNode[] {
   return root.children;
 }
 function fileRels(node: TreeNode): string[] { return node.dir ? node.children.flatMap(fileRels) : [node.rel]; }
+function allDirRels(nodes: TreeNode[]): string[] {
+  const out: string[] = [];
+  const walk = (n: TreeNode) => { if (n.dir) { out.push(n.rel); n.children.forEach(walk); } };
+  nodes.forEach(walk);
+  return out;
+}
 function sortChildren(nodes: TreeNode[]): TreeNode[] {
   return [...nodes].sort((a, b) => (a.dir === b.dir ? a.name.localeCompare(b.name) : a.dir ? -1 : 1));
 }
@@ -229,7 +235,13 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
 
       {step === 'tree' && (
         <div>
-          <div className="text-[11px] text-txt3 mb-2">{t('import.gitignoreHint')}</div>
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="text-[11px] text-txt3 min-w-0 flex-1">{t('import.gitignoreHint')}</div>
+            <div className="flex gap-3 text-[11px] shrink-0">
+              <button className="text-txt3 hover:text-clay" onClick={() => setCollapsed({})}>{t('common.expandAll')}</button>
+              <button className="text-txt3 hover:text-clay" onClick={() => setCollapsed(Object.fromEntries(allDirRels(tree).map((r) => [r, true])))}>{t('common.collapseAll')}</button>
+            </div>
+          </div>
           {progressBar}
           <div className="max-h-[46vh] overflow-auto scrolly border border-line rounded mb-3">
             {sortChildren(tree).map((n) => renderNode(n, 0))}

@@ -44,18 +44,31 @@ export function buildTree(files: FileItem[]): Node[] {
 
 function fmtSize(n: number) { return n >= 1024 ? `${(n / 1024).toFixed(1)}KB` : `${n}B`; }
 
-function TreeNode({ node, depth, onOpen, selected }: { node: Node; depth: number; onOpen: (p: string) => void; selected: string | null }) {
-  const [open, setOpen] = useState(depth < 1); // top level expanded by default
+// Collect every directory path in the tree (for expand-all / collapse-all).
+export function allDirPaths(nodes: Node[]): string[] {
+  const out: string[] = [];
+  const walk = (n: Node) => { if (n.dir) { out.push(n.path); n.children.forEach(walk); } };
+  nodes.forEach(walk);
+  return out;
+}
+
+// Open state is controlled by the parent (a path->bool map) so expand-all/collapse-all can drive
+// every node at once; an unset path falls back to the default (top level open, deeper closed).
+function TreeNode({ node, depth, onOpen, selected, openMap, setOpenMap }: {
+  node: Node; depth: number; onOpen: (p: string) => void; selected: string | null;
+  openMap: Record<string, boolean>; setOpenMap: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
+}) {
   if (node.dir) {
+    const open = openMap[node.path] ?? (depth < 1); // top level expanded by default
     return (
       <div>
         <div className="flex items-center gap-1 py-0.5 cursor-pointer hover:bg-line rounded text-xs"
-          style={{ paddingLeft: depth * 12 + 4 }} onClick={() => setOpen(!open)}>
+          style={{ paddingLeft: depth * 12 + 4 }} onClick={() => setOpenMap((m) => ({ ...m, [node.path]: !(m[node.path] ?? (depth < 1)) }))}>
           <span className="text-txt3 w-3">{open ? '▾' : '▸'}</span><span>📁</span>
           <span className="truncate">{node.name}</span>
           <span className="text-txt3 text-[10px] ml-1">{node.children.length}</span>
         </div>
-        {open && node.children.map((c) => <TreeNode key={c.path} node={c} depth={depth + 1} onOpen={onOpen} selected={selected} />)}
+        {open && node.children.map((c) => <TreeNode key={c.path} node={c} depth={depth + 1} onOpen={onOpen} selected={selected} openMap={openMap} setOpenMap={setOpenMap} />)}
       </div>
     );
   }
@@ -90,6 +103,7 @@ export function FileExplorer({
   const [file, setFile] = useState<{ name: string; content: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [mdRaw, setMdRaw] = useState(false); // markdown: false=rendered, true=source
+  const [openMap, setOpenMap] = useState<Record<string, boolean>>({}); // dir path -> open (expand/collapse-all)
 
   useEffect(() => {
     loadTree().then(setTree).catch((e) => useStore.getState().setError(e.message));
@@ -124,10 +138,18 @@ export function FileExplorer({
         </div>
       )}
       <div className="grid gap-2 h-[68vh] md:h-[60vh] grid-cols-1 grid-rows-[38%_minmax(0,1fr)] md:grid-cols-[260px_minmax(0,1fr)] md:grid-rows-1">
-        <div className="border border-line rounded overflow-auto scrolly p-1 min-h-0">
-          {!tree && <div className="text-txt3 text-xs p-2">{t('fileExplorer.loading')}</div>}
-          {tree && list.length === 0 && <div className="text-txt3 text-xs p-2">{t('fileExplorer.noFiles')}</div>}
-          {nodes.map((n) => <TreeNode key={n.path} node={n} depth={0} onOpen={openFile} selected={sel} />)}
+        <div className="border border-line rounded flex flex-col min-h-0 overflow-hidden">
+          {nodes.length > 0 && (
+            <div className="flex gap-3 px-2 py-1 border-b border-line text-[11px] shrink-0">
+              <button className="text-txt3 hover:text-clay" onClick={() => setOpenMap(Object.fromEntries(allDirPaths(nodes).map((p) => [p, true])))}>{t('common.expandAll')}</button>
+              <button className="text-txt3 hover:text-clay" onClick={() => setOpenMap(Object.fromEntries(allDirPaths(nodes).map((p) => [p, false])))}>{t('common.collapseAll')}</button>
+            </div>
+          )}
+          <div className="overflow-auto scrolly p-1 min-h-0 flex-1">
+            {!tree && <div className="text-txt3 text-xs p-2">{t('fileExplorer.loading')}</div>}
+            {tree && list.length === 0 && <div className="text-txt3 text-xs p-2">{t('fileExplorer.noFiles')}</div>}
+            {nodes.map((n) => <TreeNode key={n.path} node={n} depth={0} onOpen={openFile} selected={sel} openMap={openMap} setOpenMap={setOpenMap} />)}
+          </div>
         </div>
         <div className="border border-line rounded overflow-auto scrolly bg-bg min-w-0 min-h-0">
           {!sel && <div className="text-txt3 text-xs p-3">{t('fileExplorer.selectFilePrompt')}</div>}
