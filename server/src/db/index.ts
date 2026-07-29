@@ -97,6 +97,17 @@ CREATE TABLE IF NOT EXISTS admin_requests (
   created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_admin_requests_requester ON admin_requests(requester_id, created_at);
+CREATE TABLE IF NOT EXISTS dm_channels (
+  id TEXT PRIMARY KEY, kind TEXT NOT NULL, name TEXT, created_by TEXT NOT NULL, created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS dm_members (
+  channel_id TEXT NOT NULL, user_id TEXT NOT NULL, last_read_at INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (channel_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS dm_messages (
+  id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, user_id TEXT NOT NULL, text TEXT NOT NULL, created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_dm_messages_channel ON dm_messages(channel_id, created_at);
 `;
 
 export let sqlite: Database.Database;

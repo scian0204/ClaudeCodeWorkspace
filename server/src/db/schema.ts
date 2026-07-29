@@ -208,6 +208,33 @@ export const adminRequests = sqliteTable('admin_requests', {
   updatedAt: integer('updated_at').notNull(),
 });
 
+// ── Direct messages / group chat ──
+// A lightweight human-to-human messaging layer, entirely separate from Claude "rooms". No Claude
+// turns, no queue — just person-to-person and group text chat. A 'dm' channel is a deduped 1:1;
+// a 'group' channel has a name + any number of members. An admin can promote a group to a common
+// project room (see rooms.createRoom in dm.promoteToRoom).
+export const dmChannels = sqliteTable('dm_channels', {
+  id: text('id').primaryKey(),
+  kind: text('kind').notNull(),        // 'dm' | 'group'
+  name: text('name'),                  // null for dm; group display name
+  createdBy: text('created_by').notNull(),
+  createdAt: integer('created_at').notNull(),
+});
+
+export const dmMembers = sqliteTable('dm_members', {
+  channelId: text('channel_id').notNull(),
+  userId: text('user_id').notNull(),
+  lastReadAt: integer('last_read_at').notNull().default(0), // unread = messages newer than this
+});
+
+export const dmMessages = sqliteTable('dm_messages', {
+  id: text('id').primaryKey(),
+  channelId: text('channel_id').notNull(),
+  userId: text('user_id').notNull(),
+  text: text('text').notNull(),
+  createdAt: integer('created_at').notNull(),
+});
+
 // Git remote credentials (HTTPS PAT), encrypted at rest. Mirrors the Claude-token model:
 // per-user creds override an admin-managed common cred, resolved by remote host.
 export const gitCredentials = sqliteTable('git_credentials', {

@@ -117,6 +117,26 @@ const sock = {
       } else if (cont) later(150, cont);
       return sock;
     }
+    if (event === 'dm:send') {
+      const { channelId, text } = args[0] || {};
+      const clean = String(text || '').trim();
+      if (!clean) return sock;
+      const msg = { id: `dm_${rid()}`, channelId, userId: db.me.id, text: clean, createdAt: Date.now() };
+      (db.dmMessages[channelId] || (db.dmMessages[channelId] = [])).push(msg);
+      deliver('dm:message', { channelId, message: msg });
+      // canned reply from another member so the thread feels alive in the static demo
+      const ch = db.dmChannels.find((c: any) => c.id === channelId);
+      const other = ch?.members.find((m: any) => m.userId !== db.me.id);
+      if (other) later(900, () => {
+        const r = { id: `dm_${rid()}`, channelId, userId: other.userId, text: `👍 "${clean.slice(0, 40)}" 확인했어요!`, createdAt: Date.now() };
+        db.dmMessages[channelId].push(r);
+        deliver('dm:message', { channelId, message: r });
+      });
+      return sock;
+    }
+    if (event === 'dm:read') {
+      const ch = db.dmChannels.find((c: any) => c.id === args[0]?.channelId); if (ch) ch.unread = 0; return sock;
+    }
     if (event === 'chat:interrupt' || event === 'chat:cancel') {
       clearTimers(); waiting.clear();
       const sessionId = args[0]?.sessionId;

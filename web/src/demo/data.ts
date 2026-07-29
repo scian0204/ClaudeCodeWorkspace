@@ -19,6 +19,7 @@ const U_SAM = { id: 'u_sam', username: 'sam', role: 'member', displayName: 'Sam 
 const member = (u: any, isOwner = false, delegations: string[] = []) => ({
   userId: u.id, displayName: u.displayName, avatarColor: u.avatarColor, username: u.username, isOwner, delegations, joinedAt: ago(500),
 });
+const dmMember = (u: any) => ({ userId: u.id, displayName: u.displayName, avatarColor: u.avatarColor, avatar: (u as any).avatar ?? null, username: u.username });
 
 // ---- message builders ------------------------------------------------------
 let mid = 0;
@@ -188,6 +189,27 @@ export const db = {
     { id: 'rv_142', chatSessionId: 'cs_rv_142', repoId: 'rr_web', repoName: 'acme/webapp', prNumber: 142, prTitle: 'Add rate limiting to the API', prUrl: 'https://github.com/acme/webapp/pull/142', prState: 'open', authorLogin: 'jamie', mergeState: 'merged', verdict: 'merge_safe', verdictSummary: '테스트 46개 통과, 회귀 없음. 병합 가능.', readOnly: false, updatedAt: ago(13) },
     { id: 'rv_139', chatSessionId: 'cs_rv_139', repoId: 'rr_web', repoName: 'acme/webapp', prNumber: 139, prTitle: 'Fix flaky nightly export test', prUrl: 'https://github.com/acme/webapp/pull/139', prState: 'open', authorLogin: 'riley', mergeState: 'none', verdict: 'none', verdictSummary: null, readOnly: false, updatedAt: ago(120) },
   ] as any[],
+  // DM + group chat channels (lightweight human messaging — no Claude)
+  dmChannels: [
+    { id: 'dm_jamie', kind: 'dm', name: null, createdBy: ME.id, createdAt: ago(400),
+      members: [dmMember(ME), dmMember(U_JAMIE)],
+      lastMessage: { text: '스탠드업 5분 늦어요 🙏', createdAt: ago(8), userId: U_JAMIE.id }, unread: 1 },
+    { id: 'dm_lunch', kind: 'group', name: '점심 모임', createdBy: ME.id, createdAt: ago(600),
+      members: [dmMember(ME), dmMember(U_JAMIE), dmMember(U_RILEY)],
+      lastMessage: { text: '12시 로비에서 봐요', createdAt: ago(40), userId: U_RILEY.id }, unread: 0 },
+  ] as any[],
+  dmMessages: {
+    dm_jamie: [
+      { id: 'dmm1', channelId: 'dm_jamie', userId: ME.id, text: '어제 배포 잘 됐나요?', createdAt: ago(30) },
+      { id: 'dmm2', channelId: 'dm_jamie', userId: U_JAMIE.id, text: '네 문제 없었어요! 로그도 깨끗합니다.', createdAt: ago(28) },
+      { id: 'dmm3', channelId: 'dm_jamie', userId: U_JAMIE.id, text: '스탠드업 5분 늦어요 🙏', createdAt: ago(8) },
+    ],
+    dm_lunch: [
+      { id: 'dml1', channelId: 'dm_lunch', userId: ME.id, text: '오늘 점심 뭐 먹을까요?', createdAt: ago(60) },
+      { id: 'dml2', channelId: 'dm_lunch', userId: U_JAMIE.id, text: '국밥 콜?', createdAt: ago(55) },
+      { id: 'dml3', channelId: 'dm_lunch', userId: U_RILEY.id, text: '12시 로비에서 봐요', createdAt: ago(40) },
+    ],
+  } as Record<string, any[]>,
   // member request → admin approval queue (approval workflow demo)
   requests: [
     { id: 'req_1', requesterId: U_JAMIE.id, type: 'common_project', payload: JSON.stringify({ name: 'shared-tools' }), reason: '팀 공용 스크립트 저장소가 필요합니다', status: 'pending', reviewerId: null, decidedAt: null, result: null, createdAt: ago(30), updatedAt: ago(30) },

@@ -60,7 +60,7 @@ export function route(method: string, rawPath: string, body?: any): Res {
   if (P === '/api/auth/me/avatar') { db.me.avatar = M === 'DELETE' ? null : (b.avatarDataUrl || db.me.avatar); return ok({ user: db.me }); }
 
   // ---- client-facing config (model dropdown) ----
-  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, processPollMs: 5000 });
+  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, processPollMs: 5000 });
 
   // ---- member requests (approval workflow) ----
   if (P === '/api/requests/actions') return ok({ actions: REQUEST_ACTIONS });
@@ -291,6 +291,40 @@ export function route(method: string, rawPath: string, body?: any): Res {
       repo: repo ? { id: repo.id, name: repo.name, provider: repo.provider, host: repo.host, slug: repo.slug } : null,
       role: 'admin',
     });
+  }
+
+  // ---- DM / group chat ----
+  if (P === '/api/dm/channels' && M === 'GET') return ok({ channels: db.dmChannels });
+  if (P === '/api/dm/channels' && M === 'POST') {
+    const memberInfo = (u: any) => ({ userId: u.id, displayName: u.displayName, avatarColor: u.avatarColor, avatar: u.avatar ?? null, username: u.username });
+    if (b.kind === 'dm') {
+      const other = db.users.find((u: any) => u.id === b.userId);
+      let ch = db.dmChannels.find((c: any) => c.kind === 'dm'
+        && c.members.some((m: any) => m.userId === b.userId) && c.members.some((m: any) => m.userId === db.me.id));
+      if (!ch) {
+        ch = { id: genId('dm'), kind: 'dm', name: null, createdBy: db.me.id, createdAt: Date.now(),
+          members: [memberInfo(db.me), other && memberInfo(other)].filter(Boolean), lastMessage: null, unread: 0 };
+        db.dmChannels.unshift(ch); db.dmMessages[ch.id] = [];
+      }
+      return ok({ channel: ch });
+    }
+    const picked = (Array.isArray(b.memberIds) ? b.memberIds : []).map((id: string) => db.users.find((u: any) => u.id === id)).filter(Boolean);
+    const members = [memberInfo(db.me), ...picked.map(memberInfo)].filter((m: any, i: number, a: any[]) => a.findIndex((x) => x.userId === m.userId) === i);
+    const ch = { id: genId('dm'), kind: 'group', name: b.name || 'Group', createdBy: db.me.id, createdAt: Date.now(), members, lastMessage: null, unread: 0 };
+    db.dmChannels.unshift(ch); db.dmMessages[ch.id] = [];
+    return ok({ channel: ch });
+  }
+  if (seg[1] === 'dm' && seg[2] === 'channels' && seg[4] === 'messages' && M === 'GET') return ok({ messages: db.dmMessages[idAt(3)] || [] });
+  if (seg[1] === 'dm' && seg[2] === 'channels' && seg[4] === 'read' && M === 'POST') {
+    const c = db.dmChannels.find((x: any) => x.id === idAt(3)); if (c) c.unread = 0; return ok({ ok: true });
+  }
+  if (seg[1] === 'dm' && seg[2] === 'channels' && seg[4] === 'promote' && M === 'POST') {
+    const c = db.dmChannels.find((x: any) => x.id === idAt(3));
+    const cs = genId('cs');
+    const room = { id: genId('r'), name: c?.name || 'Group', ownerId: db.me.id, chatSessionId: cs, permissionMode: 'default',
+      members: (c?.members || []).map((m: any) => ({ userId: m.userId, displayName: m.displayName, avatarColor: m.avatarColor, username: m.username, isOwner: m.userId === db.me.id, delegations: [], joinedAt: Date.now() })) };
+    db.rooms.unshift(room); db.messages[cs] = [];
+    return ok({ roomId: room.id });
   }
 
   // ---- admin ----

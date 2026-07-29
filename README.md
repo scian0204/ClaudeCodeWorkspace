@@ -39,6 +39,7 @@ The Claude Code CLI is powerful, but it's tied to **one terminal — yours**. Cl
 
 - Everyone connects via browser → **their own isolated Claude Code session**
 - Gather in a **shared room** to drive one Claude together (like a group chat)
+- **DM a teammate or spin up a group chat** — plain person-to-person text (no Claude); an admin can promote a group to a common project room
 - Risky actions that need approval → **approve/deny live, in the browser**
 - Open **VS Code (code-server)** right there for editing, terminal, and git
 - **Commit & push** a cloned repo from the chat header (or let Claude do it) with encrypted per-user git credentials
@@ -73,6 +74,7 @@ The Claude Code CLI is powerful, but it's tied to **one terminal — yours**. Cl
 | 🧹 | **Resource cleanup (host Docker included)** | An admin **Resources** tab scans app-spawned containers (code-server editors + review sandboxes, with orphan detection), referenced + dangling images, and orphaned dirs/DB rows — then cleans them per-resource or via a double-confirmed **full reset**. Only ever removes spawned containers, dangling images, and genuine orphans; user/room projects, accounts, and chat sessions are never touched. Gated by `resourceCleanupEnabled`. |
 | 🎛 | **Activity / process manager** | An admin **Activity** tab is a live task-manager over everything the server runs: in-flight Claude turns, queued messages, code-server editor + review-sandbox containers, and running review pipelines — each with a per-row control (interrupt / cancel / kill). Auto-polls while open (`processPollMs`). |
 | 🙋 | **Member requests → admin approval** | Members request admin-only actions (create a common project, create an LLM Wiki topic, request the admin role) with a reason; admins approve/reject from a **Requests** tab (pending badge included). On approval the server runs the action and stores the result — a small action registry, so new requestable actions are a one-place add. A role upgrade only ever promotes the requester, never a payload-named user. Gated by `approvalsEnabled`. |
+| 💬 | **DM & group chat** | A lightweight human messaging layer for **every** user, fully separate from the Claude rooms — plain 1:1 DMs and named group channels over WebSocket, with unread badges. No Claude, no queue. A DM between the same two people is deduped; every read/post is membership-gated server-side. An admin can **promote a group channel to a common project room** (seeded with its members). Gated by `dmEnabled`. |
 | 🔑 | **Fully functional without a key** | With no token anywhere, it runs in **MOCK mode** — streaming, permissions, and tool-card UX all demoable. Ideal for evaluation, demos, CI. |
 | 🐳 | **One-shot deploy** | Multi-stage single image + `docker compose up`. code-server spawns dynamically as sibling containers (no orchestrator needed). |
 | 🗂 | **Folded context history** | Each `/clear` or `/compact` collapses the conversation above it into a stacked, timestamped toggle — history stays one click away instead of scrolling forever. |

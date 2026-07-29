@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useStore, type ReviewSessionSummary, type ReviewRepo } from '../lib/store';
+import { useStore, type ReviewSessionSummary, type ReviewRepo, type DmChannel } from '../lib/store';
 import { api, type UploadState } from '../lib/api';
 import { Avatar, avatarUrl, timeAgo, LangToggle } from '../lib/ui';
 import { Modal } from './Modal';
@@ -8,13 +8,16 @@ import { UploadProgress } from './UploadProgress';
 import { useT } from '../lib/i18n';
 
 export function Sidebar() {
-  const { user, sessions, rooms, wikiTopics, current, openPrivate, openRoom, openWiki, newSession, newRoom, logout, setPanel, panel, deleteSession, deleteRoom, deleteWikiTopic, renameSession, sidebarOpen, setSidebarOpen, sessionImportEnabled, pendingRequestCount } = useStore();
+  const { user, sessions, rooms, wikiTopics, current, openPrivate, openRoom, openWiki, newSession, newRoom, logout, setPanel, panel, deleteSession, deleteRoom, deleteWikiTopic, renameSession, sidebarOpen, setSidebarOpen, sessionImportEnabled, pendingRequestCount, channels, activeChannelId, openChannel, dmEnabled } = useStore();
   const [showRoom, setShowRoom] = useState(false);
   const [roomName, setRoomName] = useState('');
   const [showWiki, setShowWiki] = useState(false);
+  const [showDm, setShowDm] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const isAdmin = user?.role === 'admin';
   const t = useT();
+
+  const channelLabel = (ch: DmChannel) => (ch.kind === 'group' ? (ch.name || t('dm.group')) : (ch.members.find((m) => m.userId !== user?.id)?.displayName || t('dm.dm')));
 
   const create = async () => { if (!roomName.trim()) return; await newRoom(roomName.trim()); setRoomName(''); setShowRoom(false); };
 
@@ -68,6 +71,23 @@ export function Sidebar() {
           </Item>
         ))}
 
+        {dmEnabled && <>
+          <Section label={t('dm.section')} onAdd={() => setShowDm(true)} />
+          {channels.length === 0 && <div className="text-[11px] text-txt3 px-2 py-1">{t('common.none')}</div>}
+          {channels.map((ch) => {
+            const other = ch.kind === 'dm' ? ch.members.find((m) => m.userId !== user?.id) : undefined;
+            return (
+              <Item key={ch.id} active={panel === null && activeChannelId === ch.id} onClick={() => openChannel(ch.id)}>
+                {ch.kind === 'group'
+                  ? <span className="w-[18px] h-[18px] rounded-full grid place-items-center text-[10px] shrink-0" style={{ background: 'var(--line2, #888)' }}>👥</span>
+                  : <Avatar name={other?.displayName} color={other?.avatarColor} src={avatarUrl(other && { id: other.userId, avatar: other.avatar })} size={18} />}
+                <span className="flex-1 truncate text-[13px]">{channelLabel(ch)}</span>
+                {ch.unread > 0 && <span className="text-[10px] bg-clay text-white px-1.5 py-0.5 rounded-full font-semibold min-w-[18px] text-center">{ch.unread}</span>}
+              </Item>
+            );
+          })}
+        </>}
+
         <Section label="LLM Wiki" onAdd={isAdmin ? () => setShowWiki(true) : undefined} />
         {wikiTopics.length === 0 && <div className="text-[11px] text-txt3 px-2 py-1">{isAdmin ? t('sidebar.createTopicHint') : t('common.none')}</div>}
         {wikiTopics.map((wt) => (
@@ -116,6 +136,7 @@ export function Sidebar() {
       </Modal>
 
       {showWiki && <WikiCreateModal onClose={() => setShowWiki(false)} />}
+      {showDm && <NewChannelModal onClose={() => setShowDm(false)} />}
       {importOpen && sessionImportEnabled && <ImportSessionModal onClose={() => setImportOpen(false)} />}
     </aside>
   );
@@ -251,6 +272,69 @@ function WikiCreateModal({ onClose }: { onClose: () => void }) {
           {busy ? t('common.creating') : files.length ? t('sidebar.confirmWithCount', { count: files.length }) : t('common.confirm')}
         </button>
       </div>
+    </Modal>
+  );
+}
+
+// Start a DM (pick one user) or create a group (name + pick many). Reuses the directory picker
+// pattern from MembersDialog.
+function NewChannelModal({ onClose }: { onClose: () => void }) {
+  const { user, createDm, createGroup, setError } = useStore();
+  const [mode, setMode] = useState<'dm' | 'group'>('dm');
+  const [dir, setDir] = useState<{ id: string; displayName: string; avatarColor: string; avatar: string | null }[]>([]);
+  const [groupName, setGroupName] = useState('');
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const t = useT();
+
+  useEffect(() => { api.get('/api/users/directory').then((r) => setDir(r.users)).catch(() => {}); }, []);
+  const candidates = dir.filter((d) => d.id !== user?.id);
+
+  const startDm = async (userId: string) => {
+    setBusy(true);
+    try { await createDm(userId); onClose(); } catch (e: any) { setError(e.message); setBusy(false); }
+  };
+  const toggle = (id: string) => {
+    const next = new Set(picked); next.has(id) ? next.delete(id) : next.add(id); setPicked(next);
+  };
+  const create = async () => {
+    if (!groupName.trim()) { setError(t('dm.groupNameRequired')); return; }
+    setBusy(true);
+    try { await createGroup(groupName.trim(), [...picked]); onClose(); } catch (e: any) { setError(e.message); setBusy(false); }
+  };
+
+  return (
+    <Modal open onOpenChange={(o) => { if (!o) onClose(); }} title={t('dm.newTitle')} width={420}>
+      <div className="flex gap-2 mb-3">
+        <button className={`text-xs px-3 py-1 rounded-full border ${mode === 'dm' ? 'bg-claysoft border-clay text-clay' : 'border-line text-txt3'}`} onClick={() => setMode('dm')}>{t('dm.tabDm')}</button>
+        <button className={`text-xs px-3 py-1 rounded-full border ${mode === 'group' ? 'bg-claysoft border-clay text-clay' : 'border-line text-txt3'}`} onClick={() => setMode('group')}>{t('dm.tabGroup')}</button>
+      </div>
+
+      {mode === 'group' && (
+        <input className="input mb-2" placeholder={t('dm.groupNamePlaceholder')} value={groupName} autoFocus
+          onChange={(e) => setGroupName(e.target.value)} />
+      )}
+
+      <div className="max-h-64 overflow-auto scrolly border border-line rounded divide-y divide-line mb-3">
+        {candidates.length === 0 && <div className="text-[11px] text-txt3 px-2 py-1.5">{t('common.none')}</div>}
+        {candidates.map((d) => (
+          <button key={d.id} disabled={busy}
+            className="flex items-center gap-2 px-2.5 py-2 w-full text-left hover:bg-line disabled:opacity-50"
+            onClick={() => (mode === 'dm' ? startDm(d.id) : toggle(d.id))}>
+            <Avatar name={d.displayName} color={d.avatarColor} src={avatarUrl(d)} size={24} />
+            <span className="flex-1 truncate text-[13px]">{d.displayName}</span>
+            {mode === 'group' && <span className={`text-sm ${picked.has(d.id) ? 'text-clay' : 'text-txt3'}`}>{picked.has(d.id) ? '☑' : '☐'}</span>}
+          </button>
+        ))}
+      </div>
+
+      {mode === 'group' && (
+        <div className="flex justify-end gap-2">
+          <button className="btn-ghost" onClick={onClose} disabled={busy}>{t('common.cancel')}</button>
+          <button className="btn-primary" onClick={create} disabled={busy || !groupName.trim()}>{busy ? t('common.creating') : t('dm.createGroup')}</button>
+        </div>
+      )}
+      {mode === 'dm' && <div className="text-[11px] text-txt3">{t('dm.dmPickHint')}</div>}
     </Modal>
   );
 }

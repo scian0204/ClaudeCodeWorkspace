@@ -20,6 +20,7 @@ import { adminRoutes } from './routes/admin.js';
 import { gitCredentialRoutes } from './routes/git-credentials.js';
 import { reviewRoutes } from './routes/review.js';
 import { requestRoutes } from './routes/requests.js';
+import { dmRoutes } from './routes/dm.js';
 import { startReviewPoller, reapReviewOrphans } from './review/manager.js';
 import { cleanupSandboxOrphans } from './review/sandbox.js';
 import { initRealtime } from './realtime/io.js';
@@ -70,6 +71,7 @@ async function main() {
   await app.register(gitCredentialRoutes);
   await app.register(reviewRoutes);
   await app.register(requestRoutes);
+  await app.register(dmRoutes);
 
   app.get('/api/health', async () => ({ ok: true, mock: cfg.bool('forceMock') }));
 

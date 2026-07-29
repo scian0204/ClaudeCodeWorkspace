@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useStore } from '../lib/store';
 import { Sidebar } from './Sidebar';
 import { Chat } from './Chat';
+import { DmView } from './DmView';
 import { AdminPanel } from './AdminPanel';
 import { PluginsPanel } from './PluginsPanel';
 import { MyPage } from './MyPage';
@@ -41,6 +42,7 @@ function Toast({ msg, onClose }: { msg: string; onClose: () => void }) {
 
 export function Shell() {
   const current = useStore((s) => s.current);
+  const activeChannelId = useStore((s) => s.activeChannelId);
   const panel = useStore((s) => s.panel);
   const error = useStore((s) => s.error);
   const setError = useStore((s) => s.setError);
@@ -60,7 +62,7 @@ export function Shell() {
       {sidebarOpen && <div className="fixed inset-0 bg-black/40 z-40 md:hidden" onClick={() => setSidebarOpen(false)} />}
       <Sidebar />
       <main className="min-w-0 min-h-0 h-full bg-panel flex flex-col">
-        {panel === 'admin' ? <AdminPanel /> : panel === 'plugins' ? <PluginsPanel /> : panel === 'me' ? <MyPage /> : current ? <Chat /> : <Empty />}
+        {panel === 'admin' ? <AdminPanel /> : panel === 'plugins' ? <PluginsPanel /> : panel === 'me' ? <MyPage /> : activeChannelId ? <DmView /> : current ? <Chat /> : <Empty />}
       </main>
       {error && <Toast msg={error} onClose={() => setError(null)} />}
       <MyTokenModal open={showNag} nag onClose={() => setNagDismissed(true)} />

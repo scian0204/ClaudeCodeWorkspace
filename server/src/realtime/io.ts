@@ -8,12 +8,27 @@ import { interruptTurn, liveTurn, postChat } from '../claude/session-manager.js'
 import { respondPermission, pendingForSession, type Decision } from '../claude/permissions.js';
 import * as rooms from '../rooms/manager.js';
 import * as review from '../review/manager.js';
+import * as dm from '../rooms/dm.js';
 import { cfg } from '../lib/config-registry.js';
 import { isBareBasename } from '../lib/attachments.js';
 
 export let io: IOServer;
 
 function sessionRoom(id: string) { return `session:${id}`; }
+function dmRoom(id: string) { return `dm:${id}`; }
+function userRoom(id: string) { return `user:${id}`; } // per-user room: fan out DM joins/nudges to all a user's tabs
+
+// Called from the DM routes when a channel is created / a member is added: pull every listed user's
+// live sockets into the channel room so they receive dm:message without reconnecting.
+export function dmJoinUsers(channelId: string, userIds: string[]) {
+  if (!io) return;
+  for (const uid of userIds) io.in(userRoom(uid)).socketsJoin(dmRoom(channelId));
+}
+// Light "your channel list changed" ping (new channel / unread reset) so a user's other tabs refresh.
+export function dmNudge(userIds: string[]) {
+  if (!io) return;
+  for (const uid of userIds) io.to(userRoom(uid)).emit('dm:channels');
+}
 
 function getChat(sessionId: string) {
   return db.select().from(schema.chatSessions).where(eq(schema.chatSessions.id, sessionId)).get();
@@ -66,6 +81,32 @@ export function initRealtime(httpServer: HttpServer) {
 
   io.on('connection', (socket) => {
     const user = (socket.data as any).user as AuthUser;
+
+    // Per-user room + auto-join every DM/group channel the user belongs to (re-runs on reconnect).
+    socket.join(userRoom(user.id));
+    if (cfg.bool('dmEnabled')) for (const id of dm.channelIdsForUser(user.id)) socket.join(dmRoom(id));
+
+    // ── DM / group chat (pure human text; never routed through the Claude turn/queue path) ──
+    // Payload TS types are compile-time only — a raw socket client can send anything, so coerce to
+    // strings before any DB/trim use. A non-string would throw inside socket.io's dispatch (uncaught,
+    // no global uncaughtException handler) = whole-process crash reachable by any authed user.
+    socket.on('dm:send', (p: any, ack?: Function) => {
+      if (!cfg.bool('dmEnabled')) { ack?.({ error: 'disabled' }); return; }
+      const channelId = typeof p?.channelId === 'string' ? p.channelId : '';
+      if (!channelId || !dm.isMember(channelId, user.id)) { ack?.({ error: 'no access' }); return; }
+      const message = dm.postMessage(channelId, user.id, typeof p?.text === 'string' ? p.text : ''); // re-validates membership + caps length
+      if (!message) { ack?.({ error: 'empty' }); return; }
+      io.to(dmRoom(channelId)).emit('dm:message', { channelId, message });
+      ack?.({ ok: true });
+    });
+
+    socket.on('dm:read', (p: any) => {
+      if (!cfg.bool('dmEnabled')) return;
+      const channelId = typeof p?.channelId === 'string' ? p.channelId : '';
+      if (!channelId || !dm.isMember(channelId, user.id)) return;
+      dm.markRead(channelId, user.id);
+      io.to(userRoom(user.id)).emit('dm:channels'); // other tabs refresh unread
+    });
 
     socket.on('session:join', async (sessionId: string, ack?: Function) => {
       const a = access(user, sessionId);
