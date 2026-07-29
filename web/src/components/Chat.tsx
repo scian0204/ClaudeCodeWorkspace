@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as DM from '@radix-ui/react-dropdown-menu';
-import { useStore, type Block, type Msg, type Attachment } from '../lib/store';
+import { useStore, type Block, type Msg, type Attachment, type Project } from '../lib/store';
+import { ProjectCreateForm } from './ProjectCreateForm';
 import { api, type UploadState } from '../lib/api';
 import { UploadProgress } from './UploadProgress';
 import { Avatar, timeAgo, useIsMobile, MobileMenuButton } from '../lib/ui';
@@ -17,7 +18,7 @@ import {
   IconGauge, IconEye, IconBook, IconArchive, IconSparkle, IconCopy, IconPencil, IconHelp,
   IconTerminal, IconX, IconPaperclip, IconSend, IconShield, IconBolt, IconCheckSquare, IconCrown,
   IconGitBranch, IconClock, IconCheckCircle, IconBan, IconWarning, IconLink, IconRotateCcw,
-  IconCheck, IconRefresh, IconSquare, IconDownload, IconPlus, IconMessage,
+  IconCheck, IconRefresh, IconSquare, IconMessage,
 } from '../lib/icons';
 
 const MODELS: Record<string, string> = {
@@ -171,46 +172,30 @@ function Header() {
 function ProjectMenu() {
   const { current: c, projects, setProject, deleteProject } = useStore();
   const [roomProjects, setRoomProjects] = useState<any[]>([]);
-  const [newName, setNewName] = useState('');
-  const [gitUrl, setGitUrl] = useState('');
-  const [branch, setBranch] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [creds, setCreds] = useState<any[]>([]);
-  const [credentialId, setCredentialId] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
-  const refresh = useStore((s) => s.refreshLists);
+  const [scope, setScope] = useState<'user' | 'common'>('user'); // private session: create personal, or request/create common
 
   useEffect(() => {
     if (c?.kind === 'room' && c.roomId) api.get(`/api/projects/room/${c.roomId}`).then((r) => setRoomProjects(r.projects)).catch(() => {});
   }, [c?.roomId, c?.kind]);
-  useEffect(() => { api.get('/api/git-credentials').then((r) => setCreds([...(r.mine || []), ...(r.common || [])])).catch(() => {}); }, []);
 
   const t = useT();
   if (!c) return null;
+  const isRoom = c.kind === 'room';
   const list = [...projects.common.map((p) => ({ ...p, tag: t('chat.tagCommon') })),
-    ...(c.kind === 'room' ? roomProjects.map((p) => ({ ...p, tag: t('chat.tagRoom') })) : projects.mine.map((p) => ({ ...p, tag: t('chat.tagMine') })))];
+    ...(isRoom ? roomProjects.map((p) => ({ ...p, tag: t('chat.tagRoom') })) : projects.mine.map((p) => ({ ...p, tag: t('chat.tagMine') })))];
   const cur = list.find((p) => p.id === c.projectId);
 
-  const create = async () => {
-    const name = newName.trim(); const git = gitUrl.trim();
-    if (!name && !git) return;
-    const scope = c.kind === 'room' ? 'room' : 'user';
-    setBusy(true);
-    try {
-      const { project } = await api.post('/api/projects', { scope, name, roomId: c.roomId, gitUrl: git || undefined, branch: (git && branch.trim()) || undefined, credentialId: (git && credentialId) || undefined });
-      setNewName(''); setGitUrl(''); setBranch(''); await refresh();
-      if (c.kind === 'room') { const r = await api.get(`/api/projects/room/${c.roomId}`); setRoomProjects(r.projects); }
-      await setProject(project.id);
-      setMenuOpen(false);
-    } catch (e: any) { useStore.getState().setError(e.message); }
-    finally { setBusy(false); }
+  const onCreated = async (project: Project) => {
+    if (isRoom && c.roomId) { const r = await api.get(`/api/projects/room/${c.roomId}`); setRoomProjects(r.projects); }
+    await setProject(project.id);
   };
 
   const removeProject = async (p: { id: string; name: string }) => {
     if (!confirm(t('chat.deleteProjectConfirm', { name: p.name }))) return;
     try {
       await deleteProject(p.id);
-      if (c.kind === 'room' && c.roomId) { const r = await api.get(`/api/projects/room/${c.roomId}`); setRoomProjects(r.projects); }
+      if (isRoom && c.roomId) { const r = await api.get(`/api/projects/room/${c.roomId}`); setRoomProjects(r.projects); }
     } catch (e: any) { useStore.getState().setError(e.message); }
   };
 
@@ -230,27 +215,21 @@ function ProjectMenu() {
           </div>
         ))}
         <div className="border-t border-line my-1" />
-        <div className="flex flex-col gap-1 p-1" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-          <input className="input !py-1 !text-xs" placeholder={t('chat.newProjectNamePlaceholder')} value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !gitUrl.trim()) { e.preventDefault(); create(); } }} />
-          <input className="input !py-1 !text-xs" placeholder={t('chat.gitCloneUrlPlaceholder')} value={gitUrl}
-            onChange={(e) => setGitUrl(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); create(); } }} />
-          {gitUrl.trim() && (
-            <input className="input !py-1 !text-xs" placeholder={t('chat.gitBranchPlaceholder')} value={branch}
-              onChange={(e) => setBranch(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); create(); } }} />
+        <div className="flex flex-col gap-1.5 p-1" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+          {!isRoom && (
+            <div className="seg self-start">
+              <button className={scope === 'user' ? 'on' : ''} onClick={() => setScope('user')}>{t('project.scopePersonal')}</button>
+              <button className={scope === 'common' ? 'on' : ''} onClick={() => setScope('common')}>{t('project.scopeCommon')}</button>
+            </div>
           )}
-          {gitUrl.trim() && (
-            <select className="input !py-1 !text-xs" value={credentialId} onChange={(e) => setCredentialId(e.target.value)}>
-              <option value="">{t('chat.credAuto')}</option>
-              {creds.map((cr) => <option key={cr.id} value={cr.id}>[{cr.provider}] {cr.host} · {cr.username}</option>)}
-            </select>
-          )}
-          <button className="btn-ghost !py-1 !text-xs inline-flex items-center gap-1" disabled={busy} onClick={create}>
-            {busy ? t('common.creating') : gitUrl.trim() ? <><IconDownload size={13} />{t('chat.cloneCreate')}</> : <><IconPlus size={13} />{t('chat.createBtn')}</>}
-          </button>
+          <ProjectCreateForm
+            key={isRoom ? 'room' : scope}
+            scope={isRoom ? 'room' : scope}
+            roomId={c.roomId}
+            compact
+            onCreated={onCreated}
+            onDone={() => setMenuOpen(false)}
+          />
         </div>
       </Menu>
     </DM.Root>

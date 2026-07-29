@@ -43,17 +43,74 @@ async function cloneRepo(url: string, dir: string, credEnv?: Record<string, stri
   });
 }
 
-// Create a shared common project (empty working dir, no git). Reused by the member-request approval
-// framework (admin/requests.ts `common_project` action) so approval creates a project the exact same
-// way the admin route does — same sanitizer, same paths root. Throws on a duplicate common name.
-export function createCommonProject(name: string) {
-  const nm = safeName(name);
-  const existing = db.select().from(schema.projects)
-    .where(and(eq(schema.projects.scope, 'common'), eq(schema.projects.name, nm))).get();
-  if (existing) throw new Error(`이미 존재하는 공통 프로젝트: ${nm}`);
-  const dir = path.join(paths.commonProjects, nm);
-  ensure(dir);
-  const row = { id: newId(), scope: 'common', ownerId: null, name: nm, path: dir, createdAt: Date.now() };
+// Typed error so both the HTTP route and the member-request action map failures to the same status
+// codes / messages (route → reply.code(status); request → surfaced via `result`).
+export class ProjectError extends Error {
+  constructor(public status: number, message: string) { super(message); }
+}
+
+export interface ProjectInput { scope?: string; name?: string; roomId?: string; gitUrl?: string; branch?: string; credentialId?: string; }
+
+// Validate git URL + branch + (when a credential is picked) its ownership and host binding — the exact
+// checks the admin route ran inline. No side effects (no token decrypt, no fs), so it's safe to call at
+// member-request SUBMIT time; createProject re-runs it at approval/EXECUTE time (defense in depth: the
+// requester's creds/roles may have changed in between). Throws ProjectError on any invalid input.
+export function validateProjectInput(input: ProjectInput, user: AuthUser): void {
+  const git = input.gitUrl ? String(input.gitUrl).trim() : '';
+  if (git && !validGitUrl(git)) throw new ProjectError(400, '지원하지 않는 저장소 URL (http/https/git/ssh만 가능)');
+  // Branch goes into `git clone --branch <br>` argv. execFile (no shell) blocks injection, but a
+  // leading '-' would still be parsed as an option, so restrict to safe ref chars, no leading '-'.
+  const br = input.branch ? String(input.branch).trim() : '';
+  if (br && !/^(?!-)[\w./-]+$/.test(br)) throw new ProjectError(400, '잘못된 브랜치 이름');
+  if (git && input.credentialId) {
+    const row = getGitCredRow(String(input.credentialId));
+    if (!row) throw new ProjectError(404, 'credential not found');
+    if (!(row.scope === 'common' || (row.scope === 'user' && row.ownerId === user.id)))
+      throw new ProjectError(403, 'forbidden credential');
+    // host binding: never send a stored token to a different host than it belongs to (else a caller
+    // could exfiltrate a PAT to an attacker-controlled clone URL).
+    if (row.host !== hostFromGitUrl(git))
+      throw new ProjectError(400, 'credential host does not match repository URL');
+  }
+}
+
+// Create a project with an optional git clone. Shared by the admin route and the member-request
+// approval (admin/requests.ts `common_project`), so approval performs the SAME clone/validation the
+// admin route would, resolving the credential AS `user`. NOTE: the `scope==='common'` admin gate lives
+// in the route handler, NOT here — approval intentionally creates a common project for a member.
+export async function createProject(input: ProjectInput, user: AuthUser): Promise<typeof schema.projects.$inferSelect> {
+  validateProjectInput(input, user);
+  const git = input.gitUrl ? String(input.gitUrl).trim() : '';
+  const br = input.branch ? String(input.branch).trim() : '';
+  // Resolve a clone credential: explicit pick (already ownership/host-checked above), else auto by host.
+  let cloneEnv: Record<string, string> | undefined;
+  if (git) {
+    const cred = input.credentialId ? resolveGitCredById(String(input.credentialId)) : resolveGitCred(user.id, hostFromGitUrl(git));
+    if (cred) cloneEnv = askpassEnv(cred);
+  }
+  const nm = safeName(input.name || (git ? repoNameFromUrl(git) : ''));
+  let dir: string, ownerId: string | null;
+  if (input.scope === 'common') {
+    dir = path.join(paths.commonProjects, nm); ownerId = null;
+  } else if (input.scope === 'room') {
+    if (user.role !== 'admin' && !rooms.isMember(String(input.roomId), user.id)) throw new ProjectError(403, 'forbidden');
+    dir = path.join(paths.roomProjects(String(input.roomId)), nm); ownerId = String(input.roomId);
+  } else {
+    dir = path.join(paths.userProjects(user.id), nm); ownerId = user.id;
+  }
+  if (git) {
+    if (fs.existsSync(dir) && fs.readdirSync(dir).length) throw new ProjectError(409, `이미 존재하는 이름: ${nm}`);
+    ensure(path.dirname(dir));
+    try {
+      await cloneRepo(git, dir, cloneEnv, br || undefined);
+    } catch (e: any) {
+      try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* noop */ }
+      throw new ProjectError(500, `git clone 실패: ${String(e?.stderr || e?.message || e).slice(0, 300)}`);
+    }
+  } else {
+    ensure(dir);
+  }
+  const row = { id: newId(), scope: input.scope || 'user', ownerId, name: nm, path: dir, createdAt: Date.now() };
   db.insert(schema.projects).values(row).run();
   return row;
 }
@@ -89,58 +146,18 @@ export async function projectRoutes(app: FastifyInstance) {
 
   app.post('/api/projects', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
-    const { scope, name, roomId, gitUrl, credentialId, branch } = (req.body || {}) as any;
-    const git = gitUrl ? String(gitUrl).trim() : '';
-    if (git && !validGitUrl(git)) return reply.code(400).send({ error: '지원하지 않는 저장소 URL (http/https/git/ssh만 가능)' });
-    // Branch goes into `git clone --branch <br>` argv. execFile (no shell) blocks injection, but a
-    // leading '-' would still be parsed as an option, so restrict to safe ref chars, no leading '-'.
-    const br = branch ? String(branch).trim() : '';
-    if (br && !/^(?!-)[\w./-]+$/.test(br)) return reply.code(400).send({ error: '잘못된 브랜치 이름' });
-    // Resolve a clone credential: explicit pick (must be the user's own or a common one), else auto by host.
-    let cloneEnv: Record<string, string> | undefined;
-    if (git) {
-      let cred = null;
-      if (credentialId) {
-        const row = getGitCredRow(String(credentialId));
-        if (!row) return reply.code(404).send({ error: 'credential not found' });
-        if (!(row.scope === 'common' || (row.scope === 'user' && row.ownerId === u.id)))
-          return reply.code(403).send({ error: 'forbidden credential' });
-        // host binding: never send a stored token to a different host than it belongs to
-        // (else a caller could exfiltrate a PAT to an attacker-controlled clone URL).
-        if (row.host !== hostFromGitUrl(git))
-          return reply.code(400).send({ error: 'credential host does not match repository URL' });
-        cred = resolveGitCredById(String(credentialId));
-      } else {
-        cred = resolveGitCred(u.id, hostFromGitUrl(git));
-      }
-      if (cred) cloneEnv = askpassEnv(cred);
+    const body = (req.body || {}) as ProjectInput;
+    // Members reach a common project ONLY through an approved member-request (admin/requests.ts);
+    // the direct route stays admin-only. createProject itself does NOT gate common (approval creates
+    // one for a member on purpose), so the gate must live here.
+    if (body.scope === 'common' && !requireAdmin(req, reply)) return;
+    try {
+      const row = await createProject(body, u);
+      return { project: row };
+    } catch (e: any) {
+      const status = e instanceof ProjectError ? e.status : 500;
+      return reply.code(status).send({ error: String(e?.message || e) });
     }
-    const nm = safeName(name || (git ? repoNameFromUrl(git) : ''));
-    let dir: string, ownerId: string | null;
-    if (scope === 'common') {
-      if (!requireAdmin(req, reply)) return;
-      dir = path.join(paths.commonProjects, nm); ownerId = null;
-    } else if (scope === 'room') {
-      if (u.role !== 'admin' && !rooms.isMember(roomId, u.id)) return reply.code(403).send({ error: 'forbidden' });
-      dir = path.join(paths.roomProjects(roomId), nm); ownerId = roomId;
-    } else {
-      dir = path.join(paths.userProjects(u.id), nm); ownerId = u.id;
-    }
-    if (git) {
-      if (fs.existsSync(dir) && fs.readdirSync(dir).length) return reply.code(409).send({ error: `이미 존재하는 이름: ${nm}` });
-      ensure(path.dirname(dir));
-      try {
-        await cloneRepo(git, dir, cloneEnv, br || undefined);
-      } catch (e: any) {
-        try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* noop */ }
-        return reply.code(500).send({ error: `git clone 실패: ${String(e?.stderr || e?.message || e).slice(0, 300)}` });
-      }
-    } else {
-      ensure(dir);
-    }
-    const row = { id: newId(), scope: scope || 'user', ownerId, name: nm, path: dir, createdAt: Date.now() };
-    db.insert(schema.projects).values(row).run();
-    return { project: row };
   });
 
   app.post('/api/projects/:id/open-editor', async (req, reply) => {

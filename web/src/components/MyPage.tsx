@@ -5,6 +5,7 @@ import { useT } from '../lib/i18n';
 import { MobileMenuButton, Avatar, avatarUrl } from '../lib/ui';
 import { GitCredList } from './GitCredentials';
 import { LlmProviderForm } from './LlmProvider';
+import { ProjectCreateForm } from './ProjectCreateForm';
 import { IconArrowLeft, IconDot, IconFolder, IconUser } from '../lib/icons';
 
 function fmtDate(ms?: number | null) {
@@ -278,20 +279,28 @@ function RequestsSection() {
           {actions.length === 0 && <option value="">{t('requests.noActions')}</option>}
           {actions.map((a) => <option key={a.type} value={a.type}>{reqTypeLabel(t, a.type)}</option>)}
         </select>
-        {action?.fields.map((f) => (
-          f.type === 'textarea'
-            ? <textarea key={f.key} className="input resize-none" rows={2}
-                placeholder={reqFieldLabel(t, f.key) + (f.required ? ' *' : '')} value={fields[f.key] || ''}
-                onChange={(e) => setFields((s) => ({ ...s, [f.key]: e.target.value }))} />
-            : <input key={f.key} className="input"
-                placeholder={reqFieldLabel(t, f.key) + (f.required ? ' *' : '')} value={fields[f.key] || ''}
-                onChange={(e) => setFields((s) => ({ ...s, [f.key]: e.target.value }))} />
-        ))}
-        <textarea className="input resize-none" rows={2} placeholder={t('requests.reasonPlaceholder')}
-          value={reason} onChange={(e) => setReason(e.target.value)} />
-        <div className="flex justify-end">
-          <button className="btn-primary" disabled={busy || !type} onClick={submit}>{busy ? '…' : t('requests.submit')}</button>
-        </div>
+        {/* common_project reuses the real create form (name + git clone URL + branch + credential picker),
+            in request mode for members; other actions keep the generic field-driven form. */}
+        {type === 'common_project' ? (
+          <ProjectCreateForm scope="common" />
+        ) : (
+          <>
+            {action?.fields.map((f) => (
+              f.type === 'textarea'
+                ? <textarea key={f.key} className="input resize-none" rows={2}
+                    placeholder={reqFieldLabel(t, f.key) + (f.required ? ' *' : '')} value={fields[f.key] || ''}
+                    onChange={(e) => setFields((s) => ({ ...s, [f.key]: e.target.value }))} />
+                : <input key={f.key} className="input"
+                    placeholder={reqFieldLabel(t, f.key) + (f.required ? ' *' : '')} value={fields[f.key] || ''}
+                    onChange={(e) => setFields((s) => ({ ...s, [f.key]: e.target.value }))} />
+            ))}
+            <textarea className="input resize-none" rows={2} placeholder={t('requests.reasonPlaceholder')}
+              value={reason} onChange={(e) => setReason(e.target.value)} />
+            <div className="flex justify-end">
+              <button className="btn-primary" disabled={busy || !type} onClick={submit}>{busy ? '…' : t('requests.submit')}</button>
+            </div>
+          </>
+        )}
       </div>
       <div className="space-y-1.5">
         {mine.length === 0 && <div className="text-xs text-txt3">{t('requests.none')}</div>}

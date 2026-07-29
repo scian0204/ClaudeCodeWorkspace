@@ -212,7 +212,7 @@ export const db = {
   } as Record<string, any[]>,
   // member request → admin approval queue (approval workflow demo)
   requests: [
-    { id: 'req_1', requesterId: U_JAMIE.id, type: 'common_project', payload: JSON.stringify({ name: 'shared-tools' }), reason: '팀 공용 스크립트 저장소가 필요합니다', status: 'pending', reviewerId: null, decidedAt: null, result: null, createdAt: ago(30), updatedAt: ago(30) },
+    { id: 'req_1', requesterId: U_JAMIE.id, type: 'common_project', payload: JSON.stringify({ name: 'shared-tools', gitUrl: 'https://github.com/acme/shared-tools.git', branch: 'main' }), reason: '팀 공용 스크립트 저장소가 필요합니다', status: 'pending', reviewerId: null, decidedAt: null, result: null, createdAt: ago(30), updatedAt: ago(30) },
     { id: 'req_2', requesterId: U_RILEY.id, type: 'role_upgrade', payload: '{}', reason: '리뷰 담당이라 관리자 권한이 필요해요', status: 'approved', reviewerId: ME.id, decidedAt: ago(200), result: 'riley 권한을 admin으로 승격', createdAt: ago(300), updatedAt: ago(200) },
   ] as any[],
   // per-chat message history (also used by the socket sim to append turns)
@@ -396,7 +396,13 @@ export const EDITOR_URL = 'data:text/html;charset=utf-8,' + encodeURIComponent(
 
 // requestable admin actions (mirrors the server registry projection from /api/requests/actions)
 export const REQUEST_ACTIONS = [
-  { type: 'common_project', label: 'common_project', fields: [{ key: 'name', type: 'text', required: true }] },
+  // common_project carries the real create-feature fields (name + git clone URL + branch + credential ref)
+  { type: 'common_project', label: 'common_project', fields: [
+    { key: 'name', type: 'text', required: true },
+    { key: 'gitUrl', type: 'text', required: false },
+    { key: 'branch', type: 'text', required: false },
+    { key: 'credentialId', type: 'text', required: false },
+  ] },
   { type: 'wiki_topic', label: 'wiki_topic', fields: [{ key: 'name', type: 'text', required: true }, { key: 'description', type: 'textarea', required: false }] },
   { type: 'role_upgrade', label: 'role_upgrade', fields: [] as any[] },
 ];

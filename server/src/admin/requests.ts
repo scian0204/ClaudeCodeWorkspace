@@ -7,7 +7,7 @@ import { and, desc, eq } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { getUserById, toAuthUser, type AuthUser } from '../auth/index.js';
 import { newId } from '../lib/ids.js';
-import { createCommonProject } from '../routes/projects.js';
+import { createProject, validateProjectInput } from '../routes/projects.js';
 import { createWikiTopic } from '../routes/wiki.js';
 
 export interface ActionField { key: string; type: 'text' | 'textarea'; required: boolean; }
@@ -24,12 +24,32 @@ function reqStr(payload: any, key: string): string {
 }
 
 export const ACTIONS: Record<string, AdminAction> = {
-  // create a shared common project by name
+  // create a shared common project — same rich fields as the real create feature (name + optional git
+  // clone URL + branch + credential reference). The primary UI is the shared ProjectCreateForm; these
+  // fields are the registry metadata (GET /api/requests/actions). Only a credentialId REFERENCE is ever
+  // stored in the payload — never a token/secret.
   common_project: {
     label: 'common_project',
-    fields: [{ key: 'name', type: 'text', required: true }],
-    validate(p) { if (!reqStr(p, 'name')) throw new Error('name required'); },
-    execute(p) { const proj = createCommonProject(reqStr(p, 'name')); return `공통 프로젝트 생성됨: ${proj.name}`; },
+    fields: [
+      { key: 'name', type: 'text', required: true },
+      { key: 'gitUrl', type: 'text', required: false },
+      { key: 'branch', type: 'text', required: false },
+      { key: 'credentialId', type: 'text', required: false },
+    ],
+    validate(p, requester) {
+      if (!reqStr(p, 'name')) throw new Error('name required');
+      // reuse the real create validators (git url / branch / credential ownership+host)
+      validateProjectInput({ gitUrl: reqStr(p, 'gitUrl'), branch: reqStr(p, 'branch'), credentialId: reqStr(p, 'credentialId') || undefined }, requester);
+    },
+    async execute(p, requester) {
+      // re-validates ownership+host and clones AS THE REQUESTER (same path the admin route runs)
+      const proj = await createProject({
+        scope: 'common', name: reqStr(p, 'name'),
+        gitUrl: reqStr(p, 'gitUrl') || undefined, branch: reqStr(p, 'branch') || undefined,
+        credentialId: reqStr(p, 'credentialId') || undefined,
+      }, requester);
+      return `공통 프로젝트 생성됨: ${proj.name}`;
+    },
   },
   // create an LLM Wiki topic; createdBy = the requesting member
   wiki_topic: {
