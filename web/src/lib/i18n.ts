@@ -70,6 +70,8 @@ const ko: Dict = {
   'common.creating': '생성 중…',
   'common.none': '아직 없음',
   'common.errorPrefix': '오류: {msg}',
+  'common.expand': '펼치기',
+  'common.collapse': '접기',
   // infra
   'app.loading': '로딩…',
   'store.selectProjectFirst': '먼저 프로젝트를 선택하세요.',
@@ -567,6 +569,8 @@ const en: Dict = {
   'common.creating': 'Creating…',
   'common.none': 'None yet',
   'common.errorPrefix': 'Error: {msg}',
+  'common.expand': 'Expand',
+  'common.collapse': 'Collapse',
   // infra
   'app.loading': 'Loading…',
   'store.selectProjectFirst': 'Select a project first.',
