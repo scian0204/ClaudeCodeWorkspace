@@ -534,6 +534,28 @@ const ko: Dict = {
   'usage.loading': '불러오는 중…',
   'usage.noContext': '아직 컨텍스트 데이터가 없어요 (대화를 시작하면 표시됩니다).',
   'usage.unavailable': 'API 키 세션은 플랜 한도가 표시되지 않습니다.',
+
+  // import — 로컬 세션 가져오기
+  'import.button': '세션 가져오기',
+  'import.title': '로컬 세션 가져오기',
+  'import.pickProject': '프로젝트 폴더 선택',
+  'import.chooseFolder': '폴더 선택',
+  'import.gitignoreHint': '.gitignore에 걸리는 파일과 .git/ 은 기본적으로 제외됩니다.',
+  'import.essentialLocked': '필수 (제외 불가)',
+  'import.uploadProject': '프로젝트 업로드',
+  'import.claudeGuideTitle': 'Claude 세션 폴더 선택',
+  'import.claudeGuideBody': '~/.claude/projects 아래에서 이 프로젝트에 해당하는 폴더를 고르세요. 폴더 이름은 프로젝트 절대경로의 특수문자를 "-"로 바꾼 형태입니다. (예: {example})',
+  'import.claudePick': '세션 폴더 선택',
+  'import.claudeSkip': '건너뛰기 (프로젝트만 가져오기)',
+  'import.selectSessions': '가져올 세션 선택',
+  'import.selectAll': '전체 선택',
+  'import.sessionMeta': '메시지 {count}개 · {date}',
+  'import.noSessions': '이 폴더에서 세션을 찾지 못했습니다.',
+  'import.projectName': '프로젝트 이름',
+  'import.confirm': '가져오기',
+  'import.cancel': '취소',
+  'import.importing': '가져오는 중…',
+  'import.doneToast': '세션을 가져왔습니다.',
 };
 
 const en: Dict = {
@@ -1009,6 +1031,28 @@ const en: Dict = {
   'usage.loading': 'Loading…',
   'usage.noContext': 'No context data yet (starts once the conversation begins).',
   'usage.unavailable': 'Plan limits are not shown for API-key sessions.',
+
+  // import — local session import
+  'import.button': 'Import session',
+  'import.title': 'Import local session',
+  'import.pickProject': 'Pick project folder',
+  'import.chooseFolder': 'Choose folder',
+  'import.gitignoreHint': 'Files matched by .gitignore and .git/ are excluded by default.',
+  'import.essentialLocked': 'Essential (cannot be excluded)',
+  'import.uploadProject': 'Upload project',
+  'import.claudeGuideTitle': 'Pick the Claude session folder',
+  'import.claudeGuideBody': 'Under ~/.claude/projects, pick the folder for this project. Its name is the project’s absolute path with every special character replaced by "-". (e.g. {example})',
+  'import.claudePick': 'Choose session folder',
+  'import.claudeSkip': 'Skip (import project only)',
+  'import.selectSessions': 'Select sessions to import',
+  'import.selectAll': 'Select all',
+  'import.sessionMeta': '{count} messages · {date}',
+  'import.noSessions': 'No sessions found in this folder.',
+  'import.projectName': 'Project name',
+  'import.confirm': 'Import',
+  'import.cancel': 'Cancel',
+  'import.importing': 'Importing…',
+  'import.doneToast': 'Session imported.',
 };
 
 const DICT: Record<Lang, Dict> = { ko, en };
