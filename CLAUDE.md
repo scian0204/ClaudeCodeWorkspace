@@ -32,6 +32,11 @@ ClaudeCode Workspace — 서버 1대 상주 Claude Code 팀 워크스페이스. 
    - 새 상단바/헤더에는 `MobileMenuButton`(`web/src/lib/ui.tsx`)을 넣어 어느 화면에서도 드로어를 열 수 있게 한다. 모달 내부의 다단 그리드는 `<md`에서 세로로 스택.
    - 폰에서 의미 없는 뷰(code-server iframe, split 등)는 `useIsMobile`로 모바일에서 숨기고 chat 전용으로 강제한다. 좌우 패딩은 `px-3 md:px-5`처럼 화면에 맞춰 줄인다.
    - 검증: 데모/dev를 모바일 뷰포트(예: 375px)로 실제 확인하고, 데스크톱(≥768px)이 그대로인지도 함께 본다.
+10. **튜닝 상수·기능 플래그는 관리자 설정으로.** 새 기능에 (a) 운영자가 바꿀 만한 값(타임아웃·크기/개수 한도·폴링 주기·이미지 태그 등)이나 (b) 켜고 끌 만한 기능 토글이 생기면, 코드에 상수로 박지 말고 **`server/src/lib/config-registry.ts`의 `DEFS`에 등록**한다. 등록만 하면 관리자 API(`/api/admin/config`)와 관리자 패널 UI에 자동 노출된다.
+    - 값 사용처: `cfg.int/str/bool('key')`로 **라이브** 읽기(관리자 편집이 재시작 없이 반영). 부팅 시 1회만 읽는 값(서버 생성자 등)은 `restart: true`.
+    - 라벨: i18n에 `cfg.<key>`/`cfgDesc.<key>`를 **ko/en 양쪽** 추가(없으면 key가 그대로 노출됨). 새 그룹이면 `admin.cfgGroup.<group>`도 양쪽 추가.
+    - 클라이언트가 알아야 하는 플래그는 `publicConfig()`(→ `/api/config`)에 실어 보내고, store(`refreshLists`)에서 읽어 UI를 게이팅한다. 서버 측에서도 반드시 게이트(엔드포인트에서 차단) — UI 숨김만으로 끝내지 말 것.
+    - 판단 기준: "값이 절대 안 변한다" → 상수 유지(YAGNI). "운영 중 조정하거나 끌 여지가 있다" → 설정으로 뺀다. 애매하면 빼는 쪽.
 
 ## 개발
 

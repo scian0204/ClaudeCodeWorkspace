@@ -42,6 +42,7 @@ interface State {
   control: Control;
   presence: { id: string; name: string; color: string }[];
   congested: boolean;
+  sessionImportEnabled: boolean; // admin feature flag (from /api/config)
   viewMode: 'chat' | 'split' | 'editor';
   editorUrl: string | null;
   panel: null | 'admin' | 'plugins';
@@ -103,7 +104,7 @@ export const useStore = create<State>((set, get) => ({
   current: null, messages: [], live: null, turnActive: false,
   queue: { running: null, waiting: [] }, pending: [],
   control: { canApprove: true, canInterrupt: true, canSetMode: true, isOwner: true, delegable: [] },
-  presence: [], congested: false, viewMode: 'chat', editorUrl: null, panel: null, sidebarOpen: false, error: null,
+  presence: [], congested: false, sessionImportEnabled: true, viewMode: 'chat', editorUrl: null, panel: null, sidebarOpen: false, error: null,
   commands: [],
 
   bootstrap: async () => {
@@ -137,14 +138,16 @@ export const useStore = create<State>((set, get) => ({
 
   refreshLists: async () => {
     const isAdmin = get().user?.role === 'admin';
-    const [s, r, p, w, rv, rr] = await Promise.all([
+    const [s, r, p, w, rv, rr, cf] = await Promise.all([
       api.get('/api/sessions'), api.get('/api/rooms'), api.get('/api/projects'), api.get('/api/wiki/topics'),
       api.get('/api/review/sessions'),
       isAdmin ? api.get('/api/review/repos') : Promise.resolve({ repos: [] }),
+      api.get('/api/config').catch(() => ({})),
     ]);
     set({
       sessions: s.sessions, rooms: r.rooms, projects: { common: p.common, mine: p.mine }, wikiTopics: w.topics,
       reviewSessions: rv.sessions || [], reviewRepos: rr.repos || [],
+      sessionImportEnabled: cf.sessionImportEnabled !== false,
     });
   },
 
