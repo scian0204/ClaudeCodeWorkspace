@@ -10,3 +10,6 @@ web/dist/
 certs/*.pem
 certs/*.key
 certs/*.crt
+
+# windows cygwin crash dump (junk)
+bash.exe.stackdump
