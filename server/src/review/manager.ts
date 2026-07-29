@@ -115,6 +115,7 @@ export function deleteRepo(id: string) {
   const repo = getRepo(id); if (!repo) return;
   const rows = db.select().from(schema.reviewSessions).where(eq(schema.reviewSessions.repoId, id)).all();
   for (const rv of rows) {
+    forgetReview(rv.id); // clear any in-flight guard/retry state for reviews we're about to delete
     db.delete(schema.messages).where(eq(schema.messages.sessionId, rv.chatSessionId)).run();
     db.delete(schema.chatSessions).where(eq(schema.chatSessions.id, rv.chatSessionId)).run();
   }
@@ -128,6 +129,7 @@ export function deleteRepo(id: string) {
 }
 
 export function deleteReview(rv: Review) {
+  forgetReview(rv.id); // clear any in-flight guard/retry state so a deleted review leaves nothing behind
   const repo = getRepo(rv.repoId);
   if (repo && rv.worktreePath) void gitWorktreeRemove(repo.path, rv.worktreePath);
   db.delete(schema.messages).where(eq(schema.messages.sessionId, rv.chatSessionId)).run();
@@ -237,6 +239,39 @@ const pollTick = async () => { for (const r of listRepos()) { try { await pollRe
 export function startReviewPoller() {
   scheduleReviewPoller();
   setTimeout(() => { void pollTick(); }, 5000); // one shortly after boot
+  setTimeout(() => { recoverInterruptedReviews(); }, 8000); // resume reviews a restart interrupted
+}
+
+// Crash/restart recovery. A review left at verdict='running' has no live pipeline behind it — the
+// in-memory guard, watchdog timer, and turn subprocess all died with the previous process — and
+// polling will NEVER revive it (the PR isn't new and its head hasn't moved). Without this, an
+// auto-review that was in flight when the container was recreated/restarted hangs on 'running'
+// forever. Re-queue every such open review at boot so it resumes instead of stalling. Gated by
+// reviewAuto (respects the global auto-review toggle) and best-effort (never blocks startup).
+export function recoverInterruptedReviews() {
+  let stuck: Review[];
+  try {
+    stuck = db.select().from(schema.reviewSessions)
+      .where(and(eq(schema.reviewSessions.verdict, 'running'), eq(schema.reviewSessions.prState, 'open'))).all();
+  } catch { return; } // DB not readable at boot → nothing to recover
+  if (!stuck.length) return;
+  const auto = cfg.bool('reviewAuto');
+  for (const rv of stuck) {
+    // Per-review guard: one bad row (deleted chat session, a transient SQLite-busy at boot) must not
+    // abandon recovery for every remaining stuck review.
+    try {
+      if (auto) {
+        postSystem(rv.chatSessionId, `[자동 리뷰] 서버 재시작으로 중단된 리뷰를 자동으로 다시 실행합니다.`);
+        void autoReview(rv.id);
+      } else {
+        // Auto-review is off: don't leave a misleading, permanent 'running'. Mark it interrupted so
+        // the operator sees what happened and can re-run it by hand (polling won't revive it either).
+        setVerdict(rv.id, 'error', '서버 재시작으로 리뷰가 중단되었습니다 (자동 리뷰 꺼짐 — 수동으로 다시 실행하세요).');
+        postSystem(rv.chatSessionId, `[자동 리뷰] 서버 재시작으로 중단됨. 자동 리뷰가 꺼져 있어 자동 재실행하지 않습니다 — "자동 리뷰 실행"으로 다시 시도하세요.`);
+      }
+    } catch { /* skip this row, keep recovering the rest */ }
+  }
+  notify();
 }
 // (Re)arm the poll interval from the live config. Called at boot and whenever reviewPollMs changes
 // (admin edit) so a new interval takes effect without a restart. reviewPollMs <= 0 disables polling.
@@ -413,6 +448,17 @@ const autoRunning = new Set<string>();
 // A head change (new push) that arrived while the pipeline was already running — re-review once the
 // in-flight run finishes, so a commit pushed mid-review isn't left with a stale/old-commit verdict.
 const rerunPending = new Set<string>();
+// Per-review count of automatic retries already spent on a timed-out/interrupted turn. In-memory on
+// purpose: a fresh process = fresh budget, which is exactly what boot recovery wants. Cleared the
+// moment the review reaches any terminal verdict (see setFinal), so a later re-review starts clean.
+const attempts = new Map<string, number>();
+// Drop a review's in-flight bookkeeping. Called when the review/repo is deleted mid-pipeline (so the
+// guard Set + retry Map don't accumulate dead ids) and when a queued re-run finds the review gone.
+function forgetReview(reviewId: string) {
+  autoRunning.delete(reviewId);
+  rerunPending.delete(reviewId);
+  attempts.delete(reviewId);
+}
 
 // Full automatic pipeline for one PR: local merge → (unattended) build/run/review turn → verdict.
 // Fire-and-forget: called on PR detection (and via the manual re-run route). Errors are recorded
@@ -420,7 +466,7 @@ const rerunPending = new Set<string>();
 export async function autoReview(reviewId: string): Promise<void> {
   if (autoRunning.has(reviewId)) { rerunPending.add(reviewId); return; } // in flight → queue a re-review
   const rv = getReview(reviewId);
-  if (!rv) return;
+  if (!rv) { forgetReview(reviewId); return; } // review deleted before a queued re-run fired → don't leak state
   autoRunning.add(reviewId);
   let watchdog: ReturnType<typeof setTimeout> | undefined;
   let finalized = false;
@@ -431,6 +477,7 @@ export async function autoReview(reviewId: string): Promise<void> {
     if (finalized) return false;
     finalized = true;
     setVerdict(rv.id, verdict, summary);
+    attempts.delete(reviewId); // terminal verdict reached → reset the retry budget for future re-reviews
     notify();
     return true;
   };
@@ -482,10 +529,26 @@ export async function autoReview(reviewId: string): Promise<void> {
     // verdict; the guard release + any queued re-review happen in the turn's onDone (fired by the
     // abort's teardown), so the worktree stays exclusive until the subprocess has actually exited.
     const turnTimeoutMs = cfg.int('reviewTurnTimeoutMs');
+    const maxRetries = cfg.int('reviewMaxRetries');
     watchdog = setTimeout(() => {
-      interruptTurn(rv.chatSessionId);
-      setFinal('error', `자동 리뷰 시간 초과(${Math.round(turnTimeoutMs / 60000)}분) — 중단됨`);
-      postSystem(rv.chatSessionId, `[자동 리뷰] 시간 초과로 중단. 다시 시도하려면 "자동 리뷰 실행"을 누르세요.`);
+      interruptTurn(rv.chatSessionId); // graceful interrupt → hard abort; the turn's onDone fires at teardown
+      const used = attempts.get(reviewId) || 0;
+      const mins = Math.round(turnTimeoutMs / 60000);
+      if (used < maxRetries) {
+        // Likely a transient hang, not a permanent failure: keep the review 'running' and queue a fresh
+        // run. It fires from done() (the aborted turn's onDone) so the retry's git reset/merge can't race
+        // a still-terminating turn on the same worktree. finalized=true suppresses this run's onDone
+        // verdict + PR comment (its finalText is a partial/aborted review, not a real judgment).
+        attempts.set(reviewId, used + 1);
+        finalized = true;
+        setVerdict(rv.id, 'running', null);
+        notify();
+        rerunPending.add(reviewId);
+        postSystem(rv.chatSessionId, `[자동 리뷰] 시간 초과(${mins}분) — 자동 재시도합니다 (${used + 1}/${maxRetries}).`);
+      } else {
+        setFinal('error', `자동 리뷰 시간 초과(${mins}분) — 재시도 ${maxRetries}회 소진 후 중단됨`);
+        postSystem(rv.chatSessionId, `[자동 리뷰] 시간 초과로 중단(자동 재시도 ${maxRetries}회 소진). 다시 시도하려면 "자동 리뷰 실행"을 누르세요.`);
+      }
     }, turnTimeoutMs);
     enqueueTurn(rv.chatSessionId, author, autoPrompt(rv), (finalText) => {
       const { verdict, summary } = parseVerdict(finalText);

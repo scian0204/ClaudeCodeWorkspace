@@ -248,7 +248,7 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
   // If Docker isn't available, fall back to host exec (auto-allowed) — the trusted-team ceiling.
   let mcpServers: Record<string, any> | undefined;
   let disallowedTools: string[] | undefined;
-  let sandboxCleanup: (() => void) | undefined;
+  let sandboxCleanup: (() => Promise<void>) | undefined;
   if (s.kind === 'review' && sandboxAvailable()) {
     const rv = getReviewByChat(s.id);
     if (rv) {
@@ -256,7 +256,7 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
         const cname = await ensureSandbox(rv.repoId, rv.prNumber, cwd);
         mcpServers = { sandbox: await sandboxMcpServer(cname, cwd, cfg.int('reviewSandboxExecTimeoutMs')) };
         disallowedTools = ['Bash'];
-        sandboxCleanup = () => { void removeSandbox(rv.repoId, rv.prNumber); };
+        sandboxCleanup = () => removeSandbox(rv.repoId, rv.prNumber);
       } catch { /* sandbox failed to start → host exec fallback */ }
     }
   }
@@ -359,7 +359,11 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
   } finally {
     active.delete(s.id);
     release();
-    if (sandboxCleanup) sandboxCleanup();
+    // Await sandbox teardown BEFORE onDone. onDone can fire a review re-run (watchdog retry / new push)
+    // whose git reset --hard + merge rewrite the PR worktree; removeSandbox force-removes the container,
+    // which is what actually kills any build still writing into that same bind-mounted worktree. Firing
+    // the re-run before the container is gone would race the dying build against the git ops.
+    if (sandboxCleanup) { try { await sandboxCleanup(); } catch { /* best-effort */ } }
     if (p.onDone) {
       const finalText = blocks.filter((b): b is Extract<Block, { type: 'text' }> => b.type === 'text').map((b) => b.text).join('\n');
       try { p.onDone(finalText); } catch { /* noop */ }

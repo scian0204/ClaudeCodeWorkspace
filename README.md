@@ -222,6 +222,7 @@ flowchart TB
 - **Per-repo build image:** the PR's build/run only ever runs in a locked-down sibling container (no Docker socket, all caps dropped); its image is **selectable per repo** to match the language (Python, Rust, Go, …). Leave it blank to use the global default (`REVIEW_SANDBOX_IMAGE`, default `node:20-bookworm`, editable in the admin panel). If a tool isn't in the image, the review agent can also install it inside the container (slow; for polyglot or one-off cases)
 - **Result posted back to the PR** (`REVIEW_COMMENT`, default on): when a review finishes, the verdict + summary + full review body is published as a comment on the PR itself (GitHub issue comment / GitLab MR note / Bitbucket PR comment), so re-reviews on new pushes each drop their own comment. Set `REVIEW_COMMENT=0` to keep reviews internal
 - **On instruction, approve the PR:** one admin click **merges the PR on the remote** (GitHub/GitLab/Bitbucket API) using the merge-capable credential — the only step that touches the remote, gated behind a confirm
+- **Self-healing:** a review turn has a watchdog wall-clock cap (`REVIEW_TURN_TIMEOUT_MS`, default 30 min). If it trips, the review is **automatically retried** up to `reviewMaxRetries` (default 2) before giving up, so a transient hang doesn't strand the PR. And if the server restarts while a review is running, it is **re-queued on boot** instead of hanging on ⏳ forever
 </details>
 
 <details>

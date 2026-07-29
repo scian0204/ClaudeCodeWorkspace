@@ -224,6 +224,8 @@ export const ADMIN = {
     { key: 'maxConcurrentTurns', group: 'claude', type: 'int', value: '3', default: '3', min: 1, max: 100, restart: false, readonly: false, secret: false, overridden: false },
     { key: 'reviewAuto', group: 'review', type: 'bool', value: '1', default: '1', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'reviewPollMs', group: 'review', type: 'int', value: '60000', default: '60000', unit: 'ms', min: 0, restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'reviewTurnTimeoutMs', group: 'review', type: 'int', value: '1800000', default: '1800000', unit: 'ms', min: 60000, max: 7200000, restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'reviewMaxRetries', group: 'review', type: 'int', value: '2', default: '2', min: 0, max: 10, restart: false, readonly: false, secret: false, overridden: false },
     { key: 'reviewSandboxImage', group: 'review', type: 'string', value: 'node:20-bookworm', default: 'node:20-bookworm', restart: false, readonly: false, secret: false, overridden: false, image: true },
     { key: 'gitOpTimeoutMs', group: 'git', type: 'int', value: '120000', default: '120000', unit: 'ms', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'codeServerImage', group: 'codeserver', type: 'string', value: 'codercom/code-server:latest', default: 'codercom/code-server:latest', restart: false, readonly: false, secret: false, overridden: false, image: true },
