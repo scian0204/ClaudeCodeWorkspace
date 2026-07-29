@@ -72,6 +72,8 @@ const ko: Dict = {
   'common.errorPrefix': '오류: {msg}',
   'common.expand': '펼치기',
   'common.collapse': '접기',
+  'common.expandAll': '전체 펼치기',
+  'common.collapseAll': '전체 접기',
   // infra
   'app.loading': '로딩…',
   'store.selectProjectFirst': '먼저 프로젝트를 선택하세요.',
@@ -571,6 +573,8 @@ const en: Dict = {
   'common.errorPrefix': 'Error: {msg}',
   'common.expand': 'Expand',
   'common.collapse': 'Collapse',
+  'common.expandAll': 'Expand all',
+  'common.collapseAll': 'Collapse all',
   // infra
   'app.loading': 'Loading…',
   'store.selectProjectFirst': 'Select a project first.',
