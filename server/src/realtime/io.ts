@@ -9,6 +9,7 @@ import { respondPermission, pendingForSession, type Decision } from '../claude/p
 import * as rooms from '../rooms/manager.js';
 import * as review from '../review/manager.js';
 import { cfg } from '../lib/config-registry.js';
+import { isBareBasename } from '../lib/attachments.js';
 
 export let io: IOServer;
 
@@ -85,14 +86,21 @@ export function initRealtime(httpServer: HttpServer) {
       await presence(sessionId);
     });
 
-    socket.on('chat:send', (p: { sessionId: string; text: string; chat?: boolean; includeChat?: boolean }, ack?: Function) => {
+    socket.on('chat:send', (p: { sessionId: string; text: string; chat?: boolean; includeChat?: boolean; attachments?: { name: string; isImage: boolean }[] }, ack?: Function) => {
       const a = access(user, p.sessionId);
       if (!a) { ack?.({ error: 'no access' }); return; }
       if (!a.canWrite) { ack?.({ error: 'read-only' }); return; } // review PR author can't send
-      if (!p.text?.trim()) { ack?.({ error: 'empty' }); return; }
+      // accept only well-formed attachment refs (bare basename + bool); runTurn re-validates on disk.
+      // slice to the count cap so a client can't pad many bogus refs for runTurn to existsSync-scan.
+      const attachments = Array.isArray(p.attachments)
+        ? p.attachments.filter((x) => x && typeof x.name === 'string' && isBareBasename(x.name))
+            .slice(0, cfg.int('attachmentMaxCount')).map((x) => ({ name: x.name, isImage: !!x.isImage }))
+        : [];
+      // a turn needs text OR at least one attachment (empty-text send is fine with files attached)
+      if (!p.text?.trim() && !attachments.length) { ack?.({ error: 'empty' }); return; }
       // room team chat: persist + broadcast only, no Claude turn (chat flag valid in rooms only)
       if (p.chat && a.kind === 'room') {
-        postChat(p.sessionId, { id: user.id, name: user.displayName }, p.text.trim(),
+        postChat(p.sessionId, { id: user.id, name: user.displayName }, (p.text ?? '').trim(),
           (event, payload) => io.to(sessionRoom(p.sessionId)).emit(event, payload));
         ack?.({ ok: true });
         return;
@@ -102,8 +110,8 @@ export function initRealtime(httpServer: HttpServer) {
         const topic = db.select().from(schema.wikiTopics).where(eq(schema.wikiTopics.id, a.s.wikiTopicId)).get();
         if (topic?.compileStatus === 'compiling') { ack?.({ error: '주제 컴파일 중입니다. 완료 후 질의하세요.' }); return; }
       }
-      const itemId = enqueueTurn(p.sessionId, { id: user.id, name: user.displayName }, p.text.trim(),
-        undefined, a.kind === 'room' ? p.includeChat : false);
+      const itemId = enqueueTurn(p.sessionId, { id: user.id, name: user.displayName }, (p.text ?? '').trim(),
+        undefined, a.kind === 'room' ? p.includeChat : false, attachments);
       ack?.({ itemId });
     });
 

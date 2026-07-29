@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as DM from '@radix-ui/react-dropdown-menu';
-import { useStore, type Block, type Msg } from '../lib/store';
-import { api } from '../lib/api';
+import { useStore, type Block, type Msg, type Attachment } from '../lib/store';
+import { api, type UploadState } from '../lib/api';
+import { UploadProgress } from './UploadProgress';
 import { Avatar, timeAgo, useIsMobile, MobileMenuButton } from '../lib/ui';
 import { MembersDialog } from './MembersDialog';
 import { WikiExplorer } from './WikiExplorer';
@@ -572,6 +573,7 @@ function MessageView({ m }: { m: Msg }) {
   const isClaude = m.role === 'assistant';
   const blocks: Block[] = isClaude ? (m.content.blocks || []) : [];
   const topicId = useStore((s) => s.current?.wikiTopicId);
+  const sessionId = useStore((s) => s.current?.chatSessionId) || '';
   const isRoom = useStore((s) => s.current?.kind === 'room');
   const sources = useMemo(() => (topicId && isClaude ? extractSources(blocks, topicId) : []), [blocks, topicId, isClaude]);
   const { deleteMessage, editMessage } = useStore();
@@ -624,7 +626,10 @@ function MessageView({ m }: { m: Msg }) {
           </div>
         ) : (
           <>
-            {!isClaude && <div className="text-sm break-words leading-relaxed" dangerouslySetInnerHTML={{ __html: md(m.content.text || '') }} />}
+            {!isClaude && (m.content.text || '').trim() && <div className="text-sm break-words leading-relaxed" dangerouslySetInnerHTML={{ __html: md(m.content.text || '') }} />}
+            {!isClaude && Array.isArray(m.content.attachments) && m.content.attachments.length > 0 && (
+              <AttachmentList atts={m.content.attachments} sessionId={sessionId} />
+            )}
             {isClaude && <BlockList blocks={blocks} sources={sources} />}
             {m.content.interrupted && <div className="text-[11px] text-warn mt-1">{t('chat.interrupted')}</div>}
           </>
@@ -808,9 +813,35 @@ function filterRefs(refs: Ref[], q: string, limit = 50): Ref[] {
     .slice(0, limit).map((s) => s.r);
 }
 
+// Attachment chips: image → thumbnail, other → file icon + name. Preview src is the local/demo url
+// when present, otherwise the authed GET endpoint (persisted transcript messages). onRemove → composer.
+function AttachmentList({ atts, sessionId, onRemove }: { atts: Attachment[]; sessionId: string; onRemove?: (name: string) => void }) {
+  const t = useT();
+  if (!atts?.length) return null;
+  const srcOf = (a: Attachment) => a.url || `/api/sessions/${sessionId}/attachments/${encodeURIComponent(a.name)}`;
+  return (
+    <div className="flex flex-wrap gap-2 mt-2">
+      {atts.map((a) => (
+        <div key={a.name} className="relative border border-line rounded-lg overflow-hidden bg-card flex items-center max-w-full">
+          {a.isImage
+            ? <img src={srcOf(a)} alt={a.name} title={a.name} className="w-16 h-16 object-cover" loading="lazy" />
+            : <span className="flex items-center gap-1.5 px-2.5 py-2 text-xs text-txt2 max-w-[180px]"><span>📄</span><span className="truncate">{a.name}</span></span>}
+          {onRemove && (
+            <button type="button" onClick={() => onRemove(a.name)} title={t('chat.attachRemove')}
+              className="absolute top-0.5 right-0.5 w-4 h-4 grid place-items-center rounded-full bg-black/60 text-white text-[11px] leading-none">×</button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function Composer() {
   const store = useStore();
   const { current: c, send, queue, cancel, interrupt, turnActive, congested, user, commands } = store;
+  const [atts, setAtts] = useState<Attachment[]>([]);
+  const [uploading, setUploading] = useState<UploadState | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState('');
   const [sel, setSel] = useState(0);
   const [caret, setCaret] = useState(0);
@@ -823,11 +854,49 @@ function Composer() {
   const [includeChat, setIncludeChat] = useState(false);
   const setMode = (m: 'chat' | 'claude') => { setModeRaw(m); if (roomId) localStorage.setItem(`roomMode:${roomId}`, m); };
   useEffect(() => { setModeRaw(roomId ? ((localStorage.getItem(`roomMode:${roomId}`) as 'chat' | 'claude') || 'chat') : 'claude'); }, [roomId]);
+  // Session switch: drop pending attachments + revoke their object URLs so they don't leak across
+  // sessions and can't be silently mis-sent to a different session. (deps: session id only)
+  useEffect(() => {
+    atts.forEach((a) => { if (a.url) URL.revokeObjectURL(a.url); });
+    setAtts([]); setUploading(null);
+  }, [c?.chatSessionId]);
   if (!c) return null;
   const isRoom = c.kind === 'room';
   const readOnly = !!c.readOnly; // review PR author — can watch, can't send
   const wikiCompiling = !!c.wikiTopicId && store.wikiTopics.find((t) => t.id === c.wikiTopicId)?.compileStatus === 'compiling';
   const wikiStep = c.wikiTopicId ? store.wikiProgress[c.wikiTopicId] : undefined;
+  // room team-chat mode is text-only (no Claude) → no attachments there
+  const canAttach = !readOnly && !wikiCompiling && !(isRoom && mode === 'chat');
+
+  // Upload each picked/pasted file (one request each — uploadFiles returns the last body, so we can't
+  // batch and still recover every server-assigned name). Keep a local objectURL for instant image preview.
+  const uploadPicked = async (files: File[]) => {
+    const list = files.filter(Boolean);
+    if (!list.length || !canAttach) return;
+    for (const f of list) {
+      try {
+        const r = await api.uploadFiles(`/api/sessions/${c.chatSessionId}/attachments`, [{ file: f, rel: f.name }], setUploading);
+        const rf = (r.files || [])[0];
+        if (rf) setAtts((prev) => [...prev, { name: rf.name, isImage: rf.isImage, url: rf.isImage ? URL.createObjectURL(f) : undefined }]);
+      } catch (e: any) { store.setError(e.message); }
+    }
+    setUploading(null);
+    if (fileRef.current) fileRef.current.value = '';
+  };
+  const removeAtt = async (name: string) => {
+    const a = atts.find((x) => x.name === name);
+    if (a?.url) URL.revokeObjectURL(a.url);
+    setAtts((prev) => prev.filter((x) => x.name !== name));
+    try { await api.del(`/api/sessions/${c.chatSessionId}/attachments/${encodeURIComponent(name)}`); } catch { /* noop */ }
+  };
+  const onPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const imgs = Array.from(e.clipboardData?.items || []).filter((it) => it.kind === 'file' && it.type.startsWith('image/'));
+    if (!imgs.length || !canAttach) return;
+    e.preventDefault(); // a screenshot paste shouldn't also dump into the textarea
+    const files = imgs.map((it) => it.getAsFile()).filter(Boolean) as File[];
+    // pasted screenshots usually have no filename → synthesize one so the server has a basename
+    void uploadPicked(files.map((f) => (f.name ? f : new File([f], `screenshot-${Date.now()}.png`, { type: f.type || 'image/png' }))));
+  };
 
   // full palette: client UI actions + real CLI slash commands (built-in + plugin + skill), with hints
   const seen = new Set<string>();
@@ -878,9 +947,12 @@ function Composer() {
   const submit = () => {
     if (wikiCompiling || readOnly) return;
     if (menuOpen) return pickMenu(Math.min(sel, menuMatches.length - 1));
-    if (!text.trim()) return;
-    send(text.trim(), { chat: isRoom && mode === 'chat', includeChat: isRoom && mode === 'claude' && includeChat });
-    setText(''); setCaret(0);
+    if (uploading) return; // an upload is still in flight — sending now would drop the pending file from the turn
+    if (!text.trim() && !atts.length) return; // allow attachment-only sends
+    const attachments = atts.length ? atts.map((a) => ({ name: a.name, isImage: a.isImage })) : undefined;
+    send(text.trim(), { chat: isRoom && mode === 'chat', includeChat: isRoom && mode === 'claude' && includeChat, attachments });
+    atts.forEach((a) => { if (a.url) URL.revokeObjectURL(a.url); });
+    setText(''); setCaret(0); setAtts([]);
   };
 
   return (
@@ -943,7 +1015,9 @@ function Composer() {
               </div>
             </div>
           )}
-          <div className="border border-line2 rounded-xl bg-card p-3 relative">
+          <div className="border border-line2 rounded-xl bg-card p-3 relative"
+            onDragOver={canAttach ? (e) => e.preventDefault() : undefined}
+            onDrop={canAttach ? (e) => { e.preventDefault(); void uploadPicked(Array.from(e.dataTransfer?.files || [])); } : undefined}>
             {showHint && (
               <div className="absolute left-3 right-3 top-3 text-sm leading-[inherit] whitespace-pre-wrap break-words pointer-events-none select-none z-0" aria-hidden>
                 <span className="invisible">{text}</span><span className="text-txt3">{active!.hint}</span>
@@ -954,6 +1028,7 @@ function Composer() {
               rows={2} placeholder={readOnly ? t('review.readOnlyPlaceholder') : wikiCompiling ? t('chat.topicCompiling') : isRoom ? (mode === 'chat' ? t('chat.roomChatPlaceholder', { title: c.title }) : t('chat.roomMessagePlaceholder', { title: c.title, name: user?.displayName ?? '' })) : t('chat.messagePlaceholder')}
               value={text}
               onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
+              onPaste={onPaste}
               onChange={(e) => {
                 let v = e.target.value;
                 let pos = e.target.selectionStart ?? v.length;
@@ -973,6 +1048,8 @@ function Composer() {
                 }
                 if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
               }} />
+            {uploading && <div className="mt-2"><UploadProgress s={uploading} /></div>}
+            <AttachmentList atts={atts} sessionId={c.chatSessionId} onRemove={removeAtt} />
             <div className="flex items-center gap-2 mt-2 flex-wrap">
               {isRoom && (
                 <div className="flex items-center gap-1 shrink-0">
@@ -986,7 +1063,11 @@ function Composer() {
                 </label>
               )}
               <span className="text-xs text-txt3 truncate">{wikiCompiling ? (wikiStep ? t('chat.compilingStep', { step: wikiStep }) : t('chat.compilingReady')) : turnActive ? t('chat.claudeResponding') : (isRoom && mode === 'chat' ? t('chat.composerHintChat') : t(canRef ? 'chat.composerHintRef' : 'chat.composerHint'))}</span>
-              <button className="ml-auto bg-clay text-white rounded-lg w-8 h-8 grid place-items-center disabled:opacity-40" disabled={wikiCompiling || readOnly} onClick={submit} aria-label={t('chat.send')}>➤</button>
+              <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => { void uploadPicked(Array.from(e.target.files || [])); }} />
+              {canAttach && (
+                <button type="button" className="ml-auto toolbtn shrink-0 disabled:opacity-40" disabled={!!uploading} title={t('chat.attach')} aria-label={t('chat.attach')} onClick={() => fileRef.current?.click()}>📎</button>
+              )}
+              <button className={`${canAttach ? '' : 'ml-auto '}bg-clay text-white rounded-lg w-8 h-8 grid place-items-center disabled:opacity-40`} disabled={wikiCompiling || readOnly || !!uploading} onClick={submit} aria-label={t('chat.send')}>➤</button>
             </div>
           </div>
         </div>

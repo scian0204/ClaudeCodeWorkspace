@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { and, desc, eq, isNull } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
@@ -6,6 +8,9 @@ import { newId } from '../lib/ids.js';
 import { probeCommands, probeUsage } from '../claude/session-manager.js';
 import { reviewRoleForChat } from '../review/manager.js';
 import { cfg } from '../lib/config-registry.js';
+import { paths, ensure } from '../lib/paths.js';
+import { safeBase, isBareBasename, contentTypeFor, IMAGE_MIME } from '../lib/attachments.js';
+import * as rooms from '../rooms/manager.js';
 import type { AuthUser } from '../auth/index.js';
 
 const EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'];
@@ -30,6 +35,46 @@ function canEditChat(u: AuthUser, s: Chat): boolean {
   if (s.kind === 'private') return s.ownerId === u.id || u.role === 'admin';
   if (s.kind === 'review') return u.role === 'admin';
   return true;
+}
+// Attachment WRITE access mirrors the socket `chat:send` gate (realtime/io.ts access()): only someone
+// who can actually send a turn may stage files for it. private → owner/admin; review → admin (PR author
+// is read-only); room → admin or a member. Deliberately checks room membership (stronger than
+// canEditChat, which leans on chatSessionId obscurity) because these endpoints write to disk.
+function canWriteSession(u: AuthUser, s: Chat): boolean {
+  if (s.kind === 'room') return u.role === 'admin' || rooms.isMember(s.roomId!, u.id);
+  if (s.kind === 'review') return u.role === 'admin';
+  return s.ownerId === u.id || u.role === 'admin';
+}
+// Attachment READ access. Like canViewChat for private/review (owner/admin, resp. the read-only PR
+// author keep their view), but rooms require membership — canViewChat returns `true` for any room,
+// which is too loose when the bytes actually leave the server. Mirrors canWriteSession's room gate.
+function canViewAttachment(u: AuthUser, s: Chat): boolean {
+  if (s.kind === 'room') return u.role === 'admin' || rooms.isMember(s.roomId!, u.id);
+  return canViewChat(u, s);
+}
+
+const getChat = (id: string) => db.select().from(schema.chatSessions).where(eq(schema.chatSessions.id, id)).get();
+
+// per-session attachment dir (owner = roomId for rooms, else ownerId), created on demand.
+function attachDir(s: Chat): string {
+  const kind = s.kind === 'room' ? 'room' : 'user';
+  const dir = paths.attachments(kind, kind === 'room' ? s.roomId! : s.ownerId, s.id);
+  ensure(dir);
+  return dir;
+}
+// Write `buf` without ever overwriting: on collision suffix `-2`, `-3`, … before the extension.
+// Atomic exclusive create (flag 'wx') in a retry loop closes the existsSync→write TOCTOU (two
+// concurrent uploads racing the same name). Returns the basename actually written. Collisions are
+// bounded by the files already in `dir` (≤ attachmentMaxCount), so the loop always terminates.
+function writeUnique(dir: string, base: string, buf: Buffer): string {
+  const dot = base.lastIndexOf('.');
+  const stem = dot > 0 ? base.slice(0, dot) : base;
+  const ext = dot > 0 ? base.slice(dot) : '';
+  for (let i = 1; ; i++) {
+    const name = i === 1 ? base : `${stem}-${i}${ext}`;
+    try { fs.writeFileSync(path.join(dir, name), buf, { flag: 'wx' }); return name; }
+    catch (e: any) { if (e?.code !== 'EEXIST') throw e; }
+  }
 }
 
 export async function sessionRoutes(app: FastifyInstance) {
@@ -93,6 +138,70 @@ export async function sessionRoutes(app: FastifyInstance) {
     if (!s) return reply.code(404).send({ error: 'not found' });
     if (!canViewChat(u, s)) return reply.code(403).send({ error: 'forbidden' });
     return { usage: await probeUsage(id, u.id) };
+  });
+
+  // ── prompt attachments (uploaded files / pasted screenshots) ──
+  // Files are staged under <ownerProjectsDir>/.attachments/<sessionId>/ (an allowed root) and their
+  // absolute paths get prepended to the turn's prompt so the agent Reads them. See rooms/queue +
+  // claude/session-manager (runTurn) for how a name → absolute path reaches the prompt.
+  app.post('/api/sessions/:id/attachments', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    const s = getChat((req.params as any).id);
+    if (!s) return reply.code(404).send({ error: 'not found' });
+    if (!canWriteSession(u, s)) return reply.code(403).send({ error: 'forbidden' });
+    const maxMB = cfg.int('attachmentMaxMB');    // must stay ≤ uploadMaxMB (global multipart cap) to apply
+    const maxCount = cfg.int('attachmentMaxCount');
+    const dir = attachDir(s);
+    const existing = fs.existsSync(dir) ? fs.readdirSync(dir).length : 0;
+    const out: { name: string; size: number; isImage: boolean }[] = [];
+    const written: string[] = []; // absolute paths written THIS request — removed if a later part errors
+    const cleanup = () => { for (const p of written) { try { fs.rmSync(p, { force: true }); } catch { /* noop */ } } };
+    try {
+      // uploadFiles posts ONE file per request; accept multiple parts defensively. fileSize caps each
+      // part at the streaming layer (throws on overflow); maxCount bounds the total per session.
+      for await (const part of (req as any).parts({ limits: { fileSize: maxMB * 1024 * 1024 } })) {
+        if (part.type !== 'file') continue;
+        if (existing + out.length >= maxCount) { part.file.resume(); cleanup(); return reply.code(400).send({ error: `too many attachments (max ${maxCount})` }); }
+        let buf: Buffer;
+        try { buf = await part.toBuffer(); } // fileSize limit throws on overflow
+        catch { cleanup(); return reply.code(413).send({ error: `file too large (max ${maxMB}MB)` }); }
+        if (part.file.truncated) { cleanup(); return reply.code(413).send({ error: `file too large (max ${maxMB}MB)` }); }
+        const base = (part.filename ? safeBase(part.filename) : '') || `file-${newId()}`; // never trust the client name
+        const name = writeUnique(dir, base, buf);
+        written.push(path.join(dir, name));
+        out.push({ name, size: buf.length, isImage: IMAGE_MIME.has(part.mimetype) });
+      }
+    } catch (e: any) { cleanup(); return reply.code(413).send({ error: String(e?.message || e) }); }
+    if (!out.length) return reply.code(400).send({ error: 'no files uploaded' });
+    return { files: out };
+  });
+
+  // stream a pending attachment for the composer/message thumbnail. name MUST be a bare basename.
+  app.get('/api/sessions/:id/attachments/:name', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    const { id, name } = req.params as any;
+    const s = getChat(id);
+    if (!s) return reply.code(404).send({ error: 'not found' });
+    if (!canViewAttachment(u, s)) return reply.code(403).send({ error: 'forbidden' });
+    if (!isBareBasename(name)) return reply.code(400).send({ error: 'bad name' });
+    const file = path.join(attachDir(s), name);
+    if (!fs.existsSync(file) || !fs.statSync(file).isFile()) return reply.code(404).send({ error: 'not found' });
+    reply.header('Content-Type', contentTypeFor(name));
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('Cache-Control', 'private, max-age=300');
+    return reply.send(fs.createReadStream(file));
+  });
+
+  // drop a pending attachment (composer remove). name MUST be a bare basename.
+  app.delete('/api/sessions/:id/attachments/:name', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    const { id, name } = req.params as any;
+    const s = getChat(id);
+    if (!s) return reply.code(404).send({ error: 'not found' });
+    if (!canWriteSession(u, s)) return reply.code(403).send({ error: 'forbidden' });
+    if (!isBareBasename(name)) return reply.code(400).send({ error: 'bad name' });
+    try { fs.rmSync(path.join(attachDir(s), name), { force: true }); } catch { /* noop */ }
+    return { ok: true };
   });
 
   app.patch('/api/sessions/:id', async (req, reply) => {

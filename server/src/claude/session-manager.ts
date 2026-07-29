@@ -1,8 +1,10 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import { eq, and, desc, gte } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { newId } from '../lib/ids.js';
 import { paths, ensure } from '../lib/paths.js';
+import { isBareBasename } from '../lib/attachments.js';
 import { allowBypass } from '../lib/settings.js';
 import { turnLimiter, withRateLimitRetry } from './throttle.js';
 import { buildOptions, clampMode, rootsFor, type SessionContext, type PermMode } from './config-layering.js';
@@ -227,6 +229,7 @@ export interface RunTurnParams {
   emit: Emit;
   includeChat?: boolean; // room: prepend team chat accrued since the last Claude turn as context
   onDone?: (finalText: string) => void; // review auto-pipeline: capture the verdict after the turn
+  attachments?: { name: string; isImage: boolean }[]; // prompt attachments (files / pasted screenshots)
 }
 
 export async function runTurn(p: RunTurnParams): Promise<void> {
@@ -284,10 +287,21 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
     contextChat = rows.map((r) => ({ name: r.authorName || '?', text: (JSON.parse(r.content) as any).text || '' }));
   }
 
-  // persist + broadcast the human message (speaker prefix for multi-party rooms)
+  // resolve prompt attachments → absolute paths under the session's attachment dir. Re-validate each
+  // name is a bare basename that actually exists there (ignore anything that doesn't); the dir sits
+  // inside an allowed root so the agent can Read these paths (images render visually via Read).
+  const attachDir = paths.attachments(kind, ownerId, s.id);
+  const attachments = (p.attachments || [])
+    .filter((a) => a && isBareBasename(a.name) && fs.existsSync(path.join(attachDir, a.name)))
+    .map((a) => ({ name: a.name, isImage: !!a.isImage, abs: path.join(attachDir, a.name) }));
+
+  // persist + broadcast the human message (speaker prefix for multi-party rooms; attachment metadata
+  // rides in content so the transcript can render chips/thumbnails)
   const userMsg = saveMessage({
     sessionId: s.id, role: 'user', authorId: p.author.id, authorName: p.author.name,
-    content: { text: p.text },
+    content: attachments.length
+      ? { text: p.text, attachments: attachments.map((a) => ({ name: a.name, isImage: a.isImage })) }
+      : { text: p.text },
   });
   db.update(schema.chatSessions).set({ updatedAt: Date.now() }).where(eq(schema.chatSessions.id, s.id)).run();
   p.emit('message', { sessionId: s.id, message: publicMessage(userMsg) });
@@ -306,6 +320,12 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
   if (contextChat.length) {
     const convo = contextChat.map((c) => `[${c.name}]: ${c.text}`).join('\n');
     prompt = `[\uc774\uc804 \ub300\ud654]\n${convo}\n\n[${p.author.name}]: ${p.text}`;
+  }
+  // prepend absolute attachment paths so the agent Reads the uploaded files / pasted screenshots.
+  // (Composed into the REAL prompt only; the mock path uses p.text and doesn't run a real agent.)
+  if (attachments.length) {
+    const list = attachments.map((a) => `- ${a.abs}${a.isImage ? ' (\uc774\ubbf8\uc9c0)' : ''}`).join('\n');
+    prompt = `[\ucca8\ubd80 \ud30c\uc77c]\n${list}\n\n${prompt}`;
   }
   const roots = rootsFor(ctx);
   // review sessions run the pipeline unattended → auto-allow tools (class-1 fence still applies)

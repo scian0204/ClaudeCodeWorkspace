@@ -196,6 +196,10 @@ export const db = {
   } as Record<string, any[]>,
 };
 
+// prompt attachments (demo): server-assigned name → { url: data URL, isImage }. Populated by the XHR
+// upload interceptor (install.ts), read back by the socket mock so image thumbnails render inline.
+export const ATTACHMENTS = new Map<string, { url: string; isImage: boolean }>();
+
 export const ADMIN = {
   overview: () => ({
     users: db.users.length, rooms: db.rooms.length, sessions: db.sessions.length,
@@ -232,6 +236,8 @@ export const ADMIN = {
     { key: 'gitOpTimeoutMs', group: 'git', type: 'int', value: '120000', default: '120000', unit: 'ms', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'codeServerImage', group: 'codeserver', type: 'string', value: 'codercom/code-server:latest', default: 'codercom/code-server:latest', restart: false, readonly: false, secret: false, overridden: false, image: true },
     { key: 'codeServerIdleMs', group: 'codeserver', type: 'int', value: '1800000', default: '1800000', unit: 'ms', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'attachmentMaxMB', group: 'features', type: 'int', value: '20', default: '20', unit: 'MB', min: 1, max: 200, restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'attachmentMaxCount', group: 'features', type: 'int', value: '10', default: '10', min: 1, max: 50, restart: false, readonly: false, secret: false, overridden: false },
     { key: 'sessionTtlDays', group: 'auth', type: 'int', value: '30', default: '30', unit: 'days', min: 1, max: 365, restart: false, readonly: false, secret: false, overridden: false },
     { key: 'httpBodyLimitMB', group: 'server', type: 'int', value: '6', default: '6', unit: 'MB', restart: true, readonly: false, secret: false, overridden: false },
     { key: 'port', group: 'infra', type: 'int', value: '3000', default: '3000', restart: true, readonly: true, secret: false, overridden: false },

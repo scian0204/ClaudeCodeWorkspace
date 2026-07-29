@@ -1,7 +1,7 @@
 // Routes every /api/* request to canned data / in-memory mutations for the static demo.
 // Called by the fetch + XHR interceptors in ./install. Returns a plain {status, data}.
 import {
-  db, ADMIN, GIT, COMMANDS, USAGE, TREE_PROJECT, TREE_PLUGIN, WIKI_ARTICLES, WIKI_RAW, WIKI_TREE_ARTICLES,
+  db, ADMIN, ATTACHMENTS, GIT, COMMANDS, USAGE, TREE_PROJECT, TREE_PLUGIN, WIKI_ARTICLES, WIKI_RAW, WIKI_TREE_ARTICLES,
   fileContent, wikiFileContent, pluginDetail, EDITOR_URL, genId,
 } from './data';
 
@@ -56,6 +56,13 @@ export function route(method: string, rawPath: string, body?: any): Res {
   }
   if (seg[1] === 'sessions' && seg[3] === 'messages' && M === 'DELETE') {
     const list = msgs(idAt(2)); const i = list.findIndex((m) => m.id === idAt(4)); if (i >= 0) list.splice(i, 1); return ok({});
+  }
+  // attachments: POST is really handled by the XHR interceptor (install.ts); GET/DELETE come through here
+  if (seg[1] === 'sessions' && seg[3] === 'attachments') {
+    const name = decodeURIComponent(idAt(4) || '');
+    if (M === 'DELETE' && name) { ATTACHMENTS.delete(name); return ok({ ok: true }); }
+    if (M === 'GET' && name) { const a = ATTACHMENTS.get(name); return a ? ok({ name, url: a.url, isImage: a.isImage }) : { status: 404, data: { error: 'not found' } }; }
+    return ok({ files: [] });
   }
   if (seg[1] === 'sessions' && seg[2] && M === 'GET') return ok({ session: sessionFor(idAt(2)), messages: msgs(idAt(2)) });
   if (seg[1] === 'sessions' && seg[2] && M === 'PATCH') {

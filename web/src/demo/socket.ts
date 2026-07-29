@@ -2,7 +2,7 @@
 // calls .on()/.emit(); here .emit() interprets outbound events and synthesizes the inbound
 // stream (message → turn:start → deltas → tool → turn:end), including one permission prompt
 // on the first turn of each chat so the web-approval UX is demoable.
-import { db } from './data';
+import { db, ATTACHMENTS } from './data';
 
 type Fn = (...a: any[]) => void;
 const rid = () => (crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`);
@@ -22,11 +22,12 @@ const chunks = (s: string, n = 3) => {
   return out;
 };
 
-function reply(text: string) {
+function reply(text: string, nAtt = 0) {
   const short = text.length > 56 ? text.slice(0, 53) + '…' : text;
   const isCmd = text.trim().startsWith('/');
+  const attNote = nAtt ? `Thanks — I can see ${nAtt} attachment${nAtt > 1 ? 's' : ''}. ` : '';
   return {
-    intro: isCmd ? `Running \`${text.trim()}\`. Let me pull the current state first.` : `Sure — let me take a look at "${short}".`,
+    intro: attNote + (isCmd ? `Running \`${text.trim()}\`. Let me pull the current state first.` : `Sure — let me take a look at "${short || 'the attachment'}".`),
     tool: { name: 'Bash', input: { command: 'grep -rn "TODO" src/ | head' }, output: 'src/index.ts:42:  // TODO: wire up metrics\nsrc/db.ts:88:  // TODO: add retry' },
     outro: 'Found a couple of spots. Here is what I would change:\n\n```ts\n// wrap the flaky call in a small retry\nawait withRetry(() => db.query(sql), { tries: 3 });\n```\n\nWant me to apply it and run the tests?',
   };
@@ -34,8 +35,8 @@ function reply(text: string) {
 
 function appendMsg(sessionId: string, msg: any) { (db.messages[sessionId] || (db.messages[sessionId] = [])).push(msg); }
 
-function runTurn(sessionId: string, text: string) {
-  const r = reply(text);
+function runTurn(sessionId: string, text: string, nAtt = 0) {
+  const r = reply(text, nAtt);
   const finalBlocks: any[] = [];
 
   const streamOutro = () => {
@@ -92,12 +93,18 @@ const sock = {
       return sock;
     }
     if (event === 'chat:send') {
-      const { sessionId, text, chat } = args[0] || {};
-      appendMsg(sessionId, { id: `m_${rid()}`, role: 'user', authorId: db.me.id, authorName: db.me.displayName, content: { text }, chat: !!chat, createdAt: Date.now() });
+      const { sessionId, text, chat, attachments } = args[0] || {};
+      // pull the stored data URL back so image thumbnails render inline in the echoed message
+      const atts = Array.isArray(attachments)
+        ? attachments.map((a: any) => ({ name: a.name, isImage: !!a.isImage, url: ATTACHMENTS.get(a.name)?.url }))
+        : [];
+      const content: any = { text };
+      if (atts.length) content.attachments = atts;
+      appendMsg(sessionId, { id: `m_${rid()}`, role: 'user', authorId: db.me.id, authorName: db.me.displayName, content, chat: !!chat, createdAt: Date.now() });
       deliver('message', { sessionId, message: db.messages[sessionId][db.messages[sessionId].length - 1] });
       if (chat) return sock; // room team chat: broadcast only, no Claude turn
       deliver('turn:start', { sessionId });
-      runTurn(sessionId, text);
+      runTurn(sessionId, text, atts.length);
       return sock;
     }
     if (event === 'permission:respond') {

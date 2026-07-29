@@ -6,6 +6,7 @@ import { t } from './i18n';
 export type Block =
   | { type: 'text'; text: string }
   | { type: 'tool_use'; id: string; name: string; input: any; output?: string; isError?: boolean };
+export interface Attachment { name: string; isImage: boolean; url?: string } // url: local preview / demo data URL (real mode falls back to the GET endpoint)
 export interface Msg { id: string; role: string; authorId?: string | null; authorName?: string | null; content: any; chat?: boolean; createdAt: number; }
 export interface CmdInfo { name: string; description: string; argumentHint: string }
 export interface Member { userId: string; displayName: string; avatarColor: string; username: string; isOwner: boolean; delegations: string[]; joinedAt: number; }
@@ -76,7 +77,7 @@ interface State {
   deleteWikiTopic: (id: string) => Promise<void>;
   deleteMessage: (id: string) => Promise<void>;
   editMessage: (id: string, text: string) => Promise<void>;
-  send: (text: string, opts?: { chat?: boolean; includeChat?: boolean }) => void;
+  send: (text: string, opts?: { chat?: boolean; includeChat?: boolean; attachments?: Attachment[] }) => void;
   cancel: (itemId: string) => void;
   interrupt: () => void;
   respond: (requestId: string, decision: 'allow' | 'deny' | 'always' | 'answer', answer?: string) => void;
@@ -297,7 +298,7 @@ export const useStore = create<State>((set, get) => ({
 
   send: (text, opts) => {
     const c = get().current; if (!c) return;
-    getSocket().emit('chat:send', { sessionId: c.chatSessionId, text, chat: opts?.chat, includeChat: opts?.includeChat });
+    getSocket().emit('chat:send', { sessionId: c.chatSessionId, text, chat: opts?.chat, includeChat: opts?.includeChat, attachments: opts?.attachments });
   },
   cancel: (itemId) => {
     const c = get().current; if (!c) return;
