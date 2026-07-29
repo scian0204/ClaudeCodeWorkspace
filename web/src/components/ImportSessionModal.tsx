@@ -1,9 +1,10 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import ignore from 'ignore';
 import { useStore } from '../lib/store';
-import { api } from '../lib/api';
+import { api, type UploadState } from '../lib/api';
 import { useT } from '../lib/i18n';
 import { Modal } from './Modal';
+import { UploadProgress } from './UploadProgress';
 
 type Collected = { file: File; rel: string };
 type Sess = { uuid: string; title: string; mtime: number; msgCount: number };
@@ -74,7 +75,7 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
   const [collected, setCollected] = useState<Collected[]>([]);
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const [progress, setProgress] = useState<number | null>(null);
+  const [progress, setProgress] = useState<UploadState | null>(null);
   const [busy, setBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [sessions, setSessions] = useState<Sess[]>([]);
@@ -123,27 +124,19 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
   const uploadProject = async () => {
     const sel = collected.filter((c) => checked[c.rel]);
     if (!sel.length) return;
-    const form = new FormData();
-    for (const { file, rel } of sel) form.append(rel, file, file.name); // rel carried in field NAME
-    setProgress(0);
     try {
-      await api.uploadProgress(`/api/import/staging/${sid}/files?slot=project`, form, setProgress);
+      await api.uploadFiles(`/api/import/staging/${sid}/files?slot=project`, sel, setProgress);
       setStep('claude');
     } catch (e: any) { setError(e.message); }
     finally { setProgress(null); }
   };
 
-  // Entering the .claude step auto-opens the folder picker (the guide explains which folder).
-  useEffect(() => { if (step === 'claude') claudeDirRef.current?.click(); }, [step]);
-
   const pickClaude = async (fl: FileList | null) => {
     if (!fl?.length) return;
     setClaudeNotFound(false);
-    const form = new FormData();
-    for (const f of Array.from(fl)) form.append((f as any).webkitRelativePath || f.name, f, f.name);
-    setProgress(0);
+    const items = Array.from(fl).map((f) => ({ file: f, rel: (f as any).webkitRelativePath || f.name }));
     try {
-      await api.uploadProgress(`/api/import/staging/${sid}/files?slot=claude`, form, setProgress);
+      await api.uploadFiles(`/api/import/staging/${sid}/files?slot=claude`, items, setProgress);
       const r = await api.get(`/api/import/staging/${sid}/sessions`);
       if (r.found === false) { setClaudeNotFound(true); return; }
       setProjectName(r.projectTail || '');
@@ -204,11 +197,7 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
     );
   };
 
-  const progressBar = progress !== null && (
-    <div className="mb-2">
-      <div className="h-1.5 bg-line rounded overflow-hidden"><div className="h-full bg-clay transition-all" style={{ width: `${progress}%` }} /></div>
-    </div>
-  );
+  const progressBar = progress && <UploadProgress s={progress} />;
 
   const allSessionsSel = sessions.length > 0 && sessions.every((s) => sessionChecked[s.uuid]);
 
@@ -260,6 +249,7 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
           <div className="rounded-lg border border-line bg-rail/40 p-3 mb-3">
             <div className="text-sm font-medium mb-1">{t('import.claudeGuideTitle')}</div>
             <div className="text-xs text-txt2 leading-relaxed">{t('import.claudeGuideBody', { example: 'C:\\dev\\MyProj \u2192 C--dev-MyProj' })}</div>
+            <div className="text-[11px] text-txt3 leading-relaxed mt-1.5">{t('import.claudeHiddenHint')}</div>
           </div>
           {progressBar}
           {claudeNotFound && <div className="text-[11px] text-warn mb-2">{t('import.noSessions')}</div>}

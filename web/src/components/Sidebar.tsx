@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
 import { useStore, type ReviewSessionSummary } from '../lib/store';
-import { api } from '../lib/api';
+import { api, type UploadState } from '../lib/api';
 import { Avatar, timeAgo, LangToggle } from '../lib/ui';
 import { Modal } from './Modal';
 import { MyTokenModal } from './TokenSettings';
 import { GitCredentialsModal } from './GitCredentials';
 import { ImportSessionModal } from './ImportSessionModal';
+import { UploadProgress } from './UploadProgress';
 import { useT } from '../lib/i18n';
 
 export function Sidebar() {
@@ -161,7 +162,7 @@ function WikiCreateModal({ onClose }: { onClose: () => void }) {
   const [desc, setDesc] = useState('');
   const [precompiled, setPrecompiled] = useState(false); // upload IS an already-compiled wiki
   const [files, setFiles] = useState<{ name: string; size: number }[]>([]);
-  const [progress, setProgress] = useState<number | null>(null);
+  const [progress, setProgress] = useState<UploadState | null>(null);
   const [busy, setBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -170,11 +171,8 @@ function WikiCreateModal({ onClose }: { onClose: () => void }) {
 
   const uploadCollected = async (list: { file: File; rel: string }[]) => {
     if (!list.length) return;
-    const form = new FormData();
-    for (const { file, rel } of list) form.append(rel, file, file.name); // rel carried in field NAME (filename gets basenamed)
-    setProgress(0);
     try {
-      const r = await api.uploadProgress(`/api/wiki/staging/${sid}/files`, form, setProgress);
+      const r = await api.uploadFiles(`/api/wiki/staging/${sid}/files`, list, setProgress);
       setFiles(r.files || []);
     } catch (e: any) { setError(e.message); }
     finally { setProgress(null); if (fileRef.current) fileRef.current.value = ''; if (dirRef.current) dirRef.current.value = ''; }
@@ -240,12 +238,7 @@ function WikiCreateModal({ onClose }: { onClose: () => void }) {
           {...{ webkitdirectory: '', directory: '' } as any} onChange={(e) => pick(e.target.files)} />
       </div>
 
-      {progress !== null && (
-        <div className="mb-2">
-          <div className="h-1.5 bg-line rounded overflow-hidden"><div className="h-full bg-clay transition-all" style={{ width: `${progress}%` }} /></div>
-          <div className="text-[11px] text-txt3 mt-0.5">{t('sidebar.uploading', { progress })}</div>
-        </div>
-      )}
+      {progress && <UploadProgress s={progress} />}
 
       <div className="max-h-44 overflow-auto scrolly mb-3 border border-line rounded divide-y divide-line">
         {files.length === 0 && <div className="text-[11px] text-txt3 px-2 py-1.5">{t('sidebar.noFilesUploaded')}</div>}

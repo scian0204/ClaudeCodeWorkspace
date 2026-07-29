@@ -74,6 +74,7 @@ const ko: Dict = {
   'common.collapse': '접기',
   'common.expandAll': '전체 펼치기',
   'common.collapseAll': '전체 접기',
+  'common.uploadOverall': '전체 업로드',
   // infra
   'app.loading': '로딩…',
   'store.selectProjectFirst': '먼저 프로젝트를 선택하세요.',
@@ -549,6 +550,7 @@ const ko: Dict = {
   'import.uploadProject': '프로젝트 업로드',
   'import.claudeGuideTitle': 'Claude 세션 폴더 선택',
   'import.claudeGuideBody': '~/.claude/projects 아래에서 이 프로젝트에 해당하는 폴더를 고르세요. 폴더 이름은 프로젝트 절대경로의 특수문자를 "-"로 바꾼 형태입니다. (예: {example})',
+  'import.claudeHiddenHint': 'macOS에서 `~/.claude`는 숨김 폴더입니다 — 파일 선택창에서 `⌘⇧.`(Command+Shift+마침표)를 눌러 숨김 폴더를 표시하세요. (Windows: 파일 선택창 보기 옵션에서 "숨긴 항목")',
   'import.claudePick': '세션 폴더 선택',
   'import.claudeSkip': '건너뛰기 (프로젝트만 가져오기)',
   'import.selectSessions': '가져올 세션 선택',
@@ -575,6 +577,7 @@ const en: Dict = {
   'common.collapse': 'Collapse',
   'common.expandAll': 'Expand all',
   'common.collapseAll': 'Collapse all',
+  'common.uploadOverall': 'Overall',
   // infra
   'app.loading': 'Loading…',
   'store.selectProjectFirst': 'Select a project first.',
@@ -1050,6 +1053,7 @@ const en: Dict = {
   'import.uploadProject': 'Upload project',
   'import.claudeGuideTitle': 'Pick the Claude session folder',
   'import.claudeGuideBody': 'Under ~/.claude/projects, pick the folder for this project. Its name is the project’s absolute path with every special character replaced by "-". (e.g. {example})',
+  'import.claudeHiddenHint': 'On macOS `~/.claude` is a hidden folder — press `⌘⇧.` (Command-Shift-period) in the file dialog to reveal hidden folders. (Windows: enable “Hidden items” in the dialog’s view options.)',
   'import.claudePick': 'Choose session folder',
   'import.claudeSkip': 'Skip (import project only)',
   'import.selectSessions': 'Select sessions to import',

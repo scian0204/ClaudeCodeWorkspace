@@ -76,7 +76,7 @@ export const DEFS: ConfigDef[] = [
 
   // server limits (read once at server construction → restart to apply)
   { key: 'httpBodyLimitMB', group: 'server', type: 'int', default: '6', min: 1, max: 1024, unit: 'MB', restart: true },
-  { key: 'uploadMaxMB', group: 'server', type: 'int', default: '50', min: 1, max: 4096, unit: 'MB', restart: true },
+  { key: 'uploadMaxMB', group: 'server', type: 'int', default: '200', min: 1, max: 4096, unit: 'MB', restart: true },
   { key: 'socketMaxMB', group: 'server', type: 'int', default: '5', min: 1, max: 1024, unit: 'MB', restart: true },
   { key: 'claudeCodePath', group: 'server', type: 'string', default: '', env: 'CLAUDE_CODE_PATH' },
 
