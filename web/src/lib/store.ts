@@ -48,6 +48,7 @@ interface State {
   sessionImportEnabled: boolean; // admin feature flag (from /api/config)
   llmProvidersEnabled: boolean;  // admin feature flag (from /api/config) — gates the LLM provider UI
   approvalsEnabled: boolean;     // admin feature flag (from /api/config) — gates the member-request UI
+  processPollMs: number;         // admin process panel auto-poll interval (from /api/config)
   requests: AdminRequest[];      // member: own requests; admin: all
   pendingRequestCount: number;   // admins only — drives the sidebar admin-panel badge
   viewMode: 'chat' | 'split' | 'editor';
@@ -119,7 +120,7 @@ export const useStore = create<State>((set, get) => ({
   current: null, messages: [], live: null, turnActive: false,
   queue: { running: null, waiting: [] }, pending: [],
   control: { canApprove: true, canInterrupt: true, canSetMode: true, isOwner: true, delegable: [] },
-  presence: [], congested: false, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, panel: null, sidebarOpen: false, error: null,
+  presence: [], congested: false, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, processPollMs: 5000, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, panel: null, sidebarOpen: false, error: null,
   commands: [],
 
   bootstrap: async () => {
@@ -165,6 +166,7 @@ export const useStore = create<State>((set, get) => ({
       sessionImportEnabled: cf.sessionImportEnabled !== false,
       llmProvidersEnabled: cf.llmProvidersEnabled !== false,
       approvalsEnabled: cf.approvalsEnabled !== false,
+      processPollMs: cf.processPollMs || 5000,
     });
     await get().refreshRequests();
   },

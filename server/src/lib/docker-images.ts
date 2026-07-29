@@ -13,6 +13,21 @@ export interface ImageStatus {
   error?: string;
 }
 
+// Shared listing of app-spawned containers by label (ccw.codeserver=1 / ccw.reviewsandbox=1),
+// normalized to a small shape. Used by both the cleanup scan and the process panel so they agree.
+// Throws if Docker is unavailable — callers catch and degrade (empty list + dockerUnavailable flag).
+export interface CcwContainer { id: string; name: string; state: string; createdAt: number; labels: Record<string, string> }
+export async function listCcwContainers(label: string): Promise<CcwContainer[]> {
+  const list = await docker.listContainers({ all: true, filters: { label: [label] } });
+  return list.map((c): CcwContainer => ({
+    id: c.Id.slice(0, 12),
+    name: (c.Names?.[0] || '').replace(/^\//, ''),
+    state: c.State,
+    createdAt: (c.Created || 0) * 1000,
+    labels: c.Labels || {},
+  }));
+}
+
 export async function inspectImage(image: string): Promise<ImageStatus> {
   try {
     const info: any = await docker.getImage(image).inspect();

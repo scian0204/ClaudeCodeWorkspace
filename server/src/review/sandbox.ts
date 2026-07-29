@@ -81,6 +81,14 @@ export async function removeSandbox(repoId: string, pr: number): Promise<void> {
   await removeIfExists(nameFor(repoId, pr));
 }
 
+// Admin process panel: kill ONE sandbox container by id. Sandboxes hold no in-memory state, so a
+// direct remove is fully consistent. Returns success.
+export async function killSandbox(id: string): Promise<boolean> {
+  if (!sandboxAvailable()) return false;
+  try { await docker.getContainer(id).remove({ force: true }); return true; }
+  catch { return false; }
+}
+
 // Boot cleanup: drop sandbox containers left over from a prior run (in-memory only otherwise).
 export async function cleanupSandboxOrphans(): Promise<void> {
   await removeAllSandboxes();

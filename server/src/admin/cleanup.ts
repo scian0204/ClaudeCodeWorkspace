@@ -1,11 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import Docker from 'dockerode';
 import { config } from '../config.js';
 import { db, schema, sqlite } from '../db/index.js';
 import { paths } from '../lib/paths.js';
 import { imageConfigValues } from '../lib/config-registry.js';
-import { inspectImage, listDanglingImages, pruneDanglingImages } from '../lib/docker-images.js';
+import { inspectImage, listDanglingImages, pruneDanglingImages, listCcwContainers } from '../lib/docker-images.js';
 import { removeAllEditors } from '../codeserver/manager.js';
 import { removeAllSandboxes } from '../review/sandbox.js';
 
@@ -17,7 +16,7 @@ import { removeAllSandboxes } from '../review/sandbox.js';
 // genuinely-ORPHANED dirs/rows. They never delete a user/room home, an account, a chat session, a
 // project, or any live data. fullReset is a fixed composition of those safe actions (asserted below).
 
-const docker = new Docker(); // read-only container listing for the scan; mutations delegate to reapers
+// container listing for the scan uses the shared listCcwContainers helper; mutations delegate to reapers
 
 // ── types ──
 export interface ScanContainer { id: string; name: string; state: string; kind: 'editor' | 'sandbox'; createdAt: number; orphan?: boolean }
@@ -145,15 +144,15 @@ export async function scanResources(): Promise<CleanupScan> {
     const userIds = new Set(db.select().from(schema.users).all().map((u) => u.id));
     const roomIds = new Set(db.select().from(schema.rooms).all().map((r) => r.id));
     const projectIds = new Set(db.select().from(schema.projects).all().map((p) => p.id));
-    const list = await docker.listContainers({ all: true, filters: { label: ['ccw.codeserver=1'] } });
-    const sbx = await docker.listContainers({ all: true, filters: { label: ['ccw.reviewsandbox=1'] } });
+    const list = await listCcwContainers('ccw.codeserver=1');
+    const sbx = await listCcwContainers('ccw.reviewsandbox=1');
     containers = [
       ...list.map((c): ScanContainer => {
-        const l = c.Labels || {};
+        const l = c.labels;
         const orphan = !projectIds.has(l['ccw.project']) || !(userIds.has(l['ccw.owner']) || roomIds.has(l['ccw.owner']));
-        return { id: c.Id.slice(0, 12), name: (c.Names?.[0] || '').replace(/^\//, ''), state: c.State, kind: 'editor', createdAt: (c.Created || 0) * 1000, orphan };
+        return { id: c.id, name: c.name, state: c.state, kind: 'editor', createdAt: c.createdAt, orphan };
       }),
-      ...sbx.map((c): ScanContainer => ({ id: c.Id.slice(0, 12), name: (c.Names?.[0] || '').replace(/^\//, ''), state: c.State, kind: 'sandbox', createdAt: (c.Created || 0) * 1000 })),
+      ...sbx.map((c): ScanContainer => ({ id: c.id, name: c.name, state: c.state, kind: 'sandbox', createdAt: c.createdAt })),
     ];
   } catch { dockerUnavailable = true; }
 

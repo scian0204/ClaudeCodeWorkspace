@@ -6,6 +6,7 @@ import { getSetting, setSetting } from '../lib/settings.js';
 import { cfg, listConfigForApi, setConfigValue, resetConfigValue, imageConfigValues } from '../lib/config-registry.js';
 import { inspectImage, pullImage } from '../lib/docker-images.js';
 import { scanResources, runCleanup } from '../admin/cleanup.js';
+import { listProcesses, controlProcess } from '../admin/processes.js';
 import { turnLimiter } from '../claude/throttle.js';
 import { setCommonToken, clearCommonToken, commonTokenMeta } from '../auth/claude-token.js';
 import { getProvider, setProvider, clearProvider } from '../auth/provider.js';
@@ -100,6 +101,24 @@ export async function adminRoutes(app: FastifyInstance) {
     try {
       const summary = await runCleanup(action);
       return { enabled: true, summary, ...(await scanResources()) };
+    } catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
+  });
+
+  // ── activity / processes: live view over running/queued turns, editor+sandbox containers, and
+  // running review pipelines, with per-item controls (stop turn / cancel queued / kill container). ──
+  app.get('/api/admin/processes', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    try { return await listProcesses(); }
+    catch (e: any) { return reply.code(500).send({ error: String(e?.message || e).slice(0, 300) }); }
+  });
+  app.post('/api/admin/processes', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    const b = (req.body || {}) as any;
+    try {
+      await controlProcess(String(b.kind || ''), String(b.action || ''), {
+        sessionId: b.sessionId, itemId: b.itemId, id: b.id, chatSessionId: b.chatSessionId,
+      });
+      return await listProcesses();
     } catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
   });
 

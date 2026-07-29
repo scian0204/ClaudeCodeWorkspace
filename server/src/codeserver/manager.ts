@@ -112,6 +112,20 @@ export async function killForOwner(ownerId: string) {
   }
 }
 
+// Admin process panel: kill ONE editor container by id. If it's tracked, stop() clears the in-memory
+// registry too; otherwise (a survivor from before a restart) remove it directly. Returns success.
+export async function killEditor(id: string): Promise<boolean> {
+  if (!dockerAvailable()) return false;
+  try {
+    const info = await docker.getContainer(id).inspect();
+    const name = (info.Name || '').replace(/^\//, '');
+    const inst = [...instances.values()].find((i) => i.containerName === name);
+    if (inst) { await stop(inst); return true; }
+    await docker.getContainer(id).remove({ force: true });
+    return true;
+  } catch { return false; }
+}
+
 
 // poll code-server until it answers on :8080 (avoids iframe 502 race)
 function waitReady(name: string, timeoutMs = cfg.int('codeServerWaitReadyMs')): Promise<void> {

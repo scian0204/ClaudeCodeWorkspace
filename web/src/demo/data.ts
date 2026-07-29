@@ -273,6 +273,25 @@ export const ADMIN = {
     else if (action === 'full-reset') summary = { editors: { removed: editors() }, sandboxes: { removed: sandboxes() }, danglingImages: { removed: dangling() }, orphanDirs: { removed: dirs() }, orphanRows: { removed: rows() } };
     return { summary, ...c }; // c already carries enabled: true
   },
+  // live activity / processes: a fake running set + in-place mutator so the demo control buttons
+  // actually clear the row they target (matches the server's list → control → relist shape).
+  processes: {
+    dockerUnavailable: false,
+    turns: [{ sessionId: 's_demo1', title: 'Refactor auth middleware', kind: 'private', author: { id: 'u_demo', name: 'Demo' }, startedAt: ago(1), elapsedMs: 60_000 }] as any[],
+    queued: [{ sessionId: 's_demo1', itemId: 'q1', author: { id: 'u_two', name: 'Riya' } }] as any[],
+    editors: [{ id: 'a1b2c3d4e5f6', name: 'ccw-cs-u_demo-p_web', owner: 'Demo', project: 'web', state: 'running', createdAt: ago(30) }] as any[],
+    sandboxes: [{ id: '0099aabbccdd', name: 'ccw-rvsbx-rr_web-142', state: 'running', createdAt: ago(12) }] as any[],
+    reviewPipelines: [{ reviewId: 'rv1', prNumber: 142, prTitle: 'Add rate limiter', repoName: 'web', chatSessionId: 's_rev1' }] as any[],
+  },
+  runProcess(body: any) {
+    const p = ADMIN.processes;
+    if (body.kind === 'turn') p.turns = p.turns.filter((x: any) => x.sessionId !== body.sessionId);
+    else if (body.kind === 'queued') p.queued = p.queued.filter((x: any) => x.itemId !== body.itemId);
+    else if (body.kind === 'editor') p.editors = p.editors.filter((x: any) => x.id !== body.id);
+    else if (body.kind === 'sandbox') p.sandboxes = p.sandboxes.filter((x: any) => x.id !== body.id);
+    else if (body.kind === 'pipeline') p.reviewPipelines = p.reviewPipelines.filter((x: any) => x.chatSessionId !== body.chatSessionId);
+    return p;
+  },
   // client-facing config subset (model dropdown)
   models: { 'claude-opus-4-8': 'Opus 4.8', 'claude-sonnet-5': 'Sonnet 5', 'claude-haiku-4-5-20251001': 'Haiku 4.5' } as Record<string, string>,
   defaultModel: 'claude-opus-4-8',

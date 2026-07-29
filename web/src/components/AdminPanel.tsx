@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../lib/store';
 import { api } from '../lib/api';
 import { useT } from '../lib/i18n';
-import { MobileMenuButton } from '../lib/ui';
+import { MobileMenuButton, timeAgo } from '../lib/ui';
 import { GitCredList } from './GitCredentials';
 import { LlmProviderForm } from './LlmProvider';
 import { RequestInfo } from './MyPage';
@@ -15,6 +15,7 @@ const TABS = [
   { key: 'users', label: 'admin.tab.users' },
   { key: 'providers', label: 'admin.tab.providers' },
   { key: 'usage', label: 'admin.tab.usage' },
+  { key: 'processes', label: 'admin.tab.processes' },
   { key: 'config', label: 'admin.tab.config' },
   { key: 'resources', label: 'admin.tab.resources' },
 ] as const;
@@ -168,6 +169,8 @@ export function AdminPanel() {
             <ConfigManager />
           </>
         )}
+
+        {tab === 'processes' && <ProcessesManager />}
 
         {tab === 'resources' && <CleanupManager />}
 
@@ -462,6 +465,144 @@ function ImageControl({ it, edit, onEdit, onSave }: {
         <button className="text-clay hover:underline disabled:opacity-40" disabled={busy !== null || dirty}
           onClick={pull}>{busy === 'pull' ? t('admin.cfgImagePulling') : t('admin.cfgImagePull')}</button>
       </div>
+    </div>
+  );
+}
+
+// Activity / processes: a live task-manager over running/queued turns, editor + sandbox containers,
+// and running review pipelines, with a control per row. Auto-polls every processPollMs WHILE this tab
+// is mounted — the tab is conditionally rendered, so a tab-switch unmounts this and clears the interval.
+function ProcessesManager() {
+  const t = useT();
+  const pollMs = useStore((s) => s.processPollMs);
+  const [data, setData] = useState<any>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const load = async () => { try { setData(await api.get('/api/admin/processes')); } catch (e: any) { useStore.getState().setError(e.message); } };
+  useEffect(() => {
+    load();
+    const id = setInterval(load, Math.max(1000, pollMs));
+    return () => clearInterval(id);
+  }, [pollMs]);
+
+  const act = async (key: string, confirmKey: string, body: any) => {
+    if (!confirm(t(confirmKey))) return;
+    setBusy(key);
+    try { setData(await api.post('/api/admin/processes', body)); }
+    catch (e: any) { useStore.getState().setError(e.message); }
+    finally { setBusy(null); }
+  };
+
+  if (!data) return <div className="text-sm text-txt3">{t('admin.cleanup.rescanning')}</div>;
+  const na = data.dockerUnavailable;
+  const disabled = busy !== null;
+  const turns = data.turns || [], queued = data.queued || [], editors = data.editors || [], sandboxes = data.sandboxes || [], pipelines = data.reviewPipelines || [];
+  const short = (s: string) => (s || '').slice(0, 8);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="font-semibold">{t('admin.proc.title')}</div>
+        <button className="ml-auto text-xs border border-line rounded-lg px-2.5 py-1 hover:border-clay disabled:opacity-40"
+          disabled={disabled} onClick={() => load()}>⟳ {t('admin.proc.refresh')}</button>
+      </div>
+      <p className="text-[11px] text-txt3 leading-snug">{t('admin.proc.intro')}</p>
+
+      {/* active turns */}
+      <Section title={`${t('admin.proc.turns')} · ${turns.length}`}>
+        <div className="overflow-x-auto scrolly">
+          <table className="w-full text-sm min-w-[420px]">
+            <tbody>
+              {turns.map((r: any) => (
+                <tr key={r.sessionId} className="border-t border-line first:border-0">
+                  <td className="py-1.5 pr-2 break-all">{r.title}</td>
+                  <td className="pr-2 text-txt3 whitespace-nowrap">{r.author?.name}</td>
+                  <td className="pr-2 text-txt3 whitespace-nowrap">{timeAgo(r.startedAt)}</td>
+                  <td className="text-right"><button className="btn-danger text-xs" disabled={disabled}
+                    onClick={() => act(`turn:${r.sessionId}`, 'admin.proc.confirmStopTurn', { kind: 'turn', action: 'stop', sessionId: r.sessionId })}>{t('admin.proc.stop')}</button></td>
+                </tr>
+              ))}
+              {turns.length === 0 && <tr><td className="py-1.5 text-txt3">{t('common.none')}</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </Section>
+
+      {/* queue (waiting items) */}
+      <Section title={`${t('admin.proc.queue')} · ${queued.length}`}>
+        <div className="overflow-x-auto scrolly">
+          <table className="w-full text-sm min-w-[420px]">
+            <tbody>
+              {queued.map((r: any) => (
+                <tr key={r.itemId} className="border-t border-line first:border-0">
+                  <td className="py-1.5 pr-2 font-mono text-[11px] break-all">{short(r.sessionId)}</td>
+                  <td className="pr-2 text-txt3 whitespace-nowrap">{r.author?.name}</td>
+                  <td className="text-right"><button className="btn-danger text-xs" disabled={disabled}
+                    onClick={() => act(`q:${r.itemId}`, 'admin.proc.confirmCancel', { kind: 'queued', action: 'cancel', sessionId: r.sessionId, itemId: r.itemId })}>{t('admin.proc.cancel')}</button></td>
+                </tr>
+              ))}
+              {queued.length === 0 && <tr><td className="py-1.5 text-txt3">{t('common.none')}</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </Section>
+
+      {/* editor containers */}
+      <Section title={`${t('admin.proc.editors')}${na ? ` · ${t('admin.cleanup.dockerNa')}` : ` · ${editors.length}`}`}>
+        <div className="overflow-x-auto scrolly">
+          <table className="w-full text-sm min-w-[420px]">
+            <tbody>
+              {editors.map((c: any) => (
+                <tr key={c.id} className="border-t border-line first:border-0">
+                  <td className="py-1.5 pr-2 font-mono text-[11px] break-all">{c.name || c.id}</td>
+                  <td className="pr-2 text-txt3 whitespace-nowrap">{c.owner}{c.project ? ` · ${c.project}` : ''}</td>
+                  <td className="pr-2 text-txt3">{c.state}</td>
+                  <td className="text-right"><button className="btn-danger text-xs" disabled={disabled}
+                    onClick={() => act(`ed:${c.id}`, 'admin.proc.confirmKillEditor', { kind: 'editor', action: 'stop', id: c.id })}>{t('admin.proc.kill')}</button></td>
+                </tr>
+              ))}
+              {editors.length === 0 && <tr><td className="py-1.5 text-txt3">{na ? t('admin.cleanup.dockerNa') : t('common.none')}</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </Section>
+
+      {/* review sandbox containers */}
+      <Section title={`${t('admin.proc.sandboxes')}${na ? ` · ${t('admin.cleanup.dockerNa')}` : ` · ${sandboxes.length}`}`}>
+        <div className="overflow-x-auto scrolly">
+          <table className="w-full text-sm min-w-[420px]">
+            <tbody>
+              {sandboxes.map((c: any) => (
+                <tr key={c.id} className="border-t border-line first:border-0">
+                  <td className="py-1.5 pr-2 font-mono text-[11px] break-all">{c.name || c.id}</td>
+                  <td className="pr-2 text-txt3">{c.state}</td>
+                  <td className="text-right"><button className="btn-danger text-xs" disabled={disabled}
+                    onClick={() => act(`sb:${c.id}`, 'admin.proc.confirmKillSandbox', { kind: 'sandbox', action: 'stop', id: c.id })}>{t('admin.proc.kill')}</button></td>
+                </tr>
+              ))}
+              {sandboxes.length === 0 && <tr><td className="py-1.5 text-txt3">{na ? t('admin.cleanup.dockerNa') : t('common.none')}</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </Section>
+
+      {/* running review pipelines */}
+      <Section title={`${t('admin.proc.pipelines')} · ${pipelines.length}`}>
+        <div className="overflow-x-auto scrolly">
+          <table className="w-full text-sm min-w-[420px]">
+            <tbody>
+              {pipelines.map((r: any) => (
+                <tr key={r.reviewId} className="border-t border-line first:border-0">
+                  <td className="py-1.5 pr-2 break-all">#{r.prNumber} {r.prTitle}</td>
+                  <td className="pr-2 text-txt3 whitespace-nowrap">{r.repoName}</td>
+                  <td className="text-right"><button className="btn-danger text-xs" disabled={disabled}
+                    onClick={() => act(`pl:${r.reviewId}`, 'admin.proc.confirmStopPipeline', { kind: 'pipeline', action: 'stop', chatSessionId: r.chatSessionId })}>{t('admin.proc.stop')}</button></td>
+                </tr>
+              ))}
+              {pipelines.length === 0 && <tr><td className="py-1.5 text-txt3">{t('common.none')}</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </Section>
     </div>
   );
 }

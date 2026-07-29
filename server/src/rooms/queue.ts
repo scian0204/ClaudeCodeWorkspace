@@ -76,3 +76,5 @@ export function cancelQueued(sessionId: string, itemId: string): boolean {
   return getQueue(sessionId).cancel(itemId);
 }
 export function queueState(sessionId: string) { return getQueue(sessionId).state(); }
+// Every session's queue state (running + waiting) — admin "activity/processes" panel.
+export function allQueueStates() { return [...queues.values()].map((q) => q.state()); }

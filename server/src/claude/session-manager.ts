@@ -26,11 +26,16 @@ export type Block =
 
 interface ActiveTurn {
   abort: AbortController; blocks: Block[]; author: { id: string; name: string };
+  startedAt: number; // when this turn went live (admin process panel: elapsed time)
   query?: { interrupt: () => Promise<unknown> }; // live SDK handle for immediate turn-stop
 }
 const active = new Map<string, ActiveTurn>();
 
 export function isTurnActive(sessionId: string) { return active.has(sessionId); }
+// Live snapshot of every running turn (admin "activity/processes" panel).
+export function listActiveTurns(): { sessionId: string; author: { id: string; name: string }; startedAt: number }[] {
+  return [...active.entries()].map(([sessionId, t]) => ({ sessionId, author: t.author, startedAt: t.startedAt }));
+}
 // Snapshot of the in-flight turn so a client joining mid-turn can render progress it missed.
 export function liveTurn(sessionId: string): { blocks: Block[]; author: { id: string; name: string } } | null {
   const t = active.get(sessionId);
@@ -313,7 +318,7 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
 
   const abort = new AbortController();
   const blocks: Block[] = [];
-  const turn: ActiveTurn = { abort, blocks, author: p.author }; // blocks kept live so join can replay progress
+  const turn: ActiveTurn = { abort, blocks, author: p.author, startedAt: Date.now() }; // blocks kept live so join can replay progress
   active.set(s.id, turn);
   p.emit('turn:start', { sessionId: s.id, author: p.author });
 

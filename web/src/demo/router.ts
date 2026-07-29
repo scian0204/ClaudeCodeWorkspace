@@ -60,7 +60,7 @@ export function route(method: string, rawPath: string, body?: any): Res {
   if (P === '/api/auth/me/avatar') { db.me.avatar = M === 'DELETE' ? null : (b.avatarDataUrl || db.me.avatar); return ok({ user: db.me }); }
 
   // ---- client-facing config (model dropdown) ----
-  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true });
+  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, processPollMs: 5000 });
 
   // ---- member requests (approval workflow) ----
   if (P === '/api/requests/actions') return ok({ actions: REQUEST_ACTIONS });
@@ -315,6 +315,8 @@ export function route(method: string, rawPath: string, body?: any): Res {
   }
   if (P === '/api/admin/cleanup' && M === 'GET') return ok(ADMIN.cleanup);
   if (P === '/api/admin/cleanup' && M === 'POST') return ok(ADMIN.runCleanup(b.action));
+  if (P === '/api/admin/processes' && M === 'GET') return ok(ADMIN.processes);
+  if (P === '/api/admin/processes' && M === 'POST') return ok(ADMIN.runProcess(b));
   if (P === '/api/admin/restart' && M === 'POST') return ok({ ok: true });
   if (P === '/api/admin/claude-token') return ok({});
 
