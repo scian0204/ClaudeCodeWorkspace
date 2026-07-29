@@ -18,6 +18,7 @@ const MODELS: Record<string, string> = {
 const MODES: Record<string, string> = {
   default: 'chat.modeDefault', acceptEdits: 'chat.modeAcceptEdits', bypassPermissions: 'chat.modeBypass', plan: 'chat.modePlan',
 };
+const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
 
 const clampPanelW = (w: number) => Math.max(300, Math.min(w, 1000));
 
@@ -55,7 +56,7 @@ export function Chat() {
 }
 
 function Header() {
-  const { current: c, presence, control, toggleTheme, setViewMode, viewMode, setModel, setMode } = useStore();
+  const { current: c, presence, control, toggleTheme, setViewMode, viewMode, setModel, setEffort, setMode } = useStore();
   const [showMembers, setShowMembers] = useState(false);
   const [explorer, setExplorer] = useState(false);
   const [gitOpen, setGitOpen] = useState(false);
@@ -103,6 +104,15 @@ function Header() {
         <Menu>
           {Object.entries(models).map(([id, label]) => (
             <MenuItem key={id} onSelect={() => setModel(id)}>{label}</MenuItem>
+          ))}
+        </Menu>
+      </DM.Root>
+
+      <DM.Root>
+        <DM.Trigger asChild><button className="pill" disabled={!!c.readOnly} title={t('cfg.defaultEffort')}>{t('effort.' + c.effort)} ▾</button></DM.Trigger>
+        <Menu>
+          {EFFORTS.map((lvl) => (
+            <MenuItem key={lvl} onSelect={() => setEffort(lvl)}>{t('effort.' + lvl)}</MenuItem>
           ))}
         </Menu>
       </DM.Root>

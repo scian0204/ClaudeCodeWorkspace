@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
 CREATE TABLE IF NOT EXISTS chat_sessions (
   id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, kind TEXT NOT NULL, room_id TEXT,
   title TEXT NOT NULL, project_id TEXT, wiki_topic_id TEXT, claude_session_id TEXT,
-  model TEXT NOT NULL DEFAULT 'claude-opus-4-8', permission_mode TEXT NOT NULL DEFAULT 'default',
+  model TEXT NOT NULL DEFAULT 'claude-opus-4-8', effort TEXT NOT NULL DEFAULT 'high',
+  permission_mode TEXT NOT NULL DEFAULT 'default',
   created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS wiki_topics (
@@ -109,6 +110,8 @@ export function initDb() {
   try { sqlite.exec("ALTER TABLE messages ADD COLUMN chat INTEGER NOT NULL DEFAULT 0"); } catch { /* already present */ }
   // per-repo review build image (null → global reviewSandboxImage)
   try { sqlite.exec("ALTER TABLE review_repos ADD COLUMN sandbox_image TEXT"); } catch { /* already present */ }
+  // per-session SDK effort level (unsupported models silently downgrade)
+  try { sqlite.exec("ALTER TABLE chat_sessions ADD COLUMN effort TEXT NOT NULL DEFAULT 'high'"); } catch { /* already present */ }
   db = drizzle(sqlite, { schema });
   return db;
 }

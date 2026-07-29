@@ -30,6 +30,7 @@ export const chatSessions = sqliteTable('chat_sessions', {
   wikiTopicId: text('wiki_topic_id'), // set => this is a user's private thread under a wiki topic
   claudeSessionId: text('claude_session_id'), // SDK resume id
   model: text('model').notNull().default('claude-opus-4-8'),
+  effort: text('effort').notNull().default('high'), // SDK effort level: low|medium|high|xhigh|max
   permissionMode: text('permission_mode').notNull().default('default'),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),

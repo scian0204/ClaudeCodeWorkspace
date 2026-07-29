@@ -10,7 +10,7 @@ export interface Msg { id: string; role: string; authorId?: string | null; autho
 export interface CmdInfo { name: string; description: string; argumentHint: string }
 export interface Member { userId: string; displayName: string; avatarColor: string; username: string; isOwner: boolean; delegations: string[]; joinedAt: number; }
 export interface RoomSummary { id: string; name: string; ownerId: string; chatSessionId: string; permissionMode: string; members: Member[]; }
-export interface PrivateSession { id: string; title: string; updatedAt: number; projectId: string | null; model: string; permissionMode: string; }
+export interface PrivateSession { id: string; title: string; updatedAt: number; projectId: string | null; model: string; effort: string; permissionMode: string; }
 export interface Project { id: string; scope: string; ownerId: string | null; name: string; path: string; }
 export interface WikiTopic { id: string; name: string; description: string; path: string; createdBy: string; createdAt: number; compileStatus?: string; compiledAt?: number | null; compileError?: string | null; }
 export interface ReviewRepo { id: string; name: string; provider: string; host: string; slug: string; gitUrl: string; baseBranch: string | null; sandboxImage: string | null; polledAt: number | null; pollError: string | null; openCount: number; createdAt: number; }
@@ -21,7 +21,7 @@ export interface Live { blocks: Block[]; toolMap: Record<string, number>; }
 export interface QueueState { running: { id: string; author: { id: string; name: string } } | null; waiting: { id: string; author: { id: string; name: string } }[]; }
 export interface Control { canApprove: boolean; canInterrupt: boolean; canSetMode: boolean; isOwner: boolean; delegable: string[]; }
 export interface PermReq { requestId: string; tool: string; input: any; }
-export interface Current { chatSessionId: string; kind: 'private' | 'room' | 'review'; roomId?: string; wikiTopicId?: string; reviewId?: string; review?: ReviewMeta; readOnly?: boolean; title: string; projectId: string | null; model: string; permissionMode: string; room?: RoomSummary; }
+export interface Current { chatSessionId: string; kind: 'private' | 'room' | 'review'; roomId?: string; wikiTopicId?: string; reviewId?: string; review?: ReviewMeta; readOnly?: boolean; title: string; projectId: string | null; model: string; effort: string; permissionMode: string; room?: RoomSummary; }
 
 interface State {
   user: User | null;
@@ -86,6 +86,7 @@ interface State {
   deleteProject: (projectId: string) => Promise<void>;
   createProject: (name: string) => Promise<void>;
   setModel: (model: string) => Promise<void>;
+  setEffort: (effort: string) => Promise<void>;
   setMode: (mode: string) => Promise<void>;
   reloadRoom: () => Promise<void>;
   setPanel: (p: null | 'admin' | 'plugins' | 'me') => void;
@@ -159,7 +160,7 @@ export const useStore = create<State>((set, get) => ({
     const { session, messages } = await api.get(`/api/sessions/${id}`);
     await join(set, get, {
       chatSessionId: session.id, kind: 'private', title: session.title,
-      projectId: session.projectId, model: session.model, permissionMode: session.permissionMode,
+      projectId: session.projectId, model: session.model, effort: session.effort || 'high', permissionMode: session.permissionMode,
     }, messages);
   },
 
@@ -169,7 +170,7 @@ export const useStore = create<State>((set, get) => ({
     await join(set, get, {
       chatSessionId: room.chatSessionId, kind: 'room', roomId: room.id, title: room.name,
       projectId: chat?.session?.projectId ?? null, model: chat?.session?.model || 'claude-opus-4-8',
-      permissionMode: room.permissionMode, room,
+      effort: chat?.session?.effort || 'high', permissionMode: room.permissionMode, room,
     }, messages);
   },
 
@@ -179,7 +180,7 @@ export const useStore = create<State>((set, get) => ({
     await join(set, get, {
       chatSessionId: session.id, kind: 'private', wikiTopicId: topicId,
       title: session.title || t?.name || 'Wiki',
-      projectId: null, model: session.model || 'claude-opus-4-8', permissionMode: session.permissionMode || 'default',
+      projectId: null, model: session.model || 'claude-opus-4-8', effort: session.effort || 'high', permissionMode: session.permissionMode || 'default',
     }, messages);
   },
 
@@ -189,7 +190,7 @@ export const useStore = create<State>((set, get) => ({
     await join(set, get, {
       chatSessionId: review.chatSessionId, kind: 'review', reviewId,
       title: session.title || `#${review.prNumber}`, projectId: null,
-      model: session.model || 'claude-opus-4-8', permissionMode: session.permissionMode || 'default',
+      model: session.model || 'claude-opus-4-8', effort: session.effort || 'high', permissionMode: session.permissionMode || 'default',
       readOnly: role !== 'admin',
       review: {
         reviewId, prNumber: review.prNumber, prTitle: review.prTitle, prUrl: review.prUrl,
@@ -345,6 +346,11 @@ export const useStore = create<State>((set, get) => ({
     const c = get().current; if (!c) return;
     if (c.kind === 'private' || c.kind === 'review') await api.patch(`/api/sessions/${c.chatSessionId}`, { model });
     set({ current: { ...c, model } });
+  },
+  setEffort: async (effort) => {
+    const c = get().current; if (!c) return;
+    if (c.kind === 'private' || c.kind === 'review') await api.patch(`/api/sessions/${c.chatSessionId}`, { effort });
+    set({ current: { ...c, effort } });
   },
   setMode: async (mode) => {
     const c = get().current; if (!c) return;

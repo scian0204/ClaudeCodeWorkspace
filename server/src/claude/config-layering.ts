@@ -1,4 +1,5 @@
 import path from 'node:path';
+import type { EffortLevel } from '@anthropic-ai/claude-agent-sdk';
 import { cfg } from '../lib/config-registry.js';
 import { paths, allowedRootsFor, isInsideRoots } from '../lib/paths.js';
 
@@ -9,6 +10,7 @@ export interface SessionContext {
   ownerId: string;   // uid or roomId -> whose HOME
   cwd: string;       // project dir the turn runs in
   model: string;
+  effort?: EffortLevel; // SDK reasoning effort; unsupported models silently downgrade
   permissionMode: PermMode;
   plugins: string[]; // resolved enabled plugin dir paths (common class-2 + forced + personal)
   authToken: string; // resolved Claude token for the turn's author ('' => mock/no-auth)
@@ -62,6 +64,7 @@ export function buildOptions(ctx: SessionContext, extra: {
     env,
     model: ctx.model,
     permissionMode: ctx.permissionMode,
+    effort: ctx.effort,
     settingSources: ['user', 'project', 'local'],
     additionalDirectories,
     plugins: ctx.plugins.length ? ctx.plugins.map((p) => ({ type: 'local' as const, path: p })) : undefined,

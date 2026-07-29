@@ -10,14 +10,14 @@ const ok = (data: any = {}): Res => ({ status: 200, data });
 
 function sessionFor(id: string) {
   const s = db.sessions.find((x) => x.id === id);
-  if (s) return { id: s.id, title: s.title, projectId: s.projectId, model: s.model, permissionMode: s.permissionMode };
+  if (s) return { id: s.id, title: s.title, projectId: s.projectId, model: s.model, effort: s.effort || 'high', permissionMode: s.permissionMode };
   const room = db.rooms.find((r) => r.chatSessionId === id);
-  if (room) return { id, title: room.name, projectId: null, model: 'claude-opus-4-8', permissionMode: room.permissionMode };
+  if (room) return { id, title: room.name, projectId: null, model: 'claude-opus-4-8', effort: 'high', permissionMode: room.permissionMode };
   const w = db.wikiTopics.find((t) => `cs_${t.id}` === id);
-  if (w) return { id, title: w.name, projectId: null, model: 'claude-opus-4-8', permissionMode: 'default' };
+  if (w) return { id, title: w.name, projectId: null, model: 'claude-opus-4-8', effort: 'high', permissionMode: 'default' };
   const rv = db.reviewSessions.find((x: any) => x.chatSessionId === id);
-  if (rv) return { id, title: `#${rv.prNumber} ${rv.prTitle}`, projectId: null, model: 'claude-opus-4-8', permissionMode: 'default' };
-  return { id, title: 'New chat', projectId: null, model: 'claude-opus-4-8', permissionMode: 'default' };
+  if (rv) return { id, title: `#${rv.prNumber} ${rv.prTitle}`, projectId: null, model: 'claude-opus-4-8', effort: 'high', permissionMode: 'default' };
+  return { id, title: 'New chat', projectId: null, model: 'claude-opus-4-8', effort: 'high', permissionMode: 'default' };
 }
 const msgs = (id: string) => (db.messages[id] || (db.messages[id] = []));
 
@@ -39,12 +39,12 @@ export function route(method: string, rawPath: string, body?: any): Res {
   if (P === '/api/auth/me/avatar') { db.me.avatar = M === 'DELETE' ? null : (b.avatarDataUrl || db.me.avatar); return ok({ user: db.me }); }
 
   // ---- client-facing config (model dropdown) ----
-  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, sessionImportEnabled: true });
+  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true });
 
   // ---- sessions ----
   if (P === '/api/sessions' && M === 'GET') return ok({ sessions: db.sessions });
   if (P === '/api/sessions' && M === 'POST') {
-    const s = { id: genId('s'), title: 'New chat', updatedAt: Date.now(), projectId: null, model: 'claude-opus-4-8', permissionMode: 'default' };
+    const s = { id: genId('s'), title: 'New chat', updatedAt: Date.now(), projectId: null, model: 'claude-opus-4-8', effort: 'high', permissionMode: 'default' };
     db.sessions.unshift(s); db.messages[s.id] = []; return ok({ session: s });
   }
   if (seg[1] === 'sessions' && seg[3] === 'commands') return ok({ commands: COMMANDS });

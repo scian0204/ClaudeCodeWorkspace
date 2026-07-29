@@ -127,6 +127,7 @@ export async function probeCommands(chatSessionId: string, requesterId?: string 
   if (hit) return hit;
   const ctx: SessionContext = {
     kind, ownerId, cwd: await cwdFor(s), model: s.model || cfg.str('defaultModel'),
+    effort: (s.effort || cfg.str('defaultEffort')) as SessionContext['effort'],
     permissionMode: clampMode((s.permissionMode as PermMode) || 'default', allowBypass()), plugins,
     authToken: auth.token,
   };
@@ -183,6 +184,7 @@ export async function probeUsage(chatSessionId: string, requesterId?: string | n
 
   const ctx: SessionContext = {
     kind, ownerId, cwd: await cwdFor(s), model: s.model || cfg.str('defaultModel'),
+    effort: (s.effort || cfg.str('defaultEffort')) as SessionContext['effort'],
     permissionMode: clampMode((s.permissionMode as PermMode) || 'default', allowBypass()),
     plugins: resolvePluginPaths(kind, ownerId), authToken: auth.token,
   };
@@ -263,6 +265,7 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
 
   const ctx: SessionContext = {
     kind, ownerId, cwd, model: s.model || cfg.str('defaultModel'),
+    effort: (s.effort || cfg.str('defaultEffort')) as SessionContext['effort'],
     permissionMode: mode, plugins: resolvePluginPaths(kind, ownerId),
     authToken: auth.token, gitEnv, mcpServers, disallowedTools,
   };

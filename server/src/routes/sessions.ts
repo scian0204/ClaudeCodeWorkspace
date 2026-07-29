@@ -8,6 +8,8 @@ import { reviewRoleForChat } from '../review/manager.js';
 import { cfg } from '../lib/config-registry.js';
 import type { AuthUser } from '../auth/index.js';
 
+const EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'];
+
 function loadMessages(sessionId: string) {
   return db.select().from(schema.messages).where(eq(schema.messages.sessionId, sessionId))
     .orderBy(schema.messages.createdAt).all()
@@ -48,8 +50,8 @@ export async function sessionRoutes(app: FastifyInstance) {
     const row = {
       id: newId(), ownerId: u.id, kind: 'private', roomId: null,
       title: title ? String(title) : '새 대화', projectId: projectId ? String(projectId) : null,
-      claudeSessionId: null, model: cfg.str('defaultModel'), permissionMode: 'default',
-      createdAt: now, updatedAt: now,
+      claudeSessionId: null, model: cfg.str('defaultModel'), effort: cfg.str('defaultEffort'),
+      permissionMode: 'default', createdAt: now, updatedAt: now,
     };
     db.insert(schema.chatSessions).values(row).run();
     return { session: row };
@@ -102,6 +104,10 @@ export async function sessionRoutes(app: FastifyInstance) {
     const b = (req.body || {}) as any;
     const patch: any = { updatedAt: Date.now() };
     for (const k of ['title', 'model', 'permissionMode', 'projectId']) if (k in b) patch[k] = b[k];
+    if ('effort' in b) {
+      if (!EFFORT_LEVELS.includes(b.effort)) return reply.code(400).send({ error: 'invalid effort' });
+      patch.effort = b.effort;
+    }
     // Changing the project changes the turn's cwd. The CLI stores each conversation's
     // transcript under the cwd it was created in, so the old resume id can't be found
     // in the new cwd. Reset the SDK conversation when the project actually changes.

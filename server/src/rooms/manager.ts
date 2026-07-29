@@ -17,7 +17,7 @@ export function createRoom(owner: AuthUser, name: string) {
   db.insert(schema.chatSessions).values({
     id: chatSessionId, ownerId: owner.id, kind: 'room', roomId, title: name,
     projectId: null, claudeSessionId: null, model: cfg.str('defaultModel'),
-    permissionMode: 'default', createdAt: now, updatedAt: now,
+    effort: cfg.str('defaultEffort'), permissionMode: 'default', createdAt: now, updatedAt: now,
   }).run();
   db.insert(schema.rooms).values({
     id: roomId, name, ownerId: owner.id, chatSessionId, permissionMode: 'default', createdAt: now,

@@ -340,7 +340,7 @@ export async function wikiRoutes(app: FastifyInstance) {
       const row = {
         id: newId(), ownerId: u.id, kind: 'private', roomId: null, title: t.name,
         projectId: null, wikiTopicId: id, claudeSessionId: null, model: cfg.str('defaultModel'),
-        permissionMode: 'default', createdAt: now, updatedAt: now,
+        effort: cfg.str('defaultEffort'), permissionMode: 'default', createdAt: now, updatedAt: now,
       };
       db.insert(schema.chatSessions).values(row).run();
       s = row as any;

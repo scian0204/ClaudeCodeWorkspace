@@ -155,9 +155,9 @@ export const db = {
   me: { ...ME },
   users: [ME, U_JAMIE, U_RILEY, U_SAM].map((u) => ({ id: u.id, username: u.username, role: u.role, displayName: u.displayName, avatarColor: u.avatarColor })),
   sessions: [
-    { id: 's_auth', title: 'Auth module refactor', updatedAt: ago(11), projectId: 'p_api', model: 'claude-opus-4-8', permissionMode: 'default' },
-    { id: 's_socket', title: 'Socket reconnect bug', updatedAt: ago(138), projectId: 'p_web', model: 'claude-sonnet-5', permissionMode: 'acceptEdits' },
-    { id: 's_notes', title: 'Release notes v2.3', updatedAt: ago(60 * 20), projectId: null, model: 'claude-opus-4-8', permissionMode: 'default' },
+    { id: 's_auth', title: 'Auth module refactor', updatedAt: ago(11), projectId: 'p_api', model: 'claude-opus-4-8', effort: 'high', permissionMode: 'default' },
+    { id: 's_socket', title: 'Socket reconnect bug', updatedAt: ago(138), projectId: 'p_web', model: 'claude-sonnet-5', effort: 'medium', permissionMode: 'acceptEdits' },
+    { id: 's_notes', title: 'Release notes v2.3', updatedAt: ago(60 * 20), projectId: null, model: 'claude-opus-4-8', effort: 'high', permissionMode: 'default' },
   ],
   rooms: [
     { id: 'r_backend', name: 'Backend Guild', ownerId: U_JAMIE.id, chatSessionId: 'cs_backend', permissionMode: 'default', members: [member(U_JAMIE, true), member(ME, false, ['approve', 'interrupt']), member(U_RILEY)] },
@@ -215,10 +215,12 @@ export const ADMIN = {
   // client-facing config subset (model dropdown)
   models: { 'claude-opus-4-8': 'Opus 4.8', 'claude-sonnet-5': 'Sonnet 5', 'claude-haiku-4-5-20251001': 'Haiku 4.5' } as Record<string, string>,
   defaultModel: 'claude-opus-4-8',
+  defaultEffort: 'high',
   images: { 'node:20-bookworm': { present: true, size: 402_000_000 }, 'codercom/code-server:latest': { present: false } } as Record<string, any>,
   // full config registry (representative subset for the demo)
   config: [
     { key: 'defaultModel', group: 'claude', type: 'select', options: ['claude-opus-4-8', 'claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5-20251001', 'claude-fable-5'], value: 'claude-opus-4-8', default: 'claude-opus-4-8', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'defaultEffort', group: 'claude', type: 'select', options: ['low', 'medium', 'high', 'xhigh', 'max'], value: 'high', default: 'high', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'models', group: 'claude', type: 'json', value: '{"claude-opus-4-8":"Opus 4.8","claude-sonnet-5":"Sonnet 5","claude-haiku-4-5-20251001":"Haiku 4.5"}', default: '{"claude-opus-4-8":"Opus 4.8"}', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'forceMock', group: 'claude', type: 'bool', value: '1', default: '0', restart: false, readonly: false, secret: false, overridden: true },
     { key: 'maxConcurrentTurns', group: 'claude', type: 'int', value: '3', default: '3', min: 1, max: 100, restart: false, readonly: false, secret: false, overridden: false },

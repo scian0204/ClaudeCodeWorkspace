@@ -36,6 +36,8 @@ export const DEFS: ConfigDef[] = [
   // Claude / turns
   { key: 'defaultModel', group: 'claude', type: 'select', default: 'claude-opus-4-8',
     options: ['claude-opus-4-8', 'claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5-20251001', 'claude-fable-5'] },
+  { key: 'defaultEffort', group: 'claude', type: 'select', default: 'high',
+    options: ['low', 'medium', 'high', 'xhigh', 'max'] },
   { key: 'models', group: 'claude', type: 'json', default: DEFAULT_MODELS },
   { key: 'forceMock', group: 'claude', type: 'bool', default: '0', env: 'MOCK_CLAUDE' },
   { key: 'maxConcurrentTurns', group: 'claude', type: 'int', default: '3', env: 'MAX_CONCURRENT_TURNS', min: 1, max: 100 },
@@ -227,8 +229,8 @@ export function imageConfigValues(): string[] {
 }
 
 // Client-facing subset (any authed user): drives the model dropdown.
-export function publicConfig(): { models: Record<string, string>; defaultModel: string; sessionImportEnabled: boolean } {
+export function publicConfig(): { models: Record<string, string>; defaultModel: string; defaultEffort: string; sessionImportEnabled: boolean } {
   let models: Record<string, string>;
   try { models = JSON.parse(cfg.str('models')); } catch { models = JSON.parse(DEFAULT_MODELS); }
-  return { models, defaultModel: cfg.str('defaultModel'), sessionImportEnabled: cfg.bool('sessionImportEnabled') };
+  return { models, defaultModel: cfg.str('defaultModel'), defaultEffort: cfg.str('defaultEffort'), sessionImportEnabled: cfg.bool('sessionImportEnabled') };
 }
