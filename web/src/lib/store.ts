@@ -65,6 +65,7 @@ interface State {
   autoReviewRun: (reviewId: string) => Promise<void>;
   approveReview: (reviewId: string) => Promise<{ output: string }>;
   newSession: () => Promise<void>;
+  importSessions: (payload: { sid: string; projectName?: string; sessionUuids: string[] }) => Promise<{ project: any; sessions: any[] }>;
   newRoom: (name: string) => Promise<void>;
   newWikiTopic: (payload: { name: string; description: string; stagingId?: string; precompiled?: boolean }) => Promise<void>;
   deleteSession: (id: string) => Promise<void>;
@@ -229,6 +230,12 @@ export const useStore = create<State>((set, get) => ({
     const { session } = await api.post('/api/sessions', {});
     await get().refreshLists();
     await get().openPrivate(session.id);
+  },
+
+  importSessions: async (payload) => {
+    const r = await api.post('/api/import/sessions', payload);
+    await get().refreshLists();
+    return r;
   },
 
   newWikiTopic: async (payload) => {
