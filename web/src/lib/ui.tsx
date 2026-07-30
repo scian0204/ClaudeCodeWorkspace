@@ -62,7 +62,7 @@ export function LangToggle({ className }: { className?: string }) {
   const lang = useLang();
   const tr = useT();
   return (
-    <button className={className || 'toolbtn'} title={tr('lang.toggleTitle')} onClick={toggleLang}>
+    <button type="button" className={className || 'toolbtn'} title={tr('lang.toggleTitle')} onClick={toggleLang}>
       {lang === 'ko' ? '한' : 'EN'}
     </button>
   );
