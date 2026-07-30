@@ -55,6 +55,122 @@ Claude Code CLI는 강력하지만 **내 터미널 하나**에 묶여 있습니�
 
 ---
 
+## 📸 기능 둘러보기
+
+<sub>아래 이미지는 모두 [라이브 데모](https://scian0204.github.io/ClaudeCodeWorkspace/)(MOCK 모드)에서 캡처한 **실제 UI**입니다 — 위 배지를 눌러 직접 눌러볼 수 있습니다.</sub>
+
+### 💬 Claude와 대화 — 세션별 · 스트리밍 · 툴 카드
+
+<img src="docs/screenshots/02-chat.png" alt="개인 Claude Code 세션: 스트리밍 답변, 접이식 툴 카드, 접힌 /clear 히스토리" width="100%" />
+
+모든 유저가 **각자 격리된 Claude Code 세션**(별도 CLI 서브프로세스)을 가집니다. 답변은 serif 트랜스크립트에 토큰 단위로 스트리밍되고, 각 툴 호출은 **접이식 카드**(명령 + 출력)로 표시되며, `/clear`·`/compact` 마다 그 위 대화가 **타임스탬프 토글로 접혀** 스크롤이 무한정 늘어나지 않습니다.
+
+### 🛡 웹 권한 승인 — 브라우저에서 툴 실행을 즉시 허용
+
+<img src="docs/screenshots/03-permission.png" alt="Allow / Deny / Always allow 버튼이 있는 툴 승인 요청 카드" width="100%" />
+
+Claude는 위험한 툴을 쓰기 직전 멈추고 브라우저에 물어봅니다: **허용 / 거부 / 항상 허용**. 격리 차단막(타 유저 경로·`~/.claude`·핵심 경로)은 권한 모드와 무관하게 항상 적용됩니다.
+
+### 📊 실시간 사용량 · ⚡ 세션별 Effort · 🎛 모델 & 모드
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/09-usage.png" alt="사용량 팝오버: 컨텍스트 윈도우 + claude.ai 플랜 제한과 리셋 카운트다운" width="100%" /></td>
+<td width="50%"><img src="docs/screenshots/11-slash.png" alt="슬래시 명령 팔레트" width="100%" /></td>
+</tr>
+<tr>
+<td valign="top">채팅 헤더의 <b>사용량 미터</b> — 세션별 <b>컨텍스트 윈도우</b> 사용률과 <b>claude.ai 플랜 제한</b>(5시간·주간·모델별)을 리셋 카운트다운과 함께 CLI에서 그대로 표시. 헤더 pill로 <b>모델</b>·<b>추론 Effort</b>(low → max)·<b>권한 모드</b>도 전환합니다.</td>
+<td valign="top"><b>슬래시 명령 팔레트</b> — <code>/</code>를 입력하면 내장·플러그인·스킬 명령(및 <code>/split</code> 같은 클라이언트 뷰 액션)이 뜹니다. 퍼지 검색되며 <code>@</code> 메뉴와 같은 느낌.</td>
+</tr>
+</table>
+
+### 📎 `@` 파일 참조 · 🖇 첨부 & 붙여넣기
+
+<img src="docs/screenshots/12-at.png" alt="컴포저 위에 뜬 @ 파일·폴더 참조 메뉴" width="100%" />
+
+프로젝트 채팅에서 `@`를 입력하면 **파일·폴더**를 퍼지 검색해 `@경로` 참조를 메시지에 넣을 수 있습니다 — 컴포저를 떠나지 않고 Claude에게 파일을 지목. 아무 파일이나 첨부하거나 **클립보드 스크린샷을 붙여넣기/드래그**할 수도 있고, 이미지는 Claude에게 시각적으로 렌더링됩니다.
+
+### 👥 공유 대화방 + 세밀한 권한 위임
+
+<table>
+<tr>
+<td width="55%"><img src="docs/screenshots/04-room.png" alt="멤버 아바타와 메시지별 Claude 배지가 있는 공유 대화방" width="100%" /></td>
+<td width="45%"><img src="docs/screenshots/05-members.png" alt="멤버별 권한 위임 토글이 있는 멤버 다이얼로그" width="100%" /></td>
+</tr>
+</table>
+
+**공유 대화방**에 모여 하나의 Claude를 함께 조종합니다(그룹 채팅처럼). FIFO 큐가 다자 턴을 순서대로 처리하고, 컴포저 토글이 **팀 채팅**과 **Claude 지시**를 분리합니다(`@claude`로 소환). 소유자는 **권리별로 위임**합니다: 승인 · 인터럽트 · 초대 · 강퇴 · 소유권 이전 · 방 삭제.
+
+### 💬 DM & 그룹 채팅 — Claude 없는 순수 사람 메시징
+
+<img src="docs/screenshots/08-dm.png" alt="Claude 대화방과 분리된 1:1 DM과 그룹 채널" width="100%" />
+
+Claude 대화방과 완전히 분리된, **모든** 유저를 위한 가벼운 메시징 레이어 — WebSocket 기반 1:1 DM과 이름 있는 그룹 채널, 안읽음 배지 포함. 관리자는 **그룹 채널을 공통 프로젝트 방으로 승격**할 수 있습니다.
+
+### ⑂ Git 커밋 & 푸시 · 🧑‍💻 브라우저 속 VS Code
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/10-git.png" alt="Git 패널: 파일 단위 스테이징, 커밋, 푸시, 브랜치 전환" width="100%" /></td>
+<td width="50%"><img src="docs/screenshots/13-split.png" alt="분할 뷰: 채팅 옆의 code-server 에디터 창" width="100%" /></td>
+</tr>
+<tr>
+<td valign="top">채팅 헤더에서 <b>Git 커밋 &amp; 푸시</b> — 파일 단위 스테이징, 푸시, 브랜치 전환(로컬/원격), 유저별 암호화 PAT 자격증명(관리자 공통 폴백). 어떤 자격증명·커밋 아이덴티티가 적용 중인지 정확히 보여줍니다.</td>
+<td valign="top"><b>VS Code(code-server)</b>가 유저/방별 형제 컨테이너로 즉시 뜹니다 — 브라우저 속 에디터·터미널·git을 채팅과 나란히(<i>데모는 플레이스홀더; 에디터는 Docker 배포 필요</i>).</td>
+</tr>
+</table>
+
+### 📚 LLM Wiki · 🔀 자동 PR 리뷰
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/06-wiki.png" alt="인용 출처 패널이 있는 LLM Wiki 읽기 전용 질의 스레드" width="100%" /></td>
+<td width="50%"><img src="docs/screenshots/07-review.png" alt="자동 MERGE_SAFE 판정과 원격 병합 컨트롤이 있는 PR 리뷰 세션" width="100%" /></td>
+</tr>
+<tr>
+<td valign="top"><b>LLM Wiki</b> — 문서/이미지 폴더를 업로드하면 Claude가 질의 가능한 지식베이스로 컴파일. 모든 답변이 참고한 파일을 <b>인용 출처 패널</b>에 나열하고, 호버하면 본문 언급이 하이라이트됩니다.</td>
+<td valign="top"><b>자동 PR 리뷰</b> — 각 오픈 PR이 파이프라인을 자동 실행(병합 → 샌드박스 빌드/실행 → 버그+코드 리뷰 → <b>MERGE_SAFE / DO_NOT_MERGE 판정</b>). 관리자 클릭 한 번으로 원격에서 병합.</td>
+</tr>
+</table>
+
+### 👤 마이페이지 — 내 설정을 한 곳에
+
+<img src="docs/screenshots/14-mypage.png" alt="마이페이지: 프로필 이미지, Claude 토큰, LLM Provider 대체, git 자격증명, 개인 프로젝트" width="100%" />
+
+**프로필 이미지**, **Claude 토큰**, **LLM Provider 대체**(Bedrock / Vertex / 커스텀 base URL), **git 자격증명**, **개인 프로젝트** 관리를 모은 유저별 설정 페이지. 관리자 전용 액션(공통 프로젝트 생성, 새 위키 토픽, 관리자 권한 요청)을 **실제 기능 폼 그대로 여기서 요청**할 수 있습니다.
+
+### 🎛 모든 것을 설정 — 관리자 패널
+
+<table>
+<tr>
+<td width="33%"><img src="docs/screenshots/16-admin-overview.png" alt="관리자 개요" width="100%" /><br/><sub><b>개요</b> — 유저·방·세션·스로틀·공통 토큰.</sub></td>
+<td width="33%"><img src="docs/screenshots/17-admin-usage.png" alt="관리자 사용량 대시보드" width="100%" /><br/><sub><b>사용량</b> — 유저별 턴·토큰·비용.</sub></td>
+<td width="33%"><img src="docs/screenshots/18-admin-config.png" alt="관리자 실시간 설정 레지스트리" width="100%" /><br/><sub><b>설정</b> — 모든 운영 노브를 실시간 편집.</sub></td>
+</tr>
+<tr>
+<td width="33%"><img src="docs/screenshots/19-admin-resources.png" alt="관리자 리소스 정리" width="100%" /><br/><sub><b>리소스</b> — spawn된 컨테이너·이미지·고아 스캔 &amp; 정리.</sub></td>
+<td width="33%"><img src="docs/screenshots/20-admin-activity.png" alt="관리자 활동 / 프로세스 관리자" width="100%" /><br/><sub><b>활동</b> — 턴·큐·컨테이너 실시간 작업 관리자.</sub></td>
+<td width="33%"><img src="docs/screenshots/21-admin-requests.png" alt="관리자 멤버 요청 승인 큐" width="100%" /><br/><sub><b>요청</b> — 멤버 요청 승인/거절.</sub></td>
+</tr>
+</table>
+
+### 🔌 플러그인 · 🌐 다국어 · 📱 반응형(PWA)
+
+<table>
+<tr>
+<td width="40%"><img src="docs/screenshots/15-plugins.png" alt="플러그인 패널: 공통·개인 티어" width="100%" /></td>
+<td width="40%"><img src="docs/screenshots/22-i18n-ko.png" alt="같은 UI의 한국어 표시" width="100%" /></td>
+<td width="20%"><img src="docs/screenshots/23-mobile.png" alt="사이드바가 슬라이드인 드로어가 되는 모바일 레이아웃" width="100%" /></td>
+</tr>
+<tr>
+<td valign="top"><b>2-클래스 플러그인</b> — 공통(관리자)·개인(유저) 티어; git·업로드 설치, 플러그인별 상세 + 원클릭 업데이트.</td>
+<td valign="top"><b>다국어 UI</b> — 사이드바에서 한/영 즉시 전환, 저장 + 브라우저 언어 자동 감지.</td>
+<td valign="top"><b>폰에서도 동작</b> — 사이드바가 드로어로 접히고 채팅이 전체 폭으로; PWA로 설치 가능.</td>
+</tr>
+</table>
+
+---
+
 ## ✨ 강점
 
 |  | 강점 | 설명 |

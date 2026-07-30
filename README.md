@@ -55,6 +55,122 @@ The Claude Code CLI is powerful, but it's tied to **one terminal — yours**. Cl
 
 ---
 
+## 📸 Feature tour
+
+<sub>All shots below are the **real UI** captured from the [live demo](https://scian0204.github.io/ClaudeCodeWorkspace/) (MOCK mode) — click the badge above to try any of them yourself.</sub>
+
+### 💬 Talk to Claude — per-session, streaming, with tool cards
+
+<img src="docs/screenshots/02-chat.png" alt="Private Claude Code session: streamed answer, collapsible tool cards, folded /clear history" width="100%" />
+
+Every user gets their **own isolated Claude Code session** (a separate CLI subprocess). Answers stream token-by-token in a serif transcript, each tool call is a **collapsible card** (command + output), and every `/clear` or `/compact` **folds the history above it** into a stacked, timestamped toggle so the thread never scrolls forever.
+
+### 🛡 Web permission prompts — approve tools live in the browser
+
+<img src="docs/screenshots/03-permission.png" alt="Tool approval request card with Allow / Deny / Always allow" width="100%" />
+
+Claude pauses right before a risky tool and asks the browser: **Allow / Deny / Always allow**. The isolation deny-fence (other users' paths, `~/.claude`, key paths) always applies regardless of permission mode.
+
+### 📊 Live usage meter · ⚡ per-session effort · 🎛 model & mode
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/09-usage.png" alt="Usage popover: context window fill + claude.ai plan rate limits with reset countdowns" width="100%" /></td>
+<td width="50%"><img src="docs/screenshots/11-slash.png" alt="Slash command palette" width="100%" /></td>
+</tr>
+<tr>
+<td valign="top"><b>Usage meter</b> in the chat header — per-session <b>context-window</b> fill plus your <b>claude.ai plan limits</b> (5-hour, weekly, per-model) with live reset countdowns, straight from the CLI. Header pills also switch the <b>model</b>, the <b>reasoning effort</b> (low → max) and the <b>permission mode</b>.</td>
+<td valign="top"><b>Slash command palette</b> — type <code>/</code> for built-in, plugin and skill commands (and client-side view actions like <code>/split</code>). Fuzzy-searchable, same feel as the <code>@</code> menu.</td>
+</tr>
+</table>
+
+### 📎 `@` file references · 🖇 attach & paste
+
+<img src="docs/screenshots/12-at.png" alt="@ file and folder reference menu over the composer" width="100%" />
+
+Type `@` in any project chat to fuzzy-search **files and folders** and drop an `@path` reference into your message — point Claude at a file without leaving the composer. You can also attach any file or **paste/drag a clipboard screenshot**; images render visually to Claude.
+
+### 👥 Shared rooms + fine-grained delegation
+
+<table>
+<tr>
+<td width="55%"><img src="docs/screenshots/04-room.png" alt="Shared room chat with member avatars and per-message Claude badge" width="100%" /></td>
+<td width="45%"><img src="docs/screenshots/05-members.png" alt="Members dialog with per-member delegation toggles" width="100%" /></td>
+</tr>
+</table>
+
+Gather in a **shared room** to drive one Claude together (like a group chat). A FIFO queue orders multi-party turns; a composer toggle separates **team chat** from **instructions to Claude** (`@claude` to summon). The owner **delegates per right**: approve · interrupt · invite · kick · transfer ownership · delete room.
+
+### 💬 DM & group chat — plain human messaging, no Claude
+
+<img src="docs/screenshots/08-dm.png" alt="Direct message thread and group channel, separate from Claude rooms" width="100%" />
+
+A lightweight messaging layer for **every** user, fully separate from the Claude rooms — 1:1 DMs and named group channels over WebSocket, with unread badges. An admin can **promote a group channel to a common project room**.
+
+### ⑂ Git commit & push · 🧑‍💻 VS Code in the browser
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/10-git.png" alt="Git panel: file-level staging, commit, push, branch switch" width="100%" /></td>
+<td width="50%"><img src="docs/screenshots/13-split.png" alt="Split view: chat beside the code-server editor pane" width="100%" /></td>
+</tr>
+<tr>
+<td valign="top"><b>Git commit &amp; push</b> from the chat header — file-level staging, push, branch switch (local/remote), with encrypted per-user PAT credentials (admin-common fallback). The panel shows exactly which credential and commit identity are in effect.</td>
+<td valign="top"><b>VS Code (code-server)</b> spins up per user/room as a sibling container — editor, terminal and git in the browser, side-by-side with chat (<i>the demo shows a placeholder; the editor needs the Docker deployment</i>).</td>
+</tr>
+</table>
+
+### 📚 LLM Wiki · 🔀 Automatic PR review
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/06-wiki.png" alt="LLM Wiki read-only query thread with a cited-sources panel" width="100%" /></td>
+<td width="50%"><img src="docs/screenshots/07-review.png" alt="PR review session with an auto MERGE_SAFE verdict and remote-merge control" width="100%" /></td>
+</tr>
+<tr>
+<td valign="top"><b>LLM Wiki</b> — upload a folder of docs/images, Claude compiles them into a queryable knowledge base. Every answer lists the files it drew on in a <b>cited-sources panel</b>; hover to highlight mentions inline.</td>
+<td valign="top"><b>Automatic PR review</b> — each open PR auto-runs a pipeline (merge → build/run in a locked-down sandbox → bug + code review → a <b>MERGE_SAFE / DO_NOT_MERGE verdict</b>). One admin click merges it on the remote.</td>
+</tr>
+</table>
+
+### 👤 My Page — one place for your settings
+
+<img src="docs/screenshots/14-mypage.png" alt="My Page: profile image, Claude token, LLM provider override, git credentials, personal projects" width="100%" />
+
+A per-user settings page consolidating **profile image**, **Claude token**, **LLM provider override** (Bedrock / Vertex / custom base URL), **git credentials**, and **personal-project** management. Admin-only actions (create a common project, new wiki topic, request the admin role) can be **requested from here using the real feature form**.
+
+### 🎛 Everything configurable — the admin panel
+
+<table>
+<tr>
+<td width="33%"><img src="docs/screenshots/16-admin-overview.png" alt="Admin overview" width="100%" /><br/><sub><b>Overview</b> — users, rooms, sessions, throttle, common token.</sub></td>
+<td width="33%"><img src="docs/screenshots/17-admin-usage.png" alt="Admin usage dashboard" width="100%" /><br/><sub><b>Usage dashboard</b> — per-user turns, tokens and cost.</sub></td>
+<td width="33%"><img src="docs/screenshots/18-admin-config.png" alt="Admin live config registry" width="100%" /><br/><sub><b>Configuration</b> — every operational knob, live-editable.</sub></td>
+</tr>
+<tr>
+<td width="33%"><img src="docs/screenshots/19-admin-resources.png" alt="Admin resource cleanup" width="100%" /><br/><sub><b>Resources</b> — scan &amp; clean spawned containers, images, orphans.</sub></td>
+<td width="33%"><img src="docs/screenshots/20-admin-activity.png" alt="Admin activity / process manager" width="100%" /><br/><sub><b>Activity</b> — live task-manager over turns, queues, containers.</sub></td>
+<td width="33%"><img src="docs/screenshots/21-admin-requests.png" alt="Admin member-request approval queue" width="100%" /><br/><sub><b>Requests</b> — approve/reject member requests.</sub></td>
+</tr>
+</table>
+
+### 🔌 Plugins · 🌐 Multilingual · 📱 Responsive (PWA)
+
+<table>
+<tr>
+<td width="40%"><img src="docs/screenshots/15-plugins.png" alt="Plugins panel: common and personal tiers" width="100%" /></td>
+<td width="40%"><img src="docs/screenshots/22-i18n-ko.png" alt="The same UI in Korean" width="100%" /></td>
+<td width="20%"><img src="docs/screenshots/23-mobile.png" alt="Mobile layout with the sidebar as a slide-in drawer" width="100%" /></td>
+</tr>
+<tr>
+<td valign="top"><b>Two-class plugins</b> — common (admin) and personal (user) tiers; install via git or upload, per-plugin detail + one-click update.</td>
+<td valign="top"><b>Multilingual UI</b> — instant Korean / English switch from the sidebar, persisted and browser-language auto-detected.</td>
+<td valign="top"><b>Works on a phone</b> — the sidebar collapses into a drawer and chat goes full-width; installable as a PWA.</td>
+</tr>
+</table>
+
+---
+
 ## ✨ Strengths
 
 |  | Strength | Description |
