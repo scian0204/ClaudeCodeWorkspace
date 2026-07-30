@@ -81,13 +81,29 @@ export async function removeSandbox(repoId: string, pr: number): Promise<void> {
   await removeIfExists(nameFor(repoId, pr));
 }
 
+// Admin process panel: kill ONE sandbox container by id. Sandboxes hold no in-memory state, so a
+// direct remove is fully consistent. Returns success.
+export async function killSandbox(id: string): Promise<boolean> {
+  if (!sandboxAvailable()) return false;
+  try { await docker.getContainer(id).remove({ force: true }); return true; }
+  catch { return false; }
+}
+
 // Boot cleanup: drop sandbox containers left over from a prior run (in-memory only otherwise).
 export async function cleanupSandboxOrphans(): Promise<void> {
-  if (!sandboxAvailable()) return;
+  await removeAllSandboxes();
+}
+
+// Same labeled sweep as boot cleanup, but returns the count removed (for the admin "clean sandboxes"
+// action). Sandboxes hold no in-memory state, so the sweep alone is fully consistent.
+export async function removeAllSandboxes(): Promise<number> {
+  if (!sandboxAvailable()) return 0;
+  let removed = 0;
   try {
     const list = await docker.listContainers({ all: true, filters: { label: ['ccw.reviewsandbox=1'] } });
-    for (const c of list) { try { await docker.getContainer(c.Id).remove({ force: true }); } catch { /* ignore */ } }
+    for (const c of list) { try { await docker.getContainer(c.Id).remove({ force: true }); removed++; } catch { /* ignore */ } }
   } catch { /* docker unavailable */ }
+  return removed;
 }
 
 // Run a command inside the sandbox (TTY → raw combined stdout+stderr, no multiplex headers).

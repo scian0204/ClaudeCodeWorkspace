@@ -112,6 +112,20 @@ export async function killForOwner(ownerId: string) {
   }
 }
 
+// Admin process panel: kill ONE editor container by id. If it's tracked, stop() clears the in-memory
+// registry too; otherwise (a survivor from before a restart) remove it directly. Returns success.
+export async function killEditor(id: string): Promise<boolean> {
+  if (!dockerAvailable()) return false;
+  try {
+    const info = await docker.getContainer(id).inspect();
+    const name = (info.Name || '').replace(/^\//, '');
+    const inst = [...instances.values()].find((i) => i.containerName === name);
+    if (inst) { await stop(inst); return true; }
+    await docker.getContainer(id).remove({ force: true });
+    return true;
+  } catch { return false; }
+}
+
 
 // poll code-server until it answers on :8080 (avoids iframe 502 race)
 function waitReady(name: string, timeoutMs = cfg.int('codeServerWaitReadyMs')): Promise<void> {
@@ -134,6 +148,22 @@ export async function cleanupOrphans() {
     const list = await docker.listContainers({ all: true, filters: { label: ['ccw.codeserver=1'] } });
     for (const c of list) { try { await docker.getContainer(c.Id).remove({ force: true }); } catch { /* ignore */ } }
   } catch { /* docker unavailable */ }
+}
+
+// Admin "clean editors": remove EVERY spawned code-server container and drop the in-memory registry
+// so the idle reaper's map never points at a container that's gone. Returns how many were removed;
+// degrades to 0 when Docker is unavailable. (Clears tracking first, then does the labeled sweep — a
+// bare label sweep would leave stale Instance/route entries behind.)
+export async function removeAllEditors(): Promise<number> {
+  instances.clear();
+  byRoute.clear();
+  if (!dockerAvailable()) return 0;
+  let removed = 0;
+  try {
+    const list = await docker.listContainers({ all: true, filters: { label: ['ccw.codeserver=1'] } });
+    for (const c of list) { try { await docker.getContainer(c.Id).remove({ force: true }); removed++; } catch { /* ignore */ } }
+  } catch { /* docker unavailable */ }
+  return removed;
 }
 
 let reaperTimer: ReturnType<typeof setInterval> | null = null;

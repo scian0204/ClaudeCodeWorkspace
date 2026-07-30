@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import { PluginDetail } from './PluginDetail';
 import { MobileMenuButton } from '../lib/ui';
 import { useT } from '../lib/i18n';
+import { IconArrowLeft, IconPuzzle, IconCheck, IconLock } from '../lib/icons';
 
 export function PluginsPanel() {
   const setPanel = useStore((s) => s.setPanel);
@@ -27,8 +28,8 @@ export function PluginsPanel() {
     <div className="h-full overflow-y-auto scrolly">
       <div className="flex items-center gap-3 px-4 md:px-5 py-3 border-b border-line sticky top-0 bg-panel z-10">
         <MobileMenuButton />
-        <button className="toolbtn" onClick={() => setPanel(null)}>←</button>
-        <div className="font-semibold">{t('plugins.title')}</div>
+        <button className="toolbtn" aria-label={t('common.back')} onClick={() => setPanel(null)}><IconArrowLeft /></button>
+        <div className="font-semibold inline-flex items-center gap-1.5"><IconPuzzle size={16} />{t('plugins.title')}</div>
       </div>
       <div className="max-w-[860px] mx-auto p-4 md:p-5 space-y-6">
         {/* COMMON */}
@@ -50,7 +51,7 @@ export function PluginsPanel() {
                       <button className="text-xs text-txt3 hover:text-danger" onClick={async () => { await api.del(`/api/plugins/${p.id}`); load(); }}>{t('common.delete')}</button>
                     </>
                   ) : (
-                    p.forced ? <span className="text-[11px] text-clay">{t('plugins.required')}</span>
+                    p.forced ? <span className="text-[11px] text-clay inline-flex items-center gap-1"><IconLock size={11} />{t('plugins.required')}</span>
                       : <Toggle on={pref} label={t('plugins.usePref')} onClick={async () => { await api.post(`/api/plugins/${p.id}/pref`, { enabled: !pref }).catch(err); load(); }} />
                   )}
                 </Row>
@@ -129,7 +130,7 @@ function Row({ p, children }: { p: any; children: React.ReactNode }) {
   const t = useT();
   return (
     <div className="flex items-center gap-2 text-sm border-b border-line py-1.5">
-      <span>🧩</span><span className="font-medium">{p.name}</span>
+      <IconPuzzle size={15} className="text-txt2 shrink-0" /><span className="font-medium">{p.name}</span>
       <span className="text-[10px] text-txt3">{p.source === 'local' ? t('plugins.sourceUpload') : 'git'}</span>
       <div className="ml-auto flex items-center gap-3">{children}</div>
     </div>
@@ -137,8 +138,8 @@ function Row({ p, children }: { p: any; children: React.ReactNode }) {
 }
 function Toggle({ on, label, onClick }: { on: boolean; label: string; onClick: () => void }) {
   return (
-    <button onClick={onClick} className={`text-[11px] px-2 py-0.5 rounded-full border ${on ? 'bg-oksoft border-ok text-ok' : 'border-line text-txt3'}`}>
-      {on ? '✓ ' : ''}{label}
+    <button onClick={onClick} className={`text-[11px] px-2 py-0.5 rounded-full border inline-flex items-center gap-1 ${on ? 'bg-oksoft border-ok text-ok' : 'border-line text-txt3'}`}>
+      {on && <IconCheck size={12} />}{label}
     </button>
   );
 }

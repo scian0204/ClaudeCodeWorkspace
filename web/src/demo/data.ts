@@ -10,7 +10,7 @@ export const COLORS = { clay: '#c8613a', blue: '#5b6b8c', green: '#5b8c6b', purp
 // ---- users -----------------------------------------------------------------
 export const ME = {
   id: 'u_admin', username: 'admin', role: 'admin', displayName: 'Demo Admin',
-  avatarColor: COLORS.clay, hasClaudeToken: true, claudeTokenSetAt: ago(60 * 24 * 3) as number | null,
+  avatarColor: COLORS.clay, avatar: null as string | null, hasClaudeToken: true, claudeTokenSetAt: ago(60 * 24 * 3) as number | null,
 };
 const U_JAMIE = { id: 'u_jamie', username: 'jamie', role: 'member', displayName: 'Jamie Park', avatarColor: COLORS.blue };
 const U_RILEY = { id: 'u_riley', username: 'riley', role: 'member', displayName: 'Riley Kim', avatarColor: COLORS.green };
@@ -19,6 +19,7 @@ const U_SAM = { id: 'u_sam', username: 'sam', role: 'member', displayName: 'Sam 
 const member = (u: any, isOwner = false, delegations: string[] = []) => ({
   userId: u.id, displayName: u.displayName, avatarColor: u.avatarColor, username: u.username, isOwner, delegations, joinedAt: ago(500),
 });
+const dmMember = (u: any) => ({ userId: u.id, displayName: u.displayName, avatarColor: u.avatarColor, avatar: (u as any).avatar ?? null, username: u.username });
 
 // ---- message builders ------------------------------------------------------
 let mid = 0;
@@ -155,9 +156,9 @@ export const db = {
   me: { ...ME },
   users: [ME, U_JAMIE, U_RILEY, U_SAM].map((u) => ({ id: u.id, username: u.username, role: u.role, displayName: u.displayName, avatarColor: u.avatarColor })),
   sessions: [
-    { id: 's_auth', title: 'Auth module refactor', updatedAt: ago(11), projectId: 'p_api', model: 'claude-opus-4-8', permissionMode: 'default' },
-    { id: 's_socket', title: 'Socket reconnect bug', updatedAt: ago(138), projectId: 'p_web', model: 'claude-sonnet-5', permissionMode: 'acceptEdits' },
-    { id: 's_notes', title: 'Release notes v2.3', updatedAt: ago(60 * 20), projectId: null, model: 'claude-opus-4-8', permissionMode: 'default' },
+    { id: 's_auth', title: 'Auth module refactor', updatedAt: ago(11), projectId: 'p_api', model: 'claude-opus-4-8', effort: 'high', permissionMode: 'default' },
+    { id: 's_socket', title: 'Socket reconnect bug', updatedAt: ago(138), projectId: 'p_web', model: 'claude-sonnet-5', effort: 'medium', permissionMode: 'acceptEdits' },
+    { id: 's_notes', title: 'Release notes v2.3', updatedAt: ago(60 * 20), projectId: null, model: 'claude-opus-4-8', effort: 'high', permissionMode: 'default' },
   ],
   rooms: [
     { id: 'r_backend', name: 'Backend Guild', ownerId: U_JAMIE.id, chatSessionId: 'cs_backend', permissionMode: 'default', members: [member(U_JAMIE, true), member(ME, false, ['approve', 'interrupt']), member(U_RILEY)] },
@@ -188,6 +189,32 @@ export const db = {
     { id: 'rv_142', chatSessionId: 'cs_rv_142', repoId: 'rr_web', repoName: 'acme/webapp', prNumber: 142, prTitle: 'Add rate limiting to the API', prUrl: 'https://github.com/acme/webapp/pull/142', prState: 'open', authorLogin: 'jamie', mergeState: 'merged', verdict: 'merge_safe', verdictSummary: '테스트 46개 통과, 회귀 없음. 병합 가능.', readOnly: false, updatedAt: ago(13) },
     { id: 'rv_139', chatSessionId: 'cs_rv_139', repoId: 'rr_web', repoName: 'acme/webapp', prNumber: 139, prTitle: 'Fix flaky nightly export test', prUrl: 'https://github.com/acme/webapp/pull/139', prState: 'open', authorLogin: 'riley', mergeState: 'none', verdict: 'none', verdictSummary: null, readOnly: false, updatedAt: ago(120) },
   ] as any[],
+  // DM + group chat channels (lightweight human messaging — no Claude)
+  dmChannels: [
+    { id: 'dm_jamie', kind: 'dm', name: null, createdBy: ME.id, createdAt: ago(400),
+      members: [dmMember(ME), dmMember(U_JAMIE)],
+      lastMessage: { text: '스탠드업 5분 늦어요 🙏', createdAt: ago(8), userId: U_JAMIE.id }, unread: 1 },
+    { id: 'dm_lunch', kind: 'group', name: '점심 모임', createdBy: ME.id, createdAt: ago(600),
+      members: [dmMember(ME), dmMember(U_JAMIE), dmMember(U_RILEY)],
+      lastMessage: { text: '12시 로비에서 봐요', createdAt: ago(40), userId: U_RILEY.id }, unread: 0 },
+  ] as any[],
+  dmMessages: {
+    dm_jamie: [
+      { id: 'dmm1', channelId: 'dm_jamie', userId: ME.id, text: '어제 배포 잘 됐나요?', createdAt: ago(30) },
+      { id: 'dmm2', channelId: 'dm_jamie', userId: U_JAMIE.id, text: '네 문제 없었어요! 로그도 깨끗합니다.', createdAt: ago(28) },
+      { id: 'dmm3', channelId: 'dm_jamie', userId: U_JAMIE.id, text: '스탠드업 5분 늦어요 🙏', createdAt: ago(8) },
+    ],
+    dm_lunch: [
+      { id: 'dml1', channelId: 'dm_lunch', userId: ME.id, text: '오늘 점심 뭐 먹을까요?', createdAt: ago(60) },
+      { id: 'dml2', channelId: 'dm_lunch', userId: U_JAMIE.id, text: '국밥 콜?', createdAt: ago(55) },
+      { id: 'dml3', channelId: 'dm_lunch', userId: U_RILEY.id, text: '12시 로비에서 봐요', createdAt: ago(40) },
+    ],
+  } as Record<string, any[]>,
+  // member request → admin approval queue (approval workflow demo)
+  requests: [
+    { id: 'req_1', requesterId: U_JAMIE.id, type: 'common_project', payload: JSON.stringify({ name: 'shared-tools', gitUrl: 'https://github.com/acme/shared-tools.git', branch: 'main' }), reason: '팀 공용 스크립트 저장소가 필요합니다', status: 'pending', reviewerId: null, decidedAt: null, result: null, createdAt: ago(30), updatedAt: ago(30) },
+    { id: 'req_2', requesterId: U_RILEY.id, type: 'role_upgrade', payload: '{}', reason: '리뷰 담당이라 관리자 권한이 필요해요', status: 'approved', reviewerId: ME.id, decidedAt: ago(200), result: 'riley 권한을 admin으로 승격', createdAt: ago(300), updatedAt: ago(200) },
+  ] as any[],
   // per-chat message history (also used by the socket sim to append turns)
   messages: {
     s_auth: AUTH_MSGS, s_socket: SOCKET_MSGS, s_notes: [],
@@ -195,6 +222,24 @@ export const db = {
     cs_rv_142: REVIEW_MSGS, cs_rv_139: [],
   } as Record<string, any[]>,
 };
+
+// LLM provider override (demo): per-scope status (type + non-secret fields; booleans for secrets).
+// Seeded with a user-scope custom (LiteLLM proxy) profile so the My Page section shows a configured
+// state; the common scope starts empty. Mutated in place by the router's PUT/DELETE handlers.
+export const PROVIDERS: Record<'user' | 'common', any> = {
+  user: {
+    type: 'custom',
+    fields: {
+      baseUrl: 'http://litellm:4000', region: '', projectId: '', model: 'gpt-4o',
+      hasAuthToken: true, hasApiKey: false, hasAccessKeyId: false, hasSecretKey: false, hasSessionToken: false, hasBearerToken: false,
+    },
+  },
+  common: null,
+};
+
+// prompt attachments (demo): server-assigned name → { url: data URL, isImage }. Populated by the XHR
+// upload interceptor (install.ts), read back by the socket mock so image thumbnails render inline.
+export const ATTACHMENTS = new Map<string, { url: string; isImage: boolean }>();
 
 export const ADMIN = {
   overview: () => ({
@@ -212,13 +257,72 @@ export const ADMIN = {
     ],
   },
   settings: { allowBypass: false },
+  // resource cleanup: a plausible inventory + an in-place mutator so the demo actions actually clear
+  // the counts they target (matches the server's scan → action → rescan shape).
+  cleanup: {
+    enabled: true,
+    dockerUnavailable: false,
+    containers: [
+      { id: 'a1b2c3d4e5f6', name: 'ccw-cs-u_demo-p_web', state: 'running', kind: 'editor', createdAt: ago(30), orphan: false },
+      { id: 'f6e5d4c3b2a1', name: 'ccw-cs-u_ghost-p_old', state: 'exited', kind: 'editor', createdAt: ago(4000), orphan: true },
+      { id: '0099aabbccdd', name: 'ccw-rvsbx-rr_web-142', state: 'running', kind: 'sandbox', createdAt: ago(12), orphan: false },
+    ] as any[],
+    images: [
+      { ref: 'codercom/code-server:latest', present: true, size: 512_000_000 },
+      { ref: 'node:20-bookworm', present: true, size: 402_000_000 },
+    ] as any[],
+    danglingImages: { count: 3, size: 268_000_000 },
+    orphanDirs: {
+      reviewDirs: { count: 1, size: 84_000_000 },
+      attachmentDirs: { count: 2, size: 1_500_000 },
+      homeDirs: { count: 0, size: 0 },
+    },
+    orphanRows: { messages: 12, reviewSessions: 1, roomMembers: 0, usage: 4, pluginPrefs: 2 },
+  },
+  runCleanup(action: string) {
+    const c = ADMIN.cleanup;
+    const editors = () => { const n = c.containers.filter((x: any) => x.kind === 'editor').length; c.containers = c.containers.filter((x: any) => x.kind !== 'editor'); return n; };
+    const sandboxes = () => { const n = c.containers.filter((x: any) => x.kind === 'sandbox').length; c.containers = c.containers.filter((x: any) => x.kind !== 'sandbox'); return n; };
+    const dangling = () => { const n = c.danglingImages.count; c.danglingImages = { count: 0, size: 0 }; return n; };
+    const dirs = () => { const n = c.orphanDirs.reviewDirs.count + c.orphanDirs.attachmentDirs.count; c.orphanDirs.reviewDirs = { count: 0, size: 0 }; c.orphanDirs.attachmentDirs = { count: 0, size: 0 }; return n; };
+    const rows = () => { const r = c.orphanRows; const n = r.messages + r.reviewSessions + r.roomMembers + r.usage + r.pluginPrefs; c.orphanRows = { messages: 0, reviewSessions: 0, roomMembers: 0, usage: 0, pluginPrefs: 0 }; return n; };
+    let summary: any = { removed: 0 };
+    if (action === 'editors') summary = { removed: editors() };
+    else if (action === 'sandboxes') summary = { removed: sandboxes() };
+    else if (action === 'dangling-images') summary = { removed: dangling() };
+    else if (action === 'orphan-dirs') summary = { removed: dirs() };
+    else if (action === 'orphan-rows') summary = { removed: rows() };
+    else if (action === 'full-reset') summary = { editors: { removed: editors() }, sandboxes: { removed: sandboxes() }, danglingImages: { removed: dangling() }, orphanDirs: { removed: dirs() }, orphanRows: { removed: rows() } };
+    return { summary, ...c }; // c already carries enabled: true
+  },
+  // live activity / processes: a fake running set + in-place mutator so the demo control buttons
+  // actually clear the row they target (matches the server's list → control → relist shape).
+  processes: {
+    dockerUnavailable: false,
+    turns: [{ sessionId: 's_demo1', title: 'Refactor auth middleware', kind: 'private', author: { id: 'u_demo', name: 'Demo' }, startedAt: ago(1), elapsedMs: 60_000 }] as any[],
+    queued: [{ sessionId: 's_demo1', itemId: 'q1', author: { id: 'u_two', name: 'Riya' } }] as any[],
+    editors: [{ id: 'a1b2c3d4e5f6', name: 'ccw-cs-u_demo-p_web', owner: 'Demo', project: 'web', state: 'running', createdAt: ago(30) }] as any[],
+    sandboxes: [{ id: '0099aabbccdd', name: 'ccw-rvsbx-rr_web-142', state: 'running', createdAt: ago(12) }] as any[],
+    reviewPipelines: [{ reviewId: 'rv1', prNumber: 142, prTitle: 'Add rate limiter', repoName: 'web', chatSessionId: 's_rev1' }] as any[],
+  },
+  runProcess(body: any) {
+    const p = ADMIN.processes;
+    if (body.kind === 'turn') p.turns = p.turns.filter((x: any) => x.sessionId !== body.sessionId);
+    else if (body.kind === 'queued') p.queued = p.queued.filter((x: any) => x.itemId !== body.itemId);
+    else if (body.kind === 'editor') p.editors = p.editors.filter((x: any) => x.id !== body.id);
+    else if (body.kind === 'sandbox') p.sandboxes = p.sandboxes.filter((x: any) => x.id !== body.id);
+    else if (body.kind === 'pipeline') p.reviewPipelines = p.reviewPipelines.filter((x: any) => x.chatSessionId !== body.chatSessionId);
+    return p;
+  },
   // client-facing config subset (model dropdown)
   models: { 'claude-opus-4-8': 'Opus 4.8', 'claude-sonnet-5': 'Sonnet 5', 'claude-haiku-4-5-20251001': 'Haiku 4.5' } as Record<string, string>,
   defaultModel: 'claude-opus-4-8',
+  defaultEffort: 'high',
   images: { 'node:20-bookworm': { present: true, size: 402_000_000 }, 'codercom/code-server:latest': { present: false } } as Record<string, any>,
   // full config registry (representative subset for the demo)
   config: [
     { key: 'defaultModel', group: 'claude', type: 'select', options: ['claude-opus-4-8', 'claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5-20251001', 'claude-fable-5'], value: 'claude-opus-4-8', default: 'claude-opus-4-8', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'defaultEffort', group: 'claude', type: 'select', options: ['low', 'medium', 'high', 'xhigh', 'max'], value: 'high', default: 'high', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'models', group: 'claude', type: 'json', value: '{"claude-opus-4-8":"Opus 4.8","claude-sonnet-5":"Sonnet 5","claude-haiku-4-5-20251001":"Haiku 4.5"}', default: '{"claude-opus-4-8":"Opus 4.8"}', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'forceMock', group: 'claude', type: 'bool', value: '1', default: '0', restart: false, readonly: false, secret: false, overridden: true },
     { key: 'maxConcurrentTurns', group: 'claude', type: 'int', value: '3', default: '3', min: 1, max: 100, restart: false, readonly: false, secret: false, overridden: false },
@@ -230,6 +334,9 @@ export const ADMIN = {
     { key: 'gitOpTimeoutMs', group: 'git', type: 'int', value: '120000', default: '120000', unit: 'ms', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'codeServerImage', group: 'codeserver', type: 'string', value: 'codercom/code-server:latest', default: 'codercom/code-server:latest', restart: false, readonly: false, secret: false, overridden: false, image: true },
     { key: 'codeServerIdleMs', group: 'codeserver', type: 'int', value: '1800000', default: '1800000', unit: 'ms', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'attachmentMaxMB', group: 'features', type: 'int', value: '20', default: '20', unit: 'MB', min: 1, max: 200, restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'attachmentMaxCount', group: 'features', type: 'int', value: '10', default: '10', min: 1, max: 50, restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'resourceCleanupEnabled', group: 'features', type: 'bool', value: '1', default: '1', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'sessionTtlDays', group: 'auth', type: 'int', value: '30', default: '30', unit: 'days', min: 1, max: 365, restart: false, readonly: false, secret: false, overridden: false },
     { key: 'httpBodyLimitMB', group: 'server', type: 'int', value: '6', default: '6', unit: 'MB', restart: true, readonly: false, secret: false, overridden: false },
     { key: 'port', group: 'infra', type: 'int', value: '3000', default: '3000', restart: true, readonly: true, secret: false, overridden: false },
@@ -286,6 +393,19 @@ export const EDITOR_URL = 'data:text/html;charset=utf-8,' + encodeURIComponent(
      <div style="margin:12px 0 6px;color:#e6e6e6;font-weight:600">VS Code (code-server)</div>
      <div style="font-size:12px;color:#8a8a8a;line-height:1.6">In the full app this pane is a live code-server container — editor, terminal and git in the browser. It needs a backend, so the static demo shows this placeholder.</div>
    </div></body>`);
+
+// requestable admin actions (mirrors the server registry projection from /api/requests/actions)
+export const REQUEST_ACTIONS = [
+  // common_project carries the real create-feature fields (name + git clone URL + branch + credential ref)
+  { type: 'common_project', label: 'common_project', fields: [
+    { key: 'name', type: 'text', required: true },
+    { key: 'gitUrl', type: 'text', required: false },
+    { key: 'branch', type: 'text', required: false },
+    { key: 'credentialId', type: 'text', required: false },
+  ] },
+  { type: 'wiki_topic', label: 'wiki_topic', fields: [{ key: 'name', type: 'text', required: true }, { key: 'description', type: 'textarea', required: false }] },
+  { type: 'role_upgrade', label: 'role_upgrade', fields: [] as any[] },
+];
 
 // helpers used by the router for mutations
 export const genId = (p: string) => `${p}_${Date.now().toString(36)}${Math.floor(Math.random() * 1e4).toString(36)}`;

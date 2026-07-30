@@ -175,7 +175,7 @@ export async function importRoutes(app: FastifyInstance) {
       db.insert(schema.chatSessions).values({
         id: chatId, ownerId: u.id, kind: 'private', roomId: null, title,
         projectId: project.id, wikiTopicId: null, claudeSessionId: uuid,
-        model: cfg.str('defaultModel'), permissionMode: 'default', createdAt: now, updatedAt: now,
+        model: cfg.str('defaultModel'), effort: cfg.str('defaultEffort'), permissionMode: 'default', createdAt: now, updatedAt: now,
       }).run();
       for (const msg of jsonlToMessages(lines, chatId, now)) {
         db.insert(schema.messages).values({

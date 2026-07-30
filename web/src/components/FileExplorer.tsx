@@ -3,6 +3,7 @@ import { useStore } from '../lib/store';
 import { md } from '../lib/md';
 import { useT } from '../lib/i18n';
 import { Modal } from './Modal';
+import { IconChevronDown, IconChevronRight, IconFolder, IconFile, IconEye, IconTerminal } from '../lib/icons';
 
 export const isImage = (n: string) => /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(n);
 export const isMarkdown = (n: string) => /\.(md|markdown)$/i.test(n);
@@ -64,7 +65,7 @@ function TreeNode({ node, depth, onOpen, selected, openMap, setOpenMap }: {
       <div>
         <div className="flex items-center gap-1 py-0.5 cursor-pointer hover:bg-line rounded text-xs"
           style={{ paddingLeft: depth * 12 + 4 }} onClick={() => setOpenMap((m) => ({ ...m, [node.path]: !(m[node.path] ?? (depth < 1)) }))}>
-          <span className="text-txt3 w-3">{open ? '▾' : '▸'}</span><span>📁</span>
+          <span className="text-txt3 w-3 inline-flex">{open ? <IconChevronDown size={13} /> : <IconChevronRight size={13} />}</span><IconFolder size={14} className="text-txt3 shrink-0" />
           <span className="truncate">{node.name}</span>
           <span className="text-txt3 text-[10px] ml-1">{node.children.length}</span>
         </div>
@@ -75,7 +76,7 @@ function TreeNode({ node, depth, onOpen, selected, openMap, setOpenMap }: {
   return (
     <div className={`flex items-center gap-1 py-0.5 cursor-pointer rounded text-xs ${selected === node.path ? 'bg-claysoft text-clay' : 'hover:bg-line'}`}
       style={{ paddingLeft: depth * 12 + 18 }} onClick={() => onOpen(node.path)} title={node.path}>
-      <span>📄</span><span className="truncate flex-1">{node.name}</span>
+      <IconFile size={14} className="text-txt3 shrink-0" /><span className="truncate flex-1">{node.name}</span>
       <span className="text-txt3 text-[10px]">{fmtSize(node.size)}</span>
     </div>
   );
@@ -158,8 +159,8 @@ export function FileExplorer({
               <div className="sticky top-0 bg-card border-b border-line px-3 py-1.5 text-xs font-mono flex items-center gap-2">
                 <span className="truncate flex-1">{sel}</span>
                 {isMarkdown(sel) && !isImage(sel) && (
-                  <button className="shrink-0 px-1.5 py-0.5 rounded border border-line hover:text-clay" onClick={() => setMdRaw(!mdRaw)}>
-                    {mdRaw ? t('fileExplorer.rendered') : t('fileExplorer.source')}
+                  <button className="shrink-0 px-1.5 py-0.5 rounded border border-line hover:text-clay inline-flex items-center gap-1" onClick={() => setMdRaw(!mdRaw)}>
+                    {mdRaw ? <><IconEye size={12} />{t('fileExplorer.rendered')}</> : <><IconTerminal size={12} />{t('fileExplorer.source')}</>}
                   </button>
                 )}
               </div>

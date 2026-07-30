@@ -2,11 +2,14 @@ import { useEffect, useState } from 'react';
 import { useStore } from '../lib/store';
 import { Sidebar } from './Sidebar';
 import { Chat } from './Chat';
+import { DmView } from './DmView';
 import { AdminPanel } from './AdminPanel';
 import { PluginsPanel } from './PluginsPanel';
+import { MyPage } from './MyPage';
 import { MyTokenModal } from './TokenSettings';
 import { MobileMenuButton } from '../lib/ui';
 import { useT } from '../lib/i18n';
+import { IconX, IconPlus } from '../lib/icons';
 
 function Empty() {
   const newSession = useStore((s) => s.newSession);
@@ -22,7 +25,7 @@ function Empty() {
         <div>
           <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" className="w-16 h-16 mx-auto mb-3" />
           <div className="text-txt2 mb-4">{t('shell.emptyHint')}</div>
-          <button className="btn-primary" onClick={() => newSession()}>{t('shell.newConversation')}</button>
+          <button className="btn-primary inline-flex items-center gap-1.5" onClick={() => newSession()}><IconPlus size={16} />{t('shell.newConversation')}</button>
         </div>
       </div>
     </div>
@@ -30,16 +33,18 @@ function Empty() {
 }
 
 function Toast({ msg, onClose }: { msg: string; onClose: () => void }) {
+  const t = useT();
   return (
     <div className="fixed bottom-5 left-1/2 -translate-x-1/2 bg-card border border-danger text-danger text-sm rounded-lg px-4 py-2 shadow-lg z-[60] flex items-center gap-3">
       <span>{msg}</span>
-      <button className="text-txt3 hover:text-txt" onClick={onClose}>✕</button>
+      <button className="text-txt3 hover:text-txt" aria-label={t('common.close')} onClick={onClose}><IconX size={15} /></button>
     </div>
   );
 }
 
 export function Shell() {
   const current = useStore((s) => s.current);
+  const activeChannelId = useStore((s) => s.activeChannelId);
   const panel = useStore((s) => s.panel);
   const error = useStore((s) => s.error);
   const setError = useStore((s) => s.setError);
@@ -59,7 +64,7 @@ export function Shell() {
       {sidebarOpen && <div className="fixed inset-0 bg-black/40 z-40 md:hidden" onClick={() => setSidebarOpen(false)} />}
       <Sidebar />
       <main className="min-w-0 min-h-0 h-full bg-panel flex flex-col">
-        {panel === 'admin' ? <AdminPanel /> : panel === 'plugins' ? <PluginsPanel /> : current ? <Chat /> : <Empty />}
+        {panel === 'admin' ? <AdminPanel /> : panel === 'plugins' ? <PluginsPanel /> : panel === 'me' ? <MyPage /> : activeChannelId ? <DmView /> : current ? <Chat /> : <Empty />}
       </main>
       {error && <Toast msg={error} onClose={() => setError(null)} />}
       <MyTokenModal open={showNag} nag onClose={() => setNagDismissed(true)} />

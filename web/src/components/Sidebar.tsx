@@ -1,24 +1,28 @@
 import { useState, useRef, useEffect } from 'react';
-import { useStore, type ReviewSessionSummary, type ReviewRepo } from '../lib/store';
+import { useStore, type ReviewSessionSummary, type ReviewRepo, type DmChannel } from '../lib/store';
 import { api, type UploadState } from '../lib/api';
-import { Avatar, timeAgo, LangToggle } from '../lib/ui';
+import { Avatar, avatarUrl, timeAgo, LangToggle } from '../lib/ui';
 import { Modal } from './Modal';
-import { MyTokenModal } from './TokenSettings';
-import { GitCredentialsModal } from './GitCredentials';
 import { ImportSessionModal } from './ImportSessionModal';
 import { UploadProgress } from './UploadProgress';
 import { useT } from '../lib/i18n';
+import {
+  IconX, IconDownload, IconMessage, IconPencil, IconTrash, IconUsers, IconClock, IconWarning,
+  IconBook, IconPuzzle, IconSliders, IconLogout, IconFile, IconBox, IconRefresh, IconPlus,
+  IconCheckCircle, IconBan, IconGitBranch, IconCheckSquare, IconSquare, IconFolder,
+} from '../lib/icons';
 
 export function Sidebar() {
-  const { user, sessions, rooms, wikiTopics, current, openPrivate, openRoom, openWiki, newSession, newRoom, logout, setPanel, panel, deleteSession, deleteRoom, deleteWikiTopic, renameSession, sidebarOpen, setSidebarOpen, sessionImportEnabled } = useStore();
+  const { user, sessions, rooms, wikiTopics, current, openPrivate, openRoom, openWiki, newSession, newRoom, logout, setPanel, panel, deleteSession, deleteRoom, deleteWikiTopic, renameSession, sidebarOpen, setSidebarOpen, sessionImportEnabled, pendingRequestCount, channels, activeChannelId, openChannel, dmEnabled } = useStore();
   const [showRoom, setShowRoom] = useState(false);
   const [roomName, setRoomName] = useState('');
   const [showWiki, setShowWiki] = useState(false);
-  const [showToken, setShowToken] = useState(false);
-  const [showGitCreds, setShowGitCreds] = useState(false);
+  const [showDm, setShowDm] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const isAdmin = user?.role === 'admin';
   const t = useT();
+
+  const channelLabel = (ch: DmChannel) => (ch.kind === 'group' ? (ch.name || t('dm.group')) : (ch.members.find((m) => m.userId !== user?.id)?.displayName || t('dm.dm')));
 
   const create = async () => { if (!roomName.trim()) return; await newRoom(roomName.trim()); setRoomName(''); setShowRoom(false); };
 
@@ -27,7 +31,7 @@ export function Sidebar() {
       max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:w-[264px] max-md:z-50 max-md:shadow-2xl
       max-md:transition-transform max-md:duration-200 ${sidebarOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full'}`}>
       <div className="px-3.5 pt-3.5 pb-2 relative">
-        <button className="toolbtn md:hidden absolute top-2.5 right-2.5 z-10" aria-label={t('nav.closeMenu')} onClick={() => setSidebarOpen(false)}>✕</button>
+        <button className="toolbtn md:hidden absolute top-2.5 right-2.5 z-10" aria-label={t('nav.closeMenu')} onClick={() => setSidebarOpen(false)}><IconX /></button>
         <LangToggle className="absolute top-3 right-3 text-[11px] text-txt3 hover:text-txt border border-line rounded px-1.5 py-0.5 z-10 max-md:right-11" />
         <div className="flex items-center gap-2.5 mb-3.5 pr-9">
           <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" className="w-[26px] h-[26px] rounded-md shrink-0" />
@@ -36,22 +40,22 @@ export function Sidebar() {
             <div className="text-[11px] text-txt3 truncate">{t('sidebar.teamName', { name: user?.displayName ?? '' })}</div>
           </div>
         </div>
-        <button className="btn-primary w-full flex items-center justify-center gap-2 !py-2" onClick={() => newSession()}>{t('sidebar.newChat')}</button>
+        <button className="btn-primary w-full flex items-center justify-center gap-2 !py-2" onClick={() => newSession()}><IconPlus size={16} />{t('sidebar.newChat')}</button>
       </div>
 
       <div className="flex-1 overflow-y-auto scrolly px-2 pb-1">
         <Section label={t('sidebar.personal')} onAdd={() => newSession()}
-          extra={sessionImportEnabled ? <button className="cursor-pointer text-[13px] leading-none" title={t('import.button')} onClick={() => setImportOpen(true)}>📥</button> : undefined} />
+          extra={sessionImportEnabled ? <button className="cursor-pointer leading-none text-txt3 hover:text-txt" title={t('import.button')} aria-label={t('import.button')} onClick={() => setImportOpen(true)}><IconDownload size={15} /></button> : undefined} />
         {sessions.length === 0 && <div className="text-[11px] text-txt3 px-2 py-1">{t('common.none')}</div>}
         {sessions.map((s) => (
           <Item key={s.id} active={panel === null && current?.chatSessionId === s.id} onClick={() => { setPanel(null); openPrivate(s.id); }}>
-            <span className="opacity-70">💬</span>
+            <span className="opacity-70"><IconMessage size={15} /></span>
             <span className="flex-1 truncate text-[13px]">{s.title}</span>
             <span className="text-[11px] text-txt3 group-hover:hidden">{timeAgo(s.updatedAt)}</span>
-            <button className="hidden group-hover:block text-txt3 hover:text-clay text-xs px-1" title={t('sidebar.renameChatTitle')}
-              onClick={(e) => { e.stopPropagation(); const nt = prompt(t('sidebar.renameChatPrompt'), s.title); if (nt && nt.trim() && nt.trim() !== s.title) renameSession(s.id, nt.trim()); }}>✎</button>
-            <button className="hidden group-hover:block text-txt3 hover:text-danger text-xs px-1" title={t('sidebar.deleteChatTitle')}
-              onClick={(e) => { e.stopPropagation(); if (confirm(t('sidebar.deleteChatConfirm', { title: s.title }))) deleteSession(s.id); }}>🗑</button>
+            <button className="hidden group-hover:block text-txt3 hover:text-clay px-1" title={t('sidebar.renameChatTitle')} aria-label={t('sidebar.renameChatTitle')}
+              onClick={(e) => { e.stopPropagation(); const nt = prompt(t('sidebar.renameChatPrompt'), s.title); if (nt && nt.trim() && nt.trim() !== s.title) renameSession(s.id, nt.trim()); }}><IconPencil size={14} /></button>
+            <button className="hidden group-hover:block text-txt3 hover:text-danger px-1" title={t('sidebar.deleteChatTitle')} aria-label={t('sidebar.deleteChatTitle')}
+              onClick={(e) => { e.stopPropagation(); if (confirm(t('sidebar.deleteChatConfirm', { title: s.title }))) deleteSession(s.id); }}><IconTrash size={14} /></button>
           </Item>
         ))}
 
@@ -67,21 +71,38 @@ export function Sidebar() {
                   style={{ background: m.avatarColor, borderColor: 'var(--rail)' }}>{m.displayName.slice(0, 2).toUpperCase()}</span>
               ))}
             </span>
-            <button className="hidden group-hover:block text-txt3 hover:text-danger text-xs px-1" title={t('sidebar.deleteRoomTitle')}
-              onClick={(e) => { e.stopPropagation(); if (confirm(t('sidebar.deleteRoomConfirm', { name: r.name }))) deleteRoom(r.id); }}>🗑</button>
+            <button className="hidden group-hover:block text-txt3 hover:text-danger px-1" title={t('sidebar.deleteRoomTitle')} aria-label={t('sidebar.deleteRoomTitle')}
+              onClick={(e) => { e.stopPropagation(); if (confirm(t('sidebar.deleteRoomConfirm', { name: r.name }))) deleteRoom(r.id); }}><IconTrash size={14} /></button>
           </Item>
         ))}
+
+        {dmEnabled && <>
+          <Section label={t('dm.section')} onAdd={() => setShowDm(true)} />
+          {channels.length === 0 && <div className="text-[11px] text-txt3 px-2 py-1">{t('common.none')}</div>}
+          {channels.map((ch) => {
+            const other = ch.kind === 'dm' ? ch.members.find((m) => m.userId !== user?.id) : undefined;
+            return (
+              <Item key={ch.id} active={panel === null && activeChannelId === ch.id} onClick={() => openChannel(ch.id)}>
+                {ch.kind === 'group'
+                  ? <span className="w-[18px] h-[18px] rounded-full grid place-items-center shrink-0 text-white" style={{ background: 'var(--line2, #888)' }}><IconUsers size={11} /></span>
+                  : <Avatar name={other?.displayName} color={other?.avatarColor} src={avatarUrl(other && { id: other.userId, avatar: other.avatar })} size={18} />}
+                <span className="flex-1 truncate text-[13px]">{channelLabel(ch)}</span>
+                {ch.unread > 0 && <span className="text-[10px] bg-clay text-white px-1.5 py-0.5 rounded-full font-semibold min-w-[18px] text-center">{ch.unread}</span>}
+              </Item>
+            );
+          })}
+        </>}
 
         <Section label="LLM Wiki" onAdd={isAdmin ? () => setShowWiki(true) : undefined} />
         {wikiTopics.length === 0 && <div className="text-[11px] text-txt3 px-2 py-1">{isAdmin ? t('sidebar.createTopicHint') : t('common.none')}</div>}
         {wikiTopics.map((wt) => (
           <Item key={wt.id} active={panel === null && current?.wikiTopicId === wt.id} onClick={() => { setPanel(null); openWiki(wt.id); }}>
-            <span className="opacity-70">{wt.compileStatus === 'compiling' ? '⏳' : wt.compileStatus === 'error' ? '⚠️' : '📚'}</span>
+            <span className="opacity-70">{wt.compileStatus === 'compiling' ? <IconClock size={15} /> : wt.compileStatus === 'error' ? <IconWarning size={15} className="text-warn" /> : <IconBook size={15} />}</span>
             <span className="flex-1 truncate text-[13px]">{wt.name}</span>
             {wt.compileStatus === 'compiling' && <span className="text-[10px] text-txt3 group-hover:hidden">{t('sidebar.compiling')}</span>}
             {isAdmin && (
-              <button className="hidden group-hover:block text-txt3 hover:text-danger text-xs px-1" title={t('sidebar.deleteTopicTitle')}
-                onClick={(e) => { e.stopPropagation(); if (confirm(t('sidebar.deleteTopicConfirm', { name: wt.name }))) deleteWikiTopic(wt.id); }}>🗑</button>
+              <button className="hidden group-hover:block text-txt3 hover:text-danger px-1" title={t('sidebar.deleteTopicTitle')} aria-label={t('sidebar.deleteTopicTitle')}
+                onClick={(e) => { e.stopPropagation(); if (confirm(t('sidebar.deleteTopicConfirm', { name: wt.name }))) deleteWikiTopic(wt.id); }}><IconTrash size={14} /></button>
             )}
           </Item>
         ))}
@@ -90,28 +111,23 @@ export function Sidebar() {
       </div>
 
       <div className="border-t border-line p-2.5">
-        <div className="flex items-center gap-2.5 px-2 py-1.5 rounded-md">
-          <Avatar name={user?.displayName} color={user?.avatarColor} />
-          <div className="flex-1 text-[13px]">{user?.displayName}</div>
+        <button className={`flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full text-left ${panel === 'me' ? 'bg-claysoft' : 'hover:bg-line'}`} onClick={() => setPanel('me')}>
+          <Avatar name={user?.displayName} color={user?.avatarColor} src={avatarUrl(user)} />
+          <div className="flex-1 text-[13px] min-w-0 truncate">{user?.displayName}</div>
+          {!user?.hasClaudeToken && <span className="text-[10px] bg-warnsoft text-warn px-1.5 py-0.5 rounded-full whitespace-nowrap">{t('sidebar.tokenUnregistered')}</span>}
           <span className="text-[10px] bg-claysoft text-clay px-1.5 py-0.5 rounded-full font-semibold">{user?.role}</span>
-        </div>
-        <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full hover:bg-line text-left text-[13px] text-txt2" onClick={() => setShowToken(true)}>
-          <span className="w-7 text-center">🔑</span> {t('sidebar.myToken')}
-          {!user?.hasClaudeToken && <span className="ml-auto text-[10px] bg-warnsoft text-warn px-1.5 py-0.5 rounded-full">{t('sidebar.tokenUnregistered')}</span>}
-        </button>
-        <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full hover:bg-line text-left text-[13px] text-txt2" onClick={() => setShowGitCreds(true)}>
-          <span className="w-7 text-center">🔀</span> {t('sidebar.gitCreds')}
         </button>
         <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full hover:bg-line text-left text-[13px] text-txt2" onClick={() => setPanel('plugins')}>
-          <span className="w-7 text-center">🧩</span> {t('sidebar.plugins')}
+          <span className="w-7 grid place-items-center"><IconPuzzle size={17} /></span> {t('sidebar.plugins')}
         </button>
         {user?.role === 'admin' && (
           <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full hover:bg-line text-left text-[13px] text-txt2" onClick={() => setPanel('admin')}>
-            <span className="w-7 text-center">🛠</span> {t('sidebar.adminPanel')}
+            <span className="w-7 grid place-items-center"><IconSliders size={17} /></span> {t('sidebar.adminPanel')}
+            {pendingRequestCount > 0 && <span className="ml-auto text-[10px] bg-warnsoft text-warn px-1.5 py-0.5 rounded-full whitespace-nowrap">{pendingRequestCount}</span>}
           </button>
         )}
         <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full hover:bg-line text-left text-[13px] text-txt2" onClick={() => logout()}>
-          <span className="w-7 text-center">↩</span> {t('sidebar.logout')}
+          <span className="w-7 grid place-items-center"><IconLogout size={17} /></span> {t('sidebar.logout')}
         </button>
       </div>
 
@@ -125,9 +141,8 @@ export function Sidebar() {
       </Modal>
 
       {showWiki && <WikiCreateModal onClose={() => setShowWiki(false)} />}
+      {showDm && <NewChannelModal onClose={() => setShowDm(false)} />}
       {importOpen && sessionImportEnabled && <ImportSessionModal onClose={() => setImportOpen(false)} />}
-      <MyTokenModal open={showToken} onClose={() => setShowToken(false)} />
-      <GitCredentialsModal open={showGitCreds} onClose={() => setShowGitCreds(false)} />
     </aside>
   );
 }
@@ -228,7 +243,7 @@ function WikiCreateModal({ onClose }: { onClose: () => void }) {
         onDragLeave={() => setDragOver(false)}
         onDrop={onDrop}
         className={`border-2 border-dashed rounded-lg px-3 py-4 text-center mb-2 transition-colors ${dragOver ? 'border-clay bg-claysoft' : 'border-line'}`}>
-        <div className="text-xs text-txt2 mb-2">{t(precompiled ? 'sidebar.dropZonePrecompiled' : 'sidebar.dropZone')}</div>
+        <div className="text-xs text-txt2 mb-2 inline-flex items-center gap-1"><IconFolder size={14} />{t(precompiled ? 'sidebar.dropZonePrecompiled' : 'sidebar.dropZone')}</div>
         <div className="flex justify-center gap-2">
           <button className="btn-ghost !py-1 !text-xs" disabled={progress !== null} onClick={() => fileRef.current?.click()}>{t('sidebar.chooseFiles')}</button>
           <button className="btn-ghost !py-1 !text-xs" disabled={progress !== null} onClick={() => dirRef.current?.click()}>{t('sidebar.chooseFolder')}</button>
@@ -244,10 +259,10 @@ function WikiCreateModal({ onClose }: { onClose: () => void }) {
         {files.length === 0 && <div className="text-[11px] text-txt3 px-2 py-1.5">{t('sidebar.noFilesUploaded')}</div>}
         {files.map((f) => (
           <div key={f.name} className="flex items-center gap-2 px-2 py-1.5 text-xs">
-            <span>📄</span>
+            <IconFile size={14} className="text-txt3 shrink-0" />
             <span className="flex-1 truncate" title={f.name}>{f.name}</span>
             <span className="text-txt3 text-[11px]">{fmtSize(f.size)}</span>
-            <button className="text-txt3 hover:text-danger" title={t('common.delete')} onClick={() => removeFile(f.name)}>🗑</button>
+            <button className="text-txt3 hover:text-danger" title={t('common.delete')} aria-label={t('common.delete')} onClick={() => removeFile(f.name)}><IconTrash size={14} /></button>
           </div>
         ))}
       </div>
@@ -266,14 +281,77 @@ function WikiCreateModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+// Start a DM (pick one user) or create a group (name + pick many). Reuses the directory picker
+// pattern from MembersDialog.
+function NewChannelModal({ onClose }: { onClose: () => void }) {
+  const { user, createDm, createGroup, setError } = useStore();
+  const [mode, setMode] = useState<'dm' | 'group'>('dm');
+  const [dir, setDir] = useState<{ id: string; displayName: string; avatarColor: string; avatar: string | null }[]>([]);
+  const [groupName, setGroupName] = useState('');
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const t = useT();
+
+  useEffect(() => { api.get('/api/users/directory').then((r) => setDir(r.users)).catch(() => {}); }, []);
+  const candidates = dir.filter((d) => d.id !== user?.id);
+
+  const startDm = async (userId: string) => {
+    setBusy(true);
+    try { await createDm(userId); onClose(); } catch (e: any) { setError(e.message); setBusy(false); }
+  };
+  const toggle = (id: string) => {
+    const next = new Set(picked); next.has(id) ? next.delete(id) : next.add(id); setPicked(next);
+  };
+  const create = async () => {
+    if (!groupName.trim()) { setError(t('dm.groupNameRequired')); return; }
+    setBusy(true);
+    try { await createGroup(groupName.trim(), [...picked]); onClose(); } catch (e: any) { setError(e.message); setBusy(false); }
+  };
+
+  return (
+    <Modal open onOpenChange={(o) => { if (!o) onClose(); }} title={t('dm.newTitle')} width={420}>
+      <div className="flex gap-2 mb-3">
+        <button className={`text-xs px-3 py-1 rounded-full border ${mode === 'dm' ? 'bg-claysoft border-clay text-clay' : 'border-line text-txt3'}`} onClick={() => setMode('dm')}>{t('dm.tabDm')}</button>
+        <button className={`text-xs px-3 py-1 rounded-full border ${mode === 'group' ? 'bg-claysoft border-clay text-clay' : 'border-line text-txt3'}`} onClick={() => setMode('group')}>{t('dm.tabGroup')}</button>
+      </div>
+
+      {mode === 'group' && (
+        <input className="input mb-2" placeholder={t('dm.groupNamePlaceholder')} value={groupName} autoFocus
+          onChange={(e) => setGroupName(e.target.value)} />
+      )}
+
+      <div className="max-h-64 overflow-auto scrolly border border-line rounded divide-y divide-line mb-3">
+        {candidates.length === 0 && <div className="text-[11px] text-txt3 px-2 py-1.5">{t('common.none')}</div>}
+        {candidates.map((d) => (
+          <button key={d.id} disabled={busy}
+            className="flex items-center gap-2 px-2.5 py-2 w-full text-left hover:bg-line disabled:opacity-50"
+            onClick={() => (mode === 'dm' ? startDm(d.id) : toggle(d.id))}>
+            <Avatar name={d.displayName} color={d.avatarColor} src={avatarUrl(d)} size={24} />
+            <span className="flex-1 truncate text-[13px]">{d.displayName}</span>
+            {mode === 'group' && <span className={picked.has(d.id) ? 'text-clay' : 'text-txt3'}>{picked.has(d.id) ? <IconCheckSquare size={16} /> : <IconSquare size={16} />}</span>}
+          </button>
+        ))}
+      </div>
+
+      {mode === 'group' && (
+        <div className="flex justify-end gap-2">
+          <button className="btn-ghost" onClick={onClose} disabled={busy}>{t('common.cancel')}</button>
+          <button className="btn-primary" onClick={create} disabled={busy || !groupName.trim()}>{busy ? t('common.creating') : t('dm.createGroup')}</button>
+        </div>
+      )}
+      {mode === 'dm' && <div className="text-[11px] text-txt3">{t('dm.dmPickHint')}</div>}
+    </Modal>
+  );
+}
+
 function verdictBadge(verdict: string) {
   switch (verdict) {
-    case 'running': return '⏳';
-    case 'merge_safe': return '✅';
-    case 'do_not_merge': return '⛔';
-    case 'conflict': return '⚠️';
-    case 'error': return '⚠️';
-    default: return '🔀';
+    case 'running': return <IconClock size={15} className="text-clay" />;
+    case 'merge_safe': return <IconCheckCircle size={15} className="text-ok" />;
+    case 'do_not_merge': return <IconBan size={15} className="text-danger" />;
+    case 'conflict': return <IconWarning size={15} className="text-warn" />;
+    case 'error': return <IconWarning size={15} className="text-danger" />;
+    default: return <IconGitBranch size={15} className="text-txt3" />;
   }
 }
 
@@ -310,15 +388,15 @@ function ReviewSection() {
           : reviewRepos.map((r) => (
             <div key={r.id}>
               <div className="group flex items-center gap-1.5 px-2 py-1 text-[11px] text-txt2">
-                <span className="opacity-70">📦</span>
+                <span className="opacity-70"><IconBox size={14} /></span>
                 <span className="flex-1 truncate font-semibold" title={`${r.host}/${r.slug}`}>{r.name}</span>
                 <span className="text-txt3 group-hover:hidden">{t('review.openCount', { count: r.openCount })}</span>
-                <button className="hidden group-hover:block hover:text-clay disabled:opacity-40" title={t('review.pollNow')}
-                  disabled={busyPoll === r.id} onClick={() => poll(r.id)}>{busyPoll === r.id ? '…' : '⟳'}</button>
-                <button className="hidden group-hover:block hover:text-clay" title={t('review.editRepoTitle')}
-                  onClick={() => setEditRepo(r)}>✎</button>
-                <button className="hidden group-hover:block hover:text-danger" title={t('review.deleteRepoTitle')}
-                  onClick={() => { if (confirm(t('review.deleteRepoConfirm', { name: r.name }))) deleteReviewRepo(r.id); }}>🗑</button>
+                <button className="hidden group-hover:block hover:text-clay disabled:opacity-40" title={t('review.pollNow')} aria-label={t('review.pollNow')}
+                  disabled={busyPoll === r.id} onClick={() => poll(r.id)}>{busyPoll === r.id ? '…' : <IconRefresh size={13} />}</button>
+                <button className="hidden group-hover:block hover:text-clay" title={t('review.editRepoTitle')} aria-label={t('review.editRepoTitle')}
+                  onClick={() => setEditRepo(r)}><IconPencil size={13} /></button>
+                <button className="hidden group-hover:block hover:text-danger" title={t('review.deleteRepoTitle')} aria-label={t('review.deleteRepoTitle')}
+                  onClick={() => { if (confirm(t('review.deleteRepoConfirm', { name: r.name }))) deleteReviewRepo(r.id); }}><IconTrash size={13} /></button>
               </div>
               {r.pollError && <div className="px-2 pb-1 text-[10px] text-danger truncate" title={r.pollError}>{t('review.pollErrorLabel')}</div>}
               {reviewSessions.filter((s) => s.repoId === r.id).map(sessionItem)}
@@ -436,7 +514,7 @@ function Section({ label, onAdd, extra }: { label: string; onAdd?: () => void; e
       {label}
       <span className="flex items-center gap-1.5">
         {extra}
-        {onAdd && <span className="cursor-pointer text-sm leading-none" onClick={onAdd}>＋</span>}
+        {onAdd && <span className="cursor-pointer leading-none text-txt3 hover:text-txt" onClick={onAdd}><IconPlus size={15} /></span>}
       </span>
     </div>
   );

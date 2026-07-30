@@ -39,6 +39,7 @@ The Claude Code CLI is powerful, but it's tied to **one terminal — yours**. Cl
 
 - Everyone connects via browser → **their own isolated Claude Code session**
 - Gather in a **shared room** to drive one Claude together (like a group chat)
+- **DM a teammate or spin up a group chat** — plain person-to-person text (no Claude); an admin can promote a group to a common project room
 - Risky actions that need approval → **approve/deny live, in the browser**
 - Open **VS Code (code-server)** right there for editing, terminal, and git
 - **Commit & push** a cloned repo from the chat header (or let Claude do it) with encrypted per-user git credentials
@@ -46,6 +47,7 @@ The Claude Code CLI is powerful, but it's tied to **one terminal — yours**. Cl
 - **Import a local session** — upload a project folder plus its `~/.claude` session files to clone the conversation as a resumable private session
 - **Auto-review pull requests** — each open PR auto-runs a pipeline (merge → build/run → bug + code review → a merge-safe verdict); one click merges it on the remote
 - **Live usage meter** in the chat header — per-session **context-window** fill plus your **claude.ai plan limits** (5-hour, weekly, per-model) with reset countdowns, straight from the CLI
+- **Per-session model effort** — pick the reasoning effort (low → max) from a header pill; unsupported models silently downgrade
 - Each user runs on **their own Claude token** (admin-common token + env as fallback); admins see everything via a **usage dashboard**
 - **Works on a phone** — responsive layout: the sidebar collapses into a slide-in drawer and the chat goes full-width (installable as a PWA)
 
@@ -63,14 +65,21 @@ The Claude Code CLI is powerful, but it's tied to **one terminal — yours**. Cl
 | 🧑‍💻 | **VS Code in the browser** | Spin up a project in a code-server container instantly. Mounts only your volume + the shared one (isolated); auto-reaped when idle. |
 | 🔌 | **Two-class plugins** | Common (admin) and personal (user) tiers. Install via git or local upload, admin-forced plugins, per-user on/off. Per-plugin detail view + one-click update. |
 | 🪪 | **Per-user Claude tokens** | Each member registers their own token (encrypted at rest); usage and cost are attributed per person. Falls back to an admin-set common token, then env. |
+| 🔀 | **LLM provider override** | Optionally run turns against a non-default LLM backend instead of the Claude token, per-user or admin-common (encrypted at rest). **Amazon Bedrock** and **Google Vertex AI** Claude models are supported natively; **OpenAI/ChatGPT/local LLMs** connect through an Anthropic-compatible proxy base URL (e.g. LiteLLM, claude-code-router, an Ollama shim). Resolution: user provider → user token → common provider → common token → MOCK. Leave it unset and the default Claude-token path is unchanged. Gated by `llmProvidersEnabled`. |
+| 👤 | **My Page** | One per-user settings page consolidating profile image (upload/remove, shown in your own sidebar and My Page), Claude token, LLM provider override, git credentials, and personal-project management (create / delete / open in a new chat). |
 | ⑂ | **Git commit & push** | Commit (with file-level staging), push, and switch branches (local/remote) for a cloned project right from the chat header — Claude can also commit/push itself. Clones fetch full history (all branches) and can target a specific branch. HTTPS PAT credentials for GitHub/GitLab/Bitbucket are encrypted per-user (admin-common fallback), picked at clone time, resolved by host. The panel shows exactly which credential (yours vs. shared) and commit identity are in effect for the repo, so auth failures are easy to diagnose. |
 | 📚 | **LLM Wiki knowledge base** | Upload a folder of docs/images; Claude compiles them into cross-linked articles users can query in read-only threads. Import an already-compiled wiki to skip compilation. |
 | 🔀 | **Automatic PR review** | Admin registers a remote (merge-capable credential required); the server polls GitHub/GitLab/Bitbucket and each open PR becomes a review session — visible to admins and the PR's author (read-only). Each new PR **auto-runs the whole pipeline**: local merge → build/run → bug detection + code review → a **MERGE_SAFE / DO_NOT_MERGE verdict**. On the admin's word, one click **merges the PR on the remote** using the credential. |
 | 🎛 | **Everything configurable in the admin panel** | A single config registry surfaces every operational knob — turn cap, model list & default, the whole review pipeline (poll interval, auto/comment toggles, sandbox image/limits/timeouts), code-server image/idle, git timeouts, session lifetime, upload/body/socket limits — in one grouped, **live-editable** admin page (most apply instantly; a few flag *restart required*). Env vars just seed the defaults; infrastructure and secrets are shown read-only. |
+| 🧹 | **Resource cleanup (host Docker included)** | An admin **Resources** tab scans app-spawned containers (code-server editors + review sandboxes, with orphan detection), referenced + dangling images, and orphaned dirs/DB rows — then cleans them per-resource or via a double-confirmed **full reset**. Only ever removes spawned containers, dangling images, and genuine orphans; user/room projects, accounts, and chat sessions are never touched. Gated by `resourceCleanupEnabled`. |
+| 🎛 | **Activity / process manager** | An admin **Activity** tab is a live task-manager over everything the server runs: in-flight Claude turns, queued messages, code-server editor + review-sandbox containers, and running review pipelines — each with a per-row control (interrupt / cancel / kill). Auto-polls while open (`processPollMs`). |
+| 🙋 | **Member requests → admin approval** | Members request admin-only actions (create a common project, create an LLM Wiki topic, request the admin role) with a reason; admins approve/reject from a **Requests** tab (pending badge included). Requests reuse the **real feature form** — a common-project request carries the same git clone URL / branch / credential picker the admin create form has, so approval runs the actual clone (credential re-validated as the requester). On approval the server runs the action and stores the result — a small action registry, so new requestable actions are a one-place add. A role upgrade only ever promotes the requester, never a payload-named user. Gated by `approvalsEnabled`. |
+| 💬 | **DM & group chat** | A lightweight human messaging layer for **every** user, fully separate from the Claude rooms — plain 1:1 DMs and named group channels over WebSocket, with unread badges. No Claude, no queue. A DM between the same two people is deduped; every read/post is membership-gated server-side. An admin can **promote a group channel to a common project room** (seeded with its members). Gated by `dmEnabled`. |
 | 🔑 | **Fully functional without a key** | With no token anywhere, it runs in **MOCK mode** — streaming, permissions, and tool-card UX all demoable. Ideal for evaluation, demos, CI. |
 | 🐳 | **One-shot deploy** | Multi-stage single image + `docker compose up`. code-server spawns dynamically as sibling containers (no orchestrator needed). |
 | 🗂 | **Folded context history** | Each `/clear` or `/compact` collapses the conversation above it into a stacked, timestamped toggle — history stays one click away instead of scrolling forever. |
 | 📎 | **`@` file & folder references** | Type `@` in any project chat to fuzzy-search files and folders in an instant preview menu — the same feel as the `/` command palette. Picking one drops an `@path` reference into your message, so you point Claude at a file without leaving the composer. |
+| 🖇 | **Attach files & paste screenshots** | Attach any file — or just paste (or drag-drop) a clipboard screenshot — into the composer. Uploads stage under the session's workspace and their paths ride the prompt, so Claude reads them (images render visually). Thumbnails/chips show inline in the composer and the transcript; per-file size and count limits are admin-configurable. |
 | 🎨 | **Desktop-app-grade UI** | Clay theme following the Claude Code desktop app, light/dark, collapsible tool cards, serif responses, member avatars and presence. |
 
 ---
@@ -202,6 +211,18 @@ flowchart TB
 </details>
 
 <details>
+<summary><b>LLM provider override (Bedrock / Vertex / custom base URL)</b></summary>
+
+- The runtime is the Claude CLI (Anthropic wire format). A provider profile (per-user, or admin-common as fallback) builds the right env for the turn — an **additive override** on top of the default Claude-token path
+- **anthropic** — pin/keep a Claude token (`ANTHROPIC_API_KEY` / `CLAUDE_CODE_OAUTH_TOKEN`); leave the token blank to just use your saved Claude token
+- **bedrock** — native: `CLAUDE_CODE_USE_BEDROCK=1` + region + a credential (`AWS_BEARER_TOKEN_BEDROCK`, or an access key id/secret (+session token)) + model id
+- **vertex** — native but minimal: `CLAUDE_CODE_USE_VERTEX=1` + region + project id, using the host's GCP Application Default Credentials (ADC)
+- **custom** — `ANTHROPIC_BASE_URL` (+ optional bearer token + model). **This is the path for OpenAI/ChatGPT/local LLMs**: point it at a proxy that translates Anthropic↔OpenAI (LiteLLM, claude-code-router, an Ollama Anthropic-compat shim). The app cannot speak OpenAI's wire format directly
+- Resolution order: user provider → user Claude token → common provider → common Claude token/env → MOCK. **When no provider is configured, auth resolves exactly as before** — the default token path does not regress
+- Config (base URL, tokens, keys) is encrypted at rest; the API never returns secrets (only which fields are set). Gated by the `llmProvidersEnabled` flag
+</details>
+
+<details>
 <summary><b>LLM Wiki (team knowledge base)</b></summary>
 
 - Admin uploads a folder of docs/images → Claude reads the `raw/` sources and **auto-compiles** them into `wiki/` articles + `_index.md` (multimodal — images transcribed too)
@@ -282,6 +303,7 @@ A **lightweight posture** that assumes a mutually trusted team/individual. App l
 ## 🛣 Roadmap
 
 - [x] Per-user Claude tokens (personal + admin-common + env fallback)
+- [x] LLM provider override (Bedrock / Vertex native · OpenAI/local via Anthropic-compatible proxy)
 - [ ] SSO / proxy-header auth adapter
 - [ ] Postgres · Redis promotion (multi-process scale)
 - [ ] CRDT real-time collaborative editing

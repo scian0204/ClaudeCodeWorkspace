@@ -5,6 +5,7 @@ import { md } from '../lib/md';
 import { useT } from '../lib/i18n';
 import { isImage, isMarkdown, resolveRelAsset } from './FileExplorer';
 import { citeId, extractSources, resolveRealPath, useCite, type WikiSource } from '../lib/wikiCite';
+import { IconPaperclip, IconChevronRight, IconImage, IconFile, IconArrowLeft, IconEye, IconTerminal } from '../lib/icons';
 
 // Toggles the `.on` class on every in-text citation mark matching the hovered source, so hovering
 // a panel row lights up its mentions in the answer (and vice-versa). Marks are non-React DOM.
@@ -59,7 +60,7 @@ export function SourcesPanel({ topicId, open, onToggle, width, onResize }: { top
   if (!open) {
     return (
       <aside className="border-l border-line bg-panel flex flex-col items-center pt-3 gap-2 select-none">
-        <button className="toolbtn" title={t('wikiSources.expand')} onClick={onToggle}>📎</button>
+        <button className="toolbtn" title={t('wikiSources.expand')} aria-label={t('wikiSources.expand')} onClick={onToggle}><IconPaperclip /></button>
         {sources.length > 0 && <span className="text-[10px] text-txt3">{sources.length}</span>}
       </aside>
     );
@@ -75,10 +76,10 @@ export function SourcesPanel({ topicId, open, onToggle, width, onResize }: { top
       <div onMouseDown={startDrag} title={t('wikiSources.resize')}
         className="absolute left-0 top-0 h-full w-1.5 -ml-0.5 cursor-col-resize z-10 hover:bg-clay/40" />
       <div className="flex items-center gap-2 px-3 py-2.5 border-b border-line shrink-0">
-        <span>📎</span>
+        <IconPaperclip size={15} />
         <span className="font-semibold text-sm">{t('wikiSources.title')}</span>
         <span className="text-txt3 text-xs">{sources.length}</span>
-        <button className="ml-auto text-txt3 hover:text-clay text-sm" title={t('wikiSources.collapse')} onClick={onToggle}>»</button>
+        <button className="ml-auto text-txt3 hover:text-clay" title={t('wikiSources.collapse')} aria-label={t('wikiSources.collapse')} onClick={onToggle}><IconChevronRight size={16} /></button>
       </div>
 
       {preview ? (
@@ -101,7 +102,7 @@ export function SourcesPanel({ topicId, open, onToggle, width, onResize }: { top
                       onClick={() => openPreview(s)}
                       className={`w-full text-left flex items-center gap-1.5 px-2 py-1.5 rounded text-xs mb-0.5 border transition
                         ${hovered === id ? 'border-clay bg-claysoft text-clay' : 'border-transparent hover:bg-line text-txt2'}`}>
-                      <span className="shrink-0">{isImage(base) ? '🖼' : '📄'}</span>
+                      <span className="shrink-0">{isImage(base) ? <IconImage size={14} /> : <IconFile size={14} />}</span>
                       <span className="truncate flex-1">{base}</span>
                     </button>
                   );
@@ -145,12 +146,12 @@ function CitePreview({ topicId, src, onBack }: { topicId: string; src: WikiSourc
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <div className="flex items-center gap-2 px-2.5 py-1.5 border-b border-line shrink-0 text-xs">
-        <button className="text-txt3 hover:text-clay" onClick={onBack}>{t('wikiSources.back')}</button>
+        <button className="text-txt3 hover:text-clay inline-flex items-center gap-1" onClick={onBack}><IconArrowLeft size={13} />{t('wikiSources.back')}</button>
         <span className="font-mono truncate flex-1" title={`${real.dir}/${real.path}`}>{base}</span>
         <span className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'var(--claysoft)', color: 'var(--clay)' }}>{real.dir}</span>
         {isMarkdown(real.path) && !isImage(real.path) && !notFound && (
-          <button className="shrink-0 px-1.5 py-0.5 rounded border border-line hover:text-clay" onClick={() => setRaw(!raw)}>
-            {raw ? t('fileExplorer.rendered') : t('fileExplorer.source')}
+          <button className="shrink-0 px-1.5 py-0.5 rounded border border-line hover:text-clay inline-flex items-center gap-1" onClick={() => setRaw(!raw)}>
+            {raw ? <><IconEye size={12} />{t('fileExplorer.rendered')}</> : <><IconTerminal size={12} />{t('fileExplorer.source')}</>}
           </button>
         )}
       </div>

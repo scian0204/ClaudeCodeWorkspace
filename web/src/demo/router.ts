@@ -1,23 +1,44 @@
 // Routes every /api/* request to canned data / in-memory mutations for the static demo.
 // Called by the fetch + XHR interceptors in ./install. Returns a plain {status, data}.
 import {
-  db, ADMIN, GIT, COMMANDS, USAGE, TREE_PROJECT, TREE_PLUGIN, WIKI_ARTICLES, WIKI_RAW, WIKI_TREE_ARTICLES,
-  fileContent, wikiFileContent, pluginDetail, EDITOR_URL, genId,
+  db, ADMIN, ATTACHMENTS, GIT, PROVIDERS, COMMANDS, USAGE, TREE_PROJECT, TREE_PLUGIN, WIKI_ARTICLES, WIKI_RAW, WIKI_TREE_ARTICLES,
+  REQUEST_ACTIONS, fileContent, wikiFileContent, pluginDetail, EDITOR_URL, genId,
 } from './data';
 
 type Res = { status: number; data: any };
 const ok = (data: any = {}): Res => ({ status: 200, data });
 
+// mirror the server's provider status shape + minimal per-type validation (so the demo shows errors)
+function providerStatus(type: string, c: any) {
+  return {
+    type,
+    fields: {
+      baseUrl: c.baseUrl || '', region: c.region || '', projectId: c.projectId || '', model: c.model || '',
+      hasAuthToken: !!c.authToken, hasApiKey: !!c.apiKey, hasAccessKeyId: !!c.accessKeyId,
+      hasSecretKey: !!c.secretKey, hasSessionToken: !!c.sessionToken, hasBearerToken: !!c.bearerToken,
+    },
+  };
+}
+function providerError(type: string, c: any): string | null {
+  if (type === 'custom' && !(c.baseUrl || '').trim()) return 'custom: base URL required (Anthropic-compatible endpoint)';
+  if (type === 'bedrock') {
+    if (!(c.region || '').trim()) return 'bedrock: AWS region required';
+    if (!(c.bearerToken || '').trim() && !((c.accessKeyId || '').trim() && (c.secretKey || '').trim())) return 'bedrock: provide a bearer token, or an access key id + secret key';
+  }
+  if (type === 'vertex' && (!(c.region || '').trim() || !(c.projectId || '').trim())) return 'vertex: region + project id required';
+  return null;
+}
+
 function sessionFor(id: string) {
   const s = db.sessions.find((x) => x.id === id);
-  if (s) return { id: s.id, title: s.title, projectId: s.projectId, model: s.model, permissionMode: s.permissionMode };
+  if (s) return { id: s.id, title: s.title, projectId: s.projectId, model: s.model, effort: s.effort || 'high', permissionMode: s.permissionMode };
   const room = db.rooms.find((r) => r.chatSessionId === id);
-  if (room) return { id, title: room.name, projectId: null, model: 'claude-opus-4-8', permissionMode: room.permissionMode };
+  if (room) return { id, title: room.name, projectId: null, model: 'claude-opus-4-8', effort: 'high', permissionMode: room.permissionMode };
   const w = db.wikiTopics.find((t) => `cs_${t.id}` === id);
-  if (w) return { id, title: w.name, projectId: null, model: 'claude-opus-4-8', permissionMode: 'default' };
+  if (w) return { id, title: w.name, projectId: null, model: 'claude-opus-4-8', effort: 'high', permissionMode: 'default' };
   const rv = db.reviewSessions.find((x: any) => x.chatSessionId === id);
-  if (rv) return { id, title: `#${rv.prNumber} ${rv.prTitle}`, projectId: null, model: 'claude-opus-4-8', permissionMode: 'default' };
-  return { id, title: 'New chat', projectId: null, model: 'claude-opus-4-8', permissionMode: 'default' };
+  if (rv) return { id, title: `#${rv.prNumber} ${rv.prTitle}`, projectId: null, model: 'claude-opus-4-8', effort: 'high', permissionMode: 'default' };
+  return { id, title: 'New chat', projectId: null, model: 'claude-opus-4-8', effort: 'high', permissionMode: 'default' };
 }
 const msgs = (id: string) => (db.messages[id] || (db.messages[id] = []));
 
@@ -34,14 +55,54 @@ export function route(method: string, rawPath: string, body?: any): Res {
   if (P === '/api/auth/login') return ok({ user: db.me });
   if (P === '/api/auth/logout') return ok({});
   if (P === '/api/auth/me/claude-token') { db.me.hasClaudeToken = M !== 'DELETE'; db.me.claudeTokenSetAt = M !== 'DELETE' ? Date.now() : null; return ok({ user: db.me }); }
+  // avatar: store the picked image inline as a data URL (install.ts reads the File → b.avatarDataUrl);
+  // avatarUrl() renders a data: URL directly, so no GET stream is needed in the demo.
+  if (P === '/api/auth/me/avatar') { db.me.avatar = M === 'DELETE' ? null : (b.avatarDataUrl || db.me.avatar); return ok({ user: db.me }); }
 
   // ---- client-facing config (model dropdown) ----
-  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, sessionImportEnabled: true });
+  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, processPollMs: 5000 });
+
+  // ---- member requests (approval workflow) ----
+  if (P === '/api/requests/actions') return ok({ actions: REQUEST_ACTIONS });
+  if (P === '/api/requests' && M === 'GET') return ok({ requests: db.requests }); // demo me is admin → all
+  if (P === '/api/requests' && M === 'POST') {
+    const req = { id: genId('req'), requesterId: db.me.id, type: String(b.type || ''), payload: JSON.stringify(b.payload || {}), reason: String(b.reason || ''), status: 'pending', reviewerId: null, decidedAt: null, result: null, createdAt: Date.now(), updatedAt: Date.now() };
+    db.requests.unshift(req); return ok({ request: req });
+  }
+  if (seg[1] === 'requests' && seg[3] === 'decide' && M === 'POST') {
+    const r: any = db.requests.find((x: any) => x.id === idAt(2));
+    if (!r) return { status: 404, data: { error: 'not found' } };
+    if (r.status !== 'pending') return { status: 400, data: { error: 'already decided' } };
+    const approve = !!b.approve;
+    r.status = approve ? 'approved' : 'rejected'; r.reviewerId = db.me.id; r.decidedAt = Date.now(); r.updatedAt = Date.now();
+    if (approve) {
+      const payload = (() => { try { return JSON.parse(r.payload || '{}'); } catch { return {}; } })();
+      r.result = r.type === 'common_project' ? `공통 프로젝트 생성됨: ${payload.name || ''}`
+        : r.type === 'wiki_topic' ? `위키 주제 생성됨: ${payload.name || ''}`
+        : r.type === 'role_upgrade' ? `${db.me.username} 권한을 admin으로 승격`
+        : '완료 (demo)';
+    } else { r.result = b.note ? String(b.note) : null; }
+    return ok({ request: r });
+  }
+
+  // ---- llm provider override (user self-service + admin common) ----
+  if (P === '/api/auth/me/provider' || P === '/api/admin/provider') {
+    const scope: 'user' | 'common' = P.includes('/admin/') ? 'common' : 'user';
+    if (M === 'DELETE') { PROVIDERS[scope] = null; return ok({ provider: null }); }
+    if (M === 'PUT') {
+      const type = String(b.type || ''); const c = b.config || {};
+      const err = providerError(type, c);
+      if (err) return { status: 400, data: { error: err } };
+      PROVIDERS[scope] = providerStatus(type, c);
+      return ok({ provider: PROVIDERS[scope] });
+    }
+    return ok({ provider: PROVIDERS[scope] }); // GET
+  }
 
   // ---- sessions ----
   if (P === '/api/sessions' && M === 'GET') return ok({ sessions: db.sessions });
   if (P === '/api/sessions' && M === 'POST') {
-    const s = { id: genId('s'), title: 'New chat', updatedAt: Date.now(), projectId: null, model: 'claude-opus-4-8', permissionMode: 'default' };
+    const s = { id: genId('s'), title: 'New chat', updatedAt: Date.now(), projectId: null, model: 'claude-opus-4-8', effort: 'high', permissionMode: 'default' };
     db.sessions.unshift(s); db.messages[s.id] = []; return ok({ session: s });
   }
   if (seg[1] === 'sessions' && seg[3] === 'commands') return ok({ commands: COMMANDS });
@@ -53,6 +114,13 @@ export function route(method: string, rawPath: string, body?: any): Res {
   }
   if (seg[1] === 'sessions' && seg[3] === 'messages' && M === 'DELETE') {
     const list = msgs(idAt(2)); const i = list.findIndex((m) => m.id === idAt(4)); if (i >= 0) list.splice(i, 1); return ok({});
+  }
+  // attachments: POST is really handled by the XHR interceptor (install.ts); GET/DELETE come through here
+  if (seg[1] === 'sessions' && seg[3] === 'attachments') {
+    const name = decodeURIComponent(idAt(4) || '');
+    if (M === 'DELETE' && name) { ATTACHMENTS.delete(name); return ok({ ok: true }); }
+    if (M === 'GET' && name) { const a = ATTACHMENTS.get(name); return a ? ok({ name, url: a.url, isImage: a.isImage }) : { status: 404, data: { error: 'not found' } }; }
+    return ok({ files: [] });
   }
   if (seg[1] === 'sessions' && seg[2] && M === 'GET') return ok({ session: sessionFor(idAt(2)), messages: msgs(idAt(2)) });
   if (seg[1] === 'sessions' && seg[2] && M === 'PATCH') {
@@ -225,6 +293,40 @@ export function route(method: string, rawPath: string, body?: any): Res {
     });
   }
 
+  // ---- DM / group chat ----
+  if (P === '/api/dm/channels' && M === 'GET') return ok({ channels: db.dmChannels });
+  if (P === '/api/dm/channels' && M === 'POST') {
+    const memberInfo = (u: any) => ({ userId: u.id, displayName: u.displayName, avatarColor: u.avatarColor, avatar: u.avatar ?? null, username: u.username });
+    if (b.kind === 'dm') {
+      const other = db.users.find((u: any) => u.id === b.userId);
+      let ch = db.dmChannels.find((c: any) => c.kind === 'dm'
+        && c.members.some((m: any) => m.userId === b.userId) && c.members.some((m: any) => m.userId === db.me.id));
+      if (!ch) {
+        ch = { id: genId('dm'), kind: 'dm', name: null, createdBy: db.me.id, createdAt: Date.now(),
+          members: [memberInfo(db.me), other && memberInfo(other)].filter(Boolean), lastMessage: null, unread: 0 };
+        db.dmChannels.unshift(ch); db.dmMessages[ch.id] = [];
+      }
+      return ok({ channel: ch });
+    }
+    const picked = (Array.isArray(b.memberIds) ? b.memberIds : []).map((id: string) => db.users.find((u: any) => u.id === id)).filter(Boolean);
+    const members = [memberInfo(db.me), ...picked.map(memberInfo)].filter((m: any, i: number, a: any[]) => a.findIndex((x) => x.userId === m.userId) === i);
+    const ch = { id: genId('dm'), kind: 'group', name: b.name || 'Group', createdBy: db.me.id, createdAt: Date.now(), members, lastMessage: null, unread: 0 };
+    db.dmChannels.unshift(ch); db.dmMessages[ch.id] = [];
+    return ok({ channel: ch });
+  }
+  if (seg[1] === 'dm' && seg[2] === 'channels' && seg[4] === 'messages' && M === 'GET') return ok({ messages: db.dmMessages[idAt(3)] || [] });
+  if (seg[1] === 'dm' && seg[2] === 'channels' && seg[4] === 'read' && M === 'POST') {
+    const c = db.dmChannels.find((x: any) => x.id === idAt(3)); if (c) c.unread = 0; return ok({ ok: true });
+  }
+  if (seg[1] === 'dm' && seg[2] === 'channels' && seg[4] === 'promote' && M === 'POST') {
+    const c = db.dmChannels.find((x: any) => x.id === idAt(3));
+    const cs = genId('cs');
+    const room = { id: genId('r'), name: c?.name || 'Group', ownerId: db.me.id, chatSessionId: cs, permissionMode: 'default',
+      members: (c?.members || []).map((m: any) => ({ userId: m.userId, displayName: m.displayName, avatarColor: m.avatarColor, username: m.username, isOwner: m.userId === db.me.id, delegations: [], joinedAt: Date.now() })) };
+    db.rooms.unshift(room); db.messages[cs] = [];
+    return ok({ roomId: room.id });
+  }
+
   // ---- admin ----
   if (P === '/api/admin/overview') return ok(ADMIN.overview());
   if (P === '/api/admin/usage') return ok(ADMIN.usage);
@@ -245,6 +347,10 @@ export function route(method: string, rawPath: string, body?: any): Res {
   if (P === '/api/admin/image/pull' && M === 'POST') {
     const s = (ADMIN.images[b.image] ||= { present: false }); s.present = true; s.size = s.size || 402_000_000; return ok(s);
   }
+  if (P === '/api/admin/cleanup' && M === 'GET') return ok(ADMIN.cleanup);
+  if (P === '/api/admin/cleanup' && M === 'POST') return ok(ADMIN.runCleanup(b.action));
+  if (P === '/api/admin/processes' && M === 'GET') return ok(ADMIN.processes);
+  if (P === '/api/admin/processes' && M === 'POST') return ok(ADMIN.runProcess(b));
   if (P === '/api/admin/restart' && M === 'POST') return ok({ ok: true });
   if (P === '/api/admin/claude-token') return ok({});
 

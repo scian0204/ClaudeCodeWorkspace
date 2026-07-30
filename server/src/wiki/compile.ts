@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import { eq } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { buildOptions, type SessionContext } from '../claude/config-layering.js';
-import { resolveClaudeAuth } from '../auth/claude-token.js';
+import { resolveProvider } from '../auth/provider.js';
 import { cfg } from '../lib/config-registry.js';
 import { recordUsage } from '../usage/tracker.js';
 import { io } from '../realtime/io.js';
@@ -61,6 +61,7 @@ function compilePrompt(name: string, description: string) {
 }
 
 async function runCompile(t: NonNullable<ReturnType<typeof getTopic>>) {
+  const prov = resolveProvider(t.createdBy); // creator's provider/token, else admin common, else env
   const ctx: SessionContext = {
     kind: 'user', ownerId: t.createdBy, cwd: t.path,
     model: cfg.str('defaultModel'),
@@ -68,7 +69,7 @@ async function runCompile(t: NonNullable<ReturnType<typeof getTopic>>) {
     // tool, and bypass maps to --dangerously-skip-permissions which the CLI refuses under root.
     permissionMode: 'acceptEdits',
     plugins: [], // deterministic compile — no user plugins/skills in the loop
-    authToken: resolveClaudeAuth(t.createdBy).token, // creator's token, else admin common, else env
+    authToken: '', providerEnv: prov.env, providerModel: prov.model,
   };
   const { query } = await import('@anthropic-ai/claude-agent-sdk');
   const abort = new AbortController();
@@ -115,8 +116,8 @@ export async function compileTopic(topicId: string): Promise<void> {
   const rawDir = path.join(t.path, 'raw');
   const wikiDir = path.join(t.path, 'wiki');
   if (!anyFiles(rawDir)) { setStatus(topicId, 'done', null); return; } // nothing to compile
-  // no resolvable token (creator's own, admin common, or env) — skip; nothing to authenticate with
-  if (resolveClaudeAuth(t.createdBy).source === 'none') { setStatus(topicId, 'done', null); return; }
+  // no resolvable auth (creator's provider/token, admin common, or env) — skip; nothing to run with
+  if (resolveProvider(t.createdBy).source === 'none') { setStatus(topicId, 'done', null); return; }
 
   inflight.add(topicId);
   setStatus(topicId, 'compiling', null);

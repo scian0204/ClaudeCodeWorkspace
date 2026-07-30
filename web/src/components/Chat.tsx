@@ -1,7 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as DM from '@radix-ui/react-dropdown-menu';
-import { useStore, type Block, type Msg } from '../lib/store';
-import { api } from '../lib/api';
+import { useStore, type Block, type Msg, type Attachment, type Project } from '../lib/store';
+import { ProjectCreateForm } from './ProjectCreateForm';
+import { api, type UploadState } from '../lib/api';
+import { UploadProgress } from './UploadProgress';
 import { Avatar, timeAgo, useIsMobile, MobileMenuButton } from '../lib/ui';
 import { MembersDialog } from './MembersDialog';
 import { WikiExplorer } from './WikiExplorer';
@@ -11,13 +13,24 @@ import { SourcesPanel, CiteHighlighter } from './SourcesPanel';
 import { extractSources, markCitations, type WikiSource } from '../lib/wikiCite';
 import { md } from '../lib/md';
 import { useT } from '../lib/i18n';
+import {
+  IconChevronDown, IconChevronRight, IconChevronUp, IconTheme, IconFolder, IconFile, IconTrash,
+  IconGauge, IconEye, IconBook, IconArchive, IconSparkle, IconCopy, IconPencil, IconHelp,
+  IconTerminal, IconX, IconPaperclip, IconSend, IconShield, IconBolt, IconCheckSquare, IconCrown,
+  IconGitBranch, IconClock, IconCheckCircle, IconBan, IconWarning, IconLink, IconRotateCcw,
+  IconCheck, IconRefresh, IconSquare, IconMessage,
+} from '../lib/icons';
 
 const MODELS: Record<string, string> = {
   'claude-opus-4-8': 'Opus 4.8', 'claude-sonnet-5': 'Sonnet 5', 'claude-haiku-4-5-20251001': 'Haiku 4.5',
 };
-const MODES: Record<string, string> = {
-  default: 'chat.modeDefault', acceptEdits: 'chat.modeAcceptEdits', bypassPermissions: 'chat.modeBypass', plan: 'chat.modePlan',
+const MODES: Record<string, { key: string; Icon: typeof IconCheck }> = {
+  default: { key: 'chat.modeDefault', Icon: IconShield },
+  acceptEdits: { key: 'chat.modeAcceptEdits', Icon: IconPencil },
+  bypassPermissions: { key: 'chat.modeBypass', Icon: IconBolt },
+  plan: { key: 'chat.modePlan', Icon: IconCheckSquare },
 };
+const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
 
 const clampPanelW = (w: number) => Math.max(300, Math.min(w, 1000));
 
@@ -55,7 +68,7 @@ export function Chat() {
 }
 
 function Header() {
-  const { current: c, presence, control, toggleTheme, setViewMode, viewMode, setModel, setMode } = useStore();
+  const { current: c, presence, control, toggleTheme, setViewMode, viewMode, setModel, setEffort, setMode } = useStore();
   const [showMembers, setShowMembers] = useState(false);
   const [explorer, setExplorer] = useState(false);
   const [gitOpen, setGitOpen] = useState(false);
@@ -67,6 +80,7 @@ function Header() {
   const isRoom = c.kind === 'room';
   const isReview = c.kind === 'review';
   const owner = c.room?.members.find((m) => m.isOwner);
+  const modeUi = MODES[c.permissionMode];
 
   return (
     <header className="flex items-center gap-2 md:gap-2.5 px-3 md:px-4 py-2.5 border-b border-line bg-panel shrink-0 flex-wrap">
@@ -74,7 +88,7 @@ function Header() {
       <div className="font-semibold text-sm flex items-center gap-2 min-w-0">
         <span className="w-[7px] h-[7px] rounded-full bg-ok shrink-0" />
         <span className="truncate">{c.title}</span>
-        <span className="text-txt3 text-xs font-mono truncate hidden md:inline">{c.wikiTopicId ? t('chat.knowledgeQuery') : (c.projectId ? '' : t('chat.noProject'))}</span>
+        <span className="text-txt3 text-xs font-mono truncate hidden md:inline-flex items-center gap-1">{c.wikiTopicId ? <><IconBook size={12} />{t('chat.knowledgeQuery')}</> : (c.projectId ? '' : t('chat.noProject'))}</span>
       </div>
       <div className="flex-1" />
 
@@ -88,18 +102,18 @@ function Header() {
                 {m.displayName.slice(0, 2).toUpperCase()}</span>
             ))}
           </div>
-          <button className="pill" onClick={() => setShowMembers(true)}>{t('chat.ownerMembers', { owner: owner?.displayName || t('chat.roomOwner') })}</button>
+          <button className="pill inline-flex items-center gap-1" onClick={() => setShowMembers(true)}><IconCrown size={13} />{t('chat.ownerMembers', { owner: owner?.displayName || t('chat.roomOwner') })}</button>
         </>
       )}
 
       {isReview && c.review && <ReviewControls />}
 
       {!c.wikiTopicId && !isReview && <ProjectMenu />}
-      {!c.wikiTopicId && c.projectId && <button className="pill" title={t('chat.projectFileExplorer')} onClick={() => setExplorer(true)}>{t('chat.filesBtn')}</button>}
-      {!c.wikiTopicId && c.projectId && <button className="pill" title={t('git.title')} onClick={() => setGitOpen(true)}>{t('git.pill')}</button>}
+      {!c.wikiTopicId && c.projectId && <button className="pill inline-flex items-center gap-1" title={t('chat.projectFileExplorer')} onClick={() => setExplorer(true)}><IconFolder size={13} />{t('chat.filesBtn')}</button>}
+      {!c.wikiTopicId && c.projectId && <button className="pill inline-flex items-center gap-1" title={t('git.title')} onClick={() => setGitOpen(true)}><IconGitBranch size={13} />{t('git.pill')}</button>}
 
       <DM.Root>
-        <DM.Trigger asChild><button className="pill" disabled={!!c.readOnly}>{models[c.model] || c.model} ▾</button></DM.Trigger>
+        <DM.Trigger asChild><button className="pill" disabled={!!c.readOnly}>{models[c.model] || c.model}<IconChevronDown size={14} /></button></DM.Trigger>
         <Menu>
           {Object.entries(models).map(([id, label]) => (
             <MenuItem key={id} onSelect={() => setModel(id)}>{label}</MenuItem>
@@ -108,10 +122,19 @@ function Header() {
       </DM.Root>
 
       <DM.Root>
-        <DM.Trigger asChild><button className="pill" disabled={(isRoom || isReview) && !control.canSetMode}>{t(MODES[c.permissionMode]) || c.permissionMode} ▾</button></DM.Trigger>
+        <DM.Trigger asChild><button className="pill" disabled={!!c.readOnly} title={t('cfg.defaultEffort')}>{t('effort.' + c.effort)}<IconChevronDown size={14} /></button></DM.Trigger>
         <Menu>
-          {Object.entries(MODES).map(([id, label]) => (
-            <MenuItem key={id} onSelect={() => setMode(id)}>{t(label)}</MenuItem>
+          {EFFORTS.map((lvl) => (
+            <MenuItem key={lvl} onSelect={() => setEffort(lvl)}>{t('effort.' + lvl)}</MenuItem>
+          ))}
+        </Menu>
+      </DM.Root>
+
+      <DM.Root>
+        <DM.Trigger asChild><button className="pill" disabled={(isRoom || isReview) && !control.canSetMode}>{modeUi ? <span className="inline-flex items-center gap-1"><modeUi.Icon size={13} />{t(modeUi.key)}</span> : c.permissionMode}<IconChevronDown size={14} /></button></DM.Trigger>
+        <Menu>
+          {Object.entries(MODES).map(([id, m]) => (
+            <MenuItem key={id} onSelect={() => setMode(id)}><span className="inline-flex items-center gap-1.5"><m.Icon size={14} />{t(m.key)}</span></MenuItem>
           ))}
           {isRoom && !control.canSetMode && <div className="px-2 py-1 text-[11px] text-txt3">{t('chat.ownerOnlyMode')}</div>}
         </Menu>
@@ -128,7 +151,7 @@ function Header() {
           ))}
         </div>
       )}
-      <button className="toolbtn" title={t('chat.toggleTheme')} onClick={toggleTheme}>◐</button>
+      <button className="toolbtn" title={t('chat.toggleTheme')} aria-label={t('chat.toggleTheme')} onClick={toggleTheme}><IconTheme /></button>
 
       {gitOpen && c.projectId && <GitPanel projectId={c.projectId} open={gitOpen} onClose={() => setGitOpen(false)} />}
       {showMembers && c.room && <MembersDialog open={showMembers} onClose={() => setShowMembers(false)} />}
@@ -149,52 +172,36 @@ function Header() {
 function ProjectMenu() {
   const { current: c, projects, setProject, deleteProject } = useStore();
   const [roomProjects, setRoomProjects] = useState<any[]>([]);
-  const [newName, setNewName] = useState('');
-  const [gitUrl, setGitUrl] = useState('');
-  const [branch, setBranch] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [creds, setCreds] = useState<any[]>([]);
-  const [credentialId, setCredentialId] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
-  const refresh = useStore((s) => s.refreshLists);
+  const [scope, setScope] = useState<'user' | 'common'>('user'); // private session: create personal, or request/create common
 
   useEffect(() => {
     if (c?.kind === 'room' && c.roomId) api.get(`/api/projects/room/${c.roomId}`).then((r) => setRoomProjects(r.projects)).catch(() => {});
   }, [c?.roomId, c?.kind]);
-  useEffect(() => { api.get('/api/git-credentials').then((r) => setCreds([...(r.mine || []), ...(r.common || [])])).catch(() => {}); }, []);
 
   const t = useT();
   if (!c) return null;
+  const isRoom = c.kind === 'room';
   const list = [...projects.common.map((p) => ({ ...p, tag: t('chat.tagCommon') })),
-    ...(c.kind === 'room' ? roomProjects.map((p) => ({ ...p, tag: t('chat.tagRoom') })) : projects.mine.map((p) => ({ ...p, tag: t('chat.tagMine') })))];
+    ...(isRoom ? roomProjects.map((p) => ({ ...p, tag: t('chat.tagRoom') })) : projects.mine.map((p) => ({ ...p, tag: t('chat.tagMine') })))];
   const cur = list.find((p) => p.id === c.projectId);
 
-  const create = async () => {
-    const name = newName.trim(); const git = gitUrl.trim();
-    if (!name && !git) return;
-    const scope = c.kind === 'room' ? 'room' : 'user';
-    setBusy(true);
-    try {
-      const { project } = await api.post('/api/projects', { scope, name, roomId: c.roomId, gitUrl: git || undefined, branch: (git && branch.trim()) || undefined, credentialId: (git && credentialId) || undefined });
-      setNewName(''); setGitUrl(''); setBranch(''); await refresh();
-      if (c.kind === 'room') { const r = await api.get(`/api/projects/room/${c.roomId}`); setRoomProjects(r.projects); }
-      await setProject(project.id);
-      setMenuOpen(false);
-    } catch (e: any) { useStore.getState().setError(e.message); }
-    finally { setBusy(false); }
+  const onCreated = async (project: Project) => {
+    if (isRoom && c.roomId) { const r = await api.get(`/api/projects/room/${c.roomId}`); setRoomProjects(r.projects); }
+    await setProject(project.id);
   };
 
   const removeProject = async (p: { id: string; name: string }) => {
     if (!confirm(t('chat.deleteProjectConfirm', { name: p.name }))) return;
     try {
       await deleteProject(p.id);
-      if (c.kind === 'room' && c.roomId) { const r = await api.get(`/api/projects/room/${c.roomId}`); setRoomProjects(r.projects); }
+      if (isRoom && c.roomId) { const r = await api.get(`/api/projects/room/${c.roomId}`); setRoomProjects(r.projects); }
     } catch (e: any) { useStore.getState().setError(e.message); }
   };
 
   return (
     <DM.Root open={menuOpen} onOpenChange={setMenuOpen}>
-      <DM.Trigger asChild><button className="pill">📁 {cur ? cur.name : t('chat.project')} ▾</button></DM.Trigger>
+      <DM.Trigger asChild><button className="pill"><IconFolder size={14} />{cur ? cur.name : t('chat.project')}<IconChevronDown size={14} /></button></DM.Trigger>
       <Menu>
         {list.length === 0 && <div className="px-2 py-1 text-[11px] text-txt3">{t('chat.noProjects')}</div>}
         {list.map((p) => (
@@ -203,32 +210,26 @@ function ProjectMenu() {
               <span className="text-[10px] text-txt3">[{p.tag}]</span>
               <span className="flex-1 truncate">{p.name}</span>
             </button>
-            <button title={t('common.delete')} className="text-txt3 hover:text-danger opacity-50 group-hover:opacity-100 px-0.5 shrink-0"
-              onClick={() => removeProject(p)}>🗑</button>
+            <button title={t('common.delete')} aria-label={t('common.delete')} className="text-txt3 hover:text-danger opacity-50 group-hover:opacity-100 px-0.5 shrink-0"
+              onClick={() => removeProject(p)}><IconTrash size={14} /></button>
           </div>
         ))}
         <div className="border-t border-line my-1" />
-        <div className="flex flex-col gap-1 p-1" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-          <input className="input !py-1 !text-xs" placeholder={t('chat.newProjectNamePlaceholder')} value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !gitUrl.trim()) { e.preventDefault(); create(); } }} />
-          <input className="input !py-1 !text-xs" placeholder={t('chat.gitCloneUrlPlaceholder')} value={gitUrl}
-            onChange={(e) => setGitUrl(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); create(); } }} />
-          {gitUrl.trim() && (
-            <input className="input !py-1 !text-xs" placeholder={t('chat.gitBranchPlaceholder')} value={branch}
-              onChange={(e) => setBranch(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); create(); } }} />
+        <div className="flex flex-col gap-1.5 p-1" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+          {!isRoom && (
+            <div className="seg self-start">
+              <button className={scope === 'user' ? 'on' : ''} onClick={() => setScope('user')}>{t('project.scopePersonal')}</button>
+              <button className={scope === 'common' ? 'on' : ''} onClick={() => setScope('common')}>{t('project.scopeCommon')}</button>
+            </div>
           )}
-          {gitUrl.trim() && (
-            <select className="input !py-1 !text-xs" value={credentialId} onChange={(e) => setCredentialId(e.target.value)}>
-              <option value="">{t('chat.credAuto')}</option>
-              {creds.map((cr) => <option key={cr.id} value={cr.id}>[{cr.provider}] {cr.host} · {cr.username}</option>)}
-            </select>
-          )}
-          <button className="btn-ghost !py-1 !text-xs" disabled={busy} onClick={create}>
-            {busy ? t('common.creating') : gitUrl.trim() ? t('chat.cloneCreate') : t('chat.createBtn')}
-          </button>
+          <ProjectCreateForm
+            key={isRoom ? 'room' : scope}
+            scope={isRoom ? 'room' : scope}
+            roomId={c.roomId}
+            compact
+            onCreated={onCreated}
+            onDone={() => setMenuOpen(false)}
+          />
         </div>
       </Menu>
     </DM.Root>
@@ -328,7 +329,7 @@ function UsagePill() {
   return (
     <DM.Root open={open} onOpenChange={setOpen}>
       <DM.Trigger asChild>
-        <button className="pill" title={t('usage.title')}>◔ {pctLabel} ▾</button>
+        <button className="pill" title={t('usage.title')}><IconGauge size={14} />{pctLabel}<IconChevronDown size={14} /></button>
       </DM.Trigger>
       <DM.Portal>
         <DM.Content sideOffset={4} align="end"
@@ -366,12 +367,12 @@ function UsagePill() {
   );
 }
 
-const VERDICT_UI: Record<string, { key: string; color: string }> = {
-  running: { key: 'review.vRunning', color: 'var(--clay)' },
-  merge_safe: { key: 'review.vSafe', color: 'var(--ok)' },
-  do_not_merge: { key: 'review.vHold', color: 'var(--danger)' },
-  conflict: { key: 'review.vConflict', color: 'var(--danger)' },
-  error: { key: 'review.vError', color: 'var(--danger)' },
+const VERDICT_UI: Record<string, { key: string; color: string; Icon?: typeof IconCheck }> = {
+  running: { key: 'review.vRunning', color: 'var(--clay)', Icon: IconClock },
+  merge_safe: { key: 'review.vSafe', color: 'var(--ok)', Icon: IconCheckCircle },
+  do_not_merge: { key: 'review.vHold', color: 'var(--danger)', Icon: IconBan },
+  conflict: { key: 'review.vConflict', color: 'var(--danger)', Icon: IconWarning },
+  error: { key: 'review.vError', color: 'var(--danger)', Icon: IconWarning },
   unknown: { key: 'review.vUnknown', color: 'var(--txt-3)' },
   none: { key: 'review.vNone', color: 'var(--txt-3)' },
 };
@@ -402,13 +403,13 @@ function ReviewControls() {
   return (
     <>
       <span className="text-txt3 text-xs font-mono truncate hidden lg:inline" title={`${rv.baseRef} ← ${rv.headRef}`}>{rv.baseRef} ← {rv.headRef}</span>
-      <a className="pill" href={rv.prUrl} target="_blank" rel="noreferrer" title={rv.prUrl}>{t('review.prLink', { n: rv.prNumber })}</a>
-      <span className="text-[11px] font-semibold" style={{ color: v.color }} title={rv.verdictSummary || ''}>{t(v.key)}</span>
+      <a className="pill inline-flex items-center gap-1" href={rv.prUrl} target="_blank" rel="noreferrer" title={rv.prUrl}><IconLink size={13} />{t('review.prLink', { n: rv.prNumber })}</a>
+      <span className="text-[11px] font-semibold inline-flex items-center gap-1" style={{ color: v.color }} title={rv.verdictSummary || ''}>{v.Icon && <v.Icon size={12} />}{t(v.key)}</span>
       {readOnly
-        ? <span className="pill" title={t('review.readOnlyHint')}>👁 {t('review.readOnly')}</span>
+        ? <span className="pill inline-flex items-center gap-1" title={t('review.readOnlyHint')}><IconEye size={14} />{t('review.readOnly')}</span>
         : <>
-            <button className="pill" disabled={busy !== '' || rv.verdict === 'running'} onClick={runAuto} title={t('review.autoRunHint')}>{busy === 'auto' || rv.verdict === 'running' ? t('review.autoRunning') : t('review.autoRun')}</button>
-            <button className="pill" disabled={busy !== ''} onClick={approve} title={t('review.approveHint')}>{busy === 'approve' ? t('review.approving') : t('review.approve')}</button>
+            <button className="pill inline-flex items-center gap-1" disabled={busy !== '' || rv.verdict === 'running'} onClick={runAuto} title={t('review.autoRunHint')}><IconRotateCcw size={13} />{busy === 'auto' || rv.verdict === 'running' ? t('review.autoRunning') : t('review.autoRun')}</button>
+            <button className="pill inline-flex items-center gap-1" disabled={busy !== ''} onClick={approve} title={t('review.approveHint')}><IconCheckCircle size={13} />{busy === 'approve' ? t('review.approving') : t('review.approve')}</button>
           </>}
     </>
   );
@@ -439,22 +440,22 @@ function WikiBanner() {
   const recompile = () => api.post(`/api/wiki/topics/${topicId}/recompile`).catch((e) => useStore.getState().setError(e.message));
 
   const statusEl =
-    status === 'compiling' ? <span className="text-clay">{t('chat.compiling')}</span>
-      : status === 'error' ? <span className="text-danger" title={topic?.compileError || ''}>{t('chat.compileError')}</span>
-      : status === 'done' ? <span className="text-ok">{t('chat.compiled')}{topic?.compiledAt ? ` · ${timeAgo(topic.compiledAt)}` : ''}</span>
+    status === 'compiling' ? <span className="text-clay inline-flex items-center gap-1"><IconClock size={13} />{t('chat.compiling')}</span>
+      : status === 'error' ? <span className="text-danger inline-flex items-center gap-1" title={topic?.compileError || ''}><IconWarning size={13} />{t('chat.compileError')}</span>
+      : status === 'done' ? <span className="text-ok inline-flex items-center gap-1"><IconCheck size={13} />{t('chat.compiled')}{topic?.compiledAt ? ` · ${timeAgo(topic.compiledAt)}` : ''}</span>
       : <span className="text-txt3">{t('chat.notCompiled')}</span>;
 
   return (
     <div className="border-b border-line bg-card text-xs shrink-0">
       <div className="flex items-center gap-2 px-3 md:px-5 py-2 flex-wrap">
-        <span className="cursor-pointer" onClick={() => setOpen(!open)}>📚</span>
+        <span className="cursor-pointer" onClick={() => setOpen(!open)}><IconBook size={15} /></span>
         <span className="font-semibold cursor-pointer" onClick={() => setOpen(!open)}>{c?.title}</span>
         {statusEl}
         {files && <span className="text-txt3">· {source === 'raw' ? t('chat.rawCount', { count: files.length }) : t('chat.articleCount', { count: files.length })}</span>}
         <div className="ml-auto flex items-center gap-2">
-          <button className="text-txt3 hover:text-clay" onClick={() => setExplorer(true)}>{t('chat.fileExplorerBtn')}</button>
-          {isAdmin && <button className="text-txt3 hover:text-clay disabled:opacity-40" disabled={status === 'compiling'} onClick={recompile}>{t('chat.recompile')}</button>}
-          <span className="cursor-pointer text-txt3" onClick={() => setOpen(!open)}>{open ? '▲' : '▼'}</span>
+          <button className="text-txt3 hover:text-clay inline-flex items-center gap-1" onClick={() => setExplorer(true)}><IconFolder size={13} />{t('chat.fileExplorerBtn')}</button>
+          {isAdmin && <button className="text-txt3 hover:text-clay disabled:opacity-40 inline-flex items-center gap-1" disabled={status === 'compiling'} onClick={recompile}><IconRefresh size={13} />{t('chat.recompile')}</button>}
+          <span className="cursor-pointer text-txt3" onClick={() => setOpen(!open)}>{open ? <IconChevronUp size={15} /> : <IconChevronDown size={15} />}</span>
         </div>
       </div>
       {explorer && <WikiExplorer topicId={topicId} onClose={() => setExplorer(false)} />}
@@ -542,8 +543,8 @@ function FoldedSegment({ seg }: { seg: Segment }) {
   return (
     <div className="border border-line rounded-lg my-3 bg-card overflow-hidden">
       <div className="flex items-center gap-2 px-3 py-2 cursor-pointer text-xs select-none" onClick={() => setOpen(!open)}>
-        <span className="text-txt3">{open ? '▼' : '▶'}</span>
-        <span className="text-clay">🗂</span>
+        <span className="text-txt3">{open ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}</span>
+        <span className="text-clay"><IconArchive size={14} /></span>
         <code className="font-mono text-clay">/{seg.cmd}</code>
         <span className="font-semibold text-txt2">{label}</span>
         <span className="text-txt3 font-mono truncate">{range}</span>
@@ -562,6 +563,7 @@ function MessageView({ m }: { m: Msg }) {
   const isClaude = m.role === 'assistant';
   const blocks: Block[] = isClaude ? (m.content.blocks || []) : [];
   const topicId = useStore((s) => s.current?.wikiTopicId);
+  const sessionId = useStore((s) => s.current?.chatSessionId) || '';
   const isRoom = useStore((s) => s.current?.kind === 'room');
   const sources = useMemo(() => (topicId && isClaude ? extractSources(blocks, topicId) : []), [blocks, topicId, isClaude]);
   const { deleteMessage, editMessage } = useStore();
@@ -594,12 +596,12 @@ function MessageView({ m }: { m: Msg }) {
         <div className="text-xs text-txt2 font-semibold mb-1 flex items-center gap-2">
           {isClaude ? 'Claude' : m.authorName}
           {!isClaude && isRoom && !m.chat && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-normal" style={{ background: 'var(--claysoft)', color: 'var(--clay)' }}>🤖 {t('chat.claudeBadge')}</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-normal inline-flex items-center gap-1" style={{ background: 'var(--claysoft)', color: 'var(--clay)' }}><IconSparkle size={11} />{t('chat.claudeBadge')}</span>
           )}
           <span className="hidden group-hover:flex items-center gap-1.5 text-txt3">
-            {copyText && <button className={copied ? 'text-ok' : 'hover:text-clay'} title={t('chat.copy')} onClick={copy}>{copied ? t('chat.copied') : '📋'}</button>}
-            {canEdit && <button className="hover:text-clay" title={t('chat.edit')} onClick={() => { setDraft(m.content.text || ''); setEditing(true); }}>✎</button>}
-            <button className="hover:text-danger" title={t('common.delete')} onClick={() => { if (confirm(t('chat.deleteMessageConfirm'))) deleteMessage(m.id); }}>🗑</button>
+            {copyText && <button className={copied ? 'text-ok inline-flex items-center gap-1' : 'hover:text-clay'} title={t('chat.copy')} aria-label={t('chat.copy')} onClick={copy}>{copied ? <><IconCheck size={13} />{t('chat.copied')}</> : <IconCopy size={14} />}</button>}
+            {canEdit && <button className="hover:text-clay" title={t('chat.edit')} aria-label={t('chat.edit')} onClick={() => { setDraft(m.content.text || ''); setEditing(true); }}><IconPencil size={14} /></button>}
+            <button className="hover:text-danger" title={t('common.delete')} aria-label={t('common.delete')} onClick={() => { if (confirm(t('chat.deleteMessageConfirm'))) deleteMessage(m.id); }}><IconTrash size={14} /></button>
           </span>
         </div>
         {editing ? (
@@ -614,9 +616,12 @@ function MessageView({ m }: { m: Msg }) {
           </div>
         ) : (
           <>
-            {!isClaude && <div className="text-sm break-words leading-relaxed" dangerouslySetInnerHTML={{ __html: md(m.content.text || '') }} />}
+            {!isClaude && (m.content.text || '').trim() && <div className="text-sm break-words leading-relaxed" dangerouslySetInnerHTML={{ __html: md(m.content.text || '') }} />}
+            {!isClaude && Array.isArray(m.content.attachments) && m.content.attachments.length > 0 && (
+              <AttachmentList atts={m.content.attachments} sessionId={sessionId} />
+            )}
             {isClaude && <BlockList blocks={blocks} sources={sources} />}
-            {m.content.interrupted && <div className="text-[11px] text-warn mt-1">{t('chat.interrupted')}</div>}
+            {m.content.interrupted && <div className="text-[11px] text-warn mt-1 inline-flex items-center gap-1"><IconSquare size={12} />{t('chat.interrupted')}</div>}
           </>
         )}
       </div>
@@ -671,18 +676,18 @@ function ToolCard({ b }: { b: Extract<Block, { type: 'tool_use' }> }) {
   const cmd = isAsk
     ? (b.input?.questions?.[0]?.question || t('chat.question'))
     : (b.input?.command || b.input?.file_path || b.input?.path || JSON.stringify(b.input || {}).slice(0, 80));
-  const status =
+  const status: { text: string; color: string; Icon?: typeof IconCheck } =
     b.output == null ? { text: t('chat.toolRunning'), color: 'var(--txt-3)' }
-    : isAsk ? (cancelled ? { text: t('chat.cancelled'), color: 'var(--txt-3)' } : { text: t('chat.selected'), color: 'var(--ok)' })
-    : b.isError ? { text: t('chat.toolError'), color: 'var(--danger)' }
-    : { text: t('chat.toolDone'), color: 'var(--ok)' };
+    : isAsk ? (cancelled ? { text: t('chat.cancelled'), color: 'var(--txt-3)' } : { text: t('chat.selected'), color: 'var(--ok)', Icon: IconCheck })
+    : b.isError ? { text: t('chat.toolError'), color: 'var(--danger)', Icon: IconX }
+    : { text: t('chat.toolDone'), color: 'var(--ok)', Icon: IconCheck };
   return (
     <div className="border border-line rounded-lg my-2 overflow-hidden bg-card">
       <div className="flex items-center gap-2 px-3 py-2 cursor-pointer text-xs" onClick={() => setOpen(!open)}>
-        <span className="text-clay">{isAsk ? '❓' : '⌘'}</span>
+        <span className="text-clay">{isAsk ? <IconHelp size={14} /> : <IconTerminal size={14} />}</span>
         <span className="font-semibold">{isAsk ? t('chat.question') : b.name}</span>
         <code className="font-mono text-txt2 truncate flex-1">{String(cmd)}</code>
-        <span className="text-[11px] flex items-center gap-1" style={{ color: status.color }}>{status.text}</span>
+        <span className="text-[11px] flex items-center gap-1" style={{ color: status.color }}>{status.Icon && <status.Icon size={12} />}{status.text}</span>
       </div>
       {open && b.output != null && (
         <div className="border-t border-line px-3 py-2 font-mono text-xs text-txt2 whitespace-pre-wrap bg-bg max-h-64 overflow-auto scrolly">{b.output}</div>
@@ -711,7 +716,7 @@ function ToolApproval({ p, canApprove, respond }: { p: any; canApprove: boolean;
   const t = useT();
   return (
     <>
-      <div className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: 'var(--warn)' }}>{t('chat.toolApprovalRequest', { tool: p.tool })}</div>
+      <div className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: 'var(--warn)' }}><IconWarning size={14} />{t('chat.toolApprovalRequest', { tool: p.tool })}</div>
       <code className="font-mono text-xs bg-card px-1.5 py-1 rounded border border-line block truncate">{p.input?.command || p.input?.file_path || JSON.stringify(p.input)}</code>
       {canApprove ? (
         <div className="flex gap-2 mt-2.5">
@@ -740,7 +745,7 @@ function AskQuestion({ p, canApprove, respond }: { p: any; canApprove: boolean; 
     <div className="flex flex-col gap-3">
       {qs.map((q, qi) => (
         <div key={qi}>
-          <div className="text-xs font-semibold mb-1.5" style={{ color: 'var(--warn)' }}>❓ {q.question}</div>
+          <div className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: 'var(--warn)' }}><IconHelp size={14} className="shrink-0" />{q.question}</div>
           <div className="flex flex-col gap-1.5">
             {(q.options || []).map((o: any, oi: number) => (
               <button key={oi} className="text-left border border-line rounded-md px-3 py-2 bg-card hover:bg-line transition"
@@ -798,9 +803,35 @@ function filterRefs(refs: Ref[], q: string, limit = 50): Ref[] {
     .slice(0, limit).map((s) => s.r);
 }
 
+// Attachment chips: image → thumbnail, other → file icon + name. Preview src is the local/demo url
+// when present, otherwise the authed GET endpoint (persisted transcript messages). onRemove → composer.
+function AttachmentList({ atts, sessionId, onRemove }: { atts: Attachment[]; sessionId: string; onRemove?: (name: string) => void }) {
+  const t = useT();
+  if (!atts?.length) return null;
+  const srcOf = (a: Attachment) => a.url || `/api/sessions/${sessionId}/attachments/${encodeURIComponent(a.name)}`;
+  return (
+    <div className="flex flex-wrap gap-2 mt-2">
+      {atts.map((a) => (
+        <div key={a.name} className="relative border border-line rounded-lg overflow-hidden bg-card flex items-center max-w-full">
+          {a.isImage
+            ? <img src={srcOf(a)} alt={a.name} title={a.name} className="w-16 h-16 object-cover" loading="lazy" />
+            : <span className="flex items-center gap-1.5 px-2.5 py-2 text-xs text-txt2 max-w-[180px]"><IconFile size={14} className="shrink-0" /><span className="truncate">{a.name}</span></span>}
+          {onRemove && (
+            <button type="button" onClick={() => onRemove(a.name)} title={t('chat.attachRemove')} aria-label={t('chat.attachRemove')}
+              className="absolute top-0.5 right-0.5 w-4 h-4 grid place-items-center rounded-full bg-black/60 text-white leading-none"><IconX size={11} /></button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function Composer() {
   const store = useStore();
   const { current: c, send, queue, cancel, interrupt, turnActive, congested, user, commands } = store;
+  const [atts, setAtts] = useState<Attachment[]>([]);
+  const [uploading, setUploading] = useState<UploadState | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState('');
   const [sel, setSel] = useState(0);
   const [caret, setCaret] = useState(0);
@@ -813,11 +844,49 @@ function Composer() {
   const [includeChat, setIncludeChat] = useState(false);
   const setMode = (m: 'chat' | 'claude') => { setModeRaw(m); if (roomId) localStorage.setItem(`roomMode:${roomId}`, m); };
   useEffect(() => { setModeRaw(roomId ? ((localStorage.getItem(`roomMode:${roomId}`) as 'chat' | 'claude') || 'chat') : 'claude'); }, [roomId]);
+  // Session switch: drop pending attachments + revoke their object URLs so they don't leak across
+  // sessions and can't be silently mis-sent to a different session. (deps: session id only)
+  useEffect(() => {
+    atts.forEach((a) => { if (a.url) URL.revokeObjectURL(a.url); });
+    setAtts([]); setUploading(null);
+  }, [c?.chatSessionId]);
   if (!c) return null;
   const isRoom = c.kind === 'room';
   const readOnly = !!c.readOnly; // review PR author — can watch, can't send
   const wikiCompiling = !!c.wikiTopicId && store.wikiTopics.find((t) => t.id === c.wikiTopicId)?.compileStatus === 'compiling';
   const wikiStep = c.wikiTopicId ? store.wikiProgress[c.wikiTopicId] : undefined;
+  // room team-chat mode is text-only (no Claude) → no attachments there
+  const canAttach = !readOnly && !wikiCompiling && !(isRoom && mode === 'chat');
+
+  // Upload each picked/pasted file (one request each — uploadFiles returns the last body, so we can't
+  // batch and still recover every server-assigned name). Keep a local objectURL for instant image preview.
+  const uploadPicked = async (files: File[]) => {
+    const list = files.filter(Boolean);
+    if (!list.length || !canAttach) return;
+    for (const f of list) {
+      try {
+        const r = await api.uploadFiles(`/api/sessions/${c.chatSessionId}/attachments`, [{ file: f, rel: f.name }], setUploading);
+        const rf = (r.files || [])[0];
+        if (rf) setAtts((prev) => [...prev, { name: rf.name, isImage: rf.isImage, url: rf.isImage ? URL.createObjectURL(f) : undefined }]);
+      } catch (e: any) { store.setError(e.message); }
+    }
+    setUploading(null);
+    if (fileRef.current) fileRef.current.value = '';
+  };
+  const removeAtt = async (name: string) => {
+    const a = atts.find((x) => x.name === name);
+    if (a?.url) URL.revokeObjectURL(a.url);
+    setAtts((prev) => prev.filter((x) => x.name !== name));
+    try { await api.del(`/api/sessions/${c.chatSessionId}/attachments/${encodeURIComponent(name)}`); } catch { /* noop */ }
+  };
+  const onPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const imgs = Array.from(e.clipboardData?.items || []).filter((it) => it.kind === 'file' && it.type.startsWith('image/'));
+    if (!imgs.length || !canAttach) return;
+    e.preventDefault(); // a screenshot paste shouldn't also dump into the textarea
+    const files = imgs.map((it) => it.getAsFile()).filter(Boolean) as File[];
+    // pasted screenshots usually have no filename → synthesize one so the server has a basename
+    void uploadPicked(files.map((f) => (f.name ? f : new File([f], `screenshot-${Date.now()}.png`, { type: f.type || 'image/png' }))));
+  };
 
   // full palette: client UI actions + real CLI slash commands (built-in + plugin + skill), with hints
   const seen = new Set<string>();
@@ -868,9 +937,12 @@ function Composer() {
   const submit = () => {
     if (wikiCompiling || readOnly) return;
     if (menuOpen) return pickMenu(Math.min(sel, menuMatches.length - 1));
-    if (!text.trim()) return;
-    send(text.trim(), { chat: isRoom && mode === 'chat', includeChat: isRoom && mode === 'claude' && includeChat });
-    setText(''); setCaret(0);
+    if (uploading) return; // an upload is still in flight — sending now would drop the pending file from the turn
+    if (!text.trim() && !atts.length) return; // allow attachment-only sends
+    const attachments = atts.length ? atts.map((a) => ({ name: a.name, isImage: a.isImage })) : undefined;
+    send(text.trim(), { chat: isRoom && mode === 'chat', includeChat: isRoom && mode === 'claude' && includeChat, attachments });
+    atts.forEach((a) => { if (a.url) URL.revokeObjectURL(a.url); });
+    setText(''); setCaret(0); setAtts([]);
   };
 
   return (
@@ -878,14 +950,14 @@ function Composer() {
       <div className="max-w-[760px] mx-auto">
         {(queue.running || queue.waiting.length > 0 || congested) && (
           <div className="text-xs text-txt3 mb-2 flex items-center gap-2 flex-wrap">
-            {queue.running && <span>{t('chat.authorWorking', { name: queue.running.author.name })}</span>}
+            {queue.running && <span className="inline-flex items-center gap-1"><IconClock size={12} />{t('chat.authorWorking', { name: queue.running.author.name })}</span>}
             {turnActive && (
               <button className="text-danger hover:underline" onClick={interrupt}>{t('chat.interruptShort')}</button>
             )}
             {queue.waiting.map((w) => (
               <span key={w.id} className="bg-rail border border-line rounded-full px-2.5 py-0.5 text-txt2 flex items-center gap-1">
                 {t('chat.authorWaiting', { name: w.author.name })}
-                {(w.author.id === user?.id) && <button className="text-danger" title={t('common.cancel')} onClick={() => cancel(w.id)}>✕</button>}
+                {(w.author.id === user?.id) && <button className="text-danger" title={t('common.cancel')} aria-label={t('common.cancel')} onClick={() => cancel(w.id)}><IconX size={13} /></button>}
               </span>
             ))}
             {congested && <span className="text-warn">{t('chat.congested')}</span>}
@@ -922,7 +994,7 @@ function Composer() {
                 {atMatches.map((r, i) => (
                   <div key={(r.dir ? 'd:' : 'f:') + r.path} ref={i === sel ? scrollSel : undefined} onMouseEnter={() => setSel(i)} onClick={() => pickAt(i)}
                     className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer text-sm ${i === sel ? 'bg-line' : ''}`}>
-                    <span className="shrink-0">{r.dir ? '📁' : '📄'}</span>
+                    <span className="shrink-0 text-txt3">{r.dir ? <IconFolder size={14} /> : <IconFile size={14} />}</span>
                     <code className="font-mono text-txt2 text-xs truncate flex-1">{r.path}{r.dir ? '/' : ''}</code>
                     <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full shrink-0"
                       style={{ background: 'var(--claysoft)', color: 'var(--clay)' }}>
@@ -933,7 +1005,9 @@ function Composer() {
               </div>
             </div>
           )}
-          <div className="border border-line2 rounded-xl bg-card p-3 relative">
+          <div className="border border-line2 rounded-xl bg-card p-3 relative"
+            onDragOver={canAttach ? (e) => e.preventDefault() : undefined}
+            onDrop={canAttach ? (e) => { e.preventDefault(); void uploadPicked(Array.from(e.dataTransfer?.files || [])); } : undefined}>
             {showHint && (
               <div className="absolute left-3 right-3 top-3 text-sm leading-[inherit] whitespace-pre-wrap break-words pointer-events-none select-none z-0" aria-hidden>
                 <span className="invisible">{text}</span><span className="text-txt3">{active!.hint}</span>
@@ -944,6 +1018,7 @@ function Composer() {
               rows={2} placeholder={readOnly ? t('review.readOnlyPlaceholder') : wikiCompiling ? t('chat.topicCompiling') : isRoom ? (mode === 'chat' ? t('chat.roomChatPlaceholder', { title: c.title }) : t('chat.roomMessagePlaceholder', { title: c.title, name: user?.displayName ?? '' })) : t('chat.messagePlaceholder')}
               value={text}
               onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
+              onPaste={onPaste}
               onChange={(e) => {
                 let v = e.target.value;
                 let pos = e.target.selectionStart ?? v.length;
@@ -963,11 +1038,13 @@ function Composer() {
                 }
                 if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
               }} />
+            {uploading && <div className="mt-2"><UploadProgress s={uploading} /></div>}
+            <AttachmentList atts={atts} sessionId={c.chatSessionId} onRemove={removeAtt} />
             <div className="flex items-center gap-2 mt-2 flex-wrap">
               {isRoom && (
                 <div className="flex items-center gap-1 shrink-0">
-                  <button type="button" onClick={() => setMode('chat')} className={`text-xs px-2 py-0.5 rounded-full border ${mode === 'chat' ? 'bg-clay text-white border-clay' : 'border-line text-txt2 hover:border-clay'}`}>{t('chat.modeChat')}</button>
-                  <button type="button" onClick={() => setMode('claude')} className={`text-xs px-2 py-0.5 rounded-full border ${mode === 'claude' ? 'bg-clay text-white border-clay' : 'border-line text-txt2 hover:border-clay'}`}>{t('chat.modeClaude')}</button>
+                  <button type="button" onClick={() => setMode('chat')} className={`text-xs px-2 py-0.5 rounded-full border inline-flex items-center gap-1 ${mode === 'chat' ? 'bg-clay text-white border-clay' : 'border-line text-txt2 hover:border-clay'}`}><IconMessage size={12} />{t('chat.modeChat')}</button>
+                  <button type="button" onClick={() => setMode('claude')} className={`text-xs px-2 py-0.5 rounded-full border inline-flex items-center gap-1 ${mode === 'claude' ? 'bg-clay text-white border-clay' : 'border-line text-txt2 hover:border-clay'}`}><IconSparkle size={12} />{t('chat.modeClaude')}</button>
                 </div>
               )}
               {isRoom && mode === 'claude' && (
@@ -975,8 +1052,12 @@ function Composer() {
                   <input type="checkbox" checked={includeChat} onChange={(e) => setIncludeChat(e.target.checked)} /> {t('chat.includeChat')}
                 </label>
               )}
-              <span className="text-xs text-txt3 truncate">{wikiCompiling ? (wikiStep ? t('chat.compilingStep', { step: wikiStep }) : t('chat.compilingReady')) : turnActive ? t('chat.claudeResponding') : (isRoom && mode === 'chat' ? t('chat.composerHintChat') : t(canRef ? 'chat.composerHintRef' : 'chat.composerHint'))}</span>
-              <button className="ml-auto bg-clay text-white rounded-lg w-8 h-8 grid place-items-center disabled:opacity-40" disabled={wikiCompiling || readOnly} onClick={submit} aria-label={t('chat.send')}>➤</button>
+              <span className="text-xs text-txt3 truncate inline-flex items-center gap-1 min-w-0">{wikiCompiling ? <><IconClock size={12} /><span className="truncate">{wikiStep ? t('chat.compilingStep', { step: wikiStep }) : t('chat.compilingReady')}</span></> : turnActive ? t('chat.claudeResponding') : (isRoom && mode === 'chat' ? t('chat.composerHintChat') : t(canRef ? 'chat.composerHintRef' : 'chat.composerHint'))}</span>
+              <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => { void uploadPicked(Array.from(e.target.files || [])); }} />
+              {canAttach && (
+                <button type="button" className="ml-auto toolbtn shrink-0 disabled:opacity-40" disabled={!!uploading} title={t('chat.attach')} aria-label={t('chat.attach')} onClick={() => fileRef.current?.click()}><IconPaperclip size={16} /></button>
+              )}
+              <button className={`${canAttach ? '' : 'ml-auto '}bg-clay text-white rounded-lg w-8 h-8 grid place-items-center disabled:opacity-40`} disabled={wikiCompiling || readOnly || !!uploading} onClick={submit} aria-label={t('chat.send')}><IconSend size={16} /></button>
             </div>
           </div>
         </div>

@@ -183,7 +183,7 @@ function upsertReview(repo: Repo, pr: PullInfo): UpsertResult {
   db.insert(schema.chatSessions).values({
     id: chatSessionId, ownerId: repo.createdBy, kind: 'review', roomId: null,
     title: `#${pr.number} ${pr.title}`, projectId: null, wikiTopicId: null, claudeSessionId: null,
-    model: cfg.str('defaultModel'), permissionMode: 'default', createdAt: now, updatedAt: now,
+    model: cfg.str('defaultModel'), effort: cfg.str('defaultEffort'), permissionMode: 'default', createdAt: now, updatedAt: now,
   }).run();
   db.insert(schema.reviewSessions).values({
     id: reviewId, repoId: repo.id, chatSessionId, prNumber: pr.number, prTitle: pr.title, prUrl: pr.url,

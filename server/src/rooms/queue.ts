@@ -3,7 +3,8 @@ import { runTurn } from '../claude/session-manager.js';
 
 type Emit = (event: string, payload: any) => void;
 
-export interface QueueItem { id: string; author: { id: string; name: string }; text: string; onDone?: (finalText: string) => void; includeChat?: boolean; }
+export interface Attachment { name: string; isImage: boolean }
+export interface QueueItem { id: string; author: { id: string; name: string }; text: string; onDone?: (finalText: string) => void; includeChat?: boolean; attachments?: Attachment[]; }
 
 class SessionQueue {
   items: QueueItem[] = [];
@@ -43,7 +44,7 @@ class SessionQueue {
         this.running = item;
         this.broadcast();
         try {
-          await runTurn({ chatSessionId: this.sessionId, author: item.author, text: item.text, emit: this.emit, onDone: item.onDone, includeChat: item.includeChat });
+          await runTurn({ chatSessionId: this.sessionId, author: item.author, text: item.text, emit: this.emit, onDone: item.onDone, includeChat: item.includeChat, attachments: item.attachments });
         } catch (e) {
           this.emit('turn:error', { sessionId: this.sessionId, error: String((e as any)?.message || e) });
         }
@@ -66,12 +67,14 @@ function getQueue(sessionId: string): SessionQueue {
   return q;
 }
 
-export function enqueueTurn(sessionId: string, author: { id: string; name: string }, text: string, onDone?: (finalText: string) => void, includeChat?: boolean): string {
+export function enqueueTurn(sessionId: string, author: { id: string; name: string }, text: string, onDone?: (finalText: string) => void, includeChat?: boolean, attachments?: Attachment[]): string {
   const id = newId();
-  getQueue(sessionId).enqueue({ id, author, text, onDone, includeChat });
+  getQueue(sessionId).enqueue({ id, author, text, onDone, includeChat, attachments });
   return id;
 }
 export function cancelQueued(sessionId: string, itemId: string): boolean {
   return getQueue(sessionId).cancel(itemId);
 }
 export function queueState(sessionId: string) { return getQueue(sessionId).state(); }
+// Every session's queue state (running + waiting) — admin "activity/processes" panel.
+export function allQueueStates() { return [...queues.values()].map((q) => q.state()); }

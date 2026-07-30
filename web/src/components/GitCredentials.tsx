@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
-import { Modal } from './Modal';
 import { useT } from '../lib/i18n';
+import { IconPencil } from '../lib/icons';
 
 export interface GitCredMeta {
   id: string; scope: 'user' | 'common'; provider: string; host: string;
@@ -70,7 +70,7 @@ export function GitCredList({ scope }: { scope: 'user' | 'common' }) {
             <span className="text-[10px] bg-claysoft text-clay px-1.5 py-0.5 rounded-full">{c.provider}</span>
             <span className="font-mono text-xs">{c.host}</span>
             <span className="text-txt3 text-xs">· {c.username}</span>
-            {c.authorEmail && <span className="text-txt3 text-[11px] truncate">✎ {c.authorEmail}</span>}
+            {c.authorEmail && <span className="text-txt3 text-[11px] truncate inline-flex items-center gap-1"><IconPencil size={11} className="shrink-0" />{c.authorEmail}</span>}
             <span className="text-txt3 text-[10px] ml-auto">{fmtDate(c.setAt)}</span>
             <button className="text-xs text-txt3 hover:text-danger" onClick={() => del(c.id)}>{t('common.delete')}</button>
           </div>
@@ -90,18 +90,5 @@ export function GitCredList({ scope }: { scope: 'user' | 'common' }) {
       {err && <div className="text-xs text-danger mt-1">{err}</div>}
       <button className="btn-primary mt-2" disabled={busy} onClick={add}>{busy ? '…' : t('gitcred.add')}</button>
     </div>
-  );
-}
-
-export function GitCredentialsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const t = useT();
-  return (
-    <Modal open={open} onOpenChange={(o) => { if (!o) onClose(); }} title={t('gitcred.title')} width={520}>
-      <div className="text-xs text-txt2 bg-claysoft border border-line rounded-lg px-3 py-2 mb-3">{t('gitcred.notice')}</div>
-      <GitCredList scope="user" />
-      <div className="flex justify-end mt-3">
-        <button className="btn-ghost" onClick={onClose}>{t('token.close')}</button>
-      </div>
-    </Modal>
   );
 }

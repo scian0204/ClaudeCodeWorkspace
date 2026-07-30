@@ -55,6 +55,7 @@ body{margin:0;background:var(--bg);color:var(--txt);font-family:var(--sans);font
   .input:focus{ border-color:var(--clay); }
   .btn-primary{ @apply bg-clay text-white rounded-lg px-3.5 py-2 text-sm font-semibold cursor-pointer border-0; }
   .btn-ghost{ @apply bg-card border border-line2 text-txt2 rounded-lg px-3.5 py-2 text-sm cursor-pointer; }
+  .btn-danger{ @apply bg-danger text-white rounded-lg px-3.5 py-2 text-sm font-semibold cursor-pointer border-0 disabled:opacity-40; }
 }
 
 .scrolly::-webkit-scrollbar{width:9px;height:9px}

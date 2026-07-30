@@ -3,6 +3,7 @@ import { useStore } from '../lib/store';
 import { api } from '../lib/api';
 import { useT } from '../lib/i18n';
 import { Modal } from './Modal';
+import { IconCheck, IconCrown } from '../lib/icons';
 
 const PERMS: [string, string][] = [
   ['approve', 'members.permApprove'], ['interrupt', 'members.permInterrupt'], ['invite', 'members.permInvite'], ['kick', 'members.permKick'], ['transfer', 'members.permTransfer'], ['delete_room', 'members.permDeleteRoom'],
@@ -47,7 +48,7 @@ export function MembersDialog({ open, onClose }: { open: boolean; onClose: () =>
             <div className="flex items-center gap-2">
               <span className="w-6 h-6 rounded-full grid place-items-center text-[10px] text-white font-semibold" style={{ background: m.avatarColor }}>{m.displayName.slice(0, 2).toUpperCase()}</span>
               <span className="text-sm font-medium">{m.displayName}</span>
-              {m.isOwner && <span className="text-[10px] bg-claysoft text-clay px-1.5 py-0.5 rounded-full font-semibold">{t('members.ownerBadge')}</span>}
+              {m.isOwner && <span className="text-[10px] bg-claysoft text-clay px-1.5 py-0.5 rounded-full font-semibold inline-flex items-center gap-1"><IconCrown size={11} />{t('members.ownerBadge')}</span>}
               <div className="ml-auto flex gap-2">
                 {!m.isOwner && canManage && <button className="text-[11px] text-txt3 hover:text-clay" onClick={() => transfer(m.userId)}>{t('members.transferOwnership')}</button>}
                 {!m.isOwner && canManage && <button className="text-[11px] text-txt3 hover:text-danger" onClick={() => kick(m.userId)}>{t('members.permKick')}</button>}
@@ -61,8 +62,8 @@ export function MembersDialog({ open, onClose }: { open: boolean; onClose: () =>
                   return (
                     <button key={perm} disabled={!canManage}
                       onClick={() => toggle(m.userId, perm, !on)}
-                      className={`text-[11px] px-2 py-0.5 rounded-full border ${on ? 'bg-oksoft border-ok text-ok' : 'border-line text-txt3'} ${canManage ? 'cursor-pointer' : 'opacity-60'}`}>
-                      {on ? '✓ ' : ''}{t(label)}
+                      className={`text-[11px] px-2 py-0.5 rounded-full border inline-flex items-center gap-1 ${on ? 'bg-oksoft border-ok text-ok' : 'border-line text-txt3'} ${canManage ? 'cursor-pointer' : 'opacity-60'}`}>
+                      {on && <IconCheck size={12} />}{t(label)}
                     </button>
                   );
                 })}

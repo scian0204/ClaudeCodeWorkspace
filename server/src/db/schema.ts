@@ -10,6 +10,7 @@ export const users = sqliteTable('users', {
   createdAt: integer('created_at').notNull(),
   claudeTokenEnc: text('claude_token_enc'),        // AES-GCM blob of the user's Claude token
   claudeTokenSetAt: integer('claude_token_set_at'), // when it was registered (display only)
+  avatar: text('avatar'),                          // version token (set-time millis) for cache-busting; null = no avatar (file lives at <userHome>/avatar.<ext>)
 });
 
 export const authSessions = sqliteTable('auth_sessions', {
@@ -29,6 +30,7 @@ export const chatSessions = sqliteTable('chat_sessions', {
   wikiTopicId: text('wiki_topic_id'), // set => this is a user's private thread under a wiki topic
   claudeSessionId: text('claude_session_id'), // SDK resume id
   model: text('model').notNull().default('claude-opus-4-8'),
+  effort: text('effort').notNull().default('high'), // SDK effort level: low|medium|high|xhigh|max
   permissionMode: text('permission_mode').notNull().default('default'),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
@@ -173,6 +175,64 @@ export const reviewSessions = sqliteTable('review_sessions', {
   verdictSummary: text('verdict_summary'),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
+});
+
+// LLM provider override, encrypted at rest. Mirrors the git-credential model: a per-user profile
+// overrides an admin-managed common profile. When set, it replaces the default Anthropic-token auth
+// for the turn (bedrock / vertex / custom-base-URL). One profile per user + one common (unique index).
+export const llmProviders = sqliteTable('llm_providers', {
+  id: text('id').primaryKey(),
+  scope: text('scope').notNull(),        // 'user' | 'common'
+  ownerId: text('owner_id').notNull(),   // user id for 'user'; '' for 'common' (keeps the unique index working)
+  type: text('type').notNull(),          // 'anthropic' | 'bedrock' | 'vertex' | 'custom'
+  configEnc: text('config_enc').notNull(), // AES-GCM blob of the provider config JSON (fields + secrets)
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+// Member request → admin approval. A generic queue: a member submits a request for an admin-only
+// action (type = an action registry key in admin/requests.ts), an admin approves/rejects it, and on
+// approval the server runs the action. `payload` is the action's JSON args; `result` holds the
+// execution output or error. See server/src/admin/requests.ts for the action registry.
+export const adminRequests = sqliteTable('admin_requests', {
+  id: text('id').primaryKey(),
+  requesterId: text('requester_id').notNull(),
+  type: text('type').notNull(),                 // action registry key
+  payload: text('payload').notNull().default('{}'), // JSON args for the action
+  reason: text('reason').notNull().default(''),
+  status: text('status').notNull().default('pending'), // 'pending' | 'approved' | 'rejected'
+  reviewerId: text('reviewer_id'),              // admin uid; null until decided
+  decidedAt: integer('decided_at'),
+  result: text('result'),                       // execution result or error (set on approve)
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+// ── Direct messages / group chat ──
+// A lightweight human-to-human messaging layer, entirely separate from Claude "rooms". No Claude
+// turns, no queue — just person-to-person and group text chat. A 'dm' channel is a deduped 1:1;
+// a 'group' channel has a name + any number of members. An admin can promote a group to a common
+// project room (see rooms.createRoom in dm.promoteToRoom).
+export const dmChannels = sqliteTable('dm_channels', {
+  id: text('id').primaryKey(),
+  kind: text('kind').notNull(),        // 'dm' | 'group'
+  name: text('name'),                  // null for dm; group display name
+  createdBy: text('created_by').notNull(),
+  createdAt: integer('created_at').notNull(),
+});
+
+export const dmMembers = sqliteTable('dm_members', {
+  channelId: text('channel_id').notNull(),
+  userId: text('user_id').notNull(),
+  lastReadAt: integer('last_read_at').notNull().default(0), // unread = messages newer than this
+});
+
+export const dmMessages = sqliteTable('dm_messages', {
+  id: text('id').primaryKey(),
+  channelId: text('channel_id').notNull(),
+  userId: text('user_id').notNull(),
+  text: text('text').notNull(),
+  createdAt: integer('created_at').notNull(),
 });
 
 // Git remote credentials (HTTPS PAT), encrypted at rest. Mirrors the Claude-token model:

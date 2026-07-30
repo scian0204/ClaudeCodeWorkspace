@@ -2,7 +2,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import React from 'react';
 
 export function Modal({ open, onOpenChange, title, children, width = 420 }: {
-  open: boolean; onOpenChange: (o: boolean) => void; title: string; children: React.ReactNode; width?: number;
+  open: boolean; onOpenChange: (o: boolean) => void; title: React.ReactNode; children: React.ReactNode; width?: number;
 }) {
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>

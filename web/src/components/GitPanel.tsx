@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { Modal } from './Modal';
 import { useT } from '../lib/i18n';
+import { IconGitBranch } from '../lib/icons';
 
 interface GitFile { path: string; index: string; work: string; staged: boolean; }
 interface CredMeta { scope: 'user' | 'common'; provider: string; host: string; username: string; authorEmail: string | null; }
@@ -76,7 +77,7 @@ export function GitPanel({ projectId, open, onClose }: { projectId: string; open
       {st && st.repo && (
         <>
           <div className="flex items-center gap-2 text-sm mb-3">
-            <span className="text-clay" title={t('git.branchLabel')}>⑂</span>
+            <span className="text-clay" title={t('git.branchLabel')}><IconGitBranch size={15} /></span>
             {branches
               ? (
                 <select className="input !py-0.5 !text-xs !w-auto max-w-[220px] font-mono" value={branches.current}

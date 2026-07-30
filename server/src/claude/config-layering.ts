@@ -1,6 +1,8 @@
 import path from 'node:path';
+import type { EffortLevel } from '@anthropic-ai/claude-agent-sdk';
 import { cfg } from '../lib/config-registry.js';
 import { paths, allowedRootsFor, isInsideRoots } from '../lib/paths.js';
+import { PROVIDER_ENV_KEYS } from '../auth/provider.js';
 
 export type PermMode = 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan';
 
@@ -9,9 +11,12 @@ export interface SessionContext {
   ownerId: string;   // uid or roomId -> whose HOME
   cwd: string;       // project dir the turn runs in
   model: string;
+  effort?: EffortLevel; // SDK reasoning effort; unsupported models silently downgrade
   permissionMode: PermMode;
   plugins: string[]; // resolved enabled plugin dir paths (common class-2 + forced + personal)
   authToken: string; // resolved Claude token for the turn's author ('' => mock/no-auth)
+  providerEnv?: Record<string, string>; // LLM provider override env (bedrock/vertex/custom-base-URL); applied over authToken
+  providerModel?: string;               // provider model id/ARN override (wins over ctx.model)
   gitEnv?: Record<string, string>; // git author identity + askpass creds so Claude can commit/push
   mcpServers?: Record<string, any>; // review sandbox exposes its `run` tool here
   disallowedTools?: string[];       // review turns deny host 'Bash' → exec only via the sandbox tool
@@ -46,22 +51,27 @@ export function buildOptions(ctx: SessionContext, extra: {
   // OAuth tokens (sk-ant-oat*, from `claude setup-token` / Pro-Max login) must go via
   // CLAUDE_CODE_OAUTH_TOKEN; plain API keys (sk-ant-api*) via ANTHROPIC_API_KEY.
   // Passing an OAuth token as ANTHROPIC_API_KEY is rejected by the API (401 Invalid API key).
-  // Start from a clean slate so a stray host key never leaks into a mock/other-user turn.
-  delete env.ANTHROPIC_API_KEY;
-  delete env.CLAUDE_CODE_OAUTH_TOKEN;
+  // Clear EVERY provider-controlled var (tokens + bedrock/vertex/base-URL/AWS) so a stray host-global
+  // var can never leak into a default-token or mock turn; the resolved provider env is the sole source.
+  for (const k of PROVIDER_ENV_KEYS) delete env[k];
   const key = ctx.authToken;
   if (key) {
     if (key.startsWith('sk-ant-oat')) env.CLAUDE_CODE_OAUTH_TOKEN = key;
     else env.ANTHROPIC_API_KEY = key;
   }
+  // LLM provider override: applied AFTER the default token path so the provider fully controls auth
+  // (bedrock/vertex/custom base URL). When no provider is configured this is undefined and the token
+  // path above is unchanged — the default Anthropic-token behavior does not regress.
+  if (ctx.providerEnv) Object.assign(env, ctx.providerEnv);
   // Git identity + credentials so the agent's own `git commit`/`git push` are attributed and authenticated.
   if (ctx.gitEnv) Object.assign(env, ctx.gitEnv);
 
   const options: any = {
     cwd: ctx.cwd,
     env,
-    model: ctx.model,
+    model: ctx.providerModel || ctx.model, // provider model id/ARN overrides the dropdown model
     permissionMode: ctx.permissionMode,
+    effort: ctx.effort,
     settingSources: ['user', 'project', 'local'],
     additionalDirectories,
     plugins: ctx.plugins.length ? ctx.plugins.map((p) => ({ type: 'local' as const, path: p })) : undefined,

@@ -5,6 +5,7 @@ import { api, type UploadState } from '../lib/api';
 import { useT } from '../lib/i18n';
 import { Modal } from './Modal';
 import { UploadProgress } from './UploadProgress';
+import { IconFile, IconFolder, IconLock, IconChevronRight, IconChevronDown } from '../lib/icons';
 
 type Collected = { file: File; rel: string };
 type Sess = { uuid: string; title: string; mtime: number; msgCount: number };
@@ -169,9 +170,9 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
         <label key={node.rel} style={pad} className="flex items-center gap-2 px-2 py-1 text-xs hover:bg-line/50 cursor-pointer">
           <input type="checkbox" checked={!!checked[node.rel]} disabled={ess}
             onChange={(e) => setChecked((p) => ({ ...p, [node.rel]: e.target.checked }))} />
-          <span className="opacity-70">📄</span>
+          <span className="opacity-70"><IconFile size={14} /></span>
           <span className="flex-1 truncate" title={node.rel}>{node.name}</span>
-          {ess && <span className="text-txt3 shrink-0 text-[10px]" title={t('import.essentialLocked')}>🔒</span>}
+          {ess && <span className="text-txt3 shrink-0" title={t('import.essentialLocked')}><IconLock size={12} /></span>}
         </label>
       );
     }
@@ -183,12 +184,12 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
     return (
       <div key={node.rel}>
         <div style={pad} className="flex items-center gap-2 px-2 py-1 text-xs font-medium hover:bg-line/50">
-          <button type="button" className="shrink-0 w-3 text-txt3 leading-none" onClick={toggleCollapse}
-            aria-label={isCollapsed ? t('common.expand') : t('common.collapse')}>{isCollapsed ? '▸' : '▾'}</button>
+          <button type="button" className="shrink-0 w-3 text-txt3 leading-none inline-flex" onClick={toggleCollapse}
+            aria-label={isCollapsed ? t('common.expand') : t('common.collapse')}>{isCollapsed ? <IconChevronRight size={13} /> : <IconChevronDown size={13} />}</button>
           <input type="checkbox" checked={all} ref={(el) => { if (el) el.indeterminate = some && !all; }}
             onChange={(e) => toggleDir(node, e.target.checked)} />
           <span className="flex-1 flex items-center gap-2 min-w-0 cursor-pointer" onClick={toggleCollapse}>
-            <span className="opacity-70">📁</span>
+            <span className="opacity-70"><IconFolder size={14} /></span>
             <span className="flex-1 truncate" title={node.rel}>{node.name}</span>
           </span>
         </div>

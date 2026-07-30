@@ -2,8 +2,28 @@ import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../lib/store';
 import { api } from '../lib/api';
 import { useT } from '../lib/i18n';
-import { MobileMenuButton } from '../lib/ui';
+import { MobileMenuButton, timeAgo } from '../lib/ui';
 import { GitCredList } from './GitCredentials';
+import { LlmProviderForm } from './LlmProvider';
+import { RequestInfo } from './MyPage';
+import {
+  IconArrowLeft, IconDot, IconDotOutline, IconRefresh, IconChevronRight, IconChevronDown,
+  IconRotateCcw, IconX, IconPlus, IconSliders,
+} from '../lib/icons';
+
+// Tab bar model — append here to add a tab (e.g. resource cleanup, approvals, processes, LLM providers).
+// `label` is an i18n key resolved at render.
+const TABS = [
+  { key: 'overview', label: 'admin.tab.overview' },
+  { key: 'requests', label: 'admin.tab.requests' },
+  { key: 'users', label: 'admin.tab.users' },
+  { key: 'providers', label: 'admin.tab.providers' },
+  { key: 'usage', label: 'admin.tab.usage' },
+  { key: 'processes', label: 'admin.tab.processes' },
+  { key: 'config', label: 'admin.tab.config' },
+  { key: 'resources', label: 'admin.tab.resources' },
+] as const;
+type AdminTab = (typeof TABS)[number]['key'];
 
 export function AdminPanel() {
   const setPanel = useStore((s) => s.setPanel);
@@ -13,13 +33,19 @@ export function AdminPanel() {
   const [users, setUsers] = useState<any[]>([]);
   const [nu, setNu] = useState({ username: '', password: '', role: 'member', displayName: '', claudeToken: '' });
   const [commonTok, setCommonTok] = useState('');
+  const [tab, setTab] = useState<AdminTab>('overview');
+  const llmProvidersEnabled = useStore((s) => s.llmProvidersEnabled);
+  const approvalsEnabled = useStore((s) => s.approvalsEnabled);
+  const pendingRequestCount = useStore((s) => s.pendingRequestCount);
   const t = useT();
+  const tabs = TABS.filter((tb) => tb.key !== 'requests' || approvalsEnabled);
 
   const load = async () => {
     const [o, u, s, us] = await Promise.all([
       api.get('/api/admin/overview'), api.get('/api/admin/usage'), api.get('/api/admin/settings'), api.get('/api/users'),
     ]);
     setOv(o); setUsage(u); setSettings(s); setUsers(us.users);
+    void useStore.getState().refreshRequests(); // keep the requests tab + badge fresh on open
   };
   useEffect(() => { load().catch((e) => useStore.getState().setError(e.message)); }, []);
 
@@ -46,99 +72,192 @@ export function AdminPanel() {
     <div className="h-full overflow-y-auto scrolly">
       <div className="flex items-center gap-3 px-4 md:px-5 py-3 border-b border-line sticky top-0 bg-panel z-10">
         <MobileMenuButton />
-        <button className="toolbtn" onClick={() => setPanel(null)}>←</button>
-        <div className="font-semibold">{t('admin.panelTitle')}</div>
+        <button className="toolbtn" aria-label={t('common.back')} onClick={() => setPanel(null)}><IconArrowLeft /></button>
+        <div className="font-semibold inline-flex items-center gap-1.5"><IconSliders size={16} />{t('admin.panelTitle')}</div>
+      </div>
+      {/* Tab bar — scrolls horizontally inside its own container so it never widens the page on mobile. */}
+      <div className="border-b border-line overflow-x-auto scrolly">
+        <div className="flex gap-1 px-4 md:px-5">
+          {tabs.map((tb) => (
+            <button key={tb.key} onClick={() => setTab(tb.key)}
+              className={`shrink-0 px-3 py-2.5 text-sm whitespace-nowrap border-b-2 flex items-center gap-1.5 ${tab === tb.key ? 'border-clay text-clay' : 'border-transparent text-txt3 hover:text-txt'}`}>
+              {t(tb.label)}
+              {tb.key === 'requests' && pendingRequestCount > 0 && (
+                <span className="text-[10px] bg-warnsoft text-warn px-1.5 py-0.5 rounded-full">{pendingRequestCount}</span>
+              )}
+            </button>
+          ))}
+        </div>
       </div>
       <div className="max-w-[860px] mx-auto p-4 md:p-5 space-y-6">
-        {ov && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <Stat label={t('admin.statUsers')} v={ov.users} /><Stat label={t('admin.statRooms')} v={ov.rooms} />
-            <Stat label={t('admin.statSessions')} v={ov.sessions} /><Stat label={t('admin.statConcurrentTurns')} v={`${ov.throttle.inUse}/${ov.throttle.max}${ov.throttle.waiting ? ` (+${ov.throttle.waiting})` : ''}`} />
-          </div>
+        {tab === 'overview' && (
+          <>
+            {ov && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <Stat label={t('admin.statUsers')} v={ov.users} /><Stat label={t('admin.statRooms')} v={ov.rooms} />
+                <Stat label={t('admin.statSessions')} v={ov.sessions} /><Stat label={t('admin.statConcurrentTurns')} v={`${ov.throttle.inUse}/${ov.throttle.max}${ov.throttle.waiting ? ` (+${ov.throttle.waiting})` : ''}`} />
+              </div>
+            )}
+            {ov?.forceMock && <div className="text-xs text-warn bg-warnsoft border border-warn rounded-lg px-3 py-2">{t('admin.mockForcedWarning')}</div>}
+            {!ov?.forceMock && ov?.commonToken && !ov.commonToken.hasToken && <div className="text-xs text-warn bg-warnsoft border border-warn rounded-lg px-3 py-2">{t('admin.commonTokenUnsetWarning')}</div>}
+          </>
         )}
-        {ov?.forceMock && <div className="text-xs text-warn bg-warnsoft border border-warn rounded-lg px-3 py-2">{t('admin.mockForcedWarning')}</div>}
-        {!ov?.forceMock && ov?.commonToken && !ov.commonToken.hasToken && <div className="text-xs text-warn bg-warnsoft border border-warn rounded-lg px-3 py-2">{t('admin.commonTokenUnsetWarning')}</div>}
 
-        <Section title={t('admin.commonTokenTitle')}>
-          <div className="text-sm mb-2 flex items-center gap-2">
-            {ov?.commonToken?.hasToken
-              ? <><span className="text-ok">●</span><span>{t('admin.registered')}{ov.commonToken.setAt ? ` · ${new Date(ov.commonToken.setAt).toLocaleDateString()}` : ' (env)'}</span>
-                  <button className="ml-auto text-xs text-txt3 hover:text-danger" onClick={clearCommon}>{t('common.delete')}</button></>
-              : <><span className="text-warn">●</span><span className="text-txt2">{t('admin.notSet')}</span></>}
-          </div>
-          <div className="flex gap-2">
-            <input className="input flex-1" type="password" placeholder={t('admin.commonTokenPlaceholder')} value={commonTok}
-              onChange={(e) => setCommonTok(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && saveCommon()} />
-            <button className="btn-primary" onClick={saveCommon}>{t('admin.save')}</button>
-          </div>
-          <div className="text-[11px] text-txt3 mt-1.5">{t('admin.commonTokenHint', { key: 'ANTHROPIC_API_KEY' })}</div>
-        </Section>
+        {tab === 'requests' && <RequestsTab users={users} />}
 
-        <Section title={t('admin.gitCredsTitle')}>
-          <div className="text-[11px] text-txt3 mb-2">{t('admin.gitCredsHint')}</div>
-          <GitCredList scope="common" />
-        </Section>
-
-        <Section title={t('admin.usageTitle')}>
-          {usage && (
-            <>
-              <div className="text-sm text-txt2 mb-2">{t('admin.usageTotals', { turns: usage.totals.turns, input: usage.totals.inputTokens.toLocaleString(), output: usage.totals.outputTokens.toLocaleString(), cost: usage.totals.costUsd.toFixed(4) })}</div>
-              <div className="overflow-x-auto scrolly">
-              <table className="w-full text-sm min-w-[420px]">
-                <thead><tr className="text-txt3 text-xs text-left"><th className="py-1">{t('admin.colUser')}</th><th>{t('admin.colTurns')}</th><th>in</th><th>out</th><th>$</th></tr></thead>
-                <tbody>
-                  {usage.byUser.map((r: any) => (
-                    <tr key={r.userId} className="border-t border-line"><td className="py-1.5">{r.name}</td><td>{r.turns}</td><td>{r.inputTokens.toLocaleString()}</td><td>{r.outputTokens.toLocaleString()}</td><td>${r.costUsd.toFixed(4)}</td></tr>
-                  ))}
-                  {usage.byUser.length === 0 && <tr><td colSpan={5} className="text-txt3 py-2">{t('common.none')}</td></tr>}
-                </tbody>
-              </table>
+        {tab === 'providers' && (
+          <>
+            <Section title={t('admin.commonTokenTitle')}>
+              <div className="text-sm mb-2 flex items-center gap-2">
+                {ov?.commonToken?.hasToken
+                  ? <><IconDot className="text-ok" /><span>{t('admin.registered')}{ov.commonToken.setAt ? ` · ${new Date(ov.commonToken.setAt).toLocaleDateString()}` : ' (env)'}</span>
+                      <button className="ml-auto text-xs text-txt3 hover:text-danger" onClick={clearCommon}>{t('common.delete')}</button></>
+                  : <><IconDot className="text-warn" /><span className="text-txt2">{t('admin.notSet')}</span></>}
               </div>
-            </>
-          )}
-        </Section>
+              <div className="flex gap-2">
+                <input className="input flex-1" type="password" placeholder={t('admin.commonTokenPlaceholder')} value={commonTok}
+                  onChange={(e) => setCommonTok(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && saveCommon()} />
+                <button className="btn-primary" onClick={saveCommon}>{t('admin.save')}</button>
+              </div>
+              <div className="text-[11px] text-txt3 mt-1.5">{t('admin.commonTokenHint', { key: 'ANTHROPIC_API_KEY' })}</div>
+            </Section>
 
-        <Section title={t('admin.globalSettingsTitle')}>
-          {settings && (
-            <div className="space-y-2 text-sm">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={settings.allowBypass} onChange={toggleBypass} />
-                {t('admin.allowBypassLabel')}
-              </label>
-            </div>
-          )}
-        </Section>
+            {llmProvidersEnabled && (
+              <Section title={t('admin.commonProviderTitle')}>
+                <div className="text-[11px] text-txt3 mb-2">{t('admin.commonProviderHint')}</div>
+                <LlmProviderForm scope="common" />
+              </Section>
+            )}
 
-        <ConfigManager />
+            <Section title={t('admin.gitCredsTitle')}>
+              <div className="text-[11px] text-txt3 mb-2">{t('admin.gitCredsHint')}</div>
+              <GitCredList scope="common" />
+            </Section>
+          </>
+        )}
 
-        <Section title={t('admin.userManagementTitle')}>
-          <div className="space-y-1.5 mb-3">
-            {users.map((u) => (
-              <div key={u.id} className="flex items-center gap-2 text-sm border-b border-line py-1.5">
-                <span className="w-6 h-6 rounded-full grid place-items-center text-[10px] text-white font-semibold" style={{ background: u.avatarColor }}>{u.displayName.slice(0, 2).toUpperCase()}</span>
-                <span className="font-medium">{u.displayName}</span><span className="text-txt3 text-xs">@{u.username}</span>
-                <span className="text-[10px] bg-claysoft text-clay px-1.5 py-0.5 rounded-full">{u.role}</span>
-                <div className="ml-auto flex gap-2">
-                  <button className="text-xs text-txt3 hover:text-clay" onClick={() => resetPw(u.id)}>{t('admin.resetPassword')}</button>
-                  <button className="text-xs text-txt3 hover:text-danger" onClick={() => delUser(u.id)}>{t('common.delete')}</button>
+        {tab === 'usage' && (
+          <Section title={t('admin.usageTitle')}>
+            {usage && (
+              <>
+                <div className="text-sm text-txt2 mb-2">{t('admin.usageTotals', { turns: usage.totals.turns, input: usage.totals.inputTokens.toLocaleString(), output: usage.totals.outputTokens.toLocaleString(), cost: usage.totals.costUsd.toFixed(4) })}</div>
+                <div className="overflow-x-auto scrolly">
+                <table className="w-full text-sm min-w-[420px]">
+                  <thead><tr className="text-txt3 text-xs text-left"><th className="py-1">{t('admin.colUser')}</th><th>{t('admin.colTurns')}</th><th>in</th><th>out</th><th>$</th></tr></thead>
+                  <tbody>
+                    {usage.byUser.map((r: any) => (
+                      <tr key={r.userId} className="border-t border-line"><td className="py-1.5">{r.name}</td><td>{r.turns}</td><td>{r.inputTokens.toLocaleString()}</td><td>{r.outputTokens.toLocaleString()}</td><td>${r.costUsd.toFixed(4)}</td></tr>
+                    ))}
+                    {usage.byUser.length === 0 && <tr><td colSpan={5} className="text-txt3 py-2">{t('common.none')}</td></tr>}
+                  </tbody>
+                </table>
                 </div>
-              </div>
-            ))}
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <input className="input" placeholder={t('admin.usernamePlaceholder')} value={nu.username} onChange={(e) => setNu({ ...nu, username: e.target.value })} />
-            <input className="input" placeholder={t('admin.displayNamePlaceholder')} value={nu.displayName} onChange={(e) => setNu({ ...nu, displayName: e.target.value })} />
-            <input className="input" type="password" placeholder={t('admin.passwordPlaceholder')} value={nu.password} onChange={(e) => setNu({ ...nu, password: e.target.value })} />
-            <select className="input" value={nu.role} onChange={(e) => setNu({ ...nu, role: e.target.value })}>
-              <option value="member">member</option><option value="admin">admin</option>
-            </select>
-            <input className="input col-span-2" type="password" placeholder={t('admin.claudeTokenPlaceholder')}
-              value={nu.claudeToken} onChange={(e) => setNu({ ...nu, claudeToken: e.target.value })} />
-          </div>
-          <button className="btn-primary mt-2" onClick={createUser}>{t('admin.createUser')}</button>
-        </Section>
+              </>
+            )}
+          </Section>
+        )}
+
+        {tab === 'config' && (
+          <>
+            <Section title={t('admin.globalSettingsTitle')}>
+              {settings && (
+                <div className="space-y-2 text-sm">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={settings.allowBypass} onChange={toggleBypass} />
+                    {t('admin.allowBypassLabel')}
+                  </label>
+                </div>
+              )}
+            </Section>
+
+            <ConfigManager />
+          </>
+        )}
+
+        {tab === 'processes' && <ProcessesManager />}
+
+        {tab === 'resources' && <CleanupManager />}
+
+        {tab === 'users' && (
+          <Section title={t('admin.userManagementTitle')}>
+            <div className="space-y-1.5 mb-3">
+              {users.map((u) => (
+                <div key={u.id} className="flex items-center gap-2 text-sm border-b border-line py-1.5">
+                  <span className="w-6 h-6 rounded-full grid place-items-center text-[10px] text-white font-semibold" style={{ background: u.avatarColor }}>{u.displayName.slice(0, 2).toUpperCase()}</span>
+                  <span className="font-medium">{u.displayName}</span><span className="text-txt3 text-xs">@{u.username}</span>
+                  <span className="text-[10px] bg-claysoft text-clay px-1.5 py-0.5 rounded-full">{u.role}</span>
+                  <div className="ml-auto flex gap-2">
+                    <button className="text-xs text-txt3 hover:text-clay" onClick={() => resetPw(u.id)}>{t('admin.resetPassword')}</button>
+                    <button className="text-xs text-txt3 hover:text-danger" onClick={() => delUser(u.id)}>{t('common.delete')}</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <input className="input" placeholder={t('admin.usernamePlaceholder')} value={nu.username} onChange={(e) => setNu({ ...nu, username: e.target.value })} />
+              <input className="input" placeholder={t('admin.displayNamePlaceholder')} value={nu.displayName} onChange={(e) => setNu({ ...nu, displayName: e.target.value })} />
+              <input className="input" type="password" placeholder={t('admin.passwordPlaceholder')} value={nu.password} onChange={(e) => setNu({ ...nu, password: e.target.value })} />
+              <select className="input" value={nu.role} onChange={(e) => setNu({ ...nu, role: e.target.value })}>
+                <option value="member">member</option><option value="admin">admin</option>
+              </select>
+              <input className="input col-span-2" type="password" placeholder={t('admin.claudeTokenPlaceholder')}
+                value={nu.claudeToken} onChange={(e) => setNu({ ...nu, claudeToken: e.target.value })} />
+            </div>
+            <button className="btn-primary mt-2" onClick={createUser}>{t('admin.createUser')}</button>
+          </Section>
+        )}
       </div>
     </div>
+  );
+}
+
+// Member request approvals: pending requests (approve/reject) + decided history. Approving runs the
+// action server-side and surfaces its result; rejecting asks for a note. Refreshes live via the
+// requests:changed socket event.
+function RequestsTab({ users }: { users: any[] }) {
+  const requests = useStore((s) => s.requests);
+  const decideRequest = useStore((s) => s.decideRequest);
+  const t = useT();
+  const [busy, setBusy] = useState<string | null>(null);
+  const nameFor = (id: string) => users.find((u) => u.id === id)?.displayName || id;
+  const pending = requests.filter((r) => r.status === 'pending');
+  const decided = requests.filter((r) => r.status !== 'pending');
+
+  const decide = async (id: string, approve: boolean, note?: string) => {
+    setBusy(id);
+    try { await decideRequest(id, approve, note); }
+    catch (e: any) { useStore.getState().setError(e.message); }
+    finally { setBusy(null); }
+  };
+  const reject = (id: string) => { const note = prompt(t('requests.rejectPrompt')); if (note === null) return; void decide(id, false, note || undefined); };
+
+  return (
+    <>
+      <Section title={t('requests.pendingTitle')}>
+        {pending.length === 0 && <div className="text-xs text-txt3">{t('requests.noPending')}</div>}
+        <div className="space-y-2">
+          {pending.map((r) => (
+            <div key={r.id} className="flex items-start gap-2 border-b border-line pb-2 last:border-0 flex-wrap">
+              <RequestInfo r={r} requesterName={nameFor(r.requesterId)} />
+              <div className="flex gap-2 shrink-0">
+                <button className="btn-primary text-xs px-2 py-1" disabled={busy === r.id} onClick={() => decide(r.id, true)}>{t('requests.approve')}</button>
+                <button className="btn-ghost text-xs px-2 py-1" disabled={busy === r.id} onClick={() => reject(r.id)}>{t('requests.reject')}</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Section>
+      <Section title={t('requests.historyTitle')}>
+        {decided.length === 0 && <div className="text-xs text-txt3">{t('common.none')}</div>}
+        <div className="space-y-1.5">
+          {decided.map((r) => (
+            <div key={r.id} className="flex items-start gap-2 border-b border-line py-1.5 last:border-0">
+              <RequestInfo r={r} requesterName={nameFor(r.requesterId)} />
+            </div>
+          ))}
+        </div>
+      </Section>
+    </>
   );
 }
 
@@ -176,7 +295,7 @@ function ConfigManager() {
     <>
       <div className="flex items-center gap-2 flex-wrap">
         <div className="font-semibold">{t('admin.cfgTitle')}</div>
-        <button className="ml-auto text-xs border border-line rounded-lg px-2.5 py-1 hover:border-clay" onClick={restart}>⟳ {t('admin.cfgRestartBtn')}</button>
+        <button className="ml-auto text-xs border border-line rounded-lg px-2.5 py-1 hover:border-clay inline-flex items-center gap-1.5" onClick={restart}><IconRefresh size={13} />{t('admin.cfgRestartBtn')}</button>
       </div>
       {restartNeeded && (
         <div className="text-xs text-warn bg-warnsoft border border-warn rounded-lg px-3 py-2">{t('admin.cfgRestartNeeded')}</div>
@@ -186,7 +305,7 @@ function ConfigManager() {
         return (
           <details key={g} className="group bg-card border border-line rounded-xl overflow-hidden">
             <summary className="font-semibold px-4 py-3 cursor-pointer select-none list-none flex items-center gap-2 [&::-webkit-details-marker]:hidden">
-              <span className="text-txt3 text-xs transition-transform group-open:rotate-90">▶</span>
+              <span className="text-txt3 transition-transform group-open:rotate-90 inline-flex"><IconChevronRight size={14} /></span>
               <span>{t(`admin.cfgGroup.${g}`)}</span>
               <span className="ml-auto text-[11px] text-txt3 font-normal">{rows.length}</span>
             </summary>
@@ -226,7 +345,7 @@ function ConfigRow({ it, edit, onEdit, onSave, onReset }: {
             <span className="font-medium text-[13px]">{name}</span>
             <span className="font-mono text-[10px] text-txt3">{it.key}</span>
             {it.restart && <span className="text-[9px] uppercase bg-warnsoft text-warn px-1.5 py-0.5 rounded-full whitespace-nowrap">{t('admin.cfgRestart')}</span>}
-            {it.overridden && <button className="text-xs text-txt3 hover:text-clay" title={t('admin.cfgReset')} onClick={() => onReset(it.key)}>↺</button>}
+            {it.overridden && <button className="text-txt3 hover:text-clay" title={t('admin.cfgReset')} aria-label={t('admin.cfgReset')} onClick={() => onReset(it.key)}><IconRotateCcw size={14} /></button>}
           </div>
           {desc && <p className="text-[11px] text-txt3 mt-0.5 leading-snug">{desc}</p>}
         </div>
@@ -238,7 +357,7 @@ function ConfigRow({ it, edit, onEdit, onSave, onReset }: {
           ) : it.image ? (
             <ImageControl it={it} edit={edit} onEdit={onEdit} onSave={onSave} />
           ) : it.type === 'json' ? (
-            <span className="text-[11px] text-txt3">{t('admin.cfgJsonBelow')} ↓</span>
+            <span className="text-[11px] text-txt3 inline-flex items-center gap-1">{t('admin.cfgJsonBelow')}<IconChevronDown size={12} /></span>
           ) : it.type === 'bool' ? (
             <input type="checkbox" checked={it.value === '1'} onChange={(e) => onSave(it.key, e.target.checked)} />
           ) : it.type === 'select' ? (
@@ -298,11 +417,11 @@ function JsonEditor({ it, onSave }: { it: any; onSave: (k: string, v: any) => vo
             onChange={(e) => { const n = rows.slice(); n[i] = [e.target.value, r[1]]; setRows(n); }} />}
           <input className="input flex-1" placeholder={t('admin.cfgValue')} value={r[1]}
             onChange={(e) => { const n = rows.slice(); n[i] = [r[0], e.target.value]; setRows(n); }} />
-          <button className="text-txt3 hover:text-danger px-1" onClick={() => setRows(rows.filter((_, j) => j !== i))}>✕</button>
+          <button className="text-txt3 hover:text-danger px-1" aria-label={t('common.delete')} onClick={() => setRows(rows.filter((_, j) => j !== i))}><IconX size={14} /></button>
         </div>
       ))}
       <div className="flex items-center gap-2">
-        <button className="text-xs text-clay hover:underline" onClick={() => setRows([...rows, ['', '']])}>+ {t('admin.cfgAddRow')}</button>
+        <button className="text-xs text-clay hover:underline inline-flex items-center gap-1" onClick={() => setRows([...rows, ['', '']])}><IconPlus size={13} />{t('admin.cfgAddRow')}</button>
         <button className="btn-primary text-xs px-2 py-1 ml-auto" onClick={commit}>{t('admin.save')}</button>
       </div>
     </div>
@@ -345,13 +464,294 @@ function ImageControl({ it, edit, onEdit, onSave }: {
       <div className="flex items-center gap-2 text-[11px]">
         {busy === 'check' ? <span className="text-txt3">{t('admin.cfgImageChecking')}</span>
           : status?.dockerUnavailable ? <span className="text-txt3">docker N/A</span>
-          : status?.present ? <span className="text-ok">● {t('admin.cfgImagePresent')}{status.size ? ` · ${Math.round(status.size / 1e6)}MB` : ''}</span>
-          : <span className="text-warn">○ {t('admin.cfgImageAbsent')}</span>}
+          : status?.present ? <span className="text-ok inline-flex items-center gap-1"><IconDot size={10} />{t('admin.cfgImagePresent')}{status.size ? ` · ${Math.round(status.size / 1e6)}MB` : ''}</span>
+          : <span className="text-warn inline-flex items-center gap-1"><IconDotOutline size={10} />{t('admin.cfgImageAbsent')}</span>}
         <button className="text-clay hover:underline disabled:opacity-40" disabled={busy !== null || dirty}
           onClick={pull}>{busy === 'pull' ? t('admin.cfgImagePulling') : t('admin.cfgImagePull')}</button>
       </div>
     </div>
   );
+}
+
+// Activity / processes: a live task-manager over running/queued turns, editor + sandbox containers,
+// and running review pipelines, with a control per row. Auto-polls every processPollMs WHILE this tab
+// is mounted — the tab is conditionally rendered, so a tab-switch unmounts this and clears the interval.
+function ProcessesManager() {
+  const t = useT();
+  const pollMs = useStore((s) => s.processPollMs);
+  const [data, setData] = useState<any>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const load = async () => { try { setData(await api.get('/api/admin/processes')); } catch (e: any) { useStore.getState().setError(e.message); } };
+  useEffect(() => {
+    load();
+    const id = setInterval(load, Math.max(1000, pollMs));
+    return () => clearInterval(id);
+  }, [pollMs]);
+
+  const act = async (key: string, confirmKey: string, body: any) => {
+    if (!confirm(t(confirmKey))) return;
+    setBusy(key);
+    try { setData(await api.post('/api/admin/processes', body)); }
+    catch (e: any) { useStore.getState().setError(e.message); }
+    finally { setBusy(null); }
+  };
+
+  if (!data) return <div className="text-sm text-txt3">{t('admin.cleanup.rescanning')}</div>;
+  const na = data.dockerUnavailable;
+  const disabled = busy !== null;
+  const turns = data.turns || [], queued = data.queued || [], editors = data.editors || [], sandboxes = data.sandboxes || [], pipelines = data.reviewPipelines || [];
+  const short = (s: string) => (s || '').slice(0, 8);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="font-semibold">{t('admin.proc.title')}</div>
+        <button className="ml-auto text-xs border border-line rounded-lg px-2.5 py-1 hover:border-clay disabled:opacity-40 inline-flex items-center gap-1.5"
+          disabled={disabled} onClick={() => load()}><IconRefresh size={13} />{t('admin.proc.refresh')}</button>
+      </div>
+      <p className="text-[11px] text-txt3 leading-snug">{t('admin.proc.intro')}</p>
+
+      {/* active turns */}
+      <Section title={`${t('admin.proc.turns')} · ${turns.length}`}>
+        <div className="overflow-x-auto scrolly">
+          <table className="w-full text-sm min-w-[420px]">
+            <tbody>
+              {turns.map((r: any) => (
+                <tr key={r.sessionId} className="border-t border-line first:border-0">
+                  <td className="py-1.5 pr-2 break-all">{r.title}</td>
+                  <td className="pr-2 text-txt3 whitespace-nowrap">{r.author?.name}</td>
+                  <td className="pr-2 text-txt3 whitespace-nowrap">{timeAgo(r.startedAt)}</td>
+                  <td className="text-right"><button className="btn-danger text-xs" disabled={disabled}
+                    onClick={() => act(`turn:${r.sessionId}`, 'admin.proc.confirmStopTurn', { kind: 'turn', action: 'stop', sessionId: r.sessionId })}>{t('admin.proc.stop')}</button></td>
+                </tr>
+              ))}
+              {turns.length === 0 && <tr><td className="py-1.5 text-txt3">{t('common.none')}</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </Section>
+
+      {/* queue (waiting items) */}
+      <Section title={`${t('admin.proc.queue')} · ${queued.length}`}>
+        <div className="overflow-x-auto scrolly">
+          <table className="w-full text-sm min-w-[420px]">
+            <tbody>
+              {queued.map((r: any) => (
+                <tr key={r.itemId} className="border-t border-line first:border-0">
+                  <td className="py-1.5 pr-2 font-mono text-[11px] break-all">{short(r.sessionId)}</td>
+                  <td className="pr-2 text-txt3 whitespace-nowrap">{r.author?.name}</td>
+                  <td className="text-right"><button className="btn-danger text-xs" disabled={disabled}
+                    onClick={() => act(`q:${r.itemId}`, 'admin.proc.confirmCancel', { kind: 'queued', action: 'cancel', sessionId: r.sessionId, itemId: r.itemId })}>{t('admin.proc.cancel')}</button></td>
+                </tr>
+              ))}
+              {queued.length === 0 && <tr><td className="py-1.5 text-txt3">{t('common.none')}</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </Section>
+
+      {/* editor containers */}
+      <Section title={`${t('admin.proc.editors')}${na ? ` · ${t('admin.cleanup.dockerNa')}` : ` · ${editors.length}`}`}>
+        <div className="overflow-x-auto scrolly">
+          <table className="w-full text-sm min-w-[420px]">
+            <tbody>
+              {editors.map((c: any) => (
+                <tr key={c.id} className="border-t border-line first:border-0">
+                  <td className="py-1.5 pr-2 font-mono text-[11px] break-all">{c.name || c.id}</td>
+                  <td className="pr-2 text-txt3 whitespace-nowrap">{c.owner}{c.project ? ` · ${c.project}` : ''}</td>
+                  <td className="pr-2 text-txt3">{c.state}</td>
+                  <td className="text-right"><button className="btn-danger text-xs" disabled={disabled}
+                    onClick={() => act(`ed:${c.id}`, 'admin.proc.confirmKillEditor', { kind: 'editor', action: 'stop', id: c.id })}>{t('admin.proc.kill')}</button></td>
+                </tr>
+              ))}
+              {editors.length === 0 && <tr><td className="py-1.5 text-txt3">{na ? t('admin.cleanup.dockerNa') : t('common.none')}</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </Section>
+
+      {/* review sandbox containers */}
+      <Section title={`${t('admin.proc.sandboxes')}${na ? ` · ${t('admin.cleanup.dockerNa')}` : ` · ${sandboxes.length}`}`}>
+        <div className="overflow-x-auto scrolly">
+          <table className="w-full text-sm min-w-[420px]">
+            <tbody>
+              {sandboxes.map((c: any) => (
+                <tr key={c.id} className="border-t border-line first:border-0">
+                  <td className="py-1.5 pr-2 font-mono text-[11px] break-all">{c.name || c.id}</td>
+                  <td className="pr-2 text-txt3">{c.state}</td>
+                  <td className="text-right"><button className="btn-danger text-xs" disabled={disabled}
+                    onClick={() => act(`sb:${c.id}`, 'admin.proc.confirmKillSandbox', { kind: 'sandbox', action: 'stop', id: c.id })}>{t('admin.proc.kill')}</button></td>
+                </tr>
+              ))}
+              {sandboxes.length === 0 && <tr><td className="py-1.5 text-txt3">{na ? t('admin.cleanup.dockerNa') : t('common.none')}</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </Section>
+
+      {/* running review pipelines */}
+      <Section title={`${t('admin.proc.pipelines')} · ${pipelines.length}`}>
+        <div className="overflow-x-auto scrolly">
+          <table className="w-full text-sm min-w-[420px]">
+            <tbody>
+              {pipelines.map((r: any) => (
+                <tr key={r.reviewId} className="border-t border-line first:border-0">
+                  <td className="py-1.5 pr-2 break-all">#{r.prNumber} {r.prTitle}</td>
+                  <td className="pr-2 text-txt3 whitespace-nowrap">{r.repoName}</td>
+                  <td className="text-right"><button className="btn-danger text-xs" disabled={disabled}
+                    onClick={() => act(`pl:${r.reviewId}`, 'admin.proc.confirmStopPipeline', { kind: 'pipeline', action: 'stop', chatSessionId: r.chatSessionId })}>{t('admin.proc.stop')}</button></td>
+                </tr>
+              ))}
+              {pipelines.length === 0 && <tr><td className="py-1.5 text-txt3">{t('common.none')}</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </Section>
+    </div>
+  );
+}
+
+// Resource cleanup: read-only inventory + per-resource clean actions + a double-confirmed full reset.
+// Every list/table scrolls inside its own overflow-x-auto container so mobile never gets a body scroll.
+function fmtBytes(n: number): string {
+  if (!n) return '0';
+  const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0; let v = n;
+  while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+  return `${v.toFixed(i > 0 && v < 10 ? 1 : 0)}${u[i]}`;
+}
+
+function CleanupManager() {
+  const t = useT();
+  const [data, setData] = useState<any>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const load = async () => { try { setData(await api.get('/api/admin/cleanup')); } catch (e: any) { useStore.getState().setError(e.message); } };
+  useEffect(() => { load(); }, []);
+
+  const run = async (action: string) => {
+    setBusy(action);
+    try {
+      const r = await api.post('/api/admin/cleanup', { action });
+      setData(r);
+      const s = r.summary || {};
+      if (action === 'full-reset') {
+        alert(t('admin.cleanup.fullResetDone', {
+          editors: s.editors?.removed ?? 0, sandboxes: s.sandboxes?.removed ?? 0,
+          images: s.danglingImages?.removed ?? 0, dirs: s.orphanDirs?.removed ?? 0, rows: s.orphanRows?.removed ?? 0,
+        }));
+      } else {
+        alert(t('admin.cleanup.removed', { n: s.removed ?? 0 }));
+      }
+    } catch (e: any) { useStore.getState().setError(e.message); }
+    finally { setBusy(null); }
+  };
+  const act = (action: string, confirmKey: string) => { if (confirm(t(confirmKey))) void run(action); };
+  const fullReset = () => {
+    if (!confirm(t('admin.cleanup.fullResetConfirm1'))) return;
+    const typed = prompt(t('admin.cleanup.fullResetConfirm2'));
+    if (typed !== t('admin.cleanup.fullResetKeyword')) return;
+    void run('full-reset');
+  };
+
+  if (!data) return <div className="text-sm text-txt3">{t('admin.cleanup.rescanning')}</div>;
+  if (data.enabled === false) {
+    return <div className="text-xs text-warn bg-warnsoft border border-warn rounded-lg px-3 py-2">{t('admin.cleanup.disabledNote')}</div>;
+  }
+  const disabled = busy !== null;
+  const na = data.dockerUnavailable;
+  const rows = data.orphanRows || {};
+  const dirs = data.orphanDirs || {};
+  const rowDefs: [string, number][] = [
+    ['admin.cleanup.rowMessages', rows.messages], ['admin.cleanup.rowReviewSessions', rows.reviewSessions],
+    ['admin.cleanup.rowRoomMembers', rows.roomMembers], ['admin.cleanup.rowUsage', rows.usage],
+    ['admin.cleanup.rowPluginPrefs', rows.pluginPrefs],
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="font-semibold">{t('admin.cleanup.title')}</div>
+        <button className="ml-auto text-xs border border-line rounded-lg px-2.5 py-1 hover:border-clay disabled:opacity-40 inline-flex items-center gap-1.5"
+          disabled={disabled} onClick={() => load()}><IconRefresh size={13} />{t('admin.cleanup.rescan')}</button>
+      </div>
+      <p className="text-[11px] text-txt3 leading-snug">{t('admin.cleanup.intro')}</p>
+
+      {/* containers */}
+      <Section title={`${t('admin.cleanup.containers')}${na ? ` · ${t('admin.cleanup.dockerNa')}` : ''}`}>
+        <div className="overflow-x-auto scrolly">
+          <table className="w-full text-sm min-w-[420px]">
+            <tbody>
+              {(data.containers || []).map((c: any) => (
+                <tr key={c.id} className="border-t border-line first:border-0">
+                  <td className="py-1.5 pr-2">{c.kind === 'editor' ? t('admin.cleanup.kindEditor') : t('admin.cleanup.kindSandbox')}</td>
+                  <td className="pr-2 font-mono text-[11px] break-all">{c.name || c.id}</td>
+                  <td className="pr-2 text-txt3">{c.state}</td>
+                  <td>{c.orphan && <span className="text-[10px] bg-warnsoft text-warn px-1.5 py-0.5 rounded-full">{t('admin.cleanup.orphanBadge')}</span>}</td>
+                </tr>
+              ))}
+              {(data.containers || []).length === 0 && <tr><td className="py-1.5 text-txt3">{na ? t('admin.cleanup.dockerNa') : t('admin.cleanup.none')}</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex gap-2 flex-wrap mt-3">
+          <button className="btn-danger text-xs" disabled={disabled} onClick={() => act('editors', 'admin.cleanup.confirmEditors')}>{t('admin.cleanup.cleanEditors')}</button>
+          <button className="btn-danger text-xs" disabled={disabled} onClick={() => act('sandboxes', 'admin.cleanup.confirmSandboxes')}>{t('admin.cleanup.cleanSandboxes')}</button>
+        </div>
+      </Section>
+
+      {/* images */}
+      <Section title={t('admin.cleanup.images')}>
+        <div className="overflow-x-auto scrolly">
+          <table className="w-full text-sm min-w-[420px]">
+            <tbody>
+              {(data.images || []).map((im: any) => (
+                <tr key={im.ref} className="border-t border-line first:border-0">
+                  <td className="py-1.5 pr-2 font-mono text-[11px] break-all">{im.ref}</td>
+                  <td className="pr-2">{im.present ? <span className="text-ok inline-flex items-center gap-1"><IconDot size={10} />{t('admin.cleanup.present')}</span> : <span className="text-txt3 inline-flex items-center gap-1"><IconDotOutline size={10} />{t('admin.cleanup.absent')}</span>}</td>
+                  <td className="text-txt3">{im.size ? fmtBytes(im.size) : ''}</td>
+                </tr>
+              ))}
+              {(data.images || []).length === 0 && <tr><td className="py-1.5 text-txt3">{t('admin.cleanup.none')}</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap mt-3">
+          <span className="text-sm">{t('admin.cleanup.dangling')}:</span>
+          <span className="text-sm text-txt2">{na ? t('admin.cleanup.dockerNa') : t('admin.cleanup.danglingCount', { count: data.danglingImages?.count ?? 0, size: fmtBytes(data.danglingImages?.size ?? 0) })}</span>
+          <button className="btn-danger text-xs ml-auto" disabled={disabled || na} onClick={() => act('dangling-images', 'admin.cleanup.confirmDangling')}>{t('admin.cleanup.cleanDangling')}</button>
+        </div>
+      </Section>
+
+      {/* orphan dirs */}
+      <Section title={t('admin.cleanup.orphanDirs')}>
+        <div className="space-y-1.5 text-sm">
+          <DirRow label={t('admin.cleanup.reviewDirs')} g={dirs.reviewDirs} />
+          <DirRow label={t('admin.cleanup.attachmentDirs')} g={dirs.attachmentDirs} />
+          <DirRow label={t('admin.cleanup.homeDirs')} g={dirs.homeDirs} />
+        </div>
+        <button className="btn-danger text-xs mt-3" disabled={disabled} onClick={() => act('orphan-dirs', 'admin.cleanup.confirmOrphanDirs')}>{t('admin.cleanup.cleanOrphanDirs')}</button>
+      </Section>
+
+      {/* orphan DB rows */}
+      <Section title={t('admin.cleanup.orphanRows')}>
+        <div className="space-y-1.5 text-sm">
+          {rowDefs.map(([k, v]) => (
+            <div key={k} className="flex items-center gap-2"><span className="text-txt2">{t(k)}</span><span className="ml-auto tabular-nums">{v ?? 0}</span></div>
+          ))}
+        </div>
+        <button className="btn-danger text-xs mt-3" disabled={disabled} onClick={() => act('orphan-rows', 'admin.cleanup.confirmOrphanRows')}>{t('admin.cleanup.cleanOrphanRows')}</button>
+      </Section>
+
+      {/* full reset */}
+      <div className="bg-card border border-danger rounded-xl p-4">
+        <div className="font-semibold text-danger mb-1">{t('admin.cleanup.fullReset')}</div>
+        <p className="text-[11px] text-txt3 leading-snug mb-3">{t('admin.cleanup.fullResetNote')}</p>
+        <button className="btn-danger" disabled={disabled} onClick={fullReset}>{t('admin.cleanup.fullReset')}</button>
+      </div>
+    </div>
+  );
+}
+function DirRow({ label, g }: { label: string; g?: { count: number; size: number } }) {
+  return <div className="flex items-center gap-2"><span className="text-txt2">{label}</span><span className="ml-auto tabular-nums">{g?.count ?? 0}{g?.size ? ` · ${fmtBytes(g.size)}` : ''}</span></div>;
 }
 
 function Stat({ label, v }: { label: string; v: any }) {

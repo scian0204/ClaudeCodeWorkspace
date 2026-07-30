@@ -28,6 +28,9 @@ export const paths = {
   reviewWorktrees: (id: string) => path.join(D, 'reviews', id, 'wt'),   // per-PR worktrees root
   reviewWorktree: (id: string, prNumber: number) => path.join(D, 'reviews', id, 'wt', String(prNumber)),
   reviewRoot: (id: string) => path.join(D, 'reviews', id),
+  // prompt attachments: <ownerProjectsDir>/.attachments/<sessionId> — inside an allowed root so the agent can Read them
+  attachments: (kind: 'user' | 'room', ownerId: string, sessionId: string) =>
+    path.join(D, kind === 'room' ? 'rooms' : 'users', ownerId, 'projects', '.attachments', sessionId),
 };
 
 export function ensure(dir: string) {

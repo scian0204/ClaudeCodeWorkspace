@@ -1,15 +1,17 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import { eq, and, desc, gte } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { newId } from '../lib/ids.js';
 import { paths, ensure } from '../lib/paths.js';
+import { isBareBasename } from '../lib/attachments.js';
 import { allowBypass } from '../lib/settings.js';
 import { turnLimiter, withRateLimitRetry } from './throttle.js';
 import { buildOptions, clampMode, rootsFor, type SessionContext, type PermMode } from './config-layering.js';
 import { makeCanUseTool, makeAutoAllow } from './permissions.js';
 import { resolvePluginPaths } from '../plugins/manager.js';
 import { recordUsage } from '../usage/tracker.js';
-import { resolveClaudeAuth } from '../auth/claude-token.js';
+import { resolveProvider } from '../auth/provider.js';
 import { originHost } from '../lib/git-ops.js';
 import { resolveGitCred, gitIdentity, identityEnv, askpassEnv } from '../auth/git-cred.js';
 import { getReviewByChat, ensureWorktree } from '../review/manager.js';
@@ -24,11 +26,16 @@ export type Block =
 
 interface ActiveTurn {
   abort: AbortController; blocks: Block[]; author: { id: string; name: string };
+  startedAt: number; // when this turn went live (admin process panel: elapsed time)
   query?: { interrupt: () => Promise<unknown> }; // live SDK handle for immediate turn-stop
 }
 const active = new Map<string, ActiveTurn>();
 
 export function isTurnActive(sessionId: string) { return active.has(sessionId); }
+// Live snapshot of every running turn (admin "activity/processes" panel).
+export function listActiveTurns(): { sessionId: string; author: { id: string; name: string }; startedAt: number }[] {
+  return [...active.entries()].map(([sessionId, t]) => ({ sessionId, author: t.author, startedAt: t.startedAt }));
+}
 // Snapshot of the in-flight turn so a client joining mid-turn can render progress it missed.
 export function liveTurn(sessionId: string): { blocks: Block[]; author: { id: string; name: string } } | null {
   const t = active.get(sessionId);
@@ -118,17 +125,18 @@ export async function probeCommands(chatSessionId: string, requesterId?: string 
   if (!s) return [];
   const kind: 'user' | 'room' = s.kind === 'room' ? 'room' : 'user';
   const ownerId = kind === 'room' ? s.roomId! : s.ownerId;
-  // Probe with the viewer's token (or the owner's for a private session); no token => nothing to probe.
-  const auth = resolveClaudeAuth(requesterId ?? (kind === 'user' ? ownerId : null));
-  if (auth.source === 'none') return [];
+  // Probe with the viewer's auth (or the owner's for a private session); none => nothing to probe.
+  const prov = resolveProvider(requesterId ?? (kind === 'user' ? ownerId : null));
+  if (prov.source === 'none') return [];
   const plugins = resolvePluginPaths(kind, ownerId);
   const key = `${chatSessionId}|${plugins.join(',')}`;
   const hit = cmdCache.get(key);
   if (hit) return hit;
   const ctx: SessionContext = {
     kind, ownerId, cwd: await cwdFor(s), model: s.model || cfg.str('defaultModel'),
+    effort: (s.effort || cfg.str('defaultEffort')) as SessionContext['effort'],
     permissionMode: clampMode((s.permissionMode as PermMode) || 'default', allowBypass()), plugins,
-    authToken: auth.token,
+    authToken: '', providerEnv: prov.env, providerModel: prov.model,
   };
   const abort = new AbortController();
   try {
@@ -170,12 +178,12 @@ export async function probeUsage(chatSessionId: string, requesterId?: string | n
   if (!s) return EMPTY_USAGE;
   const kind: 'user' | 'room' = s.kind === 'room' ? 'room' : 'user';
   const ownerId = kind === 'room' ? s.roomId! : s.ownerId;
-  // Rate limits + subscription are account-specific to whoever probes (their own token wins in
-  // resolveClaudeAuth), so the cache MUST be keyed per requester — keying by session alone would
+  // Rate limits + subscription are account-specific to whoever probes (their own auth wins in
+  // resolveProvider), so the cache MUST be keyed per requester — keying by session alone would
   // serve one member's claude.ai plan usage to another viewer of the same room/review/session.
   const authId = requesterId ?? (kind === 'user' ? ownerId : null);
-  const auth = resolveClaudeAuth(authId);
-  if (auth.source === 'none') return EMPTY_USAGE; // mock / no token → nothing to report
+  const prov = resolveProvider(authId);
+  if (prov.source === 'none') return EMPTY_USAGE; // mock / no auth → nothing to report
 
   const cacheKey = `${chatSessionId}|${authId ?? 'shared'}`;
   const hit = usageCache.get(cacheKey);
@@ -183,8 +191,9 @@ export async function probeUsage(chatSessionId: string, requesterId?: string | n
 
   const ctx: SessionContext = {
     kind, ownerId, cwd: await cwdFor(s), model: s.model || cfg.str('defaultModel'),
+    effort: (s.effort || cfg.str('defaultEffort')) as SessionContext['effort'],
     permissionMode: clampMode((s.permissionMode as PermMode) || 'default', allowBypass()),
-    plugins: resolvePluginPaths(kind, ownerId), authToken: auth.token,
+    plugins: resolvePluginPaths(kind, ownerId), authToken: '', providerEnv: prov.env, providerModel: prov.model,
   };
   const abort = new AbortController();
   const withTimeout = <T,>(p: Promise<T>): Promise<T | null> =>
@@ -225,6 +234,7 @@ export interface RunTurnParams {
   emit: Emit;
   includeChat?: boolean; // room: prepend team chat accrued since the last Claude turn as context
   onDone?: (finalText: string) => void; // review auto-pipeline: capture the verdict after the turn
+  attachments?: { name: string; isImage: boolean }[]; // prompt attachments (files / pasted screenshots)
 }
 
 export async function runTurn(p: RunTurnParams): Promise<void> {
@@ -235,8 +245,9 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
   const ownerId = kind === 'room' ? s.roomId! : s.ownerId;
   const cwd = await cwdFor(s);
   const mode = clampMode((s.permissionMode as PermMode) || 'default', allowBypass());
-  // Each turn runs under its author's token (personal: owner; room: whoever sent this message).
-  const auth = resolveClaudeAuth(p.author.id);
+  // Each turn runs under its author's auth (personal: owner; room: whoever sent this message).
+  // resolveProvider layers an optional LLM-provider override on top of the default Claude-token path.
+  const prov = resolveProvider(p.author.id);
   // SECURITY: review turns run unattended and build/run PR-controlled code with Bash auto-allowed,
   // so never hand them the merge-capable git PAT — it would be readable from the child env by any
   // build/test script the PR ships. Review never pushes (the remote merge uses the host API), and
@@ -263,8 +274,9 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
 
   const ctx: SessionContext = {
     kind, ownerId, cwd, model: s.model || cfg.str('defaultModel'),
+    effort: (s.effort || cfg.str('defaultEffort')) as SessionContext['effort'],
     permissionMode: mode, plugins: resolvePluginPaths(kind, ownerId),
-    authToken: auth.token, gitEnv, mcpServers, disallowedTools,
+    authToken: '', providerEnv: prov.env, providerModel: prov.model, gitEnv, mcpServers, disallowedTools,
   };
 
   // room + "include chat": collect team-chat accrued since Claude last saw a message,
@@ -281,10 +293,21 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
     contextChat = rows.map((r) => ({ name: r.authorName || '?', text: (JSON.parse(r.content) as any).text || '' }));
   }
 
-  // persist + broadcast the human message (speaker prefix for multi-party rooms)
+  // resolve prompt attachments → absolute paths under the session's attachment dir. Re-validate each
+  // name is a bare basename that actually exists there (ignore anything that doesn't); the dir sits
+  // inside an allowed root so the agent can Read these paths (images render visually via Read).
+  const attachDir = paths.attachments(kind, ownerId, s.id);
+  const attachments = (p.attachments || [])
+    .filter((a) => a && isBareBasename(a.name) && fs.existsSync(path.join(attachDir, a.name)))
+    .map((a) => ({ name: a.name, isImage: !!a.isImage, abs: path.join(attachDir, a.name) }));
+
+  // persist + broadcast the human message (speaker prefix for multi-party rooms; attachment metadata
+  // rides in content so the transcript can render chips/thumbnails)
   const userMsg = saveMessage({
     sessionId: s.id, role: 'user', authorId: p.author.id, authorName: p.author.name,
-    content: { text: p.text },
+    content: attachments.length
+      ? { text: p.text, attachments: attachments.map((a) => ({ name: a.name, isImage: a.isImage })) }
+      : { text: p.text },
   });
   db.update(schema.chatSessions).set({ updatedAt: Date.now() }).where(eq(schema.chatSessions.id, s.id)).run();
   p.emit('message', { sessionId: s.id, message: publicMessage(userMsg) });
@@ -295,7 +318,7 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
 
   const abort = new AbortController();
   const blocks: Block[] = [];
-  const turn: ActiveTurn = { abort, blocks, author: p.author }; // blocks kept live so join can replay progress
+  const turn: ActiveTurn = { abort, blocks, author: p.author, startedAt: Date.now() }; // blocks kept live so join can replay progress
   active.set(s.id, turn);
   p.emit('turn:start', { sessionId: s.id, author: p.author });
 
@@ -303,6 +326,12 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
   if (contextChat.length) {
     const convo = contextChat.map((c) => `[${c.name}]: ${c.text}`).join('\n');
     prompt = `[\uc774\uc804 \ub300\ud654]\n${convo}\n\n[${p.author.name}]: ${p.text}`;
+  }
+  // prepend absolute attachment paths so the agent Reads the uploaded files / pasted screenshots.
+  // (Composed into the REAL prompt only; the mock path uses p.text and doesn't run a real agent.)
+  if (attachments.length) {
+    const list = attachments.map((a) => `- ${a.abs}${a.isImage ? ' (\uc774\ubbf8\uc9c0)' : ''}`).join('\n');
+    prompt = `[\ucca8\ubd80 \ud30c\uc77c]\n${list}\n\n${prompt}`;
   }
   const roots = rootsFor(ctx);
   // review sessions run the pipeline unattended → auto-allow tools (class-1 fence still applies)
@@ -314,7 +343,7 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
   let inTok = 0, outTok = 0, cost = 0;
 
   try {
-    if (auth.source === 'none') {
+    if (prov.source === 'none') {
       await runMock({ ctx, prompt: p.text, canUseTool, emit: p.emit, sessionId: s.id, blocks, signal: abort.signal });
       inTok = 12; outTok = 40; cost = 0;
     } else {
