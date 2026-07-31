@@ -1,9 +1,12 @@
 {
   "name": "claudecode-workspace",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "Team workspace WebUI for a server-resident Claude Code — per-session isolation + shared rooms + code-server.",
-  "workspaces": ["server", "web"],
+  "workspaces": [
+    "server",
+    "web"
+  ],
   "scripts": {
     "dev": "concurrently -n server,web -c blue,green \"npm:dev -w server\" \"npm:dev -w web\"",
     "build": "npm run build -w web",
@@ -14,6 +17,10 @@
     "release:minor": "npm version minor -m \"chore(release): v%s\" && node scripts/release.mjs",
     "release:major": "npm version major -m \"chore(release): v%s\" && node scripts/release.mjs"
   },
-  "devDependencies": { "concurrently": "^9.1.0" },
-  "engines": { "node": ">=20" }
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
 }
