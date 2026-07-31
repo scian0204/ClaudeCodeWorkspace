@@ -12,6 +12,9 @@ services:
       DATA_DIR: /data
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       MOCK_CLAUDE: ${MOCK_CLAUDE:-0}
+      # Non-essential Anthropic traffic (telemetry, error reports, /feedback transcript uploads,
+      # surveys, updater pings, WebFetch preflight). 1 = blocked (default). Admin-toggleable live.
+      BLOCK_NONESSENTIAL_TRAFFIC: ${BLOCK_NONESSENTIAL_TRAFFIC:-1}
       SESSION_SECRET: ${SESSION_SECRET:-change-me-please}
       MAX_CONCURRENT_TURNS: ${MAX_CONCURRENT_TURNS:-3}
       BOOTSTRAP_ADMIN_USER: ${BOOTSTRAP_ADMIN_USER:-admin}

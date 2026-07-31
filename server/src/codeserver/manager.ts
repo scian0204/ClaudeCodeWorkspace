@@ -5,6 +5,7 @@ import Docker from 'dockerode';
 import { config } from '../config.js';
 import { cfg, registerApply } from '../lib/config-registry.js';
 import { newToken } from '../lib/ids.js';
+import { privacyEnvList } from '../claude/privacy.js';
 
 const docker = new Docker();
 
@@ -61,8 +62,12 @@ export async function open(ownerId: string, projectId: string, absProjectPath: s
     const container = await docker.createContainer({
       name: containerName,
       Image: cfg.str('codeServerImage'),
-      Cmd: ['--auth', 'none', '--bind-addr', '0.0.0.0:8080', '/home/coder/project'],
+      Cmd: ['--auth', 'none', '--disable-telemetry', '--bind-addr', '0.0.0.0:8080', '/home/coder/project'],
       User: '0:0',
+      // A `claude` run from the editor's own terminal is a second CLI we don't spawn ourselves, so it
+      // needs the same opt-outs baked in at create time (a later toggle only affects new containers).
+      // --disable-telemetry above is code-server's own switch, unrelated to Anthropic.
+      ...(cfg.bool('blockNonessentialTraffic') ? { Env: privacyEnvList() } : {}),
       Labels: { 'ccw.codeserver': '1', 'ccw.owner': ownerId, 'ccw.project': projectId },
       HostConfig: {
         NetworkMode: config.codeServer.network,

@@ -326,6 +326,7 @@ export const ADMIN = {
     { key: 'models', group: 'claude', type: 'json', value: '{"claude-opus-4-8":"Opus 4.8","claude-sonnet-5":"Sonnet 5","claude-haiku-4-5-20251001":"Haiku 4.5"}', default: '{"claude-opus-4-8":"Opus 4.8"}', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'forceMock', group: 'claude', type: 'bool', value: '1', default: '0', restart: false, readonly: false, secret: false, overridden: true },
     { key: 'maxConcurrentTurns', group: 'claude', type: 'int', value: '3', default: '3', min: 1, max: 100, restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'blockNonessentialTraffic', group: 'privacy', type: 'bool', value: '1', default: '1', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'reviewAuto', group: 'review', type: 'bool', value: '1', default: '1', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'reviewPollMs', group: 'review', type: 'int', value: '60000', default: '60000', unit: 'ms', min: 0, restart: false, readonly: false, secret: false, overridden: false },
     { key: 'reviewTurnTimeoutMs', group: 'review', type: 'int', value: '1800000', default: '1800000', unit: 'ms', min: 60000, max: 7200000, restart: false, readonly: false, secret: false, overridden: false },

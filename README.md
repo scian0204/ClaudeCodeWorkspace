@@ -343,6 +343,10 @@ Then, **in the app** → **LLM Provider → type `custom`**, base URL `http://ol
 
 Pre-pull the app + `codercom/code-server` images once and the whole stack — app, data, editors, **and inference** — runs offline. App state (sessions, rooms, uploads, SQLite) always lives in the local data volume; only the LLM call is external by default, and this removes even that.
 
+#### Non-essential traffic — blocked by default
+
+Even on the hosted API, the workspace ships with **`BLOCK_NONESSENTIAL_TRAFFIC=1`**, so the inference request is the *only* thing the agent's CLI sends to Anthropic. Switched off for every session — and injected into every newly started editor container — are: usage telemetry, error reports, `/feedback` · `/bug` · `/share` (these upload the whole transcript, code included), the session-quality survey and its transcript-upload follow-up, non-essential model calls, auto-updater pings, the WebFetch domain preflight (which sends the hostname to `api.anthropic.com`), Artifact publishing, official-marketplace auto-install, and OpenTelemetry export. Flip it in **Admin → Config → Privacy** if you *want* metrics going to your own OTel collector.
+
 ### Recommended specs
 
 Resource use scales with concurrent sessions and open editors (each code-server is its own sibling container). These figures are for the **app/workspace itself** — a local LLM (above) needs its own GPU/VRAM on top.

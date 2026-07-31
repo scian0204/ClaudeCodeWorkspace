@@ -3,6 +3,7 @@ import type { EffortLevel } from '@anthropic-ai/claude-agent-sdk';
 import { cfg } from '../lib/config-registry.js';
 import { paths, allowedRootsFor, isInsideRoots } from '../lib/paths.js';
 import { PROVIDER_ENV_KEYS } from '../auth/provider.js';
+import { applyPrivacyEnv, PRIVACY_SETTINGS } from './privacy.js';
 
 export type PermMode = 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan';
 
@@ -65,6 +66,11 @@ export function buildOptions(ctx: SessionContext, extra: {
   if (ctx.providerEnv) Object.assign(env, ctx.providerEnv);
   // Git identity + credentials so the agent's own `git commit`/`git push` are attributed and authenticated.
   if (ctx.gitEnv) Object.assign(env, ctx.gitEnv);
+  // Non-essential Anthropic egress (telemetry / error reports / feedback+transcript upload / surveys /
+  // updater pings / WebFetch preflight). Applied LAST so nothing above can reopen a channel; when the
+  // admin toggle is off we leave the inherited env alone so a deliberate OTel setup still works.
+  const privacy = cfg.bool('blockNonessentialTraffic');
+  if (privacy) applyPrivacyEnv(env);
 
   const options: any = {
     cwd: ctx.cwd,
@@ -79,6 +85,9 @@ export function buildOptions(ctx: SessionContext, extra: {
     abortController: extra.abortController,
     includePartialMessages: true,
   };
+  // skipWebFetchPreflight is a *setting*, not an env var — the SDK's flag-settings layer beats the
+  // user's own ~/.claude/settings.json without us writing to it.
+  if (privacy) options.settings = { ...PRIVACY_SETTINGS };
   if (extra.resume) options.resume = extra.resume;
   if (ctx.mcpServers) options.mcpServers = ctx.mcpServers;
   if (ctx.disallowedTools?.length) options.disallowedTools = ctx.disallowedTools;

@@ -47,6 +47,9 @@ export const DEFS: ConfigDef[] = [
   { key: 'usageProbeTtlMs', group: 'claude', type: 'int', default: '15000', min: 1000, max: 600000, unit: 'ms' },
   { key: 'usageProbeTimeoutMs', group: 'claude', type: 'int', default: '8000', min: 1000, max: 120000, unit: 'ms' },
 
+  // privacy — non-essential egress to Anthropic (the inference call itself is never affected)
+  { key: 'blockNonessentialTraffic', group: 'privacy', type: 'bool', default: '1', env: 'BLOCK_NONESSENTIAL_TRAFFIC' },
+
   // PR review pipeline
   { key: 'reviewAuto', group: 'review', type: 'bool', default: '1', env: 'REVIEW_AUTO' },
   { key: 'reviewComment', group: 'review', type: 'bool', default: '1', env: 'REVIEW_COMMENT' },
