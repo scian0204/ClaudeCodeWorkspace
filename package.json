@@ -8,7 +8,11 @@
     "dev": "concurrently -n server,web -c blue,green \"npm:dev -w server\" \"npm:dev -w web\"",
     "build": "npm run build -w web",
     "start": "npm run start -w server",
-    "typecheck": "npm run typecheck -w server && npm run typecheck -w web"
+    "typecheck": "npm run typecheck -w server && npm run typecheck -w web",
+    "release": "node scripts/release.mjs",
+    "release:patch": "npm version patch -m \"chore(release): v%s\" && node scripts/release.mjs",
+    "release:minor": "npm version minor -m \"chore(release): v%s\" && node scripts/release.mjs",
+    "release:major": "npm version major -m \"chore(release): v%s\" && node scripts/release.mjs"
   },
   "devDependencies": { "concurrently": "^9.1.0" },
   "engines": { "node": ">=20" }

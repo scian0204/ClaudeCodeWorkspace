@@ -1,7 +1,8 @@
 services:
   app:
     build: .
-    image: claudecode-workspace
+    # Local build tags itself as this too; `docker compose pull` fetches the published image.
+    image: ${APP_IMAGE:-cian0204/claudecode-workspace:latest}
     container_name: claudecode-app
     restart: unless-stopped
     ports:

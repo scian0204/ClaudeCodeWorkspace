@@ -221,6 +221,14 @@ docker compose up -d --build
 
 → http://localhost:3000 · 단일 이미지가 API·WebSocket·정적 SPA·code-server 프록시를 모두 서빙
 
+로컬 빌드 대신 미리 빌드된 이미지를 쓰고 싶다면 Docker Hub에서 pull:
+
+```bash
+docker compose pull        # cian0204/claudecode-workspace:latest 내려받음
+docker compose up -d       # (--build 없이)
+# 버전 고정:  APP_IMAGE=cian0204/claudecode-workspace:1.0.0 docker compose up -d
+```
+
 > **요구사항:** code-server 편집기는 Docker 배포에서만 동작하며, 볼륨 subpath 마운트를 위해 **Docker Engine ≥ 26**이 필요합니다.
 
 ### HTTPS로 PWA 설치
@@ -237,6 +245,18 @@ TLS_KEY=/certs/key.pem TLS_CERT=/certs/cert.pem docker compose up -d --build
 ```
 
 `./certs`는 컨테이너에 읽기 전용으로 마운트됩니다. 공인 도메인이 있으면 mkcert 대신 실제 인증서(Let's Encrypt)를 쓰세요. `TLS_KEY`/`TLS_CERT`를 비우면 그대로 평문 HTTP로 동작합니다.
+
+### Docker Hub 배포 (버저닝)
+
+버전을 올리고 이미지를 한 번에 배포합니다. 최초 1회 `docker login` 필요.
+
+```bash
+npm run release:patch   # 버그픽스    → 1.0.0 → 1.0.1 bump, 태그, build, push
+npm run release:minor   # 새 기능      → 1.1.0
+npm run release         # 버전 안 올리고 현재 버전 재-push
+```
+
+`release:*`는 `npm version`(→ `package.json` bump + git 태그 `vX.Y.Z`)을 실행한 뒤 `scripts/release.mjs`가 `:X.Y.Z`(불변)·`:latest`(이동)·`:sha-<short>`(커밋 추적) 3개 태그로 build & push 합니다. `node scripts/release.mjs --dry-run`으로 미리보기, `DOCKER_REPO=you/app`로 저장소 변경.
 
 ---
 

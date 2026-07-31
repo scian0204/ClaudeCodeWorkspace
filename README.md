@@ -221,6 +221,14 @@ docker compose up -d --build
 
 → http://localhost:3000 · a single image serves the API, WebSocket, static SPA, and code-server proxy
 
+Prefer the prebuilt image over a local build? Pull it from Docker Hub:
+
+```bash
+docker compose pull        # fetches cian0204/claudecode-workspace:latest
+docker compose up -d       # (no --build)
+# or pin a version:  APP_IMAGE=cian0204/claudecode-workspace:1.0.0 docker compose up -d
+```
+
 > **Requirement:** the code-server editor works only in the Docker deployment, and needs **Docker Engine ≥ 26** for volume-subpath mounts.
 
 ### PWA over HTTPS
@@ -237,6 +245,18 @@ TLS_KEY=/certs/key.pem TLS_CERT=/certs/cert.pem docker compose up -d --build
 ```
 
 `./certs` is mounted read-only into the container. With a public domain, use a real cert (Let's Encrypt) instead of mkcert. Leave `TLS_KEY`/`TLS_CERT` empty to stay on plain HTTP.
+
+### Releasing to Docker Hub
+
+Version the app and publish the image in one step. Requires a one-time `docker login`.
+
+```bash
+npm run release:patch   # bug fixes    → bumps 1.0.0 → 1.0.1, tags, builds, pushes
+npm run release:minor   # new features → 1.1.0
+npm run release         # re-push the current version without bumping
+```
+
+`release:*` runs `npm version` (bumps `package.json` + git tag `vX.Y.Z`), then `scripts/release.mjs` builds and pushes three tags: `:X.Y.Z` (immutable), `:latest` (moving), `:sha-<short>` (traceable to a commit). Dry-run with `node scripts/release.mjs --dry-run`. Override the repo with `DOCKER_REPO=you/app`.
 
 ---
 
