@@ -278,11 +278,42 @@ Prefer a compose file? A build-free [`docker-compose.hub.yml`](docker-compose.hu
 
 Every session runs the Claude Code CLI as a subprocess, so it honours **`ANTHROPIC_BASE_URL`**. Point the built-in **LLM Provider → `custom`** setting (My Page per-user, or the Admin panel for everyone) at a local Anthropic-compatible gateway and *no request ever hits `api.anthropic.com`*:
 
-1. Run [LiteLLM](https://github.com/BerriAI/litellm) (or any Anthropic-compatible proxy) in front of a local model — Ollama, vLLM, LM Studio, …
-2. **LLM Provider → type `custom`**, base URL `http://litellm:4000`, model = your local model name.
-3. Pre-pull the app + `codercom/code-server` images once. After that the whole stack — app, data, editors, **and inference** — runs offline.
+Bring up the model runtime + gateway + app as one stack:
 
-App state (sessions, rooms, uploads, SQLite) is always local in the data volume; only the LLM call is external by default, and the step above removes even that.
+```yaml
+# docker-compose.local.yml  ·  docker compose -f docker-compose.local.yml up -d
+services:
+  ollama:            # local model runtime — after up: docker compose -f docker-compose.local.yml exec ollama ollama pull llama3.1
+    image: ollama/ollama
+    volumes: [ollama:/root/.ollama]
+    networks: [internal]
+
+  litellm:           # Anthropic-compatible gateway (exposes /v1/messages) in front of Ollama
+    image: ghcr.io/berriai/litellm:main-latest
+    command: ["--config", "/cfg.yaml", "--port", "4000"]
+    volumes: ["./litellm.yaml:/cfg.yaml:ro"]   # your model → ollama map; see LiteLLM docs
+    networks: [internal]
+
+  app:
+    image: cian0204/claudecode-workspace:latest
+    pull_policy: always
+    ports: ["3000:3000"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - data:/data
+    environment:
+      SESSION_SECRET: change-me-to-a-long-random-string
+      CODE_SERVER_NETWORK: claudecode_internal
+      DATA_VOLUME: claudecode-workspace_data
+    networks: [internal]
+
+networks: { internal: { name: claudecode_internal } }
+volumes: { data: { name: claudecode-workspace_data }, ollama: {} }
+```
+
+Then, **in the app** → **LLM Provider → type `custom`**, base URL `http://litellm:4000`, model = the name you mapped in `litellm.yaml`. No `ANTHROPIC_API_KEY` needed — the provider setting drives it. See [LiteLLM's Anthropic endpoint docs](https://docs.litellm.ai/docs/anthropic_completion) for the model-map config.
+
+Pre-pull the app + `codercom/code-server` images once and the whole stack — app, data, editors, **and inference** — runs offline. App state (sessions, rooms, uploads, SQLite) always lives in the local data volume; only the LLM call is external by default, and this removes even that.
 
 ### Recommended specs
 

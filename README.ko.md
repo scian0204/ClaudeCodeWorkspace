@@ -278,11 +278,42 @@ compose 파일이 편하면? build 없는 [`docker-compose.hub.yml`](docker-comp
 
 세션마다 Claude Code CLI를 서브프로세스로 돌리므로 **`ANTHROPIC_BASE_URL`**을 그대로 따름. 내장 **LLM Provider → `custom`** 설정(마이페이지=유저별, 관리자 패널=공용)을 로컬 Anthropic-호환 게이트웨이로 지정하면 *`api.anthropic.com`으로 요청이 아예 안 나감*:
 
-1. [LiteLLM](https://github.com/BerriAI/litellm)(또는 Anthropic-호환 프록시)을 로컬 모델 앞에 세움 — Ollama·vLLM·LM Studio 등.
-2. **LLM Provider → 타입 `custom`**, base URL `http://litellm:4000`, model = 로컬 모델명.
-3. 앱 + `codercom/code-server` 이미지를 최초 1회 pre-pull. 이후 전체 스택 — 앱·데이터·편집기·**추론**까지 오프라인 동작.
+모델 런타임 + 게이트웨이 + 앱을 한 스택으로 띄움:
 
-앱 상태(세션·대화방·업로드·SQLite)는 항상 data 볼륨에 로컬 저장. 기본값에선 LLM 호출만 외부이며, 위 단계로 그것도 없앰.
+```yaml
+# docker-compose.local.yml  ·  docker compose -f docker-compose.local.yml up -d
+services:
+  ollama:            # 로컬 모델 런타임 — up 후: docker compose -f docker-compose.local.yml exec ollama ollama pull llama3.1
+    image: ollama/ollama
+    volumes: [ollama:/root/.ollama]
+    networks: [internal]
+
+  litellm:           # Anthropic-호환 게이트웨이(/v1/messages 노출), Ollama 앞단
+    image: ghcr.io/berriai/litellm:main-latest
+    command: ["--config", "/cfg.yaml", "--port", "4000"]
+    volumes: ["./litellm.yaml:/cfg.yaml:ro"]   # 모델→ollama 매핑; LiteLLM 문서 참조
+    networks: [internal]
+
+  app:
+    image: cian0204/claudecode-workspace:latest
+    pull_policy: always
+    ports: ["3000:3000"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - data:/data
+    environment:
+      SESSION_SECRET: change-me-to-a-long-random-string
+      CODE_SERVER_NETWORK: claudecode_internal
+      DATA_VOLUME: claudecode-workspace_data
+    networks: [internal]
+
+networks: { internal: { name: claudecode_internal } }
+volumes: { data: { name: claudecode-workspace_data }, ollama: {} }
+```
+
+그다음 **앱에서** → **LLM Provider → 타입 `custom`**, base URL `http://litellm:4000`, model = `litellm.yaml`에 매핑한 이름. `ANTHROPIC_API_KEY` 불필요 — provider 설정이 대신함. 모델 매핑은 [LiteLLM Anthropic 엔드포인트 문서](https://docs.litellm.ai/docs/anthropic_completion) 참조.
+
+앱 + `codercom/code-server` 이미지를 최초 1회 pre-pull 하면 전체 스택 — 앱·데이터·편집기·**추론**까지 오프라인 동작. 앱 상태(세션·대화방·업로드·SQLite)는 항상 data 볼륨에 로컬 저장. 기본값에선 LLM 호출만 외부이며, 위 단계로 그것도 없앰.
 
 ### 권장 사양
 
