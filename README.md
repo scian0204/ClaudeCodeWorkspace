@@ -274,9 +274,19 @@ Prefer a compose file? A build-free [`docker-compose.hub.yml`](docker-compose.hu
 
 > **Requirement:** the code-server editor works only in the Docker deployment, and needs **Docker Engine ≥ 26** for volume-subpath mounts.
 
+### Fully local — no data leaves your network
+
+Every session runs the Claude Code CLI as a subprocess, so it honours **`ANTHROPIC_BASE_URL`**. Point the built-in **LLM Provider → `custom`** setting (My Page per-user, or the Admin panel for everyone) at a local Anthropic-compatible gateway and *no request ever hits `api.anthropic.com`*:
+
+1. Run [LiteLLM](https://github.com/BerriAI/litellm) (or any Anthropic-compatible proxy) in front of a local model — Ollama, vLLM, LM Studio, …
+2. **LLM Provider → type `custom`**, base URL `http://litellm:4000`, model = your local model name.
+3. Pre-pull the app + `codercom/code-server` images once. After that the whole stack — app, data, editors, **and inference** — runs offline.
+
+App state (sessions, rooms, uploads, SQLite) is always local in the data volume; only the LLM call is external by default, and the step above removes even that.
+
 ### Recommended specs
 
-Resource use scales with concurrent sessions and open editors (each code-server is its own sibling container).
+Resource use scales with concurrent sessions and open editors (each code-server is its own sibling container). These figures are for the **app/workspace itself** — a local LLM (above) needs its own GPU/VRAM on top.
 
 | | Minimum | Recommended |
 |---|---|---|
@@ -285,7 +295,9 @@ Resource use scales with concurrent sessions and open editors (each code-server 
 | Disk | 5 GB SSD | 20 GB+ SSD (data volume grows with projects) |
 | OS · Docker | Linux · Docker Engine ≥ 26 | Linux · Docker Engine ≥ 26 |
 | Arch | amd64 or arm64 (multi-arch image) | — |
-| Network | outbound HTTPS to `api.anthropic.com` | — |
+| Network | outbound HTTPS to `api.anthropic.com` | **none** with a local LLM (see above) |
+
+> Running a **local model** is a separate cost from the table above — its GPU/VRAM/RAM depends entirely on the model you pick (a 7–8B model wants ~8–16 GB VRAM; larger models more).
 
 ### PWA over HTTPS
 

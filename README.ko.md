@@ -274,9 +274,19 @@ compose 파일이 편하면? build 없는 [`docker-compose.hub.yml`](docker-comp
 
 > **요구사항:** code-server 편집기는 Docker 배포에서만 동작하며, 볼륨 subpath 마운트를 위해 **Docker Engine ≥ 26**이 필요합니다.
 
+### 완전 로컬 — 데이터가 밖으로 안 나감
+
+세션마다 Claude Code CLI를 서브프로세스로 돌리므로 **`ANTHROPIC_BASE_URL`**을 그대로 따름. 내장 **LLM Provider → `custom`** 설정(마이페이지=유저별, 관리자 패널=공용)을 로컬 Anthropic-호환 게이트웨이로 지정하면 *`api.anthropic.com`으로 요청이 아예 안 나감*:
+
+1. [LiteLLM](https://github.com/BerriAI/litellm)(또는 Anthropic-호환 프록시)을 로컬 모델 앞에 세움 — Ollama·vLLM·LM Studio 등.
+2. **LLM Provider → 타입 `custom`**, base URL `http://litellm:4000`, model = 로컬 모델명.
+3. 앱 + `codercom/code-server` 이미지를 최초 1회 pre-pull. 이후 전체 스택 — 앱·데이터·편집기·**추론**까지 오프라인 동작.
+
+앱 상태(세션·대화방·업로드·SQLite)는 항상 data 볼륨에 로컬 저장. 기본값에선 LLM 호출만 외부이며, 위 단계로 그것도 없앰.
+
 ### 권장 사양
 
-동시 세션 수와 열린 편집기 수에 따라 리소스 사용량이 늘어남(code-server는 각각 형제 컨테이너).
+동시 세션 수와 열린 편집기 수에 따라 리소스 사용량이 늘어남(code-server는 각각 형제 컨테이너). 아래 수치는 **앱/워크스페이스 자체** 기준 — 로컬 LLM(위)은 별도의 GPU/VRAM가 추가로 필요.
 
 | | 최소 | 권장 |
 |---|---|---|
@@ -285,7 +295,9 @@ compose 파일이 편하면? build 없는 [`docker-compose.hub.yml`](docker-comp
 | 디스크 | 5 GB SSD | 20 GB+ SSD (데이터 볼륨은 프로젝트 따라 증가) |
 | OS · Docker | Linux · Docker Engine ≥ 26 | Linux · Docker Engine ≥ 26 |
 | 아키텍처 | amd64 또는 arm64 (멀티아치 이미지) | — |
-| 네트워크 | `api.anthropic.com` 아웃바운드 HTTPS | — |
+| 네트워크 | `api.anthropic.com` 아웃바운드 HTTPS | 로컬 LLM 쓰면 **불필요**(위 참조) |
+
+> **로컬 모델** 구동은 위 표와 별개 비용 — GPU/VRAM/RAM는 고른 모델에 전적으로 달림(7~8B 모델이면 VRAM 약 8~16 GB, 더 크면 그 이상).
 
 ### HTTPS로 PWA 설치
 
