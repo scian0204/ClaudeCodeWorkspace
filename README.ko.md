@@ -18,6 +18,7 @@
 ![editor](https://img.shields.io/badge/editor-code--server-2b7de9)
 ![license](https://img.shields.io/badge/license-MIT-black)
 ![node](https://img.shields.io/badge/node-%E2%89%A520-339933)
+![docker](https://img.shields.io/badge/docker-%E2%89%A526-2496ED)
 
 <br/>
 
