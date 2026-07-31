@@ -221,16 +221,23 @@ docker compose up -d --build
 
 → http://localhost:3000 · 단일 이미지가 API·WebSocket·정적 SPA·code-server 프록시를 모두 서빙
 
-**클론 불필요** — 단독 compose 파일 하나만 받아서 Docker Hub의 이미지를 바로 실행:
+**클론·파일 불필요 — `docker run` 한 줄:**
 
 ```bash
-curl -O https://raw.githubusercontent.com/scian0204/ClaudeCodeWorkspace/main/docker-compose.hub.yml
-printf 'SESSION_SECRET=%s\nANTHROPIC_API_KEY=sk-ant-...\n' "$(openssl rand -hex 32)" > .env
-docker compose -f docker-compose.hub.yml up -d
-# 버전 고정:  APP_IMAGE=cian0204/claudecode-workspace:1.0.0 docker compose -f docker-compose.hub.yml up -d
+docker run -d --name claudecode-app \
+  -p 3000:3000 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v claudecode-workspace_data:/data \
+  -e SESSION_SECRET=$(openssl rand -hex 32) \
+  -e ANTHROPIC_API_KEY=sk-ant-... \
+  -e CODE_SERVER_NETWORK=claudecode_internal \
+  -e DATA_VOLUME=claudecode-workspace_data \
+  cian0204/claudecode-workspace:latest
 ```
 
-`docker-compose.hub.yml`은 `build:`가 없어 항상 `cian0204/claudecode-workspace`를 pull. 업그레이드는 `docker compose -f docker-compose.hub.yml pull && docker compose -f docker-compose.hub.yml up -d`.
+→ http://localhost:3000 · 초기 관리자 **admin / admin**. 앱이 부팅 시 `claudecode_internal` 네트워크를 자동 생성함(브라우저 VS Code용). 편집기 없이 쓸 거면 마지막 두 `-e` 줄 제거. 버전 고정은 `:latest` 대신 `:1.1.0`.
+
+compose 파일이 편하면? build 없는 [`docker-compose.hub.yml`](docker-compose.hub.yml)도 배포돼 있음 — `curl -O` 후 `docker compose -f docker-compose.hub.yml up -d`.
 
 > **요구사항:** code-server 편집기는 Docker 배포에서만 동작하며, 볼륨 subpath 마운트를 위해 **Docker Engine ≥ 26**이 필요합니다.
 

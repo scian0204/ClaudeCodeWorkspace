@@ -1,5 +1,6 @@
 import path from 'node:path';
 import http from 'node:http';
+import os from 'node:os';
 import Docker from 'dockerode';
 import { config } from '../config.js';
 import { cfg, registerApply } from '../lib/config-registry.js';
@@ -140,6 +141,23 @@ function waitReady(name: string, timeoutMs = cfg.int('codeServerWaitReadyMs')): 
   });
 }
 
+
+// For plain `docker run` deploys: create the code-server network if it's missing and attach
+// ourselves to it, so the app can reach spawned editor containers by name. No-op under compose
+// (the network already exists and we're already attached) and when networking is unconfigured.
+export async function ensureNetwork() {
+  const net = config.codeServer.network;
+  if (!net) return;
+  try {
+    await docker.getNetwork(net).inspect();
+  } catch {
+    try { await docker.createNetwork({ Name: net, Driver: 'bridge' }); }
+    catch { /* another booting instance raced us to it */ }
+  }
+  // os.hostname() is this container's short id by default — the ref Docker needs to attach us.
+  try { await docker.getNetwork(net).connect({ Container: os.hostname() }); }
+  catch { /* already attached, or not running inside Docker */ }
+}
 
 // remove leftover code-server containers on boot (registry is in-memory; survivors would never be reaped)
 export async function cleanupOrphans() {

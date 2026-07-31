@@ -221,16 +221,23 @@ docker compose up -d --build
 
 → http://localhost:3000 · a single image serves the API, WebSocket, static SPA, and code-server proxy
 
-**No clone needed** — grab just the standalone compose file and run the published image straight from Docker Hub:
+**No clone, no files — one `docker run`:**
 
 ```bash
-curl -O https://raw.githubusercontent.com/scian0204/ClaudeCodeWorkspace/main/docker-compose.hub.yml
-printf 'SESSION_SECRET=%s\nANTHROPIC_API_KEY=sk-ant-...\n' "$(openssl rand -hex 32)" > .env
-docker compose -f docker-compose.hub.yml up -d
-# pin a version:  APP_IMAGE=cian0204/claudecode-workspace:1.0.0 docker compose -f docker-compose.hub.yml up -d
+docker run -d --name claudecode-app \
+  -p 3000:3000 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v claudecode-workspace_data:/data \
+  -e SESSION_SECRET=$(openssl rand -hex 32) \
+  -e ANTHROPIC_API_KEY=sk-ant-... \
+  -e CODE_SERVER_NETWORK=claudecode_internal \
+  -e DATA_VOLUME=claudecode-workspace_data \
+  cian0204/claudecode-workspace:latest
 ```
 
-`docker-compose.hub.yml` has no `build:` — it always pulls `cian0204/claudecode-workspace`. Upgrade later with `docker compose -f docker-compose.hub.yml pull && docker compose -f docker-compose.hub.yml up -d`.
+→ http://localhost:3000 · initial admin **admin / admin**. The app self-creates the `claudecode_internal` network on boot (needed for the in-browser VS Code); drop the last two `-e` lines to run without the editor. Pin a version with `:1.1.0` instead of `:latest`.
+
+Prefer a compose file? A build-free [`docker-compose.hub.yml`](docker-compose.hub.yml) is also published — `curl -O` it and `docker compose -f docker-compose.hub.yml up -d`.
 
 > **Requirement:** the code-server editor works only in the Docker deployment, and needs **Docker Engine ≥ 26** for volume-subpath mounts.
 
