@@ -17,7 +17,7 @@ ClaudeCode Workspace — 서버 1대 상주 Claude Code 팀 워크스페이스. 
    npm run release:patch   # 버그픽스·자잘한 수정 (새 기능이면 release:minor)
    ```
    - `release:*`는 `npm version`으로 `package.json` 버전을 올리고 git 태그(`vX.Y.Z`)를 만든 뒤, `scripts/release.mjs`가 `:버전`·`:latest`·`:sha-<short>` 3개 태그로 build & push 한다.
-   - **기본은 amd64만**(빠름, ~1~2분). arm64까지 멀티아치로 올리려면 `npm run release:patch -- --arm` (arm64는 qemu 에뮬 빌드라 느림 ~20~30분 — **가끔만**).
+   - **기본은 amd64만**(빠름, 약 1–2분). arm64까지 멀티아치로 올리려면 `npm run release:patch -- --arm` (arm64는 qemu 에뮬 빌드라 느림, 약 20–30분 — **가끔만**).
    - **선행 조건**: 이 머신에서 최초 1회 `docker login`(Docker Hub 토큰) 되어 있어야 한다. 미로그인 시 push가 auth 에러로 실패한다. (Claude은 자격증명을 직접 입력하지 않는다 — 로그인은 사용자가 수행.)
    - `npm version`은 작업 트리가 깨끗해야 동작하므로 **커밋(규칙 2) 후** 실행한다. 버전을 안 올리고 재-push만 하려면 `npm run release`.
 4. **최종 답변은 한글.** 사용자에게 보내는 최종 답변은 한글로 작성한다. (코드/커밋/에러 문자열은 원문 유지)

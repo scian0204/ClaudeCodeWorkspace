@@ -333,13 +333,13 @@ docker run -d --name claudecode-app --network claudecode_internal \
 | | 최소 | 권장 |
 |---|---|---|
 | CPU | 2코어 | 4코어 이상 |
-| RAM | 2 GB | 4~8 GB (편집기 1개당 약 256~512 MB) |
+| RAM | 2 GB | 4–8 GB (편집기 1개당 약 256–512 MB) |
 | 디스크 | 5 GB SSD | 20 GB+ SSD (데이터 볼륨은 프로젝트 따라 증가) |
 | OS · Docker | Linux · Docker Engine ≥ 26 | Linux · Docker Engine ≥ 26 |
 | 아키텍처 | amd64 또는 arm64 (멀티아치 이미지) | — |
 | 네트워크 | `api.anthropic.com` 아웃바운드 HTTPS | 로컬 LLM 쓰면 **불필요**(위 참조) |
 
-> **로컬 모델** 구동은 위 표와 별개 비용 — GPU/VRAM/RAM는 고른 모델에 전적으로 달림(7~8B 모델이면 VRAM 약 8~16 GB, 더 크면 그 이상).
+> **로컬 모델** 구동은 위 표와 별개 비용 — GPU/VRAM/RAM는 고른 모델에 전적으로 달림(7–8B 모델이면 VRAM 약 8–16 GB, 더 크면 그 이상).
 
 ### HTTPS로 PWA 설치
 
