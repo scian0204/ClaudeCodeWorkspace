@@ -191,6 +191,8 @@ const ko: Dict = {
   'chat.send': '보내기',
   'chat.attach': '파일 첨부',
   'chat.attachRemove': '첨부 제거',
+  'chat.imgPreview': '이미지 미리보기',
+  'chat.imgPreviewClose': '닫기',
   'chat.openingEditor': '에디터를 여는 중…',
   'chat.selectProjectFirst': '헤더에서 프로젝트를 먼저 선택하세요.',
 
@@ -884,6 +886,8 @@ const en: Dict = {
   'chat.send': 'Send',
   'chat.attach': 'Attach files',
   'chat.attachRemove': 'Remove attachment',
+  'chat.imgPreview': 'Image preview',
+  'chat.imgPreviewClose': 'Close',
   'chat.openingEditor': 'Opening editor…',
   'chat.selectProjectFirst': 'Select a project in the header first.',
 

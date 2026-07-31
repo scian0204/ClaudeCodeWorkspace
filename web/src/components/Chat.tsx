@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as DM from '@radix-ui/react-dropdown-menu';
+import * as Dialog from '@radix-ui/react-dialog';
 import { useStore, type Block, type Msg, type Attachment, type Project } from '../lib/store';
 import { ProjectCreateForm } from './ProjectCreateForm';
 import { api, type UploadState } from '../lib/api';
@@ -807,22 +808,47 @@ function filterRefs(refs: Ref[], q: string, limit = 50): Ref[] {
 // when present, otherwise the authed GET endpoint (persisted transcript messages). onRemove → composer.
 function AttachmentList({ atts, sessionId, onRemove }: { atts: Attachment[]; sessionId: string; onRemove?: (name: string) => void }) {
   const t = useT();
+  const [preview, setPreview] = useState<{ src: string; name: string } | null>(null);
   if (!atts?.length) return null;
   const srcOf = (a: Attachment) => a.url || `/api/sessions/${sessionId}/attachments/${encodeURIComponent(a.name)}`;
   return (
-    <div className="flex flex-wrap gap-2 mt-2">
-      {atts.map((a) => (
-        <div key={a.name} className="relative border border-line rounded-lg overflow-hidden bg-card flex items-center max-w-full">
-          {a.isImage
-            ? <img src={srcOf(a)} alt={a.name} title={a.name} className="w-16 h-16 object-cover" loading="lazy" />
-            : <span className="flex items-center gap-1.5 px-2.5 py-2 text-xs text-txt2 max-w-[180px]"><IconFile size={14} className="shrink-0" /><span className="truncate">{a.name}</span></span>}
-          {onRemove && (
-            <button type="button" onClick={() => onRemove(a.name)} title={t('chat.attachRemove')} aria-label={t('chat.attachRemove')}
-              className="absolute top-0.5 right-0.5 w-4 h-4 grid place-items-center rounded-full bg-black/60 text-white leading-none"><IconX size={11} /></button>
-          )}
-        </div>
-      ))}
-    </div>
+    <>
+      <div className="flex flex-wrap gap-2 mt-2">
+        {atts.map((a) => (
+          <div key={a.name} className="relative border border-line rounded-lg overflow-hidden bg-card flex items-center max-w-full">
+            {a.isImage
+              ? <img src={srcOf(a)} alt={a.name} title={a.name} onClick={() => setPreview({ src: srcOf(a), name: a.name })}
+                  className="w-16 h-16 object-cover cursor-zoom-in" loading="lazy" />
+              : <span className="flex items-center gap-1.5 px-2.5 py-2 text-xs text-txt2 max-w-[180px]"><IconFile size={14} className="shrink-0" /><span className="truncate">{a.name}</span></span>}
+            {onRemove && (
+              <button type="button" onClick={() => onRemove(a.name)} title={t('chat.attachRemove')} aria-label={t('chat.attachRemove')}
+                className="absolute top-0.5 right-0.5 w-4 h-4 grid place-items-center rounded-full bg-black/60 text-white leading-none"><IconX size={11} /></button>
+            )}
+          </div>
+        ))}
+      </div>
+      <ImageLightbox preview={preview} onClose={() => setPreview(null)} />
+    </>
+  );
+}
+
+// Full-image popup for a clicked attachment thumbnail. Radix Dialog gives Esc-to-close + focus trap;
+// backdrop and image click both close (image itself has no zoom, so click-anywhere-closes is fine).
+function ImageLightbox({ preview, onClose }: { preview: { src: string; name: string } | null; onClose: () => void }) {
+  const t = useT();
+  return (
+    <Dialog.Root open={!!preview} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 bg-black/80 z-[70]" />
+        <Dialog.Content aria-describedby={undefined} onClick={onClose}
+          className="fixed inset-0 z-[70] grid place-items-center p-4 outline-none">
+          <Dialog.Title className="sr-only">{t('chat.imgPreview')}</Dialog.Title>
+          {preview && <img src={preview.src} alt={preview.name} className="max-w-[95vw] max-h-[92vh] object-contain rounded-lg shadow-2xl" />}
+          <button type="button" onClick={onClose} title={t('chat.imgPreviewClose')} aria-label={t('chat.imgPreviewClose')}
+            className="fixed top-4 right-4 w-9 h-9 grid place-items-center rounded-full bg-black/60 text-white"><IconX size={18} /></button>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 

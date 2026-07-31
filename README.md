@@ -195,7 +195,7 @@ A per-user settings page consolidating **profile image**, **Claude token**, **LL
 | 🐳 | **One-shot deploy** | Multi-stage single image + `docker compose up`. code-server spawns dynamically as sibling containers (no orchestrator needed). |
 | 🗂 | **Folded context history** | Each `/clear` or `/compact` collapses the conversation above it into a stacked, timestamped toggle — history stays one click away instead of scrolling forever. |
 | 📎 | **`@` file & folder references** | Type `@` in any project chat to fuzzy-search files and folders in an instant preview menu — the same feel as the `/` command palette. Picking one drops an `@path` reference into your message, so you point Claude at a file without leaving the composer. |
-| 🖇 | **Attach files & paste screenshots** | Attach any file — or just paste (or drag-drop) a clipboard screenshot — into the composer. Uploads stage under the session's workspace and their paths ride the prompt, so Claude reads them (images render visually). Thumbnails/chips show inline in the composer and the transcript; per-file size and count limits are admin-configurable. |
+| 🖇 | **Attach files & paste screenshots** | Attach any file — or just paste (or drag-drop) a clipboard screenshot — into the composer. Uploads stage under the session's workspace and their paths ride the prompt, so Claude reads them (images render visually). Thumbnails/chips show inline in the composer and the transcript (**click an image thumbnail to view it full-size** in a lightbox); per-file size and count limits are admin-configurable. |
 | 🎨 | **Desktop-app-grade UI** | Clay theme following the Claude Code desktop app, light/dark, collapsible tool cards, serif responses, member avatars and presence. |
 
 ---
