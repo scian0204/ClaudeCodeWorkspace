@@ -221,13 +221,16 @@ docker compose up -d --build
 
 → http://localhost:3000 · 단일 이미지가 API·WebSocket·정적 SPA·code-server 프록시를 모두 서빙
 
-로컬 빌드 대신 미리 빌드된 이미지를 쓰고 싶다면 Docker Hub에서 pull:
+**클론 불필요** — 단독 compose 파일 하나만 받아서 Docker Hub의 이미지를 바로 실행:
 
 ```bash
-docker compose pull        # cian0204/claudecode-workspace:latest 내려받음
-docker compose up -d       # (--build 없이)
-# 버전 고정:  APP_IMAGE=cian0204/claudecode-workspace:1.0.0 docker compose up -d
+curl -O https://raw.githubusercontent.com/scian0204/ClaudeCodeWorkspace/main/docker-compose.hub.yml
+printf 'SESSION_SECRET=%s\nANTHROPIC_API_KEY=sk-ant-...\n' "$(openssl rand -hex 32)" > .env
+docker compose -f docker-compose.hub.yml up -d
+# 버전 고정:  APP_IMAGE=cian0204/claudecode-workspace:1.0.0 docker compose -f docker-compose.hub.yml up -d
 ```
+
+`docker-compose.hub.yml`은 `build:`가 없어 항상 `cian0204/claudecode-workspace`를 pull. 업그레이드는 `docker compose -f docker-compose.hub.yml pull && docker compose -f docker-compose.hub.yml up -d`.
 
 > **요구사항:** code-server 편집기는 Docker 배포에서만 동작하며, 볼륨 subpath 마운트를 위해 **Docker Engine ≥ 26**이 필요합니다.
 

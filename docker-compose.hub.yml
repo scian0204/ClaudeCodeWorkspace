@@ -1,0 +1,44 @@
+# Run the published image WITHOUT cloning the repo — this one file is all you need.
+#
+#   curl -O https://raw.githubusercontent.com/scian0204/ClaudeCodeWorkspace/main/docker-compose.hub.yml
+#   printf 'SESSION_SECRET=%s\nANTHROPIC_API_KEY=sk-ant-...\n' "$(openssl rand -hex 32)" > .env
+#   docker compose -f docker-compose.hub.yml up -d
+#
+# No `build:` here — it always pulls cian0204/claudecode-workspace from Docker Hub.
+# (The repo's docker-compose.yml is the build-from-source variant for development.)
+services:
+  app:
+    image: ${APP_IMAGE:-cian0204/claudecode-workspace:latest}
+    pull_policy: always
+    container_name: claudecode-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: "3000"
+      DATA_DIR: /data
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      MOCK_CLAUDE: ${MOCK_CLAUDE:-0}
+      SESSION_SECRET: ${SESSION_SECRET:-change-me-please}
+      MAX_CONCURRENT_TURNS: ${MAX_CONCURRENT_TURNS:-3}
+      BOOTSTRAP_ADMIN_USER: ${BOOTSTRAP_ADMIN_USER:-admin}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-admin}
+      CODE_SERVER_IMAGE: ${CODE_SERVER_IMAGE:-codercom/code-server:latest}
+      CODE_SERVER_IDLE_MS: ${CODE_SERVER_IDLE_MS:-1800000}
+      CODE_SERVER_NETWORK: claudecode_internal
+      DATA_VOLUME: claudecode-workspace_data
+      TLS_KEY: ${TLS_KEY:-}
+      TLS_CERT: ${TLS_CERT:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - data:/data
+    networks:
+      - internal
+
+networks:
+  internal:
+    name: claudecode_internal
+
+volumes:
+  data:
+    name: claudecode-workspace_data
