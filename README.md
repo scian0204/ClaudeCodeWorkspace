@@ -33,6 +33,22 @@ Per-session isolated Claude Code · shared team rooms · VS Code in the browser 
 
 ---
 
+## Contents
+
+- [At a glance](#at-a-glance)
+- [📸 Feature tour](#-feature-tour)
+- [✨ Strengths](#-strengths)
+- [🚀 Quick start](#-quick-start)
+- [🧭 Architecture](#-architecture)
+- [🧩 Features in detail](#-features-in-detail)
+- [⚙️ Configuration (.env)](#️-configuration-env)
+- [🗂 Structure](#-structure)
+- [🔐 Security posture](#-security-posture)
+- [🛣 Roadmap](#-roadmap)
+- [🤝 Contributing · License](#-contributing--license)
+
+---
+
 ## At a glance
 
 The Claude Code CLI is powerful, but it's tied to **one terminal — yours**. ClaudeCode Workspace lifts that CLI **onto a server and turns it into a team asset**.
