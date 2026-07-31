@@ -311,6 +311,31 @@ networks: { internal: { name: claudecode_internal } }
 volumes: { data: { name: claudecode-workspace_data }, ollama: {} }
 ```
 
+<details><summary>그냥 <code>docker run</code>으로? 같은 스택, 네트워크 1 + 컨테이너 4</summary>
+
+```bash
+docker network create claudecode_internal
+
+docker run -d --name ollama --network claudecode_internal \
+  -v ollama:/root/.ollama ollama/ollama
+docker exec ollama ollama pull llama3.1
+
+docker run -d --name litellm --network claudecode_internal \
+  -v "$PWD/litellm.yaml:/cfg.yaml:ro" \
+  ghcr.io/berriai/litellm:main-latest --config /cfg.yaml --port 4000
+
+docker run -d --name claudecode-app --network claudecode_internal \
+  -p 3000:3000 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v claudecode-workspace_data:/data \
+  -e SESSION_SECRET=$(openssl rand -hex 32) \
+  -e CODE_SERVER_NETWORK=claudecode_internal \
+  -e DATA_VOLUME=claudecode-workspace_data \
+  cian0204/claudecode-workspace:latest
+```
+넷 다 `claudecode_internal` 공유 → 앱이 `http://litellm:4000`을 이름으로 접속.
+</details>
+
 그다음 **앱에서** → **LLM Provider → 타입 `custom`**, base URL `http://litellm:4000`, model = `litellm.yaml`에 매핑한 이름. `ANTHROPIC_API_KEY` 불필요 — provider 설정이 대신함. 모델 매핑은 [LiteLLM Anthropic 엔드포인트 문서](https://docs.litellm.ai/docs/anthropic_completion) 참조.
 
 앱 + `codercom/code-server` 이미지를 최초 1회 pre-pull 하면 전체 스택 — 앱·데이터·편집기·**추론**까지 오프라인 동작. 앱 상태(세션·대화방·업로드·SQLite)는 항상 data 볼륨에 로컬 저장. 기본값에선 LLM 호출만 외부이며, 위 단계로 그것도 없앰.
