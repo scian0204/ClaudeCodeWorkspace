@@ -221,7 +221,9 @@ docker compose up -d --build
 
 → http://localhost:3000 · a single image serves the API, WebSocket, static SPA, and code-server proxy
 
-**No clone, no files — one `docker run`:**
+**No clone, no files — one `docker run`** (pick your shell, all copy-paste ready):
+
+<details open><summary>Linux / macOS — bash / zsh</summary>
 
 ```bash
 docker run -d --name claudecode-app \
@@ -234,6 +236,37 @@ docker run -d --name claudecode-app \
   -e DATA_VOLUME=claudecode-workspace_data \
   cian0204/claudecode-workspace:latest
 ```
+</details>
+
+<details><summary>Windows — PowerShell</summary>
+
+```powershell
+docker run -d --name claudecode-app `
+  -p 3000:3000 `
+  -v /var/run/docker.sock:/var/run/docker.sock `
+  -v claudecode-workspace_data:/data `
+  -e SESSION_SECRET=$([guid]::NewGuid().Guid + [guid]::NewGuid().Guid) `
+  -e ANTHROPIC_API_KEY=sk-ant-... `
+  -e CODE_SERVER_NETWORK=claudecode_internal `
+  -e DATA_VOLUME=claudecode-workspace_data `
+  cian0204/claudecode-workspace:latest
+```
+</details>
+
+<details><summary>Windows — CMD</summary>
+
+```bat
+docker run -d --name claudecode-app ^
+  -p 3000:3000 ^
+  -v /var/run/docker.sock:/var/run/docker.sock ^
+  -v claudecode-workspace_data:/data ^
+  -e SESSION_SECRET=replace-with-a-long-random-string ^
+  -e ANTHROPIC_API_KEY=sk-ant-... ^
+  -e CODE_SERVER_NETWORK=claudecode_internal ^
+  -e DATA_VOLUME=claudecode-workspace_data ^
+  cian0204/claudecode-workspace:latest
+```
+</details>
 
 → http://localhost:3000 · initial admin **admin / admin**. The app self-creates the `claudecode_internal` network on boot (needed for the in-browser VS Code); drop the last two `-e` lines to run without the editor. Pin a version with `:1.1.0` instead of `:latest`.
 

@@ -15,7 +15,8 @@
     "release": "node scripts/release.mjs",
     "release:patch": "npm version patch -m \"chore(release): v%s\" && node scripts/release.mjs",
     "release:minor": "npm version minor -m \"chore(release): v%s\" && node scripts/release.mjs",
-    "release:major": "npm version major -m \"chore(release): v%s\" && node scripts/release.mjs"
+    "release:major": "npm version major -m \"chore(release): v%s\" && node scripts/release.mjs",
+    "hub:desc": "node scripts/hub-description.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"

@@ -221,7 +221,9 @@ docker compose up -d --build
 
 → http://localhost:3000 · 단일 이미지가 API·WebSocket·정적 SPA·code-server 프록시를 모두 서빙
 
-**클론·파일 불필요 — `docker run` 한 줄:**
+**클론·파일 불필요 — `docker run` 한 줄** (쉘 골라서 그대로 붙여넣기):
+
+<details open><summary>Linux / macOS — bash / zsh</summary>
 
 ```bash
 docker run -d --name claudecode-app \
@@ -234,6 +236,37 @@ docker run -d --name claudecode-app \
   -e DATA_VOLUME=claudecode-workspace_data \
   cian0204/claudecode-workspace:latest
 ```
+</details>
+
+<details><summary>Windows — PowerShell</summary>
+
+```powershell
+docker run -d --name claudecode-app `
+  -p 3000:3000 `
+  -v /var/run/docker.sock:/var/run/docker.sock `
+  -v claudecode-workspace_data:/data `
+  -e SESSION_SECRET=$([guid]::NewGuid().Guid + [guid]::NewGuid().Guid) `
+  -e ANTHROPIC_API_KEY=sk-ant-... `
+  -e CODE_SERVER_NETWORK=claudecode_internal `
+  -e DATA_VOLUME=claudecode-workspace_data `
+  cian0204/claudecode-workspace:latest
+```
+</details>
+
+<details><summary>Windows — CMD</summary>
+
+```bat
+docker run -d --name claudecode-app ^
+  -p 3000:3000 ^
+  -v /var/run/docker.sock:/var/run/docker.sock ^
+  -v claudecode-workspace_data:/data ^
+  -e SESSION_SECRET=replace-with-a-long-random-string ^
+  -e ANTHROPIC_API_KEY=sk-ant-... ^
+  -e CODE_SERVER_NETWORK=claudecode_internal ^
+  -e DATA_VOLUME=claudecode-workspace_data ^
+  cian0204/claudecode-workspace:latest
+```
+</details>
 
 → http://localhost:3000 · 초기 관리자 **admin / admin**. 앱이 부팅 시 `claudecode_internal` 네트워크를 자동 생성함(브라우저 VS Code용). 편집기 없이 쓸 거면 마지막 두 `-e` 줄 제거. 버전 고정은 `:latest` 대신 `:1.1.0`.
 
