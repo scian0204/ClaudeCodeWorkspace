@@ -278,20 +278,14 @@ compose 파일이 편하면? build 없는 [`docker-compose.hub.yml`](docker-comp
 
 세션마다 Claude Code CLI를 서브프로세스로 돌리므로 **`ANTHROPIC_BASE_URL`**을 그대로 따름. 내장 **LLM Provider → `custom`** 설정(마이페이지=유저별, 관리자 패널=공용)을 로컬 Anthropic-호환 게이트웨이로 지정하면 *`api.anthropic.com`으로 요청이 아예 안 나감*:
 
-모델 런타임 + 게이트웨이 + 앱을 한 스택으로 띄움:
+**Ollama**(≥ 0.14)·**vLLM**·**LM Studio**·**llama.cpp**는 이제 *네이티브* Anthropic `/v1/messages` 엔드포인트를 제공 → Claude Code가 **프록시 없이 직결**. 최소 스택 = 모델 런타임 + 앱:
 
 ```yaml
 # docker-compose.local.yml  ·  docker compose -f docker-compose.local.yml up -d
 services:
-  ollama:            # 로컬 모델 런타임 — up 후: docker compose -f docker-compose.local.yml exec ollama ollama pull llama3.1
+  ollama:            # 네이티브 Anthropic 엔드포인트 — up 후: docker compose -f docker-compose.local.yml exec ollama ollama pull qwen3-coder
     image: ollama/ollama
     volumes: [ollama:/root/.ollama]
-    networks: [internal]
-
-  litellm:           # Anthropic-호환 게이트웨이(/v1/messages 노출), Ollama 앞단
-    image: ghcr.io/berriai/litellm:main-latest
-    command: ["--config", "/cfg.yaml", "--port", "4000"]
-    volumes: ["./litellm.yaml:/cfg.yaml:ro"]   # 모델→ollama 매핑; LiteLLM 문서 참조
     networks: [internal]
 
   app:
@@ -311,19 +305,12 @@ networks: { internal: { name: claudecode_internal } }
 volumes: { data: { name: claudecode-workspace_data }, ollama: {} }
 ```
 
-<details><summary>그냥 <code>docker run</code>으로? 같은 스택, 네트워크 1 + 컨테이너 4</summary>
+<details><summary>그냥 <code>docker run</code>으로?</summary>
 
 ```bash
 docker network create claudecode_internal
-
-docker run -d --name ollama --network claudecode_internal \
-  -v ollama:/root/.ollama ollama/ollama
-docker exec ollama ollama pull llama3.1
-
-docker run -d --name litellm --network claudecode_internal \
-  -v "$PWD/litellm.yaml:/cfg.yaml:ro" \
-  ghcr.io/berriai/litellm:main-latest --config /cfg.yaml --port 4000
-
+docker run -d --name ollama --network claudecode_internal -v ollama:/root/.ollama ollama/ollama
+docker exec ollama ollama pull qwen3-coder
 docker run -d --name claudecode-app --network claudecode_internal \
   -p 3000:3000 \
   -v /var/run/docker.sock:/var/run/docker.sock \
@@ -333,10 +320,9 @@ docker run -d --name claudecode-app --network claudecode_internal \
   -e DATA_VOLUME=claudecode-workspace_data \
   cian0204/claudecode-workspace:latest
 ```
-넷 다 `claudecode_internal` 공유 → 앱이 `http://litellm:4000`을 이름으로 접속.
 </details>
 
-그다음 **앱에서** → **LLM Provider → 타입 `custom`**, base URL `http://litellm:4000`, model = `litellm.yaml`에 매핑한 이름. `ANTHROPIC_API_KEY` 불필요 — provider 설정이 대신함. 모델 매핑은 [LiteLLM Anthropic 엔드포인트 문서](https://docs.litellm.ai/docs/anthropic_completion) 참조.
+그다음 **앱에서** → **LLM Provider → 타입 `custom`**, base URL `http://ollama:11434`, auth token `ollama`(아무 값), model = 받은 모델명(예: `qwen3-coder`). `ANTHROPIC_API_KEY` 불필요 — provider 설정이 대신함. **LiteLLM** 같은 프록시는 네이티브 Anthropic 엔드포인트가 *없는* 백엔드(순수 OpenAI-only 서버)거나 여러 provider로 라우팅할 때만 필요.
 
 앱 + `codercom/code-server` 이미지를 최초 1회 pre-pull 하면 전체 스택 — 앱·데이터·편집기·**추론**까지 오프라인 동작. 앱 상태(세션·대화방·업로드·SQLite)는 항상 data 볼륨에 로컬 저장. 기본값에선 LLM 호출만 외부이며, 위 단계로 그것도 없앰.
 

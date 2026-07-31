@@ -278,20 +278,14 @@ Prefer a compose file? A build-free [`docker-compose.hub.yml`](docker-compose.hu
 
 Every session runs the Claude Code CLI as a subprocess, so it honours **`ANTHROPIC_BASE_URL`**. Point the built-in **LLM Provider → `custom`** setting (My Page per-user, or the Admin panel for everyone) at a local Anthropic-compatible gateway and *no request ever hits `api.anthropic.com`*:
 
-Bring up the model runtime + gateway + app as one stack:
+**Ollama** (≥ 0.14), **vLLM**, **LM Studio**, and **llama.cpp** now serve a *native* Anthropic `/v1/messages` endpoint, so Claude Code talks to them **directly — no proxy**. Minimal stack = model runtime + app:
 
 ```yaml
 # docker-compose.local.yml  ·  docker compose -f docker-compose.local.yml up -d
 services:
-  ollama:            # local model runtime — after up: docker compose -f docker-compose.local.yml exec ollama ollama pull llama3.1
+  ollama:            # native Anthropic endpoint — after up: docker compose -f docker-compose.local.yml exec ollama ollama pull qwen3-coder
     image: ollama/ollama
     volumes: [ollama:/root/.ollama]
-    networks: [internal]
-
-  litellm:           # Anthropic-compatible gateway (exposes /v1/messages) in front of Ollama
-    image: ghcr.io/berriai/litellm:main-latest
-    command: ["--config", "/cfg.yaml", "--port", "4000"]
-    volumes: ["./litellm.yaml:/cfg.yaml:ro"]   # your model → ollama map; see LiteLLM docs
     networks: [internal]
 
   app:
@@ -311,19 +305,12 @@ networks: { internal: { name: claudecode_internal } }
 volumes: { data: { name: claudecode-workspace_data }, ollama: {} }
 ```
 
-<details><summary>Prefer plain <code>docker run</code>? Same stack, one network + four containers</summary>
+<details><summary>Prefer plain <code>docker run</code>?</summary>
 
 ```bash
 docker network create claudecode_internal
-
-docker run -d --name ollama --network claudecode_internal \
-  -v ollama:/root/.ollama ollama/ollama
-docker exec ollama ollama pull llama3.1
-
-docker run -d --name litellm --network claudecode_internal \
-  -v "$PWD/litellm.yaml:/cfg.yaml:ro" \
-  ghcr.io/berriai/litellm:main-latest --config /cfg.yaml --port 4000
-
+docker run -d --name ollama --network claudecode_internal -v ollama:/root/.ollama ollama/ollama
+docker exec ollama ollama pull qwen3-coder
 docker run -d --name claudecode-app --network claudecode_internal \
   -p 3000:3000 \
   -v /var/run/docker.sock:/var/run/docker.sock \
@@ -333,10 +320,9 @@ docker run -d --name claudecode-app --network claudecode_internal \
   -e DATA_VOLUME=claudecode-workspace_data \
   cian0204/claudecode-workspace:latest
 ```
-All four share `claudecode_internal` so the app resolves `http://litellm:4000` by name.
 </details>
 
-Then, **in the app** → **LLM Provider → type `custom`**, base URL `http://litellm:4000`, model = the name you mapped in `litellm.yaml`. No `ANTHROPIC_API_KEY` needed — the provider setting drives it. See [LiteLLM's Anthropic endpoint docs](https://docs.litellm.ai/docs/anthropic_completion) for the model-map config.
+Then, **in the app** → **LLM Provider → type `custom`**, base URL `http://ollama:11434`, auth token `ollama` (any value), model = your pulled model (e.g. `qwen3-coder`). No `ANTHROPIC_API_KEY` needed — the provider setting drives it. A proxy like **LiteLLM** is only needed if your backend has *no* native Anthropic endpoint (an OpenAI-only server) or you want to route across several providers.
 
 Pre-pull the app + `codercom/code-server` images once and the whole stack — app, data, editors, **and inference** — runs offline. App state (sessions, rooms, uploads, SQLite) always lives in the local data volume; only the LLM call is external by default, and this removes even that.
 
