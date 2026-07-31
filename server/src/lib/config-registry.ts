@@ -47,8 +47,19 @@ export const DEFS: ConfigDef[] = [
   { key: 'usageProbeTtlMs', group: 'claude', type: 'int', default: '15000', min: 1000, max: 600000, unit: 'ms' },
   { key: 'usageProbeTimeoutMs', group: 'claude', type: 'int', default: '8000', min: 1000, max: 120000, unit: 'ms' },
 
-  // privacy — non-essential egress to Anthropic (the inference call itself is never affected)
+  // privacy — non-essential egress to Anthropic (the inference call itself is never affected).
+  // Master switch first, then one key per channel; see server/src/claude/privacy.ts for the env each
+  // channel pins. A channel key only has an effect while the master switch is on.
   { key: 'blockNonessentialTraffic', group: 'privacy', type: 'bool', default: '1', env: 'BLOCK_NONESSENTIAL_TRAFFIC' },
+  { key: 'privacyTelemetry', group: 'privacy', type: 'bool', default: '1' },
+  { key: 'privacyErrorReports', group: 'privacy', type: 'bool', default: '1' },
+  { key: 'privacyFeedbackCommands', group: 'privacy', type: 'bool', default: '1' },
+  { key: 'privacyFeedbackSurvey', group: 'privacy', type: 'bool', default: '1' },
+  { key: 'privacyNonEssentialModelCalls', group: 'privacy', type: 'bool', default: '1' },
+  { key: 'privacyAutoUpdater', group: 'privacy', type: 'bool', default: '1' },
+  { key: 'privacyWebFetchPreflight', group: 'privacy', type: 'bool', default: '1' },
+  { key: 'privacyArtifact', group: 'privacy', type: 'bool', default: '1' },
+  { key: 'privacyMarketplace', group: 'privacy', type: 'bool', default: '1' },
 
   // PR review pipeline
   { key: 'reviewAuto', group: 'review', type: 'bool', default: '1', env: 'REVIEW_AUTO' },
