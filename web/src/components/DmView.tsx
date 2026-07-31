@@ -104,7 +104,7 @@ export function DmView() {
             className="input flex-1 resize-none max-h-40" rows={1} value={text} autoFocus
             placeholder={t('dm.composerPlaceholder', { name: label })}
             onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} />
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); } }} />
           <button className="btn-primary shrink-0 !py-2" onClick={send} disabled={!text.trim()}>{t('dm.send')}</button>
         </div>
         <div className="text-[11px] text-txt3 mt-1">{t('dm.composerHint')}</div>

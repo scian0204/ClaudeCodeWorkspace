@@ -609,7 +609,7 @@ function MessageView({ m }: { m: Msg }) {
           <div className="border border-line2 rounded-lg bg-card p-2">
             <textarea className="w-full bg-transparent outline-none resize-none text-sm text-txt" rows={3}
               value={draft} autoFocus onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit(); } if (e.key === 'Escape') setEditing(false); }} />
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); saveEdit(); } if (e.key === 'Escape') setEditing(false); }} />
             <div className="flex gap-2 justify-end mt-1">
               <button className="btn-ghost !py-1 !text-xs" onClick={() => setEditing(false)}>{t('common.cancel')}</button>
               <button className="rounded-md px-3 py-1 text-xs font-semibold text-white bg-clay" onClick={saveEdit}>{t('chat.saveRegenerate')}</button>
@@ -1062,7 +1062,7 @@ function Composer() {
                   if (showAt) { e.preventDefault(); setAtClosed(true); return; }
                   if (showSlash) { e.preventDefault(); setText(''); return; }
                 }
-                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
+                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); }
               }} />
             {uploading && <div className="mt-2"><UploadProgress s={uploading} /></div>}
             <AttachmentList atts={atts} sessionId={c.chatSessionId} onRemove={removeAtt} />
