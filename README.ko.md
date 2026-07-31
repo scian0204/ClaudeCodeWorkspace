@@ -274,6 +274,19 @@ compose 파일이 편하면? build 없는 [`docker-compose.hub.yml`](docker-comp
 
 > **요구사항:** code-server 편집기는 Docker 배포에서만 동작하며, 볼륨 subpath 마운트를 위해 **Docker Engine ≥ 26**이 필요합니다.
 
+### 권장 사양
+
+동시 세션 수와 열린 편집기 수에 따라 리소스 사용량이 늘어남(code-server는 각각 형제 컨테이너).
+
+| | 최소 | 권장 |
+|---|---|---|
+| CPU | 2코어 | 4코어 이상 |
+| RAM | 2 GB | 4~8 GB (편집기 1개당 약 256~512 MB) |
+| 디스크 | 5 GB SSD | 20 GB+ SSD (데이터 볼륨은 프로젝트 따라 증가) |
+| OS · Docker | Linux · Docker Engine ≥ 26 | Linux · Docker Engine ≥ 26 |
+| 아키텍처 | amd64 또는 arm64 (멀티아치 이미지) | — |
+| 네트워크 | `api.anthropic.com` 아웃바운드 HTTPS | — |
+
 ### HTTPS로 PWA 설치
 
 브라우저는 **보안 컨텍스트**에서만 **앱으로 설치**(PWA)를 허용합니다. `http://localhost`는 예외라 로컬에선 되지만, `http://<서버-IP>:3000`에서는 설치 버튼이 뜨지 않습니다. 실제 서버에서 설치하려면 **브라우저가 신뢰하는** 인증서로 HTTPS를 서빙해야 합니다 (자체 서명 인증서를 경고 무시로 통과시키는 것만으로는 부족 — Chrome이 여전히 차단):

@@ -274,6 +274,19 @@ Prefer a compose file? A build-free [`docker-compose.hub.yml`](docker-compose.hu
 
 > **Requirement:** the code-server editor works only in the Docker deployment, and needs **Docker Engine ≥ 26** for volume-subpath mounts.
 
+### Recommended specs
+
+Resource use scales with concurrent sessions and open editors (each code-server is its own sibling container).
+
+| | Minimum | Recommended |
+|---|---|---|
+| CPU | 2 cores | 4+ cores |
+| RAM | 2 GB | 4–8 GB (≈256–512 MB per open editor) |
+| Disk | 5 GB SSD | 20 GB+ SSD (data volume grows with projects) |
+| OS · Docker | Linux · Docker Engine ≥ 26 | Linux · Docker Engine ≥ 26 |
+| Arch | amd64 or arm64 (multi-arch image) | — |
+| Network | outbound HTTPS to `api.anthropic.com` | — |
+
 ### PWA over HTTPS
 
 Browsers only offer **Install as app** (PWA) on a *secure context*. `http://localhost` is exempt, so PWA works locally — but over `http://<server-ip>:3000` it never appears. To install on a real host, serve HTTPS with a **browser-trusted** cert (a self-signed cert with a click-through is not enough — Chrome still blocks it):
