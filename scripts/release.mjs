@@ -1,14 +1,16 @@
 #!/usr/bin/env node
 // Build the app image (multi-arch) and push it to Docker Hub with version + latest + git-sha tags.
 //
-//   node scripts/release.mjs            build & push the CURRENT package.json version
+//   node scripts/release.mjs            build & push (amd64 only — fast)
+//   node scripts/release.mjs --arm      also build linux/arm64 (slow: emulated, occasional use)
 //   node scripts/release.mjs --dry-run  print what it would do (no build, no push)
 //
 // Bump the version first (creates a git tag too):
-//   npm run release:patch | release:minor | release:major
+//   npm run release:patch | release:minor | release:major        (amd64)
+//   npm run release:patch -- --arm                                (+ arm64)
 //
-// Multi-arch (linux/amd64,linux/arm64) via buildx — needs a one-time `docker login`.
-// Override: DOCKER_REPO=you/app · PLATFORMS=linux/amd64 · BUILDX_BUILDER=name
+// buildx build+push — needs a one-time `docker login`.
+// Override: DOCKER_REPO=you/app · PLATFORMS=linux/amd64,linux/arm64 · BUILDX_BUILDER=name
 import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -16,7 +18,8 @@ import { dirname, join } from 'node:path';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const repo = process.env.DOCKER_REPO || 'cian0204/claudecode-workspace';
-const platforms = process.env.PLATFORMS || 'linux/amd64,linux/arm64';
+const multiarch = process.argv.includes('--arm') || process.argv.includes('--multiarch');
+const platforms = process.env.PLATFORMS || (multiarch ? 'linux/amd64,linux/arm64' : 'linux/amd64');
 const builder = process.env.BUILDX_BUILDER || 'ccw-multi';
 const dryRun = process.argv.includes('--dry-run') || process.env.DRY_RUN === '1';
 

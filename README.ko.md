@@ -366,7 +366,7 @@ npm run release:minor   # 새 기능      → 1.1.0
 npm run release         # 버전 안 올리고 현재 버전 재-push
 ```
 
-`release:*`는 `npm version`(→ `package.json` bump + git 태그 `vX.Y.Z`)을 실행한 뒤 `scripts/release.mjs`가 `:X.Y.Z`(불변)·`:latest`(이동)·`:sha-<short>`(커밋 추적) 3개 태그로 build & push 합니다. `node scripts/release.mjs --dry-run`으로 미리보기, `DOCKER_REPO=you/app`로 저장소 변경.
+`release:*`는 `npm version`(→ `package.json` bump + git 태그 `vX.Y.Z`)을 실행한 뒤 `scripts/release.mjs`가 `:X.Y.Z`(불변)·`:latest`(이동)·`:sha-<short>`(커밋 추적) 3개 태그로 build & push 합니다. **기본은 amd64**(빠름); arm64까지 올리려면 `-- --arm`(예: `npm run release:patch -- --arm`) — 에뮬 빌드라 느려서 가끔만. `node scripts/release.mjs --dry-run`으로 미리보기, `DOCKER_REPO=you/app`로 저장소 변경.
 
 ---
 

@@ -366,7 +366,7 @@ npm run release:minor   # new features → 1.1.0
 npm run release         # re-push the current version without bumping
 ```
 
-`release:*` runs `npm version` (bumps `package.json` + git tag `vX.Y.Z`), then `scripts/release.mjs` builds and pushes three tags: `:X.Y.Z` (immutable), `:latest` (moving), `:sha-<short>` (traceable to a commit). Dry-run with `node scripts/release.mjs --dry-run`. Override the repo with `DOCKER_REPO=you/app`.
+`release:*` runs `npm version` (bumps `package.json` + git tag `vX.Y.Z`), then `scripts/release.mjs` builds and pushes three tags: `:X.Y.Z` (immutable), `:latest` (moving), `:sha-<short>` (traceable to a commit). Builds are **amd64 by default** (fast); add `-- --arm` (e.g. `npm run release:patch -- --arm`) to also publish `linux/arm64` — emulated, so slower and used occasionally. Dry-run with `node scripts/release.mjs --dry-run`. Override the repo with `DOCKER_REPO=you/app`.
 
 ---
 
