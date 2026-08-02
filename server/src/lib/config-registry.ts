@@ -27,6 +27,7 @@ export interface ConfigDef {
   options?: string[];   // select choices
   unit?: string;        // UI hint: 'ms' | 'MB' | 'days' | 'bytes' | ''
   image?: boolean;      // docker image value → UI offers presence check + pull/update
+  disabledWhen?: string; // bool key that overrides this one — UI locks the row while that key is on
 }
 
 const DEFAULT_MODELS = '{"claude-opus-4-8":"Opus 4.8","claude-sonnet-5":"Sonnet 5","claude-haiku-4-5-20251001":"Haiku 4.5"}';
@@ -48,18 +49,13 @@ export const DEFS: ConfigDef[] = [
   { key: 'usageProbeTimeoutMs', group: 'claude', type: 'int', default: '8000', min: 1000, max: 120000, unit: 'ms' },
 
   // privacy — non-essential egress to Anthropic (the inference call itself is never affected).
-  // Master switch first, then one key per channel; see server/src/claude/privacy.ts for the env each
-  // channel pins. A channel key only has an effect while the master switch is on.
+  // Every key here means the same thing: on = blocked. The master switch OVERRIDES the channel keys
+  // (on = block everything), so they are locked in the UI while it is on. See privacy.ts for the env.
   { key: 'blockNonessentialTraffic', group: 'privacy', type: 'bool', default: '1', env: 'BLOCK_NONESSENTIAL_TRAFFIC' },
-  { key: 'privacyTelemetry', group: 'privacy', type: 'bool', default: '1' },
-  { key: 'privacyErrorReports', group: 'privacy', type: 'bool', default: '1' },
-  { key: 'privacyFeedbackCommands', group: 'privacy', type: 'bool', default: '1' },
-  { key: 'privacyFeedbackSurvey', group: 'privacy', type: 'bool', default: '1' },
-  { key: 'privacyNonEssentialModelCalls', group: 'privacy', type: 'bool', default: '1' },
-  { key: 'privacyAutoUpdater', group: 'privacy', type: 'bool', default: '1' },
-  { key: 'privacyWebFetchPreflight', group: 'privacy', type: 'bool', default: '1' },
-  { key: 'privacyArtifact', group: 'privacy', type: 'bool', default: '1' },
-  { key: 'privacyMarketplace', group: 'privacy', type: 'bool', default: '1' },
+  ...(['privacyTelemetry', 'privacyErrorReports', 'privacyFeedbackCommands', 'privacyFeedbackSurvey',
+       'privacyNonEssentialModelCalls', 'privacyAutoUpdater', 'privacyWebFetchPreflight',
+       'privacyArtifact', 'privacyMarketplace'] as const).map((key): ConfigDef =>
+    ({ key, group: 'privacy', type: 'bool', default: '1', disabledWhen: 'blockNonessentialTraffic' })),
 
   // PR review pipeline
   { key: 'reviewAuto', group: 'review', type: 'bool', default: '1', env: 'REVIEW_AUTO' },
@@ -222,7 +218,7 @@ export function resetConfigValue(key: string): void {
 export interface ConfigItemDto {
   key: string; group: string; type: ConfigType; unit?: string;
   restart: boolean; readonly: boolean; secret: boolean;
-  min?: number; max?: number; options?: string[]; image?: boolean;
+  min?: number; max?: number; options?: string[]; image?: boolean; disabledWhen?: string;
   default: string; overridden: boolean;
   value?: string;   // omitted for secrets
   set?: boolean;    // secrets only: is a non-default value configured
@@ -235,7 +231,7 @@ export function listConfigForApi(): ConfigItemDto[] {
     const base: ConfigItemDto = {
       key: d.key, group: d.group, type: d.type, unit: d.unit,
       restart: !!d.restart, readonly: !!d.readonly, secret: !!d.secret,
-      min: d.min, max: d.max, options: d.options, image: !!d.image,
+      min: d.min, max: d.max, options: d.options, image: !!d.image, disabledWhen: d.disabledWhen,
       default: d.default, overridden,
     };
     if (d.secret) return { ...base, set: val !== '' && val !== d.default };

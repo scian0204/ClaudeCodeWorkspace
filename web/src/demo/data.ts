@@ -328,8 +328,12 @@ export const ADMIN = {
     { key: 'maxConcurrentTurns', group: 'claude', type: 'int', value: '3', default: '3', min: 1, max: 100, restart: false, readonly: false, secret: false, overridden: false },
     ...['blockNonessentialTraffic', 'privacyTelemetry', 'privacyErrorReports', 'privacyFeedbackCommands',
         'privacyFeedbackSurvey', 'privacyNonEssentialModelCalls', 'privacyAutoUpdater',
-        'privacyWebFetchPreflight', 'privacyArtifact', 'privacyMarketplace'].map((key) =>
-      ({ key, group: 'privacy', type: 'bool', value: '1', default: '1', restart: false, readonly: false, secret: false, overridden: false })),
+        'privacyWebFetchPreflight', 'privacyArtifact', 'privacyMarketplace'].map((key) => ({
+      key, group: 'privacy', type: 'bool', value: '1', default: '1',
+      restart: false, readonly: false, secret: false, overridden: false,
+      // every channel is overridden by the master switch → locked in the UI while it is on
+      ...(key === 'blockNonessentialTraffic' ? {} : { disabledWhen: 'blockNonessentialTraffic' }),
+    })),
     { key: 'reviewAuto', group: 'review', type: 'bool', value: '1', default: '1', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'reviewPollMs', group: 'review', type: 'int', value: '60000', default: '60000', unit: 'ms', min: 0, restart: false, readonly: false, secret: false, overridden: false },
     { key: 'reviewTurnTimeoutMs', group: 'review', type: 'int', value: '1800000', default: '1800000', unit: 'ms', min: 60000, max: 7200000, restart: false, readonly: false, secret: false, overridden: false },

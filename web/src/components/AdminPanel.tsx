@@ -313,9 +313,12 @@ function ConfigManager() {
               {(g === 'infra' || g === 'secret') && (
                 <div className="text-[11px] text-txt3 mb-2">{t(g === 'secret' ? 'admin.cfgSecretHint' : 'admin.cfgReadonlyHint')}</div>
               )}
+              {g === 'privacy' && <div className="text-[11px] text-txt3 mb-2">{t('admin.cfgPrivacyHint')}</div>}
               <div className="divide-y divide-line">
                 {rows.map((it) => (
                   <ConfigRow key={it.key} it={it} edit={edits[it.key]}
+                    locked={!!it.disabledWhen && items.find((m) => m.key === it.disabledWhen)?.value === '1'}
+                    lockedBy={it.disabledWhen}
                     onEdit={(v) => setEdits((e) => ({ ...e, [it.key]: v }))} onSave={save} onReset={reset} />
                 ))}
               </div>
@@ -327,8 +330,8 @@ function ConfigManager() {
   );
 }
 
-function ConfigRow({ it, edit, onEdit, onSave, onReset }: {
-  it: any; edit: string | undefined; onEdit: (v: string) => void;
+function ConfigRow({ it, edit, locked, lockedBy, onEdit, onSave, onReset }: {
+  it: any; edit: string | undefined; locked?: boolean; lockedBy?: string; onEdit: (v: string) => void;
   onSave: (k: string, v: any) => void; onReset: (k: string) => void;
 }) {
   const t = useT();
@@ -338,7 +341,7 @@ function ConfigRow({ it, edit, onEdit, onSave, onReset }: {
   const dirty = edit !== undefined && edit !== String(cur);
   const editable = !it.readonly && !it.secret;
   return (
-    <div className="py-2.5">
+    <div className={`py-2.5${locked ? ' opacity-50' : ''}`}>
       <div className="flex items-start gap-2 flex-wrap">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 flex-wrap">
@@ -348,6 +351,7 @@ function ConfigRow({ it, edit, onEdit, onSave, onReset }: {
             {it.overridden && <button className="text-txt3 hover:text-clay" title={t('admin.cfgReset')} aria-label={t('admin.cfgReset')} onClick={() => onReset(it.key)}><IconRotateCcw size={14} /></button>}
           </div>
           {desc && <p className="text-[11px] text-txt3 mt-0.5 leading-snug">{desc}</p>}
+          {locked && <p className="text-[11px] text-txt3 mt-0.5 leading-snug italic">{t('admin.cfgLockedBy', { name: cfgLabel(t, lockedBy || '') })}</p>}
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           {it.secret ? (
@@ -359,7 +363,9 @@ function ConfigRow({ it, edit, onEdit, onSave, onReset }: {
           ) : it.type === 'json' ? (
             <span className="text-[11px] text-txt3 inline-flex items-center gap-1">{t('admin.cfgJsonBelow')}<IconChevronDown size={12} /></span>
           ) : it.type === 'bool' ? (
-            <input type="checkbox" checked={it.value === '1'} onChange={(e) => onSave(it.key, e.target.checked)} />
+            // while locked, show the effective state (the overriding key forces it on), not the stored one
+            <input type="checkbox" checked={locked || it.value === '1'} disabled={locked}
+              onChange={(e) => onSave(it.key, e.target.checked)} />
           ) : it.type === 'select' ? (
             <select className="input" value={cur} onChange={(e) => onSave(it.key, e.target.value)}>
               {(it.options || []).map((o: string) => <option key={o} value={o}>{o}</option>)}

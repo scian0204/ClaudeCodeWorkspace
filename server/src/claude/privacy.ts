@@ -7,9 +7,10 @@
 //
 // Source of truth: https://code.claude.com/docs/en/data-usage#telemetry-services
 //
-// Two layers of admin control: a master switch (`blockNonessentialTraffic`) that turns the whole
-// thing on/off, and one key per channel so an operator can let a single one back through (e.g. ship
-// metrics to their own OTel collector) while the rest stay blocked.
+// Two layers of admin control. The master switch (`blockNonessentialTraffic`) is an OVERRIDE, not a
+// gate: on = every channel is blocked and the per-channel keys are ignored (the admin panel greys
+// them out). Turn it off to pick channel by channel — e.g. let metrics through to your own OTel
+// collector while the rest stay blocked. Every key means the same thing: on = blocked.
 
 export const PRIVACY_MASTER = 'blockNonessentialTraffic';
 
@@ -73,7 +74,7 @@ export const PRIVACY_CHANNELS: PrivacyChannel[] = [
 ];
 
 export interface PrivacyPlan {
-  active: boolean;                      // false = master off, leave the inherited env untouched
+  active: boolean;                      // false = nothing blocked, leave the inherited env untouched
   env: Record<string, string>;
   strip: string[];
   settings: Record<string, unknown>;
@@ -83,11 +84,12 @@ export interface PrivacyPlan {
 // kept as a parameter so this module stays DB-free and testable.
 export function privacyPlan(on: (key: string) => boolean): PrivacyPlan {
   const plan: PrivacyPlan = { active: false, env: {}, strip: [], settings: {} };
-  if (!on(PRIVACY_MASTER)) return plan;
-  plan.active = true;
+  const master = on(PRIVACY_MASTER);
+  const blocked = (key: string) => master || on(key); // master overrides every channel key
   let allUmbrella = true;
   for (const c of PRIVACY_CHANNELS) {
-    if (!on(c.key)) { if (c.umbrella) allUmbrella = false; continue; }
+    if (!blocked(c.key)) { if (c.umbrella) allUmbrella = false; continue; }
+    plan.active = true;
     Object.assign(plan.env, c.env);
     if (c.strip) plan.strip.push(...c.strip);
     if (c.settings) Object.assign(plan.settings, c.settings);
@@ -127,6 +129,10 @@ if (process.env.PRIVACY_SELFCHECK) {
   const env = hostile();
   const full = privacyPlan(allOn);
   applyPrivacyEnv(env, full);
+  // master alone must block every channel even with all the per-channel keys off
+  const masterOnly = privacyPlan((k) => k === PRIVACY_MASTER);
+  assert(JSON.stringify(masterOnly.env) === JSON.stringify(full.env), 'master alone blocks every channel');
+  assert(masterOnly.settings.skipWebFetchPreflight === true, 'master alone covers the preflight setting too');
   assert(env.DISABLE_TELEMETRY === '1', 'host DISABLE_TELEMETRY=0 overridden to 1');
   assert(!('BETA_TRACING_ENDPOINT' in env), 'inherited tracing endpoint stripped');
   assert(!('OTEL_EXPORTER_OTLP_HEADERS' in env), 'inherited OTLP headers stripped');
@@ -135,15 +141,17 @@ if (process.env.PRIVACY_SELFCHECK) {
   assert(full.settings.skipWebFetchPreflight === true, 'WebFetch preflight skipped');
   assert(privacyEnvList(full).includes('DO_NOT_TRACK=1'), 'docker Env list carries the same vars');
 
-  // master off → inherited env survives untouched
+  // nothing on at all → inherited env survives untouched
   const envOff = hostile();
-  applyPrivacyEnv(envOff, privacyPlan(off(PRIVACY_MASTER)));
+  const none = privacyPlan(() => false);
+  assert(!none.active, 'no switch on → inactive plan');
+  applyPrivacyEnv(envOff, none);
   assert(envOff.DISABLE_TELEMETRY === '0' && envOff.BETA_TRACING_ENDPOINT === 'https://collector.example',
-    'master off leaves the inherited env alone');
+    'everything off leaves the inherited env alone');
 
-  // one covered channel re-enabled → its vars are gone AND the umbrella must not sneak it back off
+  // master off + one covered channel off → its vars are gone AND the umbrella must not sneak it back off
   const envTel = hostile();
-  const partial = privacyPlan(off('privacyTelemetry'));
+  const partial = privacyPlan(off(PRIVACY_MASTER, 'privacyTelemetry'));
   applyPrivacyEnv(envTel, partial);
   assert(!('CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC' in partial.env), 'umbrella withheld when a covered channel is off');
   assert(envTel.DISABLE_TELEMETRY === '0', 'telemetry channel off → its vars are not pinned');
@@ -151,10 +159,13 @@ if (process.env.PRIVACY_SELFCHECK) {
   assert(envTel.DISABLE_ERROR_REPORTING === '1', 'other channels still applied');
 
   // a non-umbrella channel off must NOT withhold the umbrella var
-  assert(privacyPlan(off('privacyArtifact')).env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC === '1',
+  assert(privacyPlan(off(PRIVACY_MASTER, 'privacyArtifact')).env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC === '1',
     'non-umbrella channel off still allows the umbrella var');
-  assert(privacyPlan(off('privacyWebFetchPreflight')).settings.skipWebFetchPreflight === undefined,
+  assert(privacyPlan(off(PRIVACY_MASTER, 'privacyWebFetchPreflight')).settings.skipWebFetchPreflight === undefined,
     'preflight channel off → setting not sent');
+  // ...but with the master back on, an "off" channel key is overridden, not honoured
+  assert(privacyPlan(off('privacyWebFetchPreflight')).settings.skipWebFetchPreflight === true,
+    'master on overrides an off channel key');
   // eslint-disable-next-line no-console
   console.log('privacy.ts self-check ok');
 }
