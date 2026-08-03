@@ -86,8 +86,9 @@ export type Source = { key: string; label: string };
 
 // Generic file-explorer modal: a tree pane + a preview pane (image / markdown / text).
 // `loadTree` returns a map keyed by each source.key; single source hides the tab bar.
+// `initialDir`/`initialPath` open straight onto one file (a search hit jumping to a wiki article).
 export function FileExplorer({
-  title, width = 780, sources, loadTree, fileUrl, blobUrl, onClose,
+  title, width = 780, sources, loadTree, fileUrl, blobUrl, onClose, initialDir, initialPath,
 }: {
   title: string;
   width?: number;
@@ -96,9 +97,11 @@ export function FileExplorer({
   fileUrl: (dir: string, path: string) => string;
   blobUrl: (dir: string, path: string) => string;
   onClose: () => void;
+  initialDir?: string;
+  initialPath?: string;
 }) {
   const t = useT();
-  const [dir, setDir] = useState(sources[0].key);
+  const [dir, setDir] = useState(initialDir && sources.some((s) => s.key === initialDir) ? initialDir : sources[0].key);
   const [tree, setTree] = useState<Record<string, FileItem[]> | null>(null);
   const [sel, setSel] = useState<string | null>(null);
   const [file, setFile] = useState<{ name: string; content: string } | null>(null);
@@ -122,6 +125,14 @@ export function FileExplorer({
     } catch (e: any) { useStore.getState().setError(e.message); }
     finally { setLoading(false); }
   };
+
+  // Search hit: once the tree lands, expand the file's folders and preview it right away.
+  useEffect(() => {
+    if (!initialPath || !tree) return;
+    const parts = initialPath.split('/').slice(0, -1);
+    setOpenMap((m) => ({ ...m, ...Object.fromEntries(parts.map((_, i) => [parts.slice(0, i + 1).join('/'), true])) }));
+    void openFile(initialPath);
+  }, [tree, initialPath]);
 
   const list = tree ? tree[dir] || [] : [];
   const nodes = buildTree(list);

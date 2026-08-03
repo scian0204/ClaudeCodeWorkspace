@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore, type DmChannel } from '../lib/store';
 import { Avatar, avatarUrl, MobileMenuButton } from '../lib/ui';
+import { SearchButton } from './SearchPalette';
 import { useT } from '../lib/i18n';
 import { IconUsers } from '../lib/icons';
 
@@ -33,6 +34,7 @@ export function DmView() {
       <div className="h-full flex flex-col">
         <div className="flex items-center gap-2.5 px-3 md:px-5 py-2.5 border-b border-line shrink-0">
           <MobileMenuButton />
+          <SearchButton />
           <span className="text-txt3 text-sm">{t('dm.notFound')}</span>
         </div>
       </div>
@@ -59,6 +61,7 @@ export function DmView() {
       {/* header */}
       <div className="flex items-center gap-2.5 px-3 md:px-5 py-2.5 border-b border-line shrink-0">
         <MobileMenuButton />
+        <SearchButton />
         {ch.kind === 'group'
           ? <div className="avatar" style={{ width: 28, height: 28, background: 'var(--line2, #888)' }}><IconUsers size={15} /></div>
           : <Avatar name={other?.displayName} color={other?.avatarColor} src={avatarUrl(other && { id: other.userId, avatar: other.avatar })} />}

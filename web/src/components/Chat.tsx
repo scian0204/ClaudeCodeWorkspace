@@ -10,6 +10,7 @@ import { MembersDialog } from './MembersDialog';
 import { WikiExplorer } from './WikiExplorer';
 import { FileExplorer } from './FileExplorer';
 import { GitPanel } from './GitPanel';
+import { SearchButton } from './SearchPalette';
 import { SourcesPanel, CiteHighlighter } from './SourcesPanel';
 import { extractSources, markCitations, type WikiSource } from '../lib/wikiCite';
 import { md } from '../lib/md';
@@ -86,6 +87,7 @@ function Header() {
   return (
     <header className="flex items-center gap-2 md:gap-2.5 px-3 md:px-4 py-2.5 border-b border-line bg-panel shrink-0 flex-wrap">
       <MobileMenuButton />
+      <SearchButton />
       <div className="font-semibold text-sm flex items-center gap-2 min-w-0">
         <span className="w-[7px] h-[7px] rounded-full bg-ok shrink-0" />
         <span className="truncate">{c.title}</span>
@@ -508,8 +510,18 @@ function segmentMessages(messages: Msg[]): Segment[] {
 
 function ChatPane() {
   const { current: c, messages, live, viewMode } = useStore();
+  const highlight = useStore((s) => s.highlightMsgId);
   const streamRef = useRef<HTMLDivElement>(null);
-  useEffect(() => { streamRef.current?.scrollTo({ top: streamRef.current.scrollHeight }); }, [messages, live]);
+  const jumpedRef = useRef<string | null>(null); // ChatPane is keyed by session, so this resets on switch
+  // Normally pin to the newest message. A search hit instead scrolls its target into view — once
+  // (jumpedRef), so later turns in the same thread go back to following the bottom.
+  useEffect(() => {
+    if (highlight && jumpedRef.current !== highlight) {
+      const el = document.getElementById(`msg-${highlight}`);
+      if (el) { jumpedRef.current = highlight; el.scrollIntoView({ block: 'center' }); return; }
+    }
+    streamRef.current?.scrollTo({ top: streamRef.current.scrollHeight });
+  }, [messages, live, highlight]);
   const segments = useMemo(() => segmentMessages(messages), [messages]);
   if (!c) return null;
 
@@ -535,7 +547,9 @@ const mmdd = (ts: number) => new Date(ts).toLocaleDateString([], { month: '2-dig
 const sameDay = (a: number, b: number) => new Date(a).toDateString() === new Date(b).toDateString();
 
 function FoldedSegment({ seg }: { seg: Segment }) {
-  const [open, setOpen] = useState(false);
+  const highlight = useStore((s) => s.highlightMsgId);
+  // a search hit inside a folded /clear|/compact block opens it, else the target would be unreachable
+  const [open, setOpen] = useState(() => !!highlight && seg.msgs.some((m) => m.id === highlight));
   const t = useT();
   const a = seg.msgs[0].createdAt;
   const b = seg.msgs[seg.msgs.length - 1].createdAt;
@@ -561,6 +575,7 @@ function FoldedSegment({ seg }: { seg: Segment }) {
 }
 
 function MessageView({ m }: { m: Msg }) {
+  const highlighted = useStore((s) => s.highlightMsgId) === m.id; // search hit landed here
   const isClaude = m.role === 'assistant';
   const blocks: Block[] = isClaude ? (m.content.blocks || []) : [];
   const topicId = useStore((s) => s.current?.wikiTopicId);
@@ -591,7 +606,7 @@ function MessageView({ m }: { m: Msg }) {
   };
 
   return (
-    <div className="group flex gap-3 mb-5">
+    <div id={`msg-${m.id}`} className={`group flex gap-3 mb-5 ${highlighted ? 'ring-2 ring-clay rounded-lg -m-1 p-1 scroll-mt-6' : ''}`}>
       <Avatar name={m.authorName || undefined} claude={isClaude} color={colorFromMsg(m)} />
       <div className="flex-1 min-w-0">
         <div className="text-xs text-txt2 font-semibold mb-1 flex items-center gap-2">

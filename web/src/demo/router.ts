@@ -42,6 +42,115 @@ function sessionFor(id: string) {
 }
 const msgs = (id: string) => (db.messages[id] || (db.messages[id] = []));
 
+// ── unified search (demo) ──────────────────────────────────────────────────
+// Same hit shape + group order as the real endpoint; visibility is trivial here (the demo user is
+// an admin and every seed row belongs to them), so this only re-implements the matching + snippet.
+const MIN_Q = 2;
+const PER_TYPE = 8;
+const hasText = (s: any, n: string) => typeof s === 'string' && s.toLowerCase().includes(n);
+// flatten a message's content the way the server does: prose + tool name/input/output
+function msgText(content: any): string {
+  if (!content || typeof content !== 'object') return '';
+  const parts: string[] = [];
+  if (typeof content.text === 'string') parts.push(content.text);
+  for (const b of Array.isArray(content.blocks) ? content.blocks : []) {
+    if (b?.type === 'text') parts.push(String(b.text || ''));
+    else if (b?.type === 'tool_use') parts.push(`${b.name || ''} ${JSON.stringify(b.input ?? '')} ${b.output || ''}`);
+  }
+  return parts.join('\n');
+}
+function snip(text: string, n: string, width = 180): string {
+  const flat = String(text).replace(/\s+/g, ' ').trim();
+  const i = flat.toLowerCase().indexOf(n);
+  if (i < 0) return flat.slice(0, width) + (flat.length > width ? '…' : '');
+  const start = Math.max(0, i - Math.floor(width / 3));
+  const end = Math.min(flat.length, start + width);
+  return (start > 0 ? '…' : '') + flat.slice(start, end) + (end < flat.length ? '…' : '');
+}
+// which surface a chat-session id belongs to → the nav the client dispatches on
+function chatNav(sessionId: string): { nav: any; label: string } | null {
+  const s = db.sessions.find((x) => x.id === sessionId);
+  if (s) return { nav: { kind: 'private', sessionId }, label: s.title };
+  const r = db.rooms.find((x) => x.chatSessionId === sessionId);
+  if (r) return { nav: { kind: 'room', roomId: r.id }, label: r.name };
+  const w = db.wikiTopics.find((x) => `cs_${x.id}` === sessionId);
+  if (w) return { nav: { kind: 'wiki', topicId: w.id }, label: w.name };
+  const rv = db.reviewSessions.find((x: any) => x.chatSessionId === sessionId);
+  if (rv) return { nav: { kind: 'review', reviewId: rv.id }, label: `#${rv.prNumber} ${rv.prTitle}` };
+  return null;
+}
+function searchDemo(raw: string) {
+  const q = raw.trim();
+  if (q.length < MIN_Q) return { q, hits: [], minChars: MIN_Q };
+  const n = q.toLowerCase();
+  const hits: any[] = [];
+  const cap = (type: string) => hits.reduce((a, h) => a + (h.type === type ? 1 : 0), 0) < PER_TYPE;
+
+  for (const [sid, list] of Object.entries(db.messages)) {
+    const ctx = chatNav(sid); if (!ctx) continue;
+    for (const m of list as any[]) {
+      if (!cap('chat')) break;
+      const text = msgText(m.content);
+      if (!hasText(text, n)) continue;
+      hits.push({ type: 'chat', id: `chat:${m.id}`, title: ctx.label, subtitle: m.authorName || 'Claude',
+        snippet: snip(text, n), ts: m.createdAt, nav: { ...ctx.nav, messageId: m.id } });
+    }
+  }
+  for (const s of db.sessions) {
+    if (!cap('session') || !hasText(s.title, n)) continue;
+    hits.push({ type: 'session', id: `session:${s.id}`, title: s.title, ts: s.updatedAt, nav: { kind: 'private', sessionId: s.id } });
+  }
+  for (const r of db.rooms) {
+    if (!cap('room') || !hasText(r.name, n)) continue;
+    hits.push({ type: 'room', id: `room:${r.id}`, title: r.name, subtitle: r.members.map((m: any) => m.displayName).join(', '), nav: { kind: 'room', roomId: r.id } });
+  }
+  const chLabel = (c: any) => (c.kind === 'group' ? c.name || 'Group' : c.members.find((m: any) => m.userId !== db.me.id)?.displayName || 'DM');
+  for (const [cid, list] of Object.entries(db.dmMessages)) {
+    const c = db.dmChannels.find((x: any) => x.id === cid); if (!c) continue;
+    for (const m of list as any[]) {
+      if (!cap('dm') || !hasText(m.text, n)) continue;
+      hits.push({ type: 'dm', id: `dm:${m.id}`, title: chLabel(c), subtitle: db.users.find((u: any) => u.id === m.userId)?.displayName || '',
+        snippet: snip(m.text, n), ts: m.createdAt, nav: { kind: 'channel', channelId: cid } });
+    }
+  }
+  for (const c of db.dmChannels) {
+    if (!cap('channel') || !hasText(c.name, n)) continue;
+    hits.push({ type: 'channel', id: `channel:${c.id}`, title: chLabel(c), subtitle: c.members.map((m: any) => m.displayName).join(', '), nav: { kind: 'channel', channelId: c.id } });
+  }
+  for (const p of [...db.projects.common, ...db.projects.mine, ...Object.values(db.roomProjects).flat()]) {
+    if (!cap('project') || (!hasText(p.name, n) && !hasText(p.path, n))) continue;
+    hits.push({ type: 'project', id: `project:${p.id}`, title: p.name, subtitle: p.path, nav: { kind: 'project', projectId: p.id } });
+  }
+  for (const w of db.wikiTopics) {
+    if (!cap('wiki') || (!hasText(w.name, n) && !hasText(w.description, n))) continue;
+    hits.push({ type: 'wiki', id: `wiki:${w.id}`, title: w.name, snippet: hasText(w.description, n) ? snip(w.description, n) : undefined,
+      ts: w.createdAt, nav: { kind: 'wiki', topicId: w.id } });
+  }
+  for (const w of db.wikiTopics) {
+    for (const [dir, files] of [['wiki', WIKI_ARTICLES], ['raw', WIKI_RAW]] as const) {
+      for (const f of files as any[]) {
+        if (!cap('wikiFile')) break;
+        const body = dir === 'wiki' ? f.content : wikiFileContent('raw', f.name);
+        if (!hasText(body, n) && !hasText(f.name, n)) continue;
+        hits.push({ type: 'wikiFile', id: `wikiFile:${w.id}:${dir}:${f.name}`, title: f.name, subtitle: `${w.name} · ${dir}/`,
+          snippet: hasText(body, n) ? snip(body, n) : undefined, nav: { kind: 'wikiFile', topicId: w.id, dir, filePath: f.name } });
+      }
+    }
+  }
+  for (const s of db.reviewSessions as any[]) {
+    const blob = `#${s.prNumber} ${s.prTitle} ${s.repoName} ${s.authorLogin} ${s.verdictSummary || ''}`;
+    if (!cap('review') || !hasText(blob, n)) continue;
+    hits.push({ type: 'review', id: `review:${s.id}`, title: `#${s.prNumber} ${s.prTitle}`, subtitle: `${s.repoName} · ${s.authorLogin}`,
+      snippet: hasText(s.verdictSummary, n) ? snip(s.verdictSummary, n) : undefined, ts: s.updatedAt, nav: { kind: 'review', reviewId: s.id } });
+  }
+  for (const u of db.users as any[]) {
+    if (!cap('user') || u.id === db.me.id) continue;
+    if (!hasText(u.displayName, n) && !hasText(u.username, n)) continue;
+    hits.push({ type: 'user', id: `user:${u.id}`, title: u.displayName, subtitle: `@${u.username}`, nav: { kind: 'user', userId: u.id } });
+  }
+  return { q, hits, minChars: MIN_Q };
+}
+
 export function route(method: string, rawPath: string, body?: any): Res {
   const P = rawPath.split('?')[0];
   const query = new URLSearchParams(rawPath.split('?')[1] || '');
@@ -60,7 +169,10 @@ export function route(method: string, rawPath: string, body?: any): Res {
   if (P === '/api/auth/me/avatar') { db.me.avatar = M === 'DELETE' ? null : (b.avatarDataUrl || db.me.avatar); return ok({ user: db.me }); }
 
   // ---- client-facing config (model dropdown) ----
-  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, processPollMs: 5000 });
+  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, processPollMs: 5000 });
+
+  // ---- unified search (mirrors server/src/routes/search.ts over the seed data) ----
+  if (P === '/api/search') return ok(searchDemo(String(query.get('q') || '')));
 
   // ---- member requests (approval workflow) ----
   if (P === '/api/requests/actions') return ok({ actions: REQUEST_ACTIONS });

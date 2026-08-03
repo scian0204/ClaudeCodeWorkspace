@@ -23,6 +23,15 @@ export interface DmChannel { id: string; kind: 'dm' | 'group'; name: string | nu
 export interface DmMessage { id: string; channelId: string; userId: string; text: string; createdAt: number; }
 export interface AdminRequest { id: string; requesterId: string; type: string; payload: string; reason: string; status: 'pending' | 'approved' | 'rejected'; reviewerId: string | null; decidedAt: number | null; result: string | null; createdAt: number; updatedAt: number; }
 export interface RequestAction { type: string; label: string; fields: { key: string; type: 'text' | 'textarea'; required: boolean }[]; }
+// Unified search (GET /api/search) — mirrors server/src/routes/search.ts Hit/HitNav.
+export type HitType = 'chat' | 'session' | 'room' | 'dm' | 'channel' | 'project' | 'wiki' | 'wikiFile' | 'review' | 'user';
+export interface HitNav {
+  kind: 'private' | 'room' | 'wiki' | 'review' | 'channel' | 'project' | 'wikiFile' | 'user';
+  sessionId?: string; roomId?: string; topicId?: string; reviewId?: string;
+  channelId?: string; projectId?: string; userId?: string;
+  messageId?: string; dir?: 'raw' | 'wiki'; filePath?: string;
+}
+export interface SearchHit { type: HitType; id: string; title: string; subtitle?: string; snippet?: string; ts?: number; nav: HitNav; }
 export interface Live { blocks: Block[]; toolMap: Record<string, number>; }
 export interface QueueState { running: { id: string; author: { id: string; name: string } } | null; waiting: { id: string; author: { id: string; name: string } }[]; }
 export interface Control { canApprove: boolean; canInterrupt: boolean; canSetMode: boolean; isOwner: boolean; delegable: string[]; }
@@ -52,6 +61,9 @@ interface State {
   llmProvidersEnabled: boolean;  // admin feature flag (from /api/config) — gates the LLM provider UI
   approvalsEnabled: boolean;     // admin feature flag (from /api/config) — gates the member-request UI
   dmEnabled: boolean;            // admin feature flag (from /api/config) — gates the DM/group chat UI
+  searchEnabled: boolean;        // admin feature flag (from /api/config) — gates the unified-search UI
+  searchOpen: boolean;           // unified-search palette (Ctrl/Cmd+K)
+  highlightMsgId: string | null; // message a search hit jumped to (scroll target + ring)
   processPollMs: number;         // admin process panel auto-poll interval (from /api/config)
   channels: DmChannel[];         // DM + group chat channels the user belongs to
   activeChannelId: string | null; // open DM/group channel (main panel shows DmView when set)
@@ -79,6 +91,9 @@ interface State {
   openWiki: (topicId: string) => Promise<void>;
   openReview: (reviewId: string) => Promise<void>;
   openChannel: (id: string) => Promise<void>;
+  setSearchOpen: (open: boolean) => void;
+  setHighlightMsgId: (id: string | null) => void;
+  openHit: (hit: SearchHit) => Promise<void>;
   sendDm: (text: string) => void;
   createDm: (userId: string) => Promise<void>;
   createGroup: (name: string, memberIds: string[]) => Promise<void>;
@@ -135,7 +150,7 @@ export const useStore = create<State>((set, get) => ({
   current: null, messages: [], live: null, turnActive: false,
   queue: { running: null, waiting: [] }, pending: [],
   control: { canApprove: true, canInterrupt: true, canSetMode: true, isOwner: true, delegable: [] },
-  presence: [], congested: false, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, processPollMs: 5000, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
+  presence: [], congested: false, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, searchOpen: false, highlightMsgId: null, processPollMs: 5000, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
   channels: [], activeChannelId: null, channelMessages: [],
   commands: [],
 
@@ -158,7 +173,7 @@ export const useStore = create<State>((set, get) => ({
 
   logout: async () => {
     await api.post('/api/auth/logout');
-    set({ user: null, current: null, messages: [], sessions: [], rooms: [], wikiTopics: [], reviewRepos: [], reviewSessions: [], requests: [], pendingRequestCount: 0, channels: [], activeChannelId: null, channelMessages: [] });
+    set({ user: null, current: null, messages: [], sessions: [], rooms: [], wikiTopics: [], reviewRepos: [], reviewSessions: [], requests: [], pendingRequestCount: 0, channels: [], activeChannelId: null, channelMessages: [], searchOpen: false, highlightMsgId: null });
   },
 
   toggleTheme: () => {
@@ -184,6 +199,7 @@ export const useStore = create<State>((set, get) => ({
       llmProvidersEnabled: cf.llmProvidersEnabled !== false,
       approvalsEnabled: cf.approvalsEnabled !== false,
       dmEnabled: cf.dmEnabled !== false,
+      searchEnabled: cf.searchEnabled !== false,
       channels: dmc.channels || [],
       processPollMs: cf.processPollMs || 5000,
     });
@@ -324,6 +340,27 @@ export const useStore = create<State>((set, get) => ({
   markReadDm: (id) => {
     getSocket().emit('dm:read', { channelId: id });
     set({ channels: get().channels.map((c) => (c.id === id ? { ...c, unread: 0 } : c)) }); // optimistic
+  },
+
+  // ── unified search ──
+  setSearchOpen: (open) => set({ searchOpen: open, sidebarOpen: false }),
+  setHighlightMsgId: (id) => set({ highlightMsgId: id }),
+  // Navigate to a search hit. Reuses the existing openers so a hit lands exactly where the sidebar
+  // would put you; 'project' / 'wikiFile' are explorer targets handled by SearchPalette itself.
+  openHit: async (hit) => {
+    const n = hit.nav;
+    set({ searchOpen: false, panel: null, highlightMsgId: null });
+    switch (n.kind) {
+      case 'private': if (n.sessionId) await get().openPrivate(n.sessionId); break;
+      case 'room': if (n.roomId) await get().openRoom(n.roomId); break;
+      case 'wiki': if (n.topicId) await get().openWiki(n.topicId); break;
+      case 'review': if (n.reviewId) await get().openReview(n.reviewId); break;
+      case 'channel': if (n.channelId) await get().openChannel(n.channelId); break;
+      case 'user': if (n.userId && get().dmEnabled) await get().createDm(n.userId); break; // find-or-create the 1:1
+      default: return; // project / wikiFile: the palette opens a file explorer instead
+    }
+    // set AFTER the open — join() clears it so a plain session switch never keeps a stale ring
+    if (n.messageId) set({ highlightMsgId: n.messageId });
   },
 
   newSession: async () => {
@@ -492,6 +529,7 @@ async function join(set: any, get: () => State, cur: Current, messages: Msg[]) {
     current: cur, messages, live: null, turnActive: false,
     queue: { running: null, waiting: [] }, pending: [], presence: [],
     viewMode: 'chat', editorUrl: null, commands: [], sidebarOpen: false, // opening a thread closes the mobile drawer
+    highlightMsgId: null, // a plain thread switch drops any search-hit highlight
     activeChannelId: null, channelMessages: [], // opening a Claude thread hides any open DM view
   });
   // fetch the real slash commands (built-in + plugin + skill) the CLI exposes (non-blocking)

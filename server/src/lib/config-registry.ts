@@ -98,6 +98,12 @@ export const DEFS: ConfigDef[] = [
   { key: 'attachmentMaxMB', group: 'features', type: 'int', default: '20', min: 1, max: 200, unit: 'MB' },
   { key: 'attachmentMaxCount', group: 'features', type: 'int', default: '10', min: 1, max: 50 },
 
+  // workspace-wide search (routes/search.ts) — off hard-404s the endpoint AND hides the UI
+  { key: 'searchEnabled', group: 'search', type: 'bool', default: '1' },
+  { key: 'searchMaxPerType', group: 'search', type: 'int', default: '8', min: 1, max: 100 },
+  { key: 'searchFileMaxKB', group: 'search', type: 'int', default: '512', min: 1, max: 10240, unit: 'KB' },
+  { key: 'searchScanMaxFiles', group: 'search', type: 'int', default: '2000', min: 10, max: 100000 },
+
   // server limits (read once at server construction → restart to apply)
   { key: 'httpBodyLimitMB', group: 'server', type: 'int', default: '6', min: 1, max: 1024, unit: 'MB', restart: true },
   { key: 'uploadMaxMB', group: 'server', type: 'int', default: '200', min: 1, max: 4096, unit: 'MB', restart: true },
@@ -246,8 +252,8 @@ export function imageConfigValues(): string[] {
 }
 
 // Client-facing subset (any authed user): drives the model dropdown.
-export function publicConfig(): { models: Record<string, string>; defaultModel: string; defaultEffort: string; sessionImportEnabled: boolean; llmProvidersEnabled: boolean; approvalsEnabled: boolean; dmEnabled: boolean; processPollMs: number } {
+export function publicConfig(): { models: Record<string, string>; defaultModel: string; defaultEffort: string; sessionImportEnabled: boolean; llmProvidersEnabled: boolean; approvalsEnabled: boolean; dmEnabled: boolean; searchEnabled: boolean; processPollMs: number } {
   let models: Record<string, string>;
   try { models = JSON.parse(cfg.str('models')); } catch { models = JSON.parse(DEFAULT_MODELS); }
-  return { models, defaultModel: cfg.str('defaultModel'), defaultEffort: cfg.str('defaultEffort'), sessionImportEnabled: cfg.bool('sessionImportEnabled'), llmProvidersEnabled: cfg.bool('llmProvidersEnabled'), approvalsEnabled: cfg.bool('approvalsEnabled'), dmEnabled: cfg.bool('dmEnabled'), processPollMs: cfg.int('processPollMs') };
+  return { models, defaultModel: cfg.str('defaultModel'), defaultEffort: cfg.str('defaultEffort'), sessionImportEnabled: cfg.bool('sessionImportEnabled'), llmProvidersEnabled: cfg.bool('llmProvidersEnabled'), approvalsEnabled: cfg.bool('approvalsEnabled'), dmEnabled: cfg.bool('dmEnabled'), searchEnabled: cfg.bool('searchEnabled'), processPollMs: cfg.int('processPollMs') };
 }

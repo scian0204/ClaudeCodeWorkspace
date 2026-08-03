@@ -4,6 +4,7 @@ import { api, type UploadState } from '../lib/api';
 import { Avatar, avatarUrl, timeAgo, LangToggle } from '../lib/ui';
 import { Modal } from './Modal';
 import { ImportSessionModal } from './ImportSessionModal';
+import { SearchButton } from './SearchPalette';
 import { UploadProgress } from './UploadProgress';
 import { useT } from '../lib/i18n';
 import {
@@ -44,6 +45,7 @@ export function Sidebar() {
           </div>
         </div>
         <button className="btn-primary w-full flex items-center justify-center gap-2 !py-2" onClick={() => newSession()}><IconPlus size={16} />{t('sidebar.newChat')}</button>
+        <SearchButton label className="mt-2" />
       </div>
 
       <div className="flex-1 overflow-y-auto scrolly px-2 pb-1">
