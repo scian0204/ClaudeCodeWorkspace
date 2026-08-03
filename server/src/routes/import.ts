@@ -7,8 +7,10 @@ import { paths, ensure, ensureUserLayout } from '../lib/paths.js';
 import { newId } from '../lib/ids.js';
 import { cfg } from '../lib/config-registry.js';
 import {
-  encodeSlug, rewriteCwd, jsonlToMessages, findSlugDir, listSessions, originalCwdFromSlug,
+  encodeSlug, rewriteCwd, jsonlToMessages, findSlugDir, listSessions, originalCwdFromSlug, userTexts,
 } from '../lib/session-import.js';
+import { autoTitleImported } from '../claude/auto-title.js';
+import { emitToUser } from '../realtime/io.js';
 
 // ── path sanitizers (deliberately duplicated from wiki.ts — small, keeps routes decoupled) ──
 function safeSeg(n: string): string {
@@ -116,7 +118,10 @@ export async function importRoutes(app: FastifyInstance) {
     const slugDir = findSlugDir(claudeSlot);
     if (!slugDir) return { found: false };
     const originalCwd = originalCwdFromSlug(slugDir);
-    return { found: true, originalCwd, projectTail: tailOf(originalCwd), sessions: listSessions(slugDir) };
+    return {
+      found: true, originalCwd, projectTail: tailOf(originalCwd),
+      sessions: listSessions(slugDir, cfg.int('autoTitleMaxChars')),
+    };
   });
 
   // confirm import — place project dir, place cwd-rewritten jsonl into the user's slug dir,
@@ -157,9 +162,13 @@ export async function importRoutes(app: FastifyInstance) {
       fs.cpSync(path.join(slugDir, 'memory'), path.join(projDir, 'memory'), { recursive: true });
     }
 
-    const metaByUuid = new Map((slugDir ? listSessions(slugDir) : []).map((m) => [m.uuid, m]));
+    const metaByUuid = new Map((slugDir ? listSessions(slugDir, cfg.int('autoTitleMaxChars')) : []).map((m) => [m.uuid, m]));
     const sessionUuids: string[] = Array.isArray(body.sessionUuids) ? body.sessionUuids.map(String) : [];
     const sessions: { id: string; title: string }[] = [];
+    // transcripts the CLI never named: queue a model pass over their conversation once the response
+    // is out, so the first-message snippet we store now gets upgraded to a real title
+    const digestMax = cfg.int('importAutoTitleMessages');
+    const toTitle: { sessionId: string; text: string; prevTitle: string }[] = [];
     for (const uuid of sessionUuids) {
       const src = slugDir ? path.join(slugDir, uuid + '.jsonl') : '';
       if (!slugDir || !fs.existsSync(src)) continue;
@@ -170,14 +179,16 @@ export async function importRoutes(app: FastifyInstance) {
       const sub = path.join(slugDir, uuid);
       if (fs.existsSync(sub)) fs.cpSync(sub, path.join(projDir, uuid), { recursive: true });
 
-      const title = metaByUuid.get(uuid)?.title || uuid;
+      const meta = metaByUuid.get(uuid);
+      const title = meta?.title || uuid;
       const chatId = newId();
       db.insert(schema.chatSessions).values({
         id: chatId, ownerId: u.id, kind: 'private', roomId: null, title,
         projectId: project.id, wikiTopicId: null, claudeSessionId: uuid,
         model: cfg.str('defaultModel'), effort: cfg.str('defaultEffort'), permissionMode: 'default', createdAt: now, updatedAt: now,
       }).run();
-      for (const msg of jsonlToMessages(lines, chatId, now)) {
+      const msgs = jsonlToMessages(lines, chatId, now);
+      for (const msg of msgs) {
         db.insert(schema.messages).values({
           id: newId(), sessionId: chatId, role: msg.role,
           authorId: msg.role === 'user' ? u.id : null,
@@ -185,10 +196,28 @@ export async function importRoutes(app: FastifyInstance) {
           content: JSON.stringify(msg.content), chat: 0, createdAt: msg.createdAt,
         }).run();
       }
+      // a title the user set in the CLI is theirs — only the snippet-named ones get re-titled
+      if (!meta?.custom) {
+        const text = userTexts(msgs, digestMax).join('\n---\n');
+        if (text) toTitle.push({ sessionId: chatId, text, prevTitle: title });
+      }
       sessions.push({ id: chatId, title });
     }
 
     try { fs.rmSync(paths.importStaging(sid), { recursive: true, force: true }); } catch { /* noop */ }
+
+    // Off the response path — the import must not wait on N model calls. Sequential on purpose: a
+    // big import would otherwise fan out one Claude subprocess per session at once. Each finished
+    // title reaches the importer's tabs over `session:title`.
+    if (toTitle.length) void (async () => {
+      for (const p of toTitle) {
+        await autoTitleImported({
+          ...p, ownerId: u.id, cwd: serverCwd,
+          emit: (event, payload) => emitToUser(u.id, event, payload),
+        }).catch(() => { /* titling is cosmetic — the snippet title stands */ });
+      }
+    })();
+
     return { project, sessions };
   });
 }

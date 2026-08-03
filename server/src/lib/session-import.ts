@@ -116,16 +116,49 @@ export function originalCwdFromSlug(slugDir: string): string | null {
   return null;
 }
 
-export function listSessions(slugDir: string): Array<{ uuid: string; title: string; mtime: number; msgCount: number }> {
-  const out: Array<{ uuid: string; title: string; mtime: number; msgCount: number }> = [];
+// The user's side of a transcript, oldest first — what the chat was actually about, with Claude's
+// replies and tool noise left out. Feeds both the picker snippet and the model titling prompt.
+export function userTexts(msgs: ReturnType<typeof jsonlToMessages>, limit: number): string[] {
+  const out: string[] = [];
+  for (const m of msgs) {
+    if (m.role !== 'user') continue;
+    const t = String((m.content as any)?.text || '').trim();
+    if (t) out.push(t);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+// Shared title sanitizer: first non-empty line, stripped of the wrappers a model (or a markdown
+// first message) leads with, capped at maxChars. Also used by claude/auto-title.ts.
+export function cleanTitle(raw: string, maxChars: number): string {
+  const line = String(raw || '').split('\n').map((l) => l.trim()).find(Boolean) || '';
+  return line
+    .replace(/^[#>*\-\s]+/, '')            // markdown heading / bullet lead-in
+    .replace(/^["'`“”「『]+/, '')
+    .replace(/["'`“”」』.。!?！？]+$/, '')
+    .trim()
+    .slice(0, maxChars)
+    .trim();
+}
+
+export type ImportSessionMeta = { uuid: string; title: string; custom: boolean; mtime: number; msgCount: number };
+
+// `custom` marks a title the user set in the CLI (a `custom-title` line) — those are never re-titled
+// on import. Everything else is named after its own conversation instead of showing a raw uuid.
+export function listSessions(slugDir: string, maxChars: number): ImportSessionMeta[] {
+  const out: ImportSessionMeta[] = [];
   for (const f of fs.readdirSync(slugDir)) {
     if (!f.endsWith('.jsonl')) continue;
     const uuid = f.replace(/\.jsonl$/, '');
     const full = path.join(slugDir, f);
     const lines = fs.readFileSync(full, 'utf8').split('\n').filter(Boolean);
-    let title = uuid;
+    let title = '';
     for (const line of lines) { try { const o = JSON.parse(line); if (o?.type === 'custom-title' && o.customTitle) { title = String(o.customTitle); break; } } catch { /* skip */ } }
-    out.push({ uuid, title, mtime: fs.statSync(full).mtimeMs, msgCount: jsonlToMessages(lines, uuid).length });
+    const custom = !!title;
+    const msgs = jsonlToMessages(lines, uuid);
+    if (!title) title = cleanTitle(userTexts(msgs, 1)[0] || '', maxChars);
+    out.push({ uuid, title: title || uuid, custom, mtime: fs.statSync(full).mtimeMs, msgCount: msgs.length });
   }
   return out.sort((a, b) => b.mtime - a.mtime);
 }

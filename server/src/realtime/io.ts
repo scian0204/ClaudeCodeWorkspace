@@ -30,6 +30,12 @@ export function dmNudge(userIds: string[]) {
   if (!io) return;
   for (const uid of userIds) io.to(userRoom(uid)).emit('dm:channels');
 }
+// Push to every tab of one user, for work that finishes after the HTTP response and belongs to no
+// session room the client has joined (e.g. titling the chats a local-session import just created).
+export function emitToUser(userId: string, event: string, payload: any) {
+  if (!io) return;
+  io.to(userRoom(userId)).emit(event, payload);
+}
 
 function getChat(sessionId: string) {
   return db.select().from(schema.chatSessions).where(eq(schema.chatSessions.id, sessionId)).get();

@@ -1,6 +1,9 @@
 // Runnable check (no framework): npx tsx server/src/lib/session-import.test.ts
 import assert from 'node:assert';
-import { encodeSlug, rewriteCwd, jsonlToMessages } from './session-import.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { encodeSlug, rewriteCwd, jsonlToMessages, cleanTitle, userTexts, listSessions } from './session-import.js';
 
 // --- encodeSlug: replaces every non-alphanumeric with dash ---
 assert.equal(encodeSlug('/data/users/u1/projects/MyProj'), '-data-users-u1-projects-MyProj');
@@ -49,6 +52,48 @@ assert.equal(rewriteCwd('not json', '/x'), 'not json');
   assert.equal(blocks[1].output, 'file.txt');
   assert.equal(blocks[1].isError, false);
   assert.deepEqual(msgs[2].content, { text: 'next' });
+}
+
+// --- cleanTitle: unwraps what a model (or a markdown first message) leads with, caps length ---
+assert.equal(cleanTitle('## "Fix the auth bug"\nmore', 40), 'Fix the auth bug');
+assert.equal(cleanTitle('  \n한글 제목입니다.', 40), '한글 제목입니다');
+assert.equal(cleanTitle('abcdefghij', 4), 'abcd');
+assert.equal(cleanTitle('', 40), '');
+
+// --- userTexts: the user's side only, oldest first, capped ---
+{
+  const msgs = jsonlToMessages([
+    JSON.stringify({ type: 'user', message: { role: 'user', content: 'first' } }),
+    JSON.stringify({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'reply' }] } }),
+    JSON.stringify({ type: 'user', message: { role: 'user', content: 'second' } }),
+    JSON.stringify({ type: 'user', message: { role: 'user', content: 'third' } }),
+  ], 's');
+  assert.deepEqual(userTexts(msgs, 10), ['first', 'second', 'third']);
+  assert.deepEqual(userTexts(msgs, 2), ['first', 'second']);
+}
+
+// --- listSessions: custom-title wins; otherwise the title comes off the conversation, not the uuid ---
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sess-import-'));
+  try {
+    fs.writeFileSync(path.join(dir, 'aaaa-1111.jsonl'), [
+      JSON.stringify({ type: 'custom-title', customTitle: 'Named by hand' }),
+      JSON.stringify({ type: 'user', message: { role: 'user', content: 'whatever' } }),
+    ].join('\n'));
+    fs.writeFileSync(path.join(dir, 'bbbb-2222.jsonl'), [
+      JSON.stringify({ type: 'user', message: { role: 'user', content: '# 로그인 리다이렉트가 깨져요\n자세히는...' } }),
+      JSON.stringify({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'ok' }] } }),
+    ].join('\n'));
+    fs.writeFileSync(path.join(dir, 'cccc-3333.jsonl'), JSON.stringify({ type: 'summary', summary: 'nothing usable' }));
+
+    const byUuid = new Map(listSessions(dir, 40).map((s) => [s.uuid, s]));
+    assert.equal(byUuid.get('aaaa-1111')!.title, 'Named by hand');
+    assert.equal(byUuid.get('aaaa-1111')!.custom, true);
+    assert.equal(byUuid.get('bbbb-2222')!.title, '로그인 리다이렉트가 깨져요');
+    assert.equal(byUuid.get('bbbb-2222')!.custom, false);
+    // no user text at all → still identifiable, falls back to the uuid
+    assert.equal(byUuid.get('cccc-3333')!.title, 'cccc-3333');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 }
 
 console.log('session-import: all checks passed');

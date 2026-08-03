@@ -53,6 +53,10 @@ export const DEFS: ConfigDef[] = [
   { key: 'autoTitleModel', group: 'claude', type: 'string', default: 'claude-haiku-4-5-20251001' },
   { key: 'autoTitleMaxChars', group: 'claude', type: 'int', default: '40', min: 10, max: 120 },
   { key: 'autoTitleTimeoutMs', group: 'claude', type: 'int', default: '20000', min: 2000, max: 120000, unit: 'ms' },
+  // same naming pass for chats cloned by the local-session import (one call per session, so it is
+  // separately switchable — a 50-session import means 50 calls)
+  { key: 'importAutoTitleEnabled', group: 'claude', type: 'bool', default: '1' },
+  { key: 'importAutoTitleMessages', group: 'claude', type: 'int', default: '6', min: 1, max: 30 },
   { key: 'usageProbeTtlMs', group: 'claude', type: 'int', default: '15000', min: 1000, max: 600000, unit: 'ms' },
   { key: 'usageProbeTimeoutMs', group: 'claude', type: 'int', default: '8000', min: 1000, max: 120000, unit: 'ms' },
   // auto-resume a turn that hit the claude.ai plan window (5h / weekly), once the window resets

@@ -346,6 +346,8 @@ export const ADMIN = {
     { key: 'autoResumeMaxAttempts', group: 'claude', type: 'int', value: '3', default: '3', min: 1, max: 10, restart: false, readonly: false, secret: false, overridden: false },
     { key: 'autoTitleModel', group: 'claude', type: 'string', value: 'claude-haiku-4-5-20251001', default: 'claude-haiku-4-5-20251001', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'autoTitleMaxChars', group: 'claude', type: 'int', value: '40', default: '40', min: 10, max: 120, restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'importAutoTitleEnabled', group: 'claude', type: 'bool', value: '1', default: '1', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'importAutoTitleMessages', group: 'claude', type: 'int', value: '6', default: '6', min: 1, max: 30, restart: false, readonly: false, secret: false, overridden: false },
     ...['blockNonessentialTraffic', 'privacyTelemetry', 'privacyErrorReports', 'privacyFeedbackCommands',
         'privacyFeedbackSurvey', 'privacyNonEssentialModelCalls', 'privacyAutoUpdater',
         'privacyWebFetchPreflight', 'privacyArtifact', 'privacyMarketplace'].map((key) => ({
