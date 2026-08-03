@@ -178,14 +178,19 @@ export async function searchRoutes(app: FastifyInstance) {
     const chats = visibleChats(u);
 
     // ── private chat titles ──
+    // Owner-scoped in SQL for members (admins legitimately see every private thread, same as
+    // routes/sessions canViewChat). The `chats` lookup below is what actually enforces visibility,
+    // but without this the LIMIT would be spent on other people's rows and a member's own matching
+    // chats could silently fall off the end.
     if (want('session')) {
       const rows = db.select().from(schema.chatSessions)
         .where(and(eq(schema.chatSessions.kind, 'private'), isNull(schema.chatSessions.wikiTopicId),
-          likeExpr(schema.chatSessions.title, q)))
+          likeExpr(schema.chatSessions.title, q),
+          u.role === 'admin' ? undefined : eq(schema.chatSessions.ownerId, u.id)))
         .orderBy(order(schema.chatSessions.updatedAt)).limit(perType * 4).all();
       for (const s of rows) {
         if (!room('session')) break;
-        const v = chats.get(s.id); if (!v) continue; // someone else's private thread (admin scan)
+        const v = chats.get(s.id); if (!v) continue; // not visible (an admin's cross-user scan)
         hits.push({ type: 'session', id: `session:${s.id}`, title: s.title, ts: s.updatedAt, nav: v.nav });
       }
     }
@@ -206,10 +211,13 @@ export async function searchRoutes(app: FastifyInstance) {
     // ── chat messages (private + room + wiki thread + review chats) ──
     if (want('chat') && chats.size) {
       // An admin sees every session, so skip the id list entirely — it would otherwise blow past
-      // SQLite's bound-parameter ceiling on a big workspace.
-      const where = u.role === 'admin'
+      // SQLite's bound-parameter ceiling on a big workspace. Same escape hatch for anyone with an
+      // implausibly large visible set: `chats.get()` below is the real gate, the IN list is only a
+      // prefilter so the LIMIT isn't spent on rows this user can't see.
+      const ids = [...chats.keys()];
+      const where = u.role === 'admin' || ids.length > 900
         ? likeExpr(schema.messages.content, q)
-        : and(inArray(schema.messages.sessionId, [...chats.keys()]), likeExpr(schema.messages.content, q));
+        : and(inArray(schema.messages.sessionId, ids), likeExpr(schema.messages.content, q));
       const rows = db.select().from(schema.messages).where(where)
         .orderBy(order(schema.messages.createdAt)).limit(perType * 3).all();
       for (const m of rows) {
@@ -243,6 +251,8 @@ export async function searchRoutes(app: FastifyInstance) {
           });
         }
       }
+      // Membership is the ONLY gate here — an admin never sees a channel they are not in, matching
+      // rooms/dm.ts (promote is admin-only, reads are not).
       if (want('dm') && channels.length) {
         const byId = new Map(channels.map((c) => [c.id, c]));
         const names = new Map(db.select().from(schema.users).all().map((x) => [x.id, x.displayName]));
