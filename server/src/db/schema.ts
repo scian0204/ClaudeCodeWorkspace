@@ -13,6 +13,8 @@ export const users = sqliteTable('users', {
   avatar: text('avatar'),                          // version token (set-time millis) for cache-busting; null = no avatar (file lives at <userHome>/avatar.<ext>)
   autoTitle: integer('auto_title').notNull().default(1), // 1 = name a fresh private chat after its topic on the first turn
   autoResume: integer('auto_resume').notNull().default(0), // 1 = re-run a turn that hit the claude.ai 5h limit once the window resets (opt-in: it runs unattended)
+  primeWindow: integer('prime_window').notNull().default(0), // 1 = open a fresh claude.ai 5h window with a tiny throwaway query as soon as none is running
+  primedAt: integer('primed_at'), // when the primer last opened a window (epoch ms), null = never
 });
 
 // A turn parked because its author's claude.ai plan window (5h / weekly) was exhausted. Re-enqueued

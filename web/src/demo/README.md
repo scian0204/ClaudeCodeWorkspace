@@ -56,3 +56,7 @@ Some flows can't happen on their own in a static demo, so the mock fakes them on
   "auto-resume at HH:MM" banner appears above the composer (cancellable); after 20s (5 hours in
   the real thing) the message is re-sent automatically. Needs the My Page → *auto-resume on limit
   reset* toggle on, which the seed user has by default.
+
+The **5-hour window primer** has no demo trigger: it is a pure server-side scheduler with no UI
+beyond the My Page toggle and its "last primed" stamp, both of which the mock `PATCH /api/auth/me`
+already serves.

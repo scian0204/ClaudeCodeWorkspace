@@ -17,7 +17,7 @@ export interface WikiTopic { id: string; name: string; description: string; path
 export interface ReviewRepo { id: string; name: string; provider: string; host: string; slug: string; gitUrl: string; baseBranch: string | null; sandboxImage: string | null; polledAt: number | null; pollError: string | null; openCount: number; createdAt: number; }
 export interface ReviewSessionSummary { id: string; chatSessionId: string; repoId: string; repoName: string; prNumber: number; prTitle: string; prUrl: string; prState: string; authorLogin: string; mergeState: string; verdict: string; verdictSummary: string | null; readOnly: boolean; updatedAt: number; }
 export interface ReviewMeta { reviewId: string; prNumber: number; prTitle: string; prUrl: string; prState: string; authorLogin: string; baseRef: string; headRef: string; mergeState: string; verdict: string; verdictSummary: string | null; repoName: string; provider: string; }
-export interface User { id: string; username: string; role: string; displayName: string; avatarColor: string; avatar?: string | null; hasClaudeToken?: boolean; claudeTokenSetAt?: number | null; autoTitle?: boolean; autoResume?: boolean; }
+export interface User { id: string; username: string; role: string; displayName: string; avatarColor: string; avatar?: string | null; hasClaudeToken?: boolean; claudeTokenSetAt?: number | null; autoTitle?: boolean; autoResume?: boolean; primeWindow?: boolean; primedAt?: number | null; }
 export interface DmMemberInfo { userId: string; displayName: string; avatarColor: string; avatar: string | null; username: string; }
 export interface DmChannel { id: string; kind: 'dm' | 'group'; name: string | null; createdBy: string; createdAt: number; members: DmMemberInfo[]; lastMessage: { text: string; createdAt: number; userId: string } | null; unread: number; }
 export interface DmMessage { id: string; channelId: string; userId: string; text: string; createdAt: number; }
@@ -68,6 +68,7 @@ interface State {
   autoTitleEnabled: boolean;     // admin feature flag (from /api/config) — gates the auto session-title toggle
   autoResumeEnabled: boolean;    // admin feature flag (from /api/config) — gates the 5h-reset auto-resume toggle
   resumes: PendingResume[];      // open session's turns parked for a claude.ai window reset
+  windowPrimerEnabled: boolean;  // admin feature flag (from /api/config) — gates the 5h-window primer toggle
   searchOpen: boolean;           // unified-search palette (Ctrl/Cmd+K)
   shortcutsOpen: boolean;        // keyboard-shortcut cheat sheet (?)
   highlightMsgId: string | null; // message a search hit jumped to (scroll target + ring)
@@ -144,6 +145,7 @@ interface State {
   setError: (e: string | null) => void;
   setAutoTitle: (on: boolean) => Promise<void>;
   setAutoResume: (on: boolean) => Promise<void>;
+  setPrimeWindow: (on: boolean) => Promise<void>;
   cancelResume: (id: string) => void;
   saveClaudeToken: (token: string) => Promise<void>;
   clearClaudeToken: () => Promise<void>;
@@ -162,7 +164,7 @@ export const useStore = create<State>((set, get) => ({
   current: null, messages: [], live: null, turnActive: false,
   queue: { running: null, waiting: [] }, pending: [],
   control: { canApprove: true, canInterrupt: true, canSetMode: true, isOwner: true, delegable: [] },
-  presence: [], congested: false, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenuEnabled: true, autoTitleEnabled: true, autoResumeEnabled: true, resumes: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
+  presence: [], congested: false, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenuEnabled: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, resumes: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
   channels: [], activeChannelId: null, channelMessages: [],
   commands: [],
 
@@ -215,6 +217,7 @@ export const useStore = create<State>((set, get) => ({
       customContextMenuEnabled: cf.customContextMenu !== false,
       autoTitleEnabled: cf.autoTitleEnabled !== false,
       autoResumeEnabled: cf.autoResumeEnabled !== false,
+      windowPrimerEnabled: cf.windowPrimerEnabled !== false,
       channels: dmc.channels || [],
       processPollMs: cf.processPollMs || 5000,
     });
@@ -533,6 +536,11 @@ export const useStore = create<State>((set, get) => ({
     const { user } = await api.patch('/api/auth/me', { autoResume: on });
     set({ user });
   },
+
+  setPrimeWindow: async (on) => {
+    const { user } = await api.patch('/api/auth/me', { primeWindow: on });
+    set({ user });
+  },
   // Drop a parked turn. Optimistic: the server's turn:resumeCancelled confirms for every other tab.
   cancelResume: (id) => {
     const c = get().current; if (!c) return;
@@ -692,6 +700,8 @@ function wire(set: any, get: () => State) {
     set({ resumes: [...get().resumes.filter((r) => r.id !== p.id), next] });
   });
   const dropResume = (p: any) => { if (isCur(p.sessionId)) set({ resumes: get().resumes.filter((r) => r.id !== p.id) }); };
+  // the 5h-window primer opened a window for this user (fires on every tab they have open)
+  sock.on('user:primed', (p: any) => { const u = get().user; if (u) set({ user: { ...u, primedAt: p?.primedAt ?? Date.now() } }); });
   sock.on('turn:resumeFired', dropResume);     // it went back into the queue — queue:update takes over
   sock.on('turn:resumeCancelled', dropResume);
 

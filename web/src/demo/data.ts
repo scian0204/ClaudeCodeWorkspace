@@ -12,6 +12,7 @@ export const ME = {
   id: 'u_admin', username: 'admin', role: 'admin', displayName: 'Demo Admin',
   avatarColor: COLORS.clay, avatar: null as string | null, hasClaudeToken: true, claudeTokenSetAt: ago(60 * 24 * 3) as number | null,
   autoTitle: true, autoResume: true, // demo: on so the limit-reset banner is reachable
+  primeWindow: true, primedAt: ago(37) as number | null,
 };
 const U_JAMIE = { id: 'u_jamie', username: 'jamie', role: 'member', displayName: 'Jamie Park', avatarColor: COLORS.blue };
 const U_RILEY = { id: 'u_riley', username: 'riley', role: 'member', displayName: 'Riley Kim', avatarColor: COLORS.green };
@@ -338,6 +339,9 @@ export const ADMIN = {
     { key: 'maxConcurrentTurns', group: 'claude', type: 'int', value: '3', default: '3', min: 1, max: 100, restart: false, readonly: false, secret: false, overridden: false },
     { key: 'autoTitleEnabled', group: 'claude', type: 'bool', value: '1', default: '1', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'autoResumeEnabled', group: 'claude', type: 'bool', value: '1', default: '1', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'windowPrimerEnabled', group: 'claude', type: 'bool', value: '1', default: '1', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'windowPrimerModel', group: 'claude', type: 'string', value: 'claude-haiku-4-5-20251001', default: 'claude-haiku-4-5-20251001', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'windowPrimerPrompt', group: 'claude', type: 'string', value: 'Reply with exactly: ok', default: 'Reply with exactly: ok', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'autoResumeGraceMs', group: 'claude', type: 'int', value: '60000', default: '60000', min: 0, max: 3600000, unit: 'ms', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'autoResumeMaxAttempts', group: 'claude', type: 'int', value: '3', default: '3', min: 1, max: 10, restart: false, readonly: false, secret: false, overridden: false },
     { key: 'autoTitleModel', group: 'claude', type: 'string', value: 'claude-haiku-4-5-20251001', default: 'claude-haiku-4-5-20251001', restart: false, readonly: false, secret: false, overridden: false },

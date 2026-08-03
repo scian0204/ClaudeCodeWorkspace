@@ -9,6 +9,7 @@ import {
 } from './index.js';
 import { setUserToken, clearUserToken } from './claude-token.js';
 import { getProvider, setProvider, clearProvider } from './provider.js';
+import { syncPrimer } from '../claude/window-primer.js';
 import * as cs from '../codeserver/manager.js';
 import { cfg, publicConfig } from '../lib/config-registry.js';
 import { paths, ensureUserLayout } from '../lib/paths.js';
@@ -78,6 +79,10 @@ export async function authRoutes(app: FastifyInstance) {
     const b = (req.body || {}) as any;
     if ('autoTitle' in b) db.update(schema.users).set({ autoTitle: b.autoTitle ? 1 : 0 }).where(eq(schema.users.id, u.id)).run();
     if ('autoResume' in b) db.update(schema.users).set({ autoResume: b.autoResume ? 1 : 0 }).where(eq(schema.users.id, u.id)).run();
+    if ('primeWindow' in b) {
+      db.update(schema.users).set({ primeWindow: b.primeWindow ? 1 : 0 }).where(eq(schema.users.id, u.id)).run();
+      syncPrimer(u.id); // arm/disarm the 5h-window primer for this user right away
+    }
     const dto = meDto(u.id); if (!dto) return reply.code(404).send({ error: 'user not found' });
     return { user: dto };
   });

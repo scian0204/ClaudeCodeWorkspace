@@ -138,6 +138,9 @@ export function initDb() {
   try { sqlite.exec("ALTER TABLE users ADD COLUMN auto_title INTEGER NOT NULL DEFAULT 1"); } catch { /* already present */ }
   // per-user auto-resume when the claude.ai 5h window resets (off by default — it runs unattended)
   try { sqlite.exec("ALTER TABLE users ADD COLUMN auto_resume INTEGER NOT NULL DEFAULT 0"); } catch { /* already present */ }
+  // per-user 5h-window primer: open a fresh window with a tiny query as soon as none is running
+  try { sqlite.exec("ALTER TABLE users ADD COLUMN prime_window INTEGER NOT NULL DEFAULT 0"); } catch { /* already present */ }
+  try { sqlite.exec("ALTER TABLE users ADD COLUMN primed_at INTEGER"); } catch { /* already present */ }
   // auto-review verdict (added to an already-created review_sessions table)
   try { sqlite.exec("ALTER TABLE review_sessions ADD COLUMN verdict TEXT NOT NULL DEFAULT 'none'"); } catch { /* already present */ }
   try { sqlite.exec("ALTER TABLE review_sessions ADD COLUMN verdict_summary TEXT"); } catch { /* already present */ }

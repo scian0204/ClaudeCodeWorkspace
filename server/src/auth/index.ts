@@ -16,6 +16,8 @@ export interface AuthUser {
   avatar: string | null; // avatar version token (cache-bust key) or null when unset
   autoTitle: boolean;    // name a fresh private chat after its topic on the first turn
   autoResume: boolean;   // re-run a turn that hit the claude.ai 5h window, once it resets
+  primeWindow: boolean;  // open a fresh claude.ai 5h window with a tiny query as soon as none runs
+  primedAt: number | null; // when the primer last opened one (epoch ms), null = never
 }
 
 // ── password hashing (stdlib scrypt; lightweight posture per spec) ──
@@ -45,7 +47,7 @@ export function createUser(opts: {
   db.insert(schema.users).values(row).run();
   ensureUserLayout(id);
   if (opts.claudeToken) setUserToken(id, opts.claudeToken); // throws on bad format
-  return { id, username: row.username, role: row.role, displayName: row.displayName, avatarColor: row.avatarColor, avatar: null, autoTitle: true, autoResume: false };
+  return { id, username: row.username, role: row.role, displayName: row.displayName, avatarColor: row.avatarColor, avatar: null, autoTitle: true, autoResume: false, primeWindow: false, primedAt: null };
 }
 
 export function findByUsername(username: string) {
@@ -55,7 +57,7 @@ export function getUserById(id: string) {
   return db.select().from(schema.users).where(eq(schema.users.id, id)).get();
 }
 export function toAuthUser(u: NonNullable<ReturnType<typeof getUserById>>): AuthUser {
-  return { id: u.id, username: u.username, role: u.role as Role, displayName: u.displayName, avatarColor: u.avatarColor, avatar: u.avatar ?? null, autoTitle: u.autoTitle !== 0, autoResume: u.autoResume === 1 };
+  return { id: u.id, username: u.username, role: u.role as Role, displayName: u.displayName, avatarColor: u.avatarColor, avatar: u.avatar ?? null, autoTitle: u.autoTitle !== 0, autoResume: u.autoResume === 1, primeWindow: u.primeWindow === 1, primedAt: u.primedAt ?? null };
 }
 
 // AuthUser + Claude-token status (for /me and /login so the client can drive the nag popup).

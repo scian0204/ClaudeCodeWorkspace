@@ -26,6 +26,7 @@ export function MyPage() {
   const approvalsEnabled = useStore((s) => s.approvalsEnabled);
   const autoTitleEnabled = useStore((s) => s.autoTitleEnabled);
   const autoResumeEnabled = useStore((s) => s.autoResumeEnabled);
+  const windowPrimerEnabled = useStore((s) => s.windowPrimerEnabled);
   const t = useT();
   return (
     <div className="h-full overflow-y-auto scrolly">
@@ -38,6 +39,7 @@ export function MyPage() {
         <Section title={t('mypage.profile')}><ProfileSection /></Section>
         {autoTitleEnabled && <Section title={t('mypage.autoTitle')}><AutoTitleSection /></Section>}
         {autoResumeEnabled && <Section title={t('mypage.autoResume')}><AutoResumeSection /></Section>}
+        {windowPrimerEnabled && <Section title={t('mypage.primeWindow')}><PrimeWindowSection /></Section>}
         {approvalsEnabled && (
           <Section title={t('mypage.requests')}>
             <div className="text-xs text-txt2 bg-claysoft border border-line rounded-lg px-3 py-2 mb-3">{t('requests.intro')}</div>
@@ -155,6 +157,43 @@ function AutoResumeSection() {
       </label>
       <div className="text-xs text-txt3 mt-2">{t('mypage.autoResumeHint')}</div>
       <div className="text-xs text-txt3 mt-1">{t('mypage.autoResumeClaudeOnly')}</div>
+    </>
+  );
+}
+
+// Keep the claude.ai 5-hour window open. The window starts on your first billed message, not on a
+// wall clock, so idle time after a reset is lost. On, the server sends one tiny throwaway query as
+// soon as no window is running, and the full 5 hours are there when you actually sit down.
+function PrimeWindowSection() {
+  const user = useStore((s) => s.user);
+  const setPrimeWindow = useStore((s) => s.setPrimeWindow);
+  const setError = useStore((s) => s.setError);
+  const t = useT();
+  const [busy, setBusy] = useState(false);
+  const on = user?.primeWindow === true;
+
+  const toggle = async (next: boolean) => {
+    setBusy(true);
+    try { await setPrimeWindow(next); }
+    catch (e: any) { setError(e.message); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={on} disabled={busy} onChange={(e) => toggle(e.target.checked)} />
+        <span>{t('mypage.primeWindowLabel')}</span>
+      </label>
+      <div className="text-xs text-txt3 mt-2">{t('mypage.primeWindowHint')}</div>
+      <div className="text-xs text-txt3 mt-1">{t('mypage.primeWindowCost')}</div>
+      {on && (
+        <div className="text-xs text-txt3 mt-2">
+          {user?.primedAt
+            ? t('mypage.primeWindowLast', { at: new Date(user.primedAt).toLocaleString() })
+            : t('mypage.primeWindowNever')}
+        </div>
+      )}
     </>
   );
 }
