@@ -94,6 +94,28 @@ function runTurn(sessionId: string, text: string, nAtt = 0) {
   }
 }
 
+
+// Mirror of server/src/claude/auto-resume.ts for the static demo: sending a message that starts with
+// `!limit` pretends the claude.ai 5h window is spent, so the "parked until reset" banner (and its
+// cancel button) is reachable without a real account. The demo waits 20s instead of 5 hours.
+const DEMO_RESUME_WAIT_MS = 20_000;
+const parked = new Map<string, { sessionId: string; text: string; timer: any }>();
+
+function parkTurn(sessionId: string, text: string) {
+  const id = `res_${rid()}`;
+  const resumeAt = Date.now() + DEMO_RESUME_WAIT_MS;
+  deliver('turn:error', { sessionId, aborted: false, error: 'Claude AI usage limit reached', resumeAt });
+  deliver('turn:resumeScheduled', { sessionId, id, resumeAt, attempts: 0, text, author: { id: db.me.id, name: db.me.displayName } });
+  const timer = setTimeout(() => {
+    parked.delete(id);
+    deliver('turn:resumeFired', { sessionId, id, author: { id: db.me.id, name: db.me.displayName } });
+    deliver('turn:start', { sessionId });
+    runTurn(sessionId, text.trim().slice('!limit'.length).trim() || 'continue');
+  }, DEMO_RESUME_WAIT_MS);
+  timers.push(timer);
+  parked.set(id, { sessionId, text, timer });
+}
+
 const sock = {
   connected: true,
   id: `demo_${rid()}`,
@@ -102,7 +124,7 @@ const sock = {
   emit(event: string, ...args: any[]) {
     if (event === 'session:join') {
       const [sessionId, ack] = args;
-      if (typeof ack === 'function') ack({ queue: { running: null, waiting: [] }, pending: [], control: { canApprove: true, canInterrupt: true, canSetMode: true, isOwner: true, delegable: [] } });
+      if (typeof ack === 'function') ack({ queue: { running: null, waiting: [] }, pending: [], resumes: [], control: { canApprove: true, canInterrupt: true, canSetMode: true, isOwner: true, delegable: [] } });
       const room = db.rooms.find((r) => r.chatSessionId === sessionId);
       if (room) later(60, () => deliver('presence:update', { sessionId, users: room.members.map((m: any) => ({ id: m.userId, name: m.displayName, color: m.avatarColor })) }));
       return sock;
@@ -118,6 +140,7 @@ const sock = {
       appendMsg(sessionId, { id: `m_${rid()}`, role: 'user', authorId: db.me.id, authorName: db.me.displayName, content, chat: !!chat, createdAt: Date.now() });
       deliver('message', { sessionId, message: db.messages[sessionId][db.messages[sessionId].length - 1] });
       if (chat) return sock; // room team chat: broadcast only, no Claude turn
+      if (db.me.autoResume && String(text || '').trim().toLowerCase().startsWith('!limit')) { parkTurn(sessionId, String(text)); return sock; }
       deliver('turn:start', { sessionId });
       runTurn(sessionId, text, atts.length);
       return sock;
@@ -151,6 +174,12 @@ const sock = {
     }
     if (event === 'dm:read') {
       const ch = db.dmChannels.find((c: any) => c.id === args[0]?.channelId); if (ch) ch.unread = 0; return sock;
+    }
+    if (event === 'chat:cancelResume') {
+      const { id, sessionId } = args[0] || {};
+      const p = parked.get(id); if (p) { clearTimeout(p.timer); parked.delete(id); }
+      deliver('turn:resumeCancelled', { sessionId, id });
+      return sock;
     }
     if (event === 'chat:interrupt' || event === 'chat:cancel') {
       clearTimers(); waiting.clear();

@@ -17,7 +17,7 @@ export interface WikiTopic { id: string; name: string; description: string; path
 export interface ReviewRepo { id: string; name: string; provider: string; host: string; slug: string; gitUrl: string; baseBranch: string | null; sandboxImage: string | null; polledAt: number | null; pollError: string | null; openCount: number; createdAt: number; }
 export interface ReviewSessionSummary { id: string; chatSessionId: string; repoId: string; repoName: string; prNumber: number; prTitle: string; prUrl: string; prState: string; authorLogin: string; mergeState: string; verdict: string; verdictSummary: string | null; readOnly: boolean; updatedAt: number; }
 export interface ReviewMeta { reviewId: string; prNumber: number; prTitle: string; prUrl: string; prState: string; authorLogin: string; baseRef: string; headRef: string; mergeState: string; verdict: string; verdictSummary: string | null; repoName: string; provider: string; }
-export interface User { id: string; username: string; role: string; displayName: string; avatarColor: string; avatar?: string | null; hasClaudeToken?: boolean; claudeTokenSetAt?: number | null; autoTitle?: boolean; }
+export interface User { id: string; username: string; role: string; displayName: string; avatarColor: string; avatar?: string | null; hasClaudeToken?: boolean; claudeTokenSetAt?: number | null; autoTitle?: boolean; autoResume?: boolean; }
 export interface DmMemberInfo { userId: string; displayName: string; avatarColor: string; avatar: string | null; username: string; }
 export interface DmChannel { id: string; kind: 'dm' | 'group'; name: string | null; createdBy: string; createdAt: number; members: DmMemberInfo[]; lastMessage: { text: string; createdAt: number; userId: string } | null; unread: number; }
 export interface DmMessage { id: string; channelId: string; userId: string; text: string; createdAt: number; }
@@ -34,6 +34,8 @@ export interface HitNav {
 export interface SearchHit { type: HitType; id: string; title: string; subtitle?: string; snippet?: string; ts?: number; nav: HitNav; }
 export interface Live { blocks: Block[]; toolMap: Record<string, number>; }
 export interface QueueState { running: { id: string; author: { id: string; name: string } } | null; waiting: { id: string; author: { id: string; name: string } }[]; }
+// A turn parked until the author's claude.ai plan window (5h / weekly) resets — see server/src/claude/auto-resume.ts.
+export interface PendingResume { id: string; sessionId: string; author: { id: string; name: string }; text: string; attempts: number; resumeAt: number; }
 export interface Control { canApprove: boolean; canInterrupt: boolean; canSetMode: boolean; isOwner: boolean; delegable: string[]; }
 export interface PermReq { requestId: string; tool: string; input: any; }
 export interface Current { chatSessionId: string; kind: 'private' | 'room' | 'review'; roomId?: string; wikiTopicId?: string; reviewId?: string; review?: ReviewMeta; readOnly?: boolean; title: string; projectId: string | null; model: string; effort: string; permissionMode: string; room?: RoomSummary; }
@@ -64,6 +66,8 @@ interface State {
   searchEnabled: boolean;        // admin feature flag (from /api/config) — gates the unified-search UI
   customContextMenuEnabled: boolean; // admin feature flag (from /api/config) — off = browser's own right-click menu everywhere
   autoTitleEnabled: boolean;     // admin feature flag (from /api/config) — gates the auto session-title toggle
+  autoResumeEnabled: boolean;    // admin feature flag (from /api/config) — gates the 5h-reset auto-resume toggle
+  resumes: PendingResume[];      // open session's turns parked for a claude.ai window reset
   searchOpen: boolean;           // unified-search palette (Ctrl/Cmd+K)
   shortcutsOpen: boolean;        // keyboard-shortcut cheat sheet (?)
   highlightMsgId: string | null; // message a search hit jumped to (scroll target + ring)
@@ -139,6 +143,8 @@ interface State {
   setSidebarCollapsed: (collapsed: boolean) => void;
   setError: (e: string | null) => void;
   setAutoTitle: (on: boolean) => Promise<void>;
+  setAutoResume: (on: boolean) => Promise<void>;
+  cancelResume: (id: string) => void;
   saveClaudeToken: (token: string) => Promise<void>;
   clearClaudeToken: () => Promise<void>;
   uploadAvatar: (file: File) => Promise<void>;
@@ -156,7 +162,7 @@ export const useStore = create<State>((set, get) => ({
   current: null, messages: [], live: null, turnActive: false,
   queue: { running: null, waiting: [] }, pending: [],
   control: { canApprove: true, canInterrupt: true, canSetMode: true, isOwner: true, delegable: [] },
-  presence: [], congested: false, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenuEnabled: true, autoTitleEnabled: true, searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
+  presence: [], congested: false, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenuEnabled: true, autoTitleEnabled: true, autoResumeEnabled: true, resumes: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
   channels: [], activeChannelId: null, channelMessages: [],
   commands: [],
 
@@ -208,6 +214,7 @@ export const useStore = create<State>((set, get) => ({
       searchEnabled: cf.searchEnabled !== false,
       customContextMenuEnabled: cf.customContextMenu !== false,
       autoTitleEnabled: cf.autoTitleEnabled !== false,
+      autoResumeEnabled: cf.autoResumeEnabled !== false,
       channels: dmc.channels || [],
       processPollMs: cf.processPollMs || 5000,
     });
@@ -522,6 +529,17 @@ export const useStore = create<State>((set, get) => ({
     set({ user });
   },
 
+  setAutoResume: async (on) => {
+    const { user } = await api.patch('/api/auth/me', { autoResume: on });
+    set({ user });
+  },
+  // Drop a parked turn. Optimistic: the server's turn:resumeCancelled confirms for every other tab.
+  cancelResume: (id) => {
+    const c = get().current; if (!c) return;
+    getSocket().emit('chat:cancelResume', { sessionId: c.chatSessionId, id });
+    set({ resumes: get().resumes.filter((r) => r.id !== id) });
+  },
+
   saveClaudeToken: async (token) => {
     const { user } = await api.put('/api/auth/me/claude-token', { token });
     set({ user });
@@ -586,6 +604,7 @@ function applyJoinState(set: any, get: () => State, sessionId: string, state: an
     control: state.control || get().control,
     turnActive: !!state.queue?.running || !!live,
     live, // always set (null when no in-flight turn) so a reconnect clears any stale live blocks
+    resumes: state.resumes || [],
   });
 }
 
@@ -661,8 +680,20 @@ function wire(set: any, get: () => State) {
 
   sock.on('turn:error', (p: any) => {
     if (!isCur(p.sessionId)) return;
-    set({ live: null, turnActive: false, error: p.aborted ? null : t('common.errorPrefix', { msg: p.error }) });
+    // p.resumeAt => the plan window ran out and the turn was parked for an automatic re-run. That is
+    // an expected wait, not a failure, so the composer banner reports it instead of the error toast.
+    set({ live: null, turnActive: false, error: p.aborted || p.resumeAt ? null : t('common.errorPrefix', { msg: p.error }) });
   });
+
+  // ── auto-resume on the claude.ai window reset ──
+  sock.on('turn:resumeScheduled', (p: any) => {
+    if (!isCur(p.sessionId)) return;
+    const next: PendingResume = { id: p.id, sessionId: p.sessionId, author: p.author, text: p.text || '', attempts: p.attempts || 0, resumeAt: p.resumeAt };
+    set({ resumes: [...get().resumes.filter((r) => r.id !== p.id), next] });
+  });
+  const dropResume = (p: any) => { if (isCur(p.sessionId)) set({ resumes: get().resumes.filter((r) => r.id !== p.id) }); };
+  sock.on('turn:resumeFired', dropResume);     // it went back into the queue — queue:update takes over
+  sock.on('turn:resumeCancelled', dropResume);
 
   sock.on('permission:request', (p: any) => {
     if (!isCur(p.sessionId)) return;

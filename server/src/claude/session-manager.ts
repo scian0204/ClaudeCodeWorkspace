@@ -18,6 +18,7 @@ import { getReviewByChat, ensureWorktree } from '../review/manager.js';
 import { sandboxAvailable, ensureSandbox, removeSandbox, sandboxMcpServer } from '../review/sandbox.js';
 import { cfg } from '../lib/config-registry.js';
 import { maybeAutoTitle } from './auto-title.js';
+import { isUsageLimitError, eligible as autoResumeEligible, parkTurn } from './auto-resume.js';
 
 type Emit = (event: string, payload: any) => void;
 
@@ -228,6 +229,19 @@ export async function probeUsage(chatSessionId: string, requesterId?: string | n
   finally { try { abort.abort(); } catch { /* noop */ } }
 }
 
+// When does the exhausted plan window reopen? Asks the CLI for the live figures and takes the LATEST
+// reset among the windows that are actually spent — if both the 5h and the weekly window are full,
+// waiting only for the 5h one would just fail again. Falls back to the 5h window, then null.
+async function probeResetAt(chatSessionId: string, requesterId: string): Promise<number | null> {
+  const rl = (await probeUsage(chatSessionId, requesterId)).rateLimits;
+  if (!rl) return null;
+  const ms = (w: Win | null) => { const t = w?.resetsAt ? new Date(w.resetsAt).getTime() : NaN; return Number.isFinite(t) ? t : null; };
+  const spent = [rl.fiveHour, rl.sevenDay, ...rl.modelScoped]
+    .filter((w): w is Win => !!w && (w.utilization ?? 0) >= 99)
+    .map(ms).filter((t): t is number => t != null);
+  return spent.length ? Math.max(...spent) : ms(rl.fiveHour);
+}
+
 export interface RunTurnParams {
   chatSessionId: string;
   author: { id: string; name: string };
@@ -389,7 +403,20 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
     }).catch(() => { /* titling is cosmetic — never surface it as a turn failure */ });
   } catch (e: any) {
     const aborted = abort.signal.aborted;
-    p.emit('turn:error', { sessionId: s.id, aborted, error: aborted ? 'interrupted' : String(e?.message || e) });
+    const errMsg = aborted ? 'interrupted' : String(e?.message || e);
+    // The author's claude.ai plan window is exhausted (not a transient 429 — withRateLimitRetry
+    // already handled those). If they opted in, park the prompt and re-run it when the window
+    // resets instead of losing it. Never blocks the failure path: a park error still reports.
+    let resumeAt: number | null = null;
+    if (!aborted && isUsageLimitError(errMsg) && autoResumeEligible(p.author.id, prov.env, s.kind)) {
+      resumeAt = await parkTurn({
+        sessionId: s.id, author: p.author, text: p.text,
+        attachments: attachments.map((a) => ({ name: a.name, isImage: a.isImage })),
+        includeChat: p.includeChat, errorMessage: errMsg,
+        lookupResetAt: () => probeResetAt(s.id, p.author.id),
+      }).catch(() => null);
+    }
+    p.emit('turn:error', { sessionId: s.id, aborted, error: errMsg, ...(resumeAt ? { resumeAt } : {}) });
     if (blocks.length) saveMessage({ sessionId: s.id, role: 'assistant', authorName: 'Claude', content: { blocks, interrupted: aborted } });
   } finally {
     active.delete(s.id);

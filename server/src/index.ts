@@ -24,6 +24,7 @@ import { dmRoutes } from './routes/dm.js';
 import { searchRoutes } from './routes/search.js';
 import { startReviewPoller, reapReviewOrphans } from './review/manager.js';
 import { scheduleModelRefresh } from './claude/models.js';
+import { armPendingResumes } from './claude/auto-resume.js';
 import { cleanupSandboxOrphans } from './review/sandbox.js';
 import { initRealtime } from './realtime/io.js';
 import { startReaper, cleanupOrphans, ensureNetwork } from './codeserver/manager.js';
@@ -105,6 +106,7 @@ async function main() {
   startReaper();
   startReviewPoller(); // poll each watched repo's host for open PRs → spawn/refresh review sessions
   scheduleModelRefresh(); // pull the live model list into the `models` config (frontier ids move fast)
+  armPendingResumes(); // re-arm turns parked for a claude.ai window reset (must follow initRealtime: they emit)
 
   await app.listen({ port: config.port, host: '0.0.0.0' });
   console.log(`[ccw] listening on ${tls ? 'https' : 'http'}://:${config.port}  forceMock=${cfg.bool('forceMock')}  data=${config.dataDir}`);

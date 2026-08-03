@@ -77,6 +77,7 @@ export async function authRoutes(app: FastifyInstance) {
     const u = requireAuth(req, reply); if (!u) return;
     const b = (req.body || {}) as any;
     if ('autoTitle' in b) db.update(schema.users).set({ autoTitle: b.autoTitle ? 1 : 0 }).where(eq(schema.users.id, u.id)).run();
+    if ('autoResume' in b) db.update(schema.users).set({ autoResume: b.autoResume ? 1 : 0 }).where(eq(schema.users.id, u.id)).run();
     const dto = meDto(u.id); if (!dto) return reply.code(404).send({ error: 'user not found' });
     return { user: dto };
   });

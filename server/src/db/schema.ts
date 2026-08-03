@@ -12,6 +12,23 @@ export const users = sqliteTable('users', {
   claudeTokenSetAt: integer('claude_token_set_at'), // when it was registered (display only)
   avatar: text('avatar'),                          // version token (set-time millis) for cache-busting; null = no avatar (file lives at <userHome>/avatar.<ext>)
   autoTitle: integer('auto_title').notNull().default(1), // 1 = name a fresh private chat after its topic on the first turn
+  autoResume: integer('auto_resume').notNull().default(0), // 1 = re-run a turn that hit the claude.ai 5h limit once the window resets (opt-in: it runs unattended)
+});
+
+// A turn parked because its author's claude.ai plan window (5h / weekly) was exhausted. Re-enqueued
+// automatically at `resumeAt`. Persisted (not just an in-memory timer) so a restart inside the ≤5h
+// wait doesn't silently drop the user's prompt. See claude/auto-resume.ts.
+export const pendingResumes = sqliteTable('pending_resumes', {
+  id: text('id').primaryKey(),
+  sessionId: text('session_id').notNull(),
+  authorId: text('author_id').notNull(),
+  authorName: text('author_name').notNull(),
+  text: text('text').notNull(),
+  attachments: text('attachments').notNull().default('[]'), // JSON [{name,isImage}]
+  includeChat: integer('include_chat').notNull().default(0),
+  attempts: integer('attempts').notNull().default(0),        // auto-resumes this prompt already got
+  resumeAt: integer('resume_at').notNull(),
+  createdAt: integer('created_at').notNull(),
 });
 
 export const authSessions = sqliteTable('auth_sessions', {

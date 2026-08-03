@@ -108,6 +108,12 @@ CREATE TABLE IF NOT EXISTS dm_messages (
   id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, user_id TEXT NOT NULL, text TEXT NOT NULL, created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_dm_messages_channel ON dm_messages(channel_id, created_at);
+CREATE TABLE IF NOT EXISTS pending_resumes (
+  id TEXT PRIMARY KEY, session_id TEXT NOT NULL, author_id TEXT NOT NULL, author_name TEXT NOT NULL,
+  text TEXT NOT NULL, attachments TEXT NOT NULL DEFAULT '[]', include_chat INTEGER NOT NULL DEFAULT 0,
+  attempts INTEGER NOT NULL DEFAULT 0, resume_at INTEGER NOT NULL, created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_pending_resumes_session ON pending_resumes(session_id);
 `;
 
 export let sqlite: Database.Database;
@@ -130,6 +136,8 @@ export function initDb() {
   try { sqlite.exec("ALTER TABLE users ADD COLUMN avatar TEXT"); } catch { /* already present */ }
   // per-user auto session titling (on by default)
   try { sqlite.exec("ALTER TABLE users ADD COLUMN auto_title INTEGER NOT NULL DEFAULT 1"); } catch { /* already present */ }
+  // per-user auto-resume when the claude.ai 5h window resets (off by default — it runs unattended)
+  try { sqlite.exec("ALTER TABLE users ADD COLUMN auto_resume INTEGER NOT NULL DEFAULT 0"); } catch { /* already present */ }
   // auto-review verdict (added to an already-created review_sessions table)
   try { sqlite.exec("ALTER TABLE review_sessions ADD COLUMN verdict TEXT NOT NULL DEFAULT 'none'"); } catch { /* already present */ }
   try { sqlite.exec("ALTER TABLE review_sessions ADD COLUMN verdict_summary TEXT"); } catch { /* already present */ }

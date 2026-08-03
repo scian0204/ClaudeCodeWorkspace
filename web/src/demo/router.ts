@@ -160,7 +160,7 @@ export function route(method: string, rawPath: string, body?: any): Res {
   const idAt = (i: number) => seg[i];
 
   // ---- auth ----
-  if (P === '/api/auth/me' && M === 'PATCH') { if ('autoTitle' in b) db.me.autoTitle = !!b.autoTitle; return ok({ user: db.me }); }
+  if (P === '/api/auth/me' && M === 'PATCH') { if ('autoTitle' in b) db.me.autoTitle = !!b.autoTitle; if ('autoResume' in b) db.me.autoResume = !!b.autoResume; return ok({ user: db.me }); }
   if (P === '/api/auth/me') return ok({ user: db.me });
   if (P === '/api/auth/login') return ok({ user: db.me });
   if (P === '/api/auth/logout') return ok({});
@@ -170,7 +170,7 @@ export function route(method: string, rawPath: string, body?: any): Res {
   if (P === '/api/auth/me/avatar') { db.me.avatar = M === 'DELETE' ? null : (b.avatarDataUrl || db.me.avatar); return ok({ user: db.me }); }
 
   // ---- client-facing config (model dropdown) ----
-  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenu: true, autoTitleEnabled: true, processPollMs: 5000 });
+  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenu: true, autoTitleEnabled: true, autoResumeEnabled: true, processPollMs: 5000 });
 
   // ---- unified search (mirrors server/src/routes/search.ts over the seed data) ----
   // `sort` is ignored on purpose: the seed data never hits the per-type cap for dated surfaces, so

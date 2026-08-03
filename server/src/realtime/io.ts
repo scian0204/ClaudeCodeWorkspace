@@ -5,6 +5,7 @@ import { db, schema } from '../db/index.js';
 import { parseCookie, userForToken, COOKIE, type AuthUser } from '../auth/index.js';
 import { enqueueTurn, cancelQueued, queueState, setEmitFactory } from '../rooms/queue.js';
 import { interruptTurn, liveTurn, postChat } from '../claude/session-manager.js';
+import { pendingForSession as resumesForSession, cancelResume } from '../claude/auto-resume.js';
 import { respondPermission, pendingForSession, type Decision } from '../claude/permissions.js';
 import * as rooms from '../rooms/manager.js';
 import * as review from '../review/manager.js';
@@ -117,6 +118,7 @@ export function initRealtime(httpServer: HttpServer) {
         pending: pendingForSession(sessionId),
         control: controlInfo(user, a),
         live: liveTurn(sessionId), // replay in-flight turn progress to a mid-turn joiner
+        resumes: resumesForSession(sessionId), // turns parked until the claude.ai window resets
       };
       ack?.(state);
       await presence(sessionId);
@@ -165,6 +167,20 @@ export function initRealtime(httpServer: HttpServer) {
       if (!allowed) { ack?.({ error: 'forbidden' }); return; }
       // Same short-circuit trap as chat:interrupt: cancel must run even when the client sends no ack.
       const ok = cancelQueued(p.sessionId, p.itemId);
+      ack?.({ ok });
+    });
+
+    // Drop a turn parked for the claude.ai window reset. Same authority as cancelling a queued item:
+    // its own author always may; otherwise the session owner / admin / room interrupt-holder.
+    socket.on('chat:cancelResume', (p: { sessionId: string; id: string }, ack?: Function) => {
+      const a = access(user, p.sessionId);
+      if (!a) { ack?.({ error: 'no access' }); return; }
+      const row = resumesForSession(p.sessionId).find((r) => r.id === p.id);
+      if (!row) { ack?.({ ok: false }); return; }
+      const allowed = row.author.id === user.id
+        || (a.kind === 'room' ? rooms.can(a.roomId!, user, 'interrupt') : a.s.ownerId === user.id || user.role === 'admin');
+      if (!allowed) { ack?.({ error: 'forbidden' }); return; }
+      const ok = !!cancelResume(p.id); // must run unconditionally — clients may send no ack
       ack?.({ ok });
     });
 

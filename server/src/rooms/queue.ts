@@ -1,5 +1,6 @@
 import { newId } from '../lib/ids.js';
 import { runTurn } from '../claude/session-manager.js';
+import { setResumeHooks } from '../claude/auto-resume.js';
 
 type Emit = (event: string, payload: any) => void;
 
@@ -76,5 +77,13 @@ export function cancelQueued(sessionId: string, itemId: string): boolean {
   return getQueue(sessionId).cancel(itemId);
 }
 export function queueState(sessionId: string) { return getQueue(sessionId).state(); }
+
+// Give auto-resume a way back into the queue without importing it (queue → auto-resume only, so the
+// session-manager → auto-resume edge can't close a cycle). A resumed turn is an ordinary queue item.
+setResumeHooks({
+  enqueue: (sessionId, author, text, includeChat, attachments) =>
+    void enqueueTurn(sessionId, author, text, undefined, includeChat, attachments),
+  emit: (sessionId, event, payload) => emitFactory(sessionId)(event, payload),
+});
 // Every session's queue state (running + waiting) — admin "activity/processes" panel.
 export function allQueueStates() { return [...queues.values()].map((q) => q.state()); }

@@ -25,6 +25,7 @@ export function MyPage() {
   const llmProvidersEnabled = useStore((s) => s.llmProvidersEnabled);
   const approvalsEnabled = useStore((s) => s.approvalsEnabled);
   const autoTitleEnabled = useStore((s) => s.autoTitleEnabled);
+  const autoResumeEnabled = useStore((s) => s.autoResumeEnabled);
   const t = useT();
   return (
     <div className="h-full overflow-y-auto scrolly">
@@ -36,6 +37,7 @@ export function MyPage() {
       <div className="max-w-[860px] mx-auto p-4 md:p-5 space-y-6">
         <Section title={t('mypage.profile')}><ProfileSection /></Section>
         {autoTitleEnabled && <Section title={t('mypage.autoTitle')}><AutoTitleSection /></Section>}
+        {autoResumeEnabled && <Section title={t('mypage.autoResume')}><AutoResumeSection /></Section>}
         {approvalsEnabled && (
           <Section title={t('mypage.requests')}>
             <div className="text-xs text-txt2 bg-claysoft border border-line rounded-lg px-3 py-2 mb-3">{t('requests.intro')}</div>
@@ -123,6 +125,36 @@ function AutoTitleSection() {
         <span>{t('mypage.autoTitleLabel')}</span>
       </label>
       <div className="text-xs text-txt3 mt-2">{t('mypage.autoTitleHint')}</div>
+    </>
+  );
+}
+
+// Auto-resume when the claude.ai plan window resets: on, a turn that died because the 5h (or weekly)
+// window was exhausted is re-sent by the server once it reopens. Off by default — it runs unattended.
+// Claude-subscription auth only; an API key or a bedrock/vertex/custom provider has no such window.
+function AutoResumeSection() {
+  const user = useStore((s) => s.user);
+  const setAutoResume = useStore((s) => s.setAutoResume);
+  const setError = useStore((s) => s.setError);
+  const t = useT();
+  const [busy, setBusy] = useState(false);
+  const on = user?.autoResume === true;
+
+  const toggle = async (next: boolean) => {
+    setBusy(true);
+    try { await setAutoResume(next); }
+    catch (e: any) { setError(e.message); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={on} disabled={busy} onChange={(e) => toggle(e.target.checked)} />
+        <span>{t('mypage.autoResumeLabel')}</span>
+      </label>
+      <div className="text-xs text-txt3 mt-2">{t('mypage.autoResumeHint')}</div>
+      <div className="text-xs text-txt3 mt-1">{t('mypage.autoResumeClaudeOnly')}</div>
     </>
   );
 }

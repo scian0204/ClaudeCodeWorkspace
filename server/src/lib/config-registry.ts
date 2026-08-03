@@ -55,6 +55,12 @@ export const DEFS: ConfigDef[] = [
   { key: 'autoTitleTimeoutMs', group: 'claude', type: 'int', default: '20000', min: 2000, max: 120000, unit: 'ms' },
   { key: 'usageProbeTtlMs', group: 'claude', type: 'int', default: '15000', min: 1000, max: 600000, unit: 'ms' },
   { key: 'usageProbeTimeoutMs', group: 'claude', type: 'int', default: '8000', min: 1000, max: 120000, unit: 'ms' },
+  // auto-resume a turn that hit the claude.ai plan window (5h / weekly), once the window resets
+  { key: 'autoResumeEnabled', group: 'claude', type: 'bool', default: '1' },
+  { key: 'autoResumeGraceMs', group: 'claude', type: 'int', default: '60000', min: 0, max: 3600000, unit: 'ms' },
+  { key: 'autoResumeMaxAttempts', group: 'claude', type: 'int', default: '3', min: 1, max: 10 },
+  { key: 'autoResumeMaxPending', group: 'claude', type: 'int', default: '20', min: 1, max: 200 },
+  { key: 'autoResumeStaleMs', group: 'claude', type: 'int', default: '21600000', min: 60000, max: 604800000, unit: 'ms' },
 
   // privacy — non-essential egress to Anthropic (the inference call itself is never affected).
   // Every key here means the same thing: on = blocked. The master switch OVERRIDES the channel keys
@@ -279,6 +285,6 @@ export function modelMap(): Record<string, string> {
 }
 
 // Client-facing subset (any authed user): drives the model dropdown.
-export function publicConfig(): { models: Record<string, string>; defaultModel: string; defaultEffort: string; sessionImportEnabled: boolean; llmProvidersEnabled: boolean; approvalsEnabled: boolean; dmEnabled: boolean; searchEnabled: boolean; customContextMenu: boolean; autoTitleEnabled: boolean; processPollMs: number } {
-  return { models: modelMap(), defaultModel: cfg.str('defaultModel'), defaultEffort: cfg.str('defaultEffort'), sessionImportEnabled: cfg.bool('sessionImportEnabled'), llmProvidersEnabled: cfg.bool('llmProvidersEnabled'), approvalsEnabled: cfg.bool('approvalsEnabled'), dmEnabled: cfg.bool('dmEnabled'), searchEnabled: cfg.bool('searchEnabled'), customContextMenu: cfg.bool('customContextMenu'), autoTitleEnabled: cfg.bool('autoTitleEnabled'), processPollMs: cfg.int('processPollMs') };
+export function publicConfig(): { models: Record<string, string>; defaultModel: string; defaultEffort: string; sessionImportEnabled: boolean; llmProvidersEnabled: boolean; approvalsEnabled: boolean; dmEnabled: boolean; searchEnabled: boolean; customContextMenu: boolean; autoTitleEnabled: boolean; autoResumeEnabled: boolean; processPollMs: number } {
+  return { models: modelMap(), defaultModel: cfg.str('defaultModel'), defaultEffort: cfg.str('defaultEffort'), sessionImportEnabled: cfg.bool('sessionImportEnabled'), llmProvidersEnabled: cfg.bool('llmProvidersEnabled'), approvalsEnabled: cfg.bool('approvalsEnabled'), dmEnabled: cfg.bool('dmEnabled'), searchEnabled: cfg.bool('searchEnabled'), customContextMenu: cfg.bool('customContextMenu'), autoTitleEnabled: cfg.bool('autoTitleEnabled'), autoResumeEnabled: cfg.bool('autoResumeEnabled'), processPollMs: cfg.int('processPollMs') };
 }

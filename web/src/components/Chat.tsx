@@ -269,6 +269,9 @@ const fmtTokens = (n: number): string =>
   : n >= 1000 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k'
   : String(n);
 
+// wall-clock HH:MM of an epoch-millis instant (auto-resume banner: "재시도 예정 14:20")
+const fmtClock = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
 function resetsIn(iso: string | null, t: (k: string, p?: any) => string): string {
   if (!iso) return '';
   const ms = new Date(iso).getTime() - Date.now();
@@ -881,7 +884,7 @@ function ImageLightbox({ preview, onClose }: { preview: { src: string; name: str
 
 function Composer() {
   const store = useStore();
-  const { current: c, send, queue, cancel, interrupt, turnActive, congested, user, commands } = store;
+  const { current: c, send, queue, cancel, interrupt, turnActive, congested, user, commands, resumes, cancelResume } = store;
   const [atts, setAtts] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState<UploadState | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -1001,6 +1004,20 @@ function Composer() {
   return (
     <div className="px-3 md:px-5 pb-4 pt-2 shrink-0">
       <div className="max-w-[760px] mx-auto">
+        {resumes.length > 0 && (
+          <div className="text-xs mb-2 flex flex-col gap-1">
+            {resumes.map((r) => (
+              <div key={r.id} className="flex items-start gap-2 bg-warnsoft border border-line rounded-lg px-2.5 py-1.5">
+                <span className="text-warn shrink-0 mt-px"><IconClock size={12} /></span>
+                <span className="text-txt2 min-w-0 break-words">
+                  {t('chat.resumeScheduled', { time: fmtClock(r.resumeAt), name: r.author.name })}
+                </span>
+                <button className="ml-auto shrink-0 text-txt3 hover:text-danger" title={t('common.cancel')}
+                  aria-label={t('common.cancel')} onClick={() => cancelResume(r.id)}><IconX size={13} /></button>
+              </div>
+            ))}
+          </div>
+        )}
         {(queue.running || queue.waiting.length > 0 || congested) && (
           <div className="text-xs text-txt3 mb-2 flex items-center gap-2 flex-wrap">
             {queue.running && <span className="inline-flex items-center gap-1"><IconClock size={12} />{t('chat.authorWorking', { name: queue.running.author.name })}</span>}
