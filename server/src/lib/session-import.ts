@@ -29,6 +29,15 @@ type Block =
 
 const META_TYPES = new Set(['custom-title', 'mode', 'attachment', 'summary', 'system', 'file-history-snapshot']);
 
+// CLI plumbing the transcript files under a "user" line: the local-command caveat, slash-command
+// wrappers, captured stdout, injected reminders. Nobody typed any of it into the chat, so it is not
+// conversation — importing it verbatim leaves XML noise in the thread and can even become the
+// generated title. A line is dropped only when NOTHING but these tags is left.
+const CLI_TAGS = 'local-command-caveat|local-command-stdout|local-command-stderr|command-name|command-message|command-args|system-reminder';
+function isCliPlumbing(text: string): boolean {
+  return !text.replace(new RegExp(`<(${CLI_TAGS})>[\\s\\S]*?</\\1>`, 'g'), '').trim();
+}
+
 function textFrom(content: any): string {
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) return content.filter((b) => b?.type === 'text').map((b) => b.text).join('');
@@ -57,7 +66,9 @@ export function jsonlToMessages(
   for (const raw of lines) {
     const s = raw.trim(); if (!s) continue;
     let m: any; try { m = JSON.parse(s); } catch { continue; }
-    if (!m || m.isSidechain === true || META_TYPES.has(m.type)) continue;
+    // isMeta marks a line the CLI injected on the user's behalf (caveat, skill preamble, image
+    // dimensions, "Continue from where you left off") — never something the user wrote.
+    if (!m || m.isSidechain === true || m.isMeta === true || META_TYPES.has(m.type)) continue;
     const ts = nextTs(m.timestamp);
     if (m.type === 'assistant') {
       for (const b of m.message?.content || []) {
@@ -77,7 +88,7 @@ export function jsonlToMessages(
       }
       if (mergedOnly) continue; // tool_result-only line: merged, no message
       const text = textFrom(content);
-      if (!text) continue;
+      if (!text || isCliPlumbing(text)) continue;
       flush(ts);
       out.push({ role: 'user', content: { text }, createdAt: ts });
     }
