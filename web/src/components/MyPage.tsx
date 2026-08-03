@@ -24,6 +24,7 @@ export function MyPage() {
   const setPanel = useStore((s) => s.setPanel);
   const llmProvidersEnabled = useStore((s) => s.llmProvidersEnabled);
   const approvalsEnabled = useStore((s) => s.approvalsEnabled);
+  const autoTitleEnabled = useStore((s) => s.autoTitleEnabled);
   const t = useT();
   return (
     <div className="h-full overflow-y-auto scrolly">
@@ -34,6 +35,7 @@ export function MyPage() {
       </div>
       <div className="max-w-[860px] mx-auto p-4 md:p-5 space-y-6">
         <Section title={t('mypage.profile')}><ProfileSection /></Section>
+        {autoTitleEnabled && <Section title={t('mypage.autoTitle')}><AutoTitleSection /></Section>}
         {approvalsEnabled && (
           <Section title={t('mypage.requests')}>
             <div className="text-xs text-txt2 bg-claysoft border border-line rounded-lg px-3 py-2 mb-3">{t('requests.intro')}</div>
@@ -94,6 +96,34 @@ function ProfileSection() {
         <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={(e) => pick(e.target.files?.[0])} />
       </div>
     </div>
+  );
+}
+
+// Auto session titling: on, the server renames a still-unnamed private chat after its topic
+// once the first turn finishes. Optimistic — the checkbox flips back if the PATCH fails.
+function AutoTitleSection() {
+  const user = useStore((s) => s.user);
+  const setAutoTitle = useStore((s) => s.setAutoTitle);
+  const setError = useStore((s) => s.setError);
+  const t = useT();
+  const [busy, setBusy] = useState(false);
+  const on = user?.autoTitle !== false;
+
+  const toggle = async (next: boolean) => {
+    setBusy(true);
+    try { await setAutoTitle(next); }
+    catch (e: any) { setError(e.message); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={on} disabled={busy} onChange={(e) => toggle(e.target.checked)} />
+        <span>{t('mypage.autoTitleLabel')}</span>
+      </label>
+      <div className="text-xs text-txt3 mt-2">{t('mypage.autoTitleHint')}</div>
+    </>
   );
 }
 

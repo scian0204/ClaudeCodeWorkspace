@@ -128,6 +128,8 @@ export function initDb() {
   try { sqlite.exec("ALTER TABLE users ADD COLUMN claude_token_set_at INTEGER"); } catch { /* already present */ }
   // per-user avatar version token (cache-bust key; image file on disk under the user's home dir)
   try { sqlite.exec("ALTER TABLE users ADD COLUMN avatar TEXT"); } catch { /* already present */ }
+  // per-user auto session titling (on by default)
+  try { sqlite.exec("ALTER TABLE users ADD COLUMN auto_title INTEGER NOT NULL DEFAULT 1"); } catch { /* already present */ }
   // auto-review verdict (added to an already-created review_sessions table)
   try { sqlite.exec("ALTER TABLE review_sessions ADD COLUMN verdict TEXT NOT NULL DEFAULT 'none'"); } catch { /* already present */ }
   try { sqlite.exec("ALTER TABLE review_sessions ADD COLUMN verdict_summary TEXT"); } catch { /* already present */ }

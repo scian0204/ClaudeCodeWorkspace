@@ -72,6 +72,15 @@ export async function authRoutes(app: FastifyInstance) {
     return publicConfig();
   });
 
+  // ── self-service preferences (My Page) ──
+  app.patch('/api/auth/me', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    const b = (req.body || {}) as any;
+    if ('autoTitle' in b) db.update(schema.users).set({ autoTitle: b.autoTitle ? 1 : 0 }).where(eq(schema.users.id, u.id)).run();
+    const dto = meDto(u.id); if (!dto) return reply.code(404).send({ error: 'user not found' });
+    return { user: dto };
+  });
+
   // ── self-service Claude token (register / update / clear) ──
   app.put('/api/auth/me/claude-token', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
