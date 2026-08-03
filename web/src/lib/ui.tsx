@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import { t, useT, useLang, setLang, LANGS, LANG_LABELS, type Lang } from './i18n';
 import { useStore } from './store';
+import { withKeys } from './shortcuts';
 import { IconMenu, IconSparkle } from './icons';
 
 // Tailwind `md` breakpoint (768px). React needs JS to branch on viewport (e.g. force chat-only
@@ -24,7 +25,7 @@ export function MobileMenuButton({ className }: { className?: string }) {
   const tr = useT();
   const label = tr(isMobile ? 'nav.openMenu' : 'nav.expandSidebar');
   return (
-    <button className={`toolbtn shrink-0 ${collapsed ? '' : 'md:hidden'} ${className || ''}`} aria-label={label} title={label}
+    <button className={`toolbtn shrink-0 ${collapsed ? '' : 'md:hidden'} ${className || ''}`} aria-label={label} title={withKeys(label, 'Mod+B')}
       onClick={() => (isMobile ? setSidebarOpen(true) : setSidebarCollapsed(false))}><IconMenu /></button>
   );
 }

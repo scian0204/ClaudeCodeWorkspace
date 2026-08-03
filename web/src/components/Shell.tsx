@@ -8,7 +8,9 @@ import { PluginsPanel } from './PluginsPanel';
 import { MyPage } from './MyPage';
 import { MyTokenModal } from './TokenSettings';
 import { SearchPalette, SearchButton } from './SearchPalette';
+import { ShortcutsHelp } from './ShortcutsHelp';
 import { MobileMenuButton } from '../lib/ui';
+import { useShortcuts } from '../lib/shortcuts';
 import { useT } from '../lib/i18n';
 import { IconX, IconPlus } from '../lib/icons';
 
@@ -58,26 +60,12 @@ export function Shell() {
   const collapsed = useStore((s) => s.sidebarCollapsed);
   const user = useStore((s) => s.user);
 
-  const searchEnabled = useStore((s) => s.searchEnabled);
-  const setSearchOpen = useStore((s) => s.setSearchOpen);
-
   // Nag users without a personal token to register one — every login, until registered or dismissed.
   const [nagDismissed, setNagDismissed] = useState(false);
   useEffect(() => { setNagDismissed(false); }, [user?.id]);
   const showNag = !!user && !user.hasClaudeToken && !nagDismissed;
 
-  // Ctrl/Cmd+K opens unified search from anywhere (also Ctrl/Cmd+/ — some browsers eat Cmd+K).
-  useEffect(() => {
-    if (!searchEnabled) return;
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K' || e.key === '/')) {
-        e.preventDefault();
-        setSearchOpen(true);
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [searchEnabled, setSearchOpen]);
+  useShortcuts(); // global keyboard shortcuts (search, new chat, sidebar, home, theme, ? help)
 
   // ≥md: two static columns (264px sidebar + content), or one when collapsed. <md: single column,
   // sidebar becomes an off-canvas drawer (positioned by Sidebar itself) over a tap-to-dismiss backdrop.
@@ -90,6 +78,7 @@ export function Shell() {
       </main>
       {error && <Toast msg={error} onClose={() => setError(null)} />}
       <SearchPalette />
+      <ShortcutsHelp />
       <MyTokenModal open={showNag} nag onClose={() => setNagDismissed(true)} />
     </div>
   );

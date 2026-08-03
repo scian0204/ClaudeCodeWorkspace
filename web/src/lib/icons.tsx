@@ -32,6 +32,9 @@ export const IconChevronUp = (p: IconProps) => <Svg {...p}><path d="m6 15 6-6 6 
 export const IconPlus = (p: IconProps) => <Svg {...p}><path d="M12 5v14M5 12h14" /></Svg>;
 export const IconPanelLeft = (p: IconProps) => <Svg {...p}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></Svg>;
 export const IconSearch = (p: IconProps) => <Svg {...p}><circle cx="11" cy="11" r="7" /><path d="m20 20-4.3-4.3" /></Svg>;
+export const IconKeyboard = (p: IconProps) => (
+  <Svg {...p}><rect x="2" y="6" width="20" height="12" rx="2" /><path d="M6.5 10h.01M10.5 10h.01M14.5 10h.01M18 10h.01M8 14h8" /></Svg>
+);
 export const IconGlobe = (p: IconProps) => (
   <Svg {...p}><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.5 2.6 2.5 15.4 0 18M12 3c-2.5 2.6-2.5 15.4 0 18" /></Svg>
 );

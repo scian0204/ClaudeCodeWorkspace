@@ -63,6 +63,7 @@ interface State {
   dmEnabled: boolean;            // admin feature flag (from /api/config) — gates the DM/group chat UI
   searchEnabled: boolean;        // admin feature flag (from /api/config) — gates the unified-search UI
   searchOpen: boolean;           // unified-search palette (Ctrl/Cmd+K)
+  shortcutsOpen: boolean;        // keyboard-shortcut cheat sheet (?)
   highlightMsgId: string | null; // message a search hit jumped to (scroll target + ring)
   processPollMs: number;         // admin process panel auto-poll interval (from /api/config)
   channels: DmChannel[];         // DM + group chat channels the user belongs to
@@ -93,6 +94,7 @@ interface State {
   openChannel: (id: string) => Promise<void>;
   goHome: () => void;
   setSearchOpen: (open: boolean) => void;
+  setShortcutsOpen: (open: boolean) => void;
   setHighlightMsgId: (id: string | null) => void;
   openHit: (hit: SearchHit) => Promise<void>;
   sendDm: (text: string) => void;
@@ -151,7 +153,7 @@ export const useStore = create<State>((set, get) => ({
   current: null, messages: [], live: null, turnActive: false,
   queue: { running: null, waiting: [] }, pending: [],
   control: { canApprove: true, canInterrupt: true, canSetMode: true, isOwner: true, delegable: [] },
-  presence: [], congested: false, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, searchOpen: false, highlightMsgId: null, processPollMs: 5000, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
+  presence: [], congested: false, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
   channels: [], activeChannelId: null, channelMessages: [],
   commands: [],
 
@@ -174,7 +176,7 @@ export const useStore = create<State>((set, get) => ({
 
   logout: async () => {
     await api.post('/api/auth/logout');
-    set({ user: null, current: null, messages: [], sessions: [], rooms: [], wikiTopics: [], reviewRepos: [], reviewSessions: [], requests: [], pendingRequestCount: 0, channels: [], activeChannelId: null, channelMessages: [], searchOpen: false, highlightMsgId: null });
+    set({ user: null, current: null, messages: [], sessions: [], rooms: [], wikiTopics: [], reviewRepos: [], reviewSessions: [], requests: [], pendingRequestCount: 0, channels: [], activeChannelId: null, channelMessages: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null });
   },
 
   toggleTheme: () => {
@@ -358,6 +360,7 @@ export const useStore = create<State>((set, get) => ({
 
   // ── unified search ──
   setSearchOpen: (open) => set({ searchOpen: open, sidebarOpen: false }),
+  setShortcutsOpen: (open) => set({ shortcutsOpen: open, sidebarOpen: false }),
   setHighlightMsgId: (id) => set({ highlightMsgId: id }),
   // Navigate to a search hit. Reuses the existing openers so a hit lands exactly where the sidebar
   // would put you; 'project' / 'wikiFile' are explorer targets handled by SearchPalette itself.

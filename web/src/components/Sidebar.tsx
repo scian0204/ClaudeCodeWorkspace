@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useStore, type ReviewSessionSummary, type ReviewRepo, type DmChannel } from '../lib/store';
 import { api, type UploadState } from '../lib/api';
 import { Avatar, avatarUrl, timeAgo, LangSelect } from '../lib/ui';
+import { fmtKeys, withKeys } from '../lib/shortcuts';
 import { Modal } from './Modal';
 import { ImportSessionModal } from './ImportSessionModal';
 import { SearchButton } from './SearchPalette';
@@ -11,11 +12,11 @@ import {
   IconX, IconDownload, IconMessage, IconPencil, IconTrash, IconUsers, IconClock, IconWarning,
   IconBook, IconPuzzle, IconSliders, IconLogout, IconFile, IconBox, IconRefresh, IconPlus,
   IconCheckCircle, IconBan, IconGitBranch, IconCheckSquare, IconSquare, IconFolder, IconPanelLeft,
-  IconGlobe,
+  IconGlobe, IconKeyboard,
 } from '../lib/icons';
 
 export function Sidebar() {
-  const { user, sessions, rooms, wikiTopics, current, openPrivate, openRoom, openWiki, newSession, newRoom, logout, setPanel, panel, deleteSession, deleteRoom, deleteWikiTopic, renameSession, sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed, sessionImportEnabled, pendingRequestCount, channels, activeChannelId, openChannel, dmEnabled, goHome } = useStore();
+  const { user, sessions, rooms, wikiTopics, current, openPrivate, openRoom, openWiki, newSession, newRoom, logout, setPanel, panel, deleteSession, deleteRoom, deleteWikiTopic, renameSession, sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed, sessionImportEnabled, pendingRequestCount, channels, activeChannelId, openChannel, dmEnabled, goHome, setShortcutsOpen } = useStore();
   const [showRoom, setShowRoom] = useState(false);
   const [roomName, setRoomName] = useState('');
   const [showWiki, setShowWiki] = useState(false);
@@ -39,7 +40,7 @@ export function Sidebar() {
         <div className="flex items-start gap-1 mb-3.5">
           {/* the logo is the way back to the landing screen */}
           <button className="flex items-center gap-2 min-w-0 flex-1 text-left rounded-md hover:opacity-80"
-            title={t('nav.home')} onClick={() => goHome()}>
+            title={withKeys(t('nav.home'), 'Mod+Shift+H')} onClick={() => goHome()}>
             <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" className="w-[26px] h-[26px] rounded-md shrink-0" />
             <div className="leading-tight min-w-0">
               <div className="font-semibold text-sm tracking-tight truncate">ClaudeCode Workspace</div>
@@ -50,11 +51,11 @@ export function Sidebar() {
               so the brand title gets the full width instead of being truncated */}
           <div className="shrink-0">
             <button className="toolbtn md:hidden" aria-label={t('nav.closeMenu')} onClick={() => setSidebarOpen(false)}><IconX /></button>
-            <button className="toolbtn max-md:hidden" title={t('nav.collapseSidebar')} aria-label={t('nav.collapseSidebar')}
+            <button className="toolbtn max-md:hidden" title={withKeys(t('nav.collapseSidebar'), 'Mod+B')} aria-label={t('nav.collapseSidebar')}
               onClick={() => setSidebarCollapsed(true)}><IconPanelLeft /></button>
           </div>
         </div>
-        <button className="btn-primary w-full flex items-center justify-center gap-2 !py-2" onClick={() => newSession()}><IconPlus size={16} />{t('sidebar.newChat')}</button>
+        <button className="btn-primary w-full flex items-center justify-center gap-2 !py-2" title={withKeys(t('sidebar.newChat'), 'Mod+Shift+O')} onClick={() => newSession()}><IconPlus size={16} />{t('sidebar.newChat')}</button>
         <SearchButton label className="mt-2" />
       </div>
 
@@ -145,6 +146,10 @@ export function Sidebar() {
           <span className="w-7 grid place-items-center"><IconGlobe size={17} /></span> {t('lang.label')}
           <LangSelect className="ml-auto shrink-0 max-w-[104px] text-[11px] text-txt2 bg-card border border-line2 rounded-md px-1.5 py-0.5 outline-none cursor-pointer" />
         </div>
+        <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full hover:bg-line text-left text-[13px] text-txt2" onClick={() => setShortcutsOpen(true)}>
+          <span className="w-7 grid place-items-center"><IconKeyboard size={17} /></span> {t('sc.footer')}
+          <span className="ml-auto text-[10px] font-mono text-txt3">{fmtKeys('?')}</span>
+        </button>
         <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full hover:bg-line text-left text-[13px] text-txt2" onClick={() => logout()}>
           <span className="w-7 grid place-items-center"><IconLogout size={17} /></span> {t('sidebar.logout')}
         </button>

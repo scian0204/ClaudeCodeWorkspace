@@ -15,6 +15,7 @@ import { SourcesPanel, CiteHighlighter } from './SourcesPanel';
 import { extractSources, markCitations, type WikiSource } from '../lib/wikiCite';
 import { md } from '../lib/md';
 import { useT } from '../lib/i18n';
+import { withKeys } from '../lib/shortcuts';
 import {
   IconChevronDown, IconChevronRight, IconChevronUp, IconTheme, IconFolder, IconFile, IconTrash,
   IconGauge, IconEye, IconBook, IconArchive, IconSparkle, IconCopy, IconPencil, IconHelp,
@@ -154,7 +155,7 @@ function Header() {
           ))}
         </div>
       )}
-      <button className="toolbtn" title={t('chat.toggleTheme')} aria-label={t('chat.toggleTheme')} onClick={toggleTheme}><IconTheme /></button>
+      <button className="toolbtn" title={withKeys(t('chat.toggleTheme'), 'Mod+Shift+L')} aria-label={t('chat.toggleTheme')} onClick={toggleTheme}><IconTheme /></button>
 
       {gitOpen && c.projectId && <GitPanel projectId={c.projectId} open={gitOpen} onClose={() => setGitOpen(false)} />}
       {showMembers && c.room && <MembersDialog open={showMembers} onClose={() => setShowMembers(false)} />}
@@ -1076,6 +1077,7 @@ function Composer() {
                 if (e.key === 'Escape') {
                   if (showAt) { e.preventDefault(); setAtClosed(true); return; }
                   if (showSlash) { e.preventDefault(); setText(''); return; }
+                  if (turnActive) { e.preventDefault(); interrupt(); return; } // no menu open → stop the running turn
                 }
                 if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); }
               }} />

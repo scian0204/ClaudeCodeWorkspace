@@ -8,6 +8,7 @@ import { api } from '../lib/api';
 import { Modal } from './Modal';
 import { FileExplorer } from './FileExplorer';
 import { timeAgo } from '../lib/ui';
+import { fmtKeys, withKeys } from '../lib/shortcuts';
 import { useT } from '../lib/i18n';
 import {
   IconSearch, IconMessage, IconUsers, IconFolder, IconBook, IconFile, IconGitBranch, IconUser,
@@ -248,12 +249,12 @@ export function SearchButton({ className, label }: { className?: string; label?:
       <button className={`flex items-center gap-2 w-full text-left border border-line rounded-lg px-2.5 py-1.5 text-[12px] text-txt3 hover:border-clay hover:text-txt ${className || ''}`}
         onClick={() => setSearchOpen(true)}>
         <IconSearch size={14} /><span className="flex-1 truncate">{t('search.button')}</span>
-        <span className="text-[10px] font-mono shrink-0 max-md:hidden">{t('search.shortcut')}</span>
+        <span className="text-[10px] font-mono shrink-0 max-md:hidden">{fmtKeys('Mod+K')}</span>
       </button>
     );
   }
   return (
-    <button className={`toolbtn shrink-0 ${className || ''}`} title={t('search.button')} aria-label={t('search.button')}
+    <button className={`toolbtn shrink-0 ${className || ''}`} title={withKeys(t('search.button'), 'Mod+K')} aria-label={t('search.button')}
       onClick={() => setSearchOpen(true)}><IconSearch /></button>
   );
 }
