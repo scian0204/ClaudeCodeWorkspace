@@ -63,7 +63,7 @@ The Claude Code CLI is powerful, but it's tied to **one terminal — yours**. Cl
 - Build a team **LLM Wiki** — upload docs, Claude compiles them into a queryable knowledge base
 - **Import a local session** — upload a project folder plus its `~/.claude` session files to clone the conversation as a resumable private session
 - **Auto-review pull requests** — each open PR auto-runs a pipeline (merge → build/run → bug + code review → a merge-safe verdict); one click merges it on the remote
-- **Search the whole workspace** (`Ctrl/Cmd+K`) — one palette over your private chats, the shared rooms you belong to, DM/group messages, projects, LLM Wiki topics + documents, PR reviews and people; a hit jumps straight to the message (or opens the file). Every surface is filtered to what you could already view
+- **Search the whole workspace** (`Ctrl/Cmd+K`) — one palette over your private chats, the shared rooms you belong to, DM/group messages, projects, LLM Wiki topics + documents, PR reviews and people; a hit jumps straight to the message (or opens the file). Grouped by type by default, or flattened into one **newest / oldest** timeline. Every surface is filtered to what you could already view
 - **Live usage meter** in the chat header — per-session **context-window** fill plus your **claude.ai plan limits** (5-hour, weekly, per-model) with reset countdowns, straight from the CLI
 - **Per-session model effort** — pick the reasoning effort (low → max) from a header pill; unsupported models silently downgrade
 - Each user runs on **their own Claude token** (admin-common token + env as fallback); admins see everything via a **usage dashboard**
