@@ -154,7 +154,7 @@ function scanTopicFiles(root: string, budget: { left: number }): string[] {
 }
 
 export async function searchRoutes(app: FastifyInstance) {
-  // GET /api/search?q=<term>[&types=chat,dm,…]
+  // GET /api/search?q=<term>[&types=chat,dm,…][&sort=newest|oldest]
   app.get('/api/search', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
     if (!cfg.bool('searchEnabled')) return reply.code(404).send({ error: 'search disabled' });
@@ -165,6 +165,13 @@ export async function searchRoutes(app: FastifyInstance) {
     const perType = cfg.int('searchMaxPerType');
     const wantRaw = String((req.query as any).types || '').split(',').map((s) => s.trim()).filter(Boolean);
     const want = (t: HitType) => wantRaw.length === 0 || wantRaw.includes(t);
+    // Which END of each surface the per-type cap keeps. Without this the client's "oldest first"
+    // view would be sorting each type's NEWEST perType rows — the genuinely oldest hits would never
+    // leave the DB. Every time-ordered collector below honours it before capping.
+    const oldest = String((req.query as any).sort || '') === 'oldest';
+    const order = (col: any) => (oldest ? col : desc(col));
+    const byAge = <T>(list: T[], ts: (x: T) => number): T[] =>
+      [...list].sort((a, b) => (oldest ? ts(a) - ts(b) : ts(b) - ts(a)));
 
     const hits: Hit[] = [];
     const room = (t: HitType) => hits.reduce((n, h) => n + (h.type === t ? 1 : 0), 0) < perType;
@@ -175,7 +182,7 @@ export async function searchRoutes(app: FastifyInstance) {
       const rows = db.select().from(schema.chatSessions)
         .where(and(eq(schema.chatSessions.kind, 'private'), isNull(schema.chatSessions.wikiTopicId),
           likeExpr(schema.chatSessions.title, q)))
-        .orderBy(desc(schema.chatSessions.updatedAt)).limit(perType * 4).all();
+        .orderBy(order(schema.chatSessions.updatedAt)).limit(perType * 4).all();
       for (const s of rows) {
         if (!room('session')) break;
         const v = chats.get(s.id); if (!v) continue; // someone else's private thread (admin scan)
@@ -185,7 +192,7 @@ export async function searchRoutes(app: FastifyInstance) {
 
     // ── room names ──
     if (want('room')) {
-      for (const r of rooms.listRoomsForUser(u)) {
+      for (const r of byAge(rooms.listRoomsForUser(u), (r) => r.createdAt)) {
         if (!room('room')) break;
         if (!has(r.name, needle)) continue;
         hits.push({
@@ -204,7 +211,7 @@ export async function searchRoutes(app: FastifyInstance) {
         ? likeExpr(schema.messages.content, q)
         : and(inArray(schema.messages.sessionId, [...chats.keys()]), likeExpr(schema.messages.content, q));
       const rows = db.select().from(schema.messages).where(where)
-        .orderBy(desc(schema.messages.createdAt)).limit(perType * 3).all();
+        .orderBy(order(schema.messages.createdAt)).limit(perType * 3).all();
       for (const m of rows) {
         if (!room('chat')) break;
         const v = chats.get(m.sessionId); if (!v) continue;
@@ -226,7 +233,7 @@ export async function searchRoutes(app: FastifyInstance) {
       const label = (c: (typeof channels)[number]) =>
         c.kind === 'group' ? (c.name || 'Group') : (c.members.find((m) => m.userId !== u.id)?.displayName || 'DM');
       if (want('channel')) {
-        for (const c of channels) {
+        for (const c of byAge(channels, (c) => c.lastMessage?.createdAt ?? c.createdAt)) {
           if (!room('channel')) break;
           if (!has(c.name, needle)) continue;
           hits.push({
@@ -241,7 +248,7 @@ export async function searchRoutes(app: FastifyInstance) {
         const names = new Map(db.select().from(schema.users).all().map((x) => [x.id, x.displayName]));
         const rows = db.select().from(schema.dmMessages)
           .where(and(inArray(schema.dmMessages.channelId, [...byId.keys()]), likeExpr(schema.dmMessages.text, q)))
-          .orderBy(desc(schema.dmMessages.createdAt)).limit(perType).all();
+          .orderBy(order(schema.dmMessages.createdAt)).limit(perType).all();
         for (const m of rows) {
           const c = byId.get(m.channelId)!;
           hits.push({
@@ -255,7 +262,7 @@ export async function searchRoutes(app: FastifyInstance) {
 
     // ── projects (name / path) ──
     if (want('project')) {
-      for (const p of visibleProjects(u)) {
+      for (const p of byAge(visibleProjects(u), (p) => p.createdAt)) {
         if (!room('project')) break;
         if (!has(p.name, needle) && !has(p.path, needle)) continue;
         hits.push({
@@ -266,7 +273,7 @@ export async function searchRoutes(app: FastifyInstance) {
     }
 
     // ── wiki topics + their knowledge files (readable by any authed user, per routes/wiki.ts) ──
-    const topics = db.select().from(schema.wikiTopics).orderBy(desc(schema.wikiTopics.createdAt)).all();
+    const topics = db.select().from(schema.wikiTopics).orderBy(order(schema.wikiTopics.createdAt)).all();
     if (want('wiki')) {
       for (const t of topics) {
         if (!room('wiki')) break;
@@ -306,7 +313,7 @@ export async function searchRoutes(app: FastifyInstance) {
 
     // ── PR review sessions ──
     if (want('review')) {
-      for (const s of listReviewSessionsForUser(u)) {
+      for (const s of byAge(listReviewSessionsForUser(u), (s) => s.updatedAt)) {
         if (!room('review')) break;
         const blob = `#${s.prNumber} ${s.prTitle} ${s.repoName} ${s.authorLogin} ${s.verdictSummary || ''}`;
         if (!has(blob, needle)) continue;

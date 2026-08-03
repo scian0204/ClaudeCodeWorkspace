@@ -172,6 +172,8 @@ export function route(method: string, rawPath: string, body?: any): Res {
   if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, processPollMs: 5000 });
 
   // ---- unified search (mirrors server/src/routes/search.ts over the seed data) ----
+  // `sort` is ignored on purpose: the seed data never hits the per-type cap for dated surfaces, so
+  // returning every match is equivalent — the palette does the newest/oldest ordering client-side.
   if (P === '/api/search') return ok(searchDemo(String(query.get('q') || '')));
 
   // ---- member requests (approval workflow) ----
