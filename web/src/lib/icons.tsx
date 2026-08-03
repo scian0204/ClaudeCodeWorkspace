@@ -30,6 +30,7 @@ export const IconChevronDown = (p: IconProps) => <Svg {...p}><path d="m6 9 6 6 6
 export const IconChevronRight = (p: IconProps) => <Svg {...p}><path d="m9 6 6 6-6 6" /></Svg>;
 export const IconChevronUp = (p: IconProps) => <Svg {...p}><path d="m6 15 6-6 6 6" /></Svg>;
 export const IconPlus = (p: IconProps) => <Svg {...p}><path d="M12 5v14M5 12h14" /></Svg>;
+export const IconPanelLeft = (p: IconProps) => <Svg {...p}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></Svg>;
 
 // ── actions ──
 export const IconRefresh = (p: IconProps) => (

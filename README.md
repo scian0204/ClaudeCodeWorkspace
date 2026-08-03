@@ -66,6 +66,7 @@ The Claude Code CLI is powerful, but it's tied to **one terminal — yours**. Cl
 - **Live usage meter** in the chat header — per-session **context-window** fill plus your **claude.ai plan limits** (5-hour, weekly, per-model) with reset countdowns, straight from the CLI
 - **Per-session model effort** — pick the reasoning effort (low → max) from a header pill; unsupported models silently downgrade
 - Each user runs on **their own Claude token** (admin-common token + env as fallback); admins see everything via a **usage dashboard**
+- **Collapsible sidebar** — hide the left column on desktop for a full-width chat; the hamburger in any header brings it back (remembered per browser)
 - **Works on a phone** — responsive layout: the sidebar collapses into a slide-in drawer and the chat goes full-width (installable as a PWA)
 
 > Works as a personal remote setup too — solo, it becomes a single-account "remote Claude Code".

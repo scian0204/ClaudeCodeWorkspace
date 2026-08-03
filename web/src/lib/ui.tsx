@@ -14,14 +14,18 @@ export function useIsMobile(): boolean {
   );
 }
 
-// Hamburger that opens the off-canvas sidebar drawer. Hidden ≥md (sidebar is a static column there).
-// Dropped into every top bar so the drawer is reachable from any view.
+// Hamburger in every top bar. <md: opens the off-canvas drawer (always visible). ≥md: shown only
+// once the sidebar column is collapsed, where it brings the column back.
 export function MobileMenuButton({ className }: { className?: string }) {
   const setSidebarOpen = useStore((s) => s.setSidebarOpen);
+  const setSidebarCollapsed = useStore((s) => s.setSidebarCollapsed);
+  const collapsed = useStore((s) => s.sidebarCollapsed);
+  const isMobile = useIsMobile();
   const tr = useT();
+  const label = tr(isMobile ? 'nav.openMenu' : 'nav.expandSidebar');
   return (
-    <button className={`toolbtn md:hidden shrink-0 ${className || ''}`} aria-label={tr('nav.openMenu')} title={tr('nav.openMenu')}
-      onClick={() => setSidebarOpen(true)}><IconMenu /></button>
+    <button className={`toolbtn shrink-0 ${collapsed ? '' : 'md:hidden'} ${className || ''}`} aria-label={label} title={label}
+      onClick={() => (isMobile ? setSidebarOpen(true) : setSidebarCollapsed(false))}><IconMenu /></button>
   );
 }
 

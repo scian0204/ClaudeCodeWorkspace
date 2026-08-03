@@ -62,6 +62,7 @@ interface State {
   editorUrl: string | null;
   panel: null | 'admin' | 'plugins' | 'me';
   sidebarOpen: boolean; // mobile off-canvas drawer (ignored ≥md, sidebar is a static column there)
+  sidebarCollapsed: boolean; // ≥md only: hide the sidebar column (persisted; <md the drawer rules instead)
   error: string | null;
   commands: CmdInfo[];
 
@@ -115,6 +116,7 @@ interface State {
   reloadRoom: () => Promise<void>;
   setPanel: (p: null | 'admin' | 'plugins' | 'me') => void;
   setSidebarOpen: (open: boolean) => void;
+  setSidebarCollapsed: (collapsed: boolean) => void;
   setError: (e: string | null) => void;
   saveClaudeToken: (token: string) => Promise<void>;
   clearClaudeToken: () => Promise<void>;
@@ -133,7 +135,7 @@ export const useStore = create<State>((set, get) => ({
   current: null, messages: [], live: null, turnActive: false,
   queue: { running: null, waiting: [] }, pending: [],
   control: { canApprove: true, canInterrupt: true, canSetMode: true, isOwner: true, delegable: [] },
-  presence: [], congested: false, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, processPollMs: 5000, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, panel: null, sidebarOpen: false, error: null,
+  presence: [], congested: false, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, processPollMs: 5000, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
   channels: [], activeChannelId: null, channelMessages: [],
   commands: [],
 
@@ -453,6 +455,7 @@ export const useStore = create<State>((set, get) => ({
 
   setPanel: (p) => set({ panel: p, sidebarOpen: false }), // navigating a panel closes the mobile drawer
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
+  setSidebarCollapsed: (collapsed) => { localStorage.setItem('sidebarCollapsed', collapsed ? '1' : '0'); set({ sidebarCollapsed: collapsed }); },
   setError: (e) => set({ error: e }),
 
   saveClaudeToken: async (token) => {

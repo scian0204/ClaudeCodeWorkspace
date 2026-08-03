@@ -13,11 +13,12 @@ import { IconX, IconPlus } from '../lib/icons';
 
 function Empty() {
   const newSession = useStore((s) => s.newSession);
+  const collapsed = useStore((s) => s.sidebarCollapsed);
   const t = useT();
   return (
     <div className="h-full flex flex-col">
-      {/* mobile-only top bar so the drawer stays reachable when no thread is open */}
-      <div className="md:hidden flex items-center gap-2.5 px-3 py-2.5 border-b border-line shrink-0">
+      {/* top bar so the sidebar stays reachable when no thread is open — mobile always, desktop only while collapsed */}
+      <div className={`${collapsed ? '' : 'md:hidden'} flex items-center gap-2.5 px-3 py-2.5 border-b border-line shrink-0`}>
         <MobileMenuButton />
         <span className="font-semibold text-sm truncate">ClaudeCode Workspace</span>
       </div>
@@ -50,6 +51,7 @@ export function Shell() {
   const setError = useStore((s) => s.setError);
   const sidebarOpen = useStore((s) => s.sidebarOpen);
   const setSidebarOpen = useStore((s) => s.setSidebarOpen);
+  const collapsed = useStore((s) => s.sidebarCollapsed);
   const user = useStore((s) => s.user);
 
   // Nag users without a personal token to register one — every login, until registered or dismissed.
@@ -57,10 +59,10 @@ export function Shell() {
   useEffect(() => { setNagDismissed(false); }, [user?.id]);
   const showNag = !!user && !user.hasClaudeToken && !nagDismissed;
 
-  // ≥md: two static columns (264px sidebar + content). <md: single column, sidebar becomes an
-  // off-canvas drawer (positioned by Sidebar itself) over a tap-to-dismiss backdrop.
+  // ≥md: two static columns (264px sidebar + content), or one when collapsed. <md: single column,
+  // sidebar becomes an off-canvas drawer (positioned by Sidebar itself) over a tap-to-dismiss backdrop.
   return (
-    <div className="h-full overflow-hidden md:grid md:grid-cols-[264px_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)]">
+    <div className={`h-full overflow-hidden md:grid md:grid-rows-[minmax(0,1fr)] ${collapsed ? 'md:grid-cols-[minmax(0,1fr)]' : 'md:grid-cols-[264px_minmax(0,1fr)]'}`}>
       {sidebarOpen && <div className="fixed inset-0 bg-black/40 z-40 md:hidden" onClick={() => setSidebarOpen(false)} />}
       <Sidebar />
       <main className="min-w-0 min-h-0 h-full bg-panel flex flex-col">
