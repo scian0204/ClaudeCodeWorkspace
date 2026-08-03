@@ -283,6 +283,8 @@ function ConfigManager() {
     return r;
   });
   const reset = (key: string) => apply(() => api.del(`/api/admin/config/${encodeURIComponent(key)}`));
+  // manual "fetch now" for the model list; the response carries the whole registry, so the row re-renders
+  const fetchModels = () => apply(() => api.post('/api/admin/models/refresh', {}));
   const restart = async () => {
     if (!confirm(t('admin.cfgRestartConfirm'))) return;
     try { await api.post('/api/admin/restart', {}); } catch { /* the process exits mid-request */ }
@@ -319,7 +321,8 @@ function ConfigManager() {
                   <ConfigRow key={it.key} it={it} edit={edits[it.key]}
                     locked={!!it.disabledWhen && items.find((m) => m.key === it.disabledWhen)?.value === '1'}
                     lockedBy={it.disabledWhen}
-                    onEdit={(v) => setEdits((e) => ({ ...e, [it.key]: v }))} onSave={save} onReset={reset} />
+                    onEdit={(v) => setEdits((e) => ({ ...e, [it.key]: v }))} onSave={save} onReset={reset}
+                    onFetchModels={fetchModels} />
                 ))}
               </div>
             </div>
@@ -330,9 +333,9 @@ function ConfigManager() {
   );
 }
 
-function ConfigRow({ it, edit, locked, lockedBy, onEdit, onSave, onReset }: {
+function ConfigRow({ it, edit, locked, lockedBy, onEdit, onSave, onReset, onFetchModels }: {
   it: any; edit: string | undefined; locked?: boolean; lockedBy?: string; onEdit: (v: string) => void;
-  onSave: (k: string, v: any) => void; onReset: (k: string) => void;
+  onSave: (k: string, v: any) => void; onReset: (k: string) => void; onFetchModels?: () => Promise<void>;
 }) {
   const t = useT();
   const name = cfgLabel(t, it.key);
@@ -361,7 +364,10 @@ function ConfigRow({ it, edit, locked, lockedBy, onEdit, onSave, onReset }: {
           ) : it.image ? (
             <ImageControl it={it} edit={edit} onEdit={onEdit} onSave={onSave} />
           ) : it.type === 'json' ? (
-            <span className="text-[11px] text-txt3 inline-flex items-center gap-1">{t('admin.cfgJsonBelow')}<IconChevronDown size={12} /></span>
+            <>
+              {it.key === 'models' && onFetchModels && <ModelFetchButton onFetch={onFetchModels} />}
+              <span className="text-[11px] text-txt3 inline-flex items-center gap-1">{t('admin.cfgJsonBelow')}<IconChevronDown size={12} /></span>
+            </>
           ) : it.type === 'bool' ? (
             // while locked, show the effective state (the overriding key forces it on), not the stored one
             <input type="checkbox" checked={locked || it.value === '1'} disabled={locked}
@@ -384,6 +390,18 @@ function ConfigRow({ it, edit, locked, lockedBy, onEdit, onSave, onReset }: {
       </div>
       {editable && it.type === 'json' && <JsonEditor it={it} onSave={onSave} />}
     </div>
+  );
+}
+
+// "Fetch now" for the model list: the server pulls /v1/models from the configured provider and
+// overwrites the map, so the JSON editor below re-renders with the fresh ids.
+function ModelFetchButton({ onFetch }: { onFetch: () => Promise<void> }) {
+  const t = useT();
+  const [busy, setBusy] = useState(false);
+  const run = async () => { setBusy(true); try { await onFetch(); } finally { setBusy(false); } };
+  return (
+    <button className="text-xs border border-line rounded-lg px-2 py-1 hover:border-clay inline-flex items-center gap-1 disabled:opacity-50"
+      disabled={busy} onClick={run}><IconRefresh size={12} />{busy ? '…' : t('admin.cfgModelsFetch')}</button>
   );
 }
 

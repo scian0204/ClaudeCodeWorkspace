@@ -23,6 +23,7 @@ import { requestRoutes } from './routes/requests.js';
 import { dmRoutes } from './routes/dm.js';
 import { searchRoutes } from './routes/search.js';
 import { startReviewPoller, reapReviewOrphans } from './review/manager.js';
+import { scheduleModelRefresh } from './claude/models.js';
 import { cleanupSandboxOrphans } from './review/sandbox.js';
 import { initRealtime } from './realtime/io.js';
 import { startReaper, cleanupOrphans, ensureNetwork } from './codeserver/manager.js';
@@ -103,6 +104,7 @@ async function main() {
   await cleanupSandboxOrphans(); // clear leftover review build sandboxes from a previous run
   startReaper();
   startReviewPoller(); // poll each watched repo's host for open PRs → spawn/refresh review sessions
+  scheduleModelRefresh(); // pull the live model list into the `models` config (frontier ids move fast)
 
   await app.listen({ port: config.port, host: '0.0.0.0' });
   console.log(`[ccw] listening on ${tls ? 'https' : 'http'}://:${config.port}  forceMock=${cfg.bool('forceMock')}  data=${config.dataDir}`);

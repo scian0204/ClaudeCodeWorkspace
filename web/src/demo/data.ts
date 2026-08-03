@@ -317,6 +317,11 @@ export const ADMIN = {
   },
   // client-facing config subset (model dropdown)
   models: { 'claude-opus-4-8': 'Opus 4.8', 'claude-sonnet-5': 'Sonnet 5', 'claude-haiku-4-5-20251001': 'Haiku 4.5' } as Record<string, string>,
+  // what a live /v1/models fetch answers with (newest first) — the demo's stand-in for the endpoint
+  fetchedModels: {
+    'claude-opus-5': 'Opus 5', 'claude-fable-5': 'Fable 5', 'claude-sonnet-5': 'Sonnet 5',
+    'claude-opus-4-8': 'Opus 4.8', 'claude-haiku-4-5-20251001': 'Haiku 4.5',
+  } as Record<string, string>,
   defaultModel: 'claude-opus-4-8',
   defaultEffort: 'high',
   images: { 'node:20-bookworm': { present: true, size: 402_000_000 }, 'codercom/code-server:latest': { present: false } } as Record<string, any>,
@@ -325,6 +330,10 @@ export const ADMIN = {
     { key: 'defaultModel', group: 'claude', type: 'select', options: ['claude-opus-4-8', 'claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5-20251001', 'claude-fable-5'], value: 'claude-opus-4-8', default: 'claude-opus-4-8', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'defaultEffort', group: 'claude', type: 'select', options: ['low', 'medium', 'high', 'xhigh', 'max'], value: 'high', default: 'high', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'models', group: 'claude', type: 'json', value: '{"claude-opus-4-8":"Opus 4.8","claude-sonnet-5":"Sonnet 5","claude-haiku-4-5-20251001":"Haiku 4.5"}', default: '{"claude-opus-4-8":"Opus 4.8"}', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'modelsAutoFetch', group: 'claude', type: 'bool', value: '1', default: '1', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'modelsRefreshMs', group: 'claude', type: 'int', value: '86400000', default: '86400000', min: 60000, max: 2592000000, unit: 'ms', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'modelsMax', group: 'claude', type: 'int', value: '8', default: '8', min: 1, max: 100, restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'modelsFetchTimeoutMs', group: 'claude', type: 'int', value: '10000', default: '10000', min: 1000, max: 120000, unit: 'ms', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'forceMock', group: 'claude', type: 'bool', value: '1', default: '0', restart: false, readonly: false, secret: false, overridden: true },
     { key: 'maxConcurrentTurns', group: 'claude', type: 'int', value: '3', default: '3', min: 1, max: 100, restart: false, readonly: false, secret: false, overridden: false },
     { key: 'autoTitleEnabled', group: 'claude', type: 'bool', value: '1', default: '1', restart: false, readonly: false, secret: false, overridden: false },

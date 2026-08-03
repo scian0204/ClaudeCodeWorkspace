@@ -453,6 +453,15 @@ export function route(method: string, rawPath: string, body?: any): Res {
     if (it && !it.readonly) { it.value = it.type === 'bool' ? (b.value ? '1' : '0') : String(b.value); it.overridden = true; }
     return ok({ items: ADMIN.config });
   }
+  // model auto-fetch: stand in for the provider's /v1/models and overwrite the map + defaultModel choices
+  if (P === '/api/admin/models/refresh' && M === 'POST') {
+    ADMIN.models = { ...ADMIN.fetchedModels };
+    const it = ADMIN.config.find((x: any) => x.key === 'models');
+    if (it) { it.value = JSON.stringify(ADMIN.models); it.overridden = true; }
+    const dm = ADMIN.config.find((x: any) => x.key === 'defaultModel');
+    if (dm) dm.options = [...new Set([...Object.keys(ADMIN.models), ...(dm.options || [])])];
+    return ok({ models: ADMIN.models, items: ADMIN.config });
+  }
   if (seg[1] === 'admin' && seg[2] === 'config' && seg[3] && M === 'DELETE') {
     const it = ADMIN.config.find((x: any) => x.key === decodeURIComponent(idAt(3)));
     if (it) { it.value = it.default; it.overridden = false; }

@@ -40,6 +40,10 @@ export const DEFS: ConfigDef[] = [
   { key: 'defaultEffort', group: 'claude', type: 'select', default: 'high',
     options: ['low', 'medium', 'high', 'xhigh', 'max'] },
   { key: 'models', group: 'claude', type: 'json', default: DEFAULT_MODELS },
+  { key: 'modelsAutoFetch', group: 'claude', type: 'bool', default: '1' },
+  { key: 'modelsRefreshMs', group: 'claude', type: 'int', default: '86400000', min: 60000, max: 2592000000, unit: 'ms' },
+  { key: 'modelsMax', group: 'claude', type: 'int', default: '8', min: 1, max: 100 },
+  { key: 'modelsFetchTimeoutMs', group: 'claude', type: 'int', default: '10000', min: 1000, max: 120000, unit: 'ms' },
   { key: 'forceMock', group: 'claude', type: 'bool', default: '0', env: 'MOCK_CLAUDE' },
   { key: 'maxConcurrentTurns', group: 'claude', type: 'int', default: '3', env: 'MAX_CONCURRENT_TURNS', min: 1, max: 100 },
   { key: 'turnMaxRetries', group: 'claude', type: 'int', default: '5', min: 0, max: 20 },
@@ -183,6 +187,14 @@ export const cfg = {
 const applyHooks = new Map<string, (v: string) => void>();
 export function registerApply(key: string, fn: (v: string) => void) { applyHooks.set(key, fn); }
 
+// `defaultModel` picks from the live model map (hand-edited or auto-fetched — see claude/models.ts),
+// so its choices can't be a frozen array: a model id that only exists after a fetch must be settable.
+// The registry defaults stay in the union as a floor for when the map is empty/broken.
+function optionsFor(d: ConfigDef): string[] | undefined {
+  if (d.key !== 'defaultModel') return d.options;
+  return [...new Set([...Object.keys(modelMap()), ...(d.options || [])])];
+}
+
 // ── validation / normalization ──
 function normalize(d: ConfigDef, raw: unknown): string {
   const s = raw == null ? '' : String(raw);
@@ -196,9 +208,11 @@ function normalize(d: ConfigDef, raw: unknown): string {
       if (d.max != null && n > d.max) n = d.max;
       return String(n);
     }
-    case 'select':
-      if (d.options && !d.options.includes(s)) throw new Error(`${d.key}: '${s}' not an allowed option`);
+    case 'select': {
+      const opts = optionsFor(d);
+      if (opts && !opts.includes(s)) throw new Error(`${d.key}: '${s}' not an allowed option`);
       return s;
+    }
     case 'json':
       try { JSON.parse(s); } catch { throw new Error(`${d.key}: invalid JSON`); }
       return s;
@@ -242,7 +256,7 @@ export function listConfigForApi(): ConfigItemDto[] {
     const base: ConfigItemDto = {
       key: d.key, group: d.group, type: d.type, unit: d.unit,
       restart: !!d.restart, readonly: !!d.readonly, secret: !!d.secret,
-      min: d.min, max: d.max, options: d.options, image: !!d.image, disabledWhen: d.disabledWhen,
+      min: d.min, max: d.max, options: optionsFor(d), image: !!d.image, disabledWhen: d.disabledWhen,
       default: d.default, overridden,
     };
     if (d.secret) return { ...base, set: val !== '' && val !== d.default };
@@ -256,9 +270,15 @@ export function imageConfigValues(): string[] {
   return DEFS.filter((d) => d.image).map((d) => resolve(d.key)).filter(Boolean);
 }
 
+// The (model id → display name) map behind the chat dropdown. Corrupt JSON falls back to the default.
+export function modelMap(): Record<string, string> {
+  try {
+    const m = JSON.parse(cfg.str('models'));
+    return m && typeof m === 'object' && !Array.isArray(m) ? m : JSON.parse(DEFAULT_MODELS);
+  } catch { return JSON.parse(DEFAULT_MODELS); }
+}
+
 // Client-facing subset (any authed user): drives the model dropdown.
 export function publicConfig(): { models: Record<string, string>; defaultModel: string; defaultEffort: string; sessionImportEnabled: boolean; llmProvidersEnabled: boolean; approvalsEnabled: boolean; dmEnabled: boolean; searchEnabled: boolean; customContextMenu: boolean; autoTitleEnabled: boolean; processPollMs: number } {
-  let models: Record<string, string>;
-  try { models = JSON.parse(cfg.str('models')); } catch { models = JSON.parse(DEFAULT_MODELS); }
-  return { models, defaultModel: cfg.str('defaultModel'), defaultEffort: cfg.str('defaultEffort'), sessionImportEnabled: cfg.bool('sessionImportEnabled'), llmProvidersEnabled: cfg.bool('llmProvidersEnabled'), approvalsEnabled: cfg.bool('approvalsEnabled'), dmEnabled: cfg.bool('dmEnabled'), searchEnabled: cfg.bool('searchEnabled'), customContextMenu: cfg.bool('customContextMenu'), autoTitleEnabled: cfg.bool('autoTitleEnabled'), processPollMs: cfg.int('processPollMs') };
+  return { models: modelMap(), defaultModel: cfg.str('defaultModel'), defaultEffort: cfg.str('defaultEffort'), sessionImportEnabled: cfg.bool('sessionImportEnabled'), llmProvidersEnabled: cfg.bool('llmProvidersEnabled'), approvalsEnabled: cfg.bool('approvalsEnabled'), dmEnabled: cfg.bool('dmEnabled'), searchEnabled: cfg.bool('searchEnabled'), customContextMenu: cfg.bool('customContextMenu'), autoTitleEnabled: cfg.bool('autoTitleEnabled'), processPollMs: cfg.int('processPollMs') };
 }

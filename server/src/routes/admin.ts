@@ -10,6 +10,7 @@ import { listProcesses, controlProcess } from '../admin/processes.js';
 import { turnLimiter } from '../claude/throttle.js';
 import { setCommonToken, clearCommonToken, commonTokenMeta } from '../auth/claude-token.js';
 import { getProvider, setProvider, clearProvider } from '../auth/provider.js';
+import { refreshModels } from '../claude/models.js';
 
 export async function adminRoutes(app: FastifyInstance) {
   app.get('/api/admin/overview', async (req, reply) => {
@@ -58,6 +59,14 @@ export async function adminRoutes(app: FastifyInstance) {
     catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
     return { items: listConfigForApi() };
   });
+  // pull the live model list from the provider's /v1/models into the `models` config (frontier ids
+  // change often); returns the refreshed registry so the panel re-renders like any other edit
+  app.post('/api/admin/models/refresh', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    try { return { models: await refreshModels(), items: listConfigForApi() }; }
+    catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
+  });
+
   app.delete('/api/admin/config/:key', async (req, reply) => {
     if (!requireAdmin(req, reply)) return;
     const { key } = req.params as any;
