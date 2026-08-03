@@ -62,6 +62,7 @@ interface State {
   approvalsEnabled: boolean;     // admin feature flag (from /api/config) — gates the member-request UI
   dmEnabled: boolean;            // admin feature flag (from /api/config) — gates the DM/group chat UI
   searchEnabled: boolean;        // admin feature flag (from /api/config) — gates the unified-search UI
+  customContextMenuEnabled: boolean; // admin feature flag (from /api/config) — off = browser's own right-click menu everywhere
   searchOpen: boolean;           // unified-search palette (Ctrl/Cmd+K)
   shortcutsOpen: boolean;        // keyboard-shortcut cheat sheet (?)
   highlightMsgId: string | null; // message a search hit jumped to (scroll target + ring)
@@ -153,7 +154,7 @@ export const useStore = create<State>((set, get) => ({
   current: null, messages: [], live: null, turnActive: false,
   queue: { running: null, waiting: [] }, pending: [],
   control: { canApprove: true, canInterrupt: true, canSetMode: true, isOwner: true, delegable: [] },
-  presence: [], congested: false, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
+  presence: [], congested: false, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenuEnabled: true, searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
   channels: [], activeChannelId: null, channelMessages: [],
   commands: [],
 
@@ -203,6 +204,7 @@ export const useStore = create<State>((set, get) => ({
       approvalsEnabled: cf.approvalsEnabled !== false,
       dmEnabled: cf.dmEnabled !== false,
       searchEnabled: cf.searchEnabled !== false,
+      customContextMenuEnabled: cf.customContextMenu !== false,
       channels: dmc.channels || [],
       processPollMs: cf.processPollMs || 5000,
     });

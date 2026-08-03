@@ -16,6 +16,7 @@ import { extractSources, markCitations, type WikiSource } from '../lib/wikiCite'
 import { md } from '../lib/md';
 import { useT } from '../lib/i18n';
 import { withKeys } from '../lib/shortcuts';
+import { openContextMenu } from '../lib/contextmenu';
 import {
   IconChevronDown, IconChevronRight, IconChevronUp, IconTheme, IconFolder, IconFile, IconTrash,
   IconGauge, IconEye, IconBook, IconArchive, IconSparkle, IconCopy, IconPencil, IconHelp,
@@ -606,8 +607,18 @@ function MessageView({ m }: { m: Msg }) {
     if (edited && edited !== m.content.text) editMessage(m.id, edited);
   };
 
+  const startEdit = () => { setDraft(m.content.text || ''); setEditing(true); };
+  const remove = () => { if (confirm(t('chat.deleteMessageConfirm'))) deleteMessage(m.id); };
+
   return (
-    <div id={`msg-${m.id}`} className={`group flex gap-3 mb-5 ${highlighted ? 'ring-2 ring-clay rounded-lg -m-1 p-1 scroll-mt-6' : ''}`}>
+    <div id={`msg-${m.id}`} className={`group flex gap-3 mb-5 ${highlighted ? 'ring-2 ring-clay rounded-lg -m-1 p-1 scroll-mt-6' : ''}`}
+      onContextMenu={(e) => openContextMenu(e, [
+        // right-clicking a message gives the same three actions as the hover row
+        !!copyText && { label: t('chat.copy'), icon: <IconCopy size={14} />, onSelect: copy },
+        canEdit && { label: t('chat.edit'), icon: <IconPencil size={14} />, onSelect: startEdit },
+        '-',
+        { label: t('common.delete'), icon: <IconTrash size={14} />, danger: true, onSelect: remove },
+      ])}>
       <Avatar name={m.authorName || undefined} claude={isClaude} color={colorFromMsg(m)} />
       <div className="flex-1 min-w-0">
         <div className="text-xs text-txt2 font-semibold mb-1 flex items-center gap-2">
@@ -617,8 +628,8 @@ function MessageView({ m }: { m: Msg }) {
           )}
           <span className="hidden group-hover:flex items-center gap-1.5 text-txt3">
             {copyText && <button className={copied ? 'text-ok inline-flex items-center gap-1' : 'hover:text-clay'} title={t('chat.copy')} aria-label={t('chat.copy')} onClick={copy}>{copied ? <><IconCheck size={13} />{t('chat.copied')}</> : <IconCopy size={14} />}</button>}
-            {canEdit && <button className="hover:text-clay" title={t('chat.edit')} aria-label={t('chat.edit')} onClick={() => { setDraft(m.content.text || ''); setEditing(true); }}><IconPencil size={14} /></button>}
-            <button className="hover:text-danger" title={t('common.delete')} aria-label={t('common.delete')} onClick={() => { if (confirm(t('chat.deleteMessageConfirm'))) deleteMessage(m.id); }}><IconTrash size={14} /></button>
+            {canEdit && <button className="hover:text-clay" title={t('chat.edit')} aria-label={t('chat.edit')} onClick={startEdit}><IconPencil size={14} /></button>}
+            <button className="hover:text-danger" title={t('common.delete')} aria-label={t('common.delete')} onClick={remove}><IconTrash size={14} /></button>
           </span>
         </div>
         {editing ? (

@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { useStore, type ReviewSessionSummary, type ReviewRepo, type DmChannel } from '../lib/store';
+import { useStore, type ReviewSessionSummary, type ReviewRepo, type DmChannel, type PrivateSession, type RoomSummary, type WikiTopic } from '../lib/store';
 import { api, type UploadState } from '../lib/api';
 import { Avatar, avatarUrl, timeAgo, LangSelect } from '../lib/ui';
 import { fmtKeys, withKeys } from '../lib/shortcuts';
+import { openContextMenu, type CtxRows } from '../lib/contextmenu';
 import { Modal } from './Modal';
 import { ImportSessionModal } from './ImportSessionModal';
 import { SearchButton } from './SearchPalette';
@@ -28,6 +29,15 @@ export function Sidebar() {
   const channelLabel = (ch: DmChannel) => (ch.kind === 'group' ? (ch.name || t('dm.group')) : (ch.members.find((m) => m.userId !== user?.id)?.displayName || t('dm.dm')));
 
   const create = async () => { if (!roomName.trim()) return; await newRoom(roomName.trim()); setRoomName(''); setShowRoom(false); };
+
+  // One copy of each row action, shared by the hover buttons and the right-click menu.
+  const renameChat = (s: PrivateSession) => {
+    const nt = prompt(t('sidebar.renameChatPrompt'), s.title);
+    if (nt && nt.trim() && nt.trim() !== s.title) renameSession(s.id, nt.trim());
+  };
+  const removeChat = (s: PrivateSession) => { if (confirm(t('sidebar.deleteChatConfirm', { title: s.title }))) deleteSession(s.id); };
+  const removeRoom = (r: RoomSummary) => { if (confirm(t('sidebar.deleteRoomConfirm', { name: r.name }))) deleteRoom(r.id); };
+  const removeTopic = (wt: WikiTopic) => { if (confirm(t('sidebar.deleteTopicConfirm', { name: wt.name }))) deleteWikiTopic(wt.id); };
 
   return (
     <aside className={`bg-rail border-r border-line flex flex-col min-h-0 h-full
@@ -64,21 +74,32 @@ export function Sidebar() {
           extra={sessionImportEnabled ? <button className="cursor-pointer leading-none text-txt3 hover:text-txt" title={t('import.button')} aria-label={t('import.button')} onClick={() => setImportOpen(true)}><IconDownload size={15} /></button> : undefined} />
         {sessions.length === 0 && <div className="text-[11px] text-txt3 px-2 py-1">{t('common.none')}</div>}
         {sessions.map((s) => (
-          <Item key={s.id} active={panel === null && current?.chatSessionId === s.id} onClick={() => { setPanel(null); openPrivate(s.id); }}>
+          <Item key={s.id} active={panel === null && current?.chatSessionId === s.id} onClick={() => { setPanel(null); openPrivate(s.id); }}
+            menu={[
+              { label: t('ctx.open'), icon: <IconMessage size={14} />, onSelect: () => { setPanel(null); openPrivate(s.id); } },
+              { label: t('sidebar.renameChatTitle'), icon: <IconPencil size={14} />, onSelect: () => renameChat(s) },
+              '-',
+              { label: t('sidebar.deleteChatTitle'), icon: <IconTrash size={14} />, danger: true, onSelect: () => removeChat(s) },
+            ]}>
             <span className="opacity-70"><IconMessage size={15} /></span>
             <span className="flex-1 truncate text-[13px]">{s.title}</span>
             <span className="text-[11px] text-txt3 group-hover:hidden">{timeAgo(s.updatedAt)}</span>
             <button className="hidden group-hover:block text-txt3 hover:text-clay px-1" title={t('sidebar.renameChatTitle')} aria-label={t('sidebar.renameChatTitle')}
-              onClick={(e) => { e.stopPropagation(); const nt = prompt(t('sidebar.renameChatPrompt'), s.title); if (nt && nt.trim() && nt.trim() !== s.title) renameSession(s.id, nt.trim()); }}><IconPencil size={14} /></button>
+              onClick={(e) => { e.stopPropagation(); renameChat(s); }}><IconPencil size={14} /></button>
             <button className="hidden group-hover:block text-txt3 hover:text-danger px-1" title={t('sidebar.deleteChatTitle')} aria-label={t('sidebar.deleteChatTitle')}
-              onClick={(e) => { e.stopPropagation(); if (confirm(t('sidebar.deleteChatConfirm', { title: s.title }))) deleteSession(s.id); }}><IconTrash size={14} /></button>
+              onClick={(e) => { e.stopPropagation(); removeChat(s); }}><IconTrash size={14} /></button>
           </Item>
         ))}
 
         <Section label={t('sidebar.rooms')} onAdd={() => setShowRoom(true)} />
         {rooms.length === 0 && <div className="text-[11px] text-txt3 px-2 py-1">{t('common.none')}</div>}
         {rooms.map((r) => (
-          <Item key={r.id} active={panel === null && current?.roomId === r.id} onClick={() => { setPanel(null); openRoom(r.id); }}>
+          <Item key={r.id} active={panel === null && current?.roomId === r.id} onClick={() => { setPanel(null); openRoom(r.id); }}
+            menu={[
+              { label: t('ctx.open'), icon: <IconMessage size={14} />, onSelect: () => { setPanel(null); openRoom(r.id); } },
+              '-',
+              { label: t('sidebar.deleteRoomTitle'), icon: <IconTrash size={14} />, danger: true, onSelect: () => removeRoom(r) },
+            ]}>
             <span className="w-[7px] h-[7px] rounded-full bg-ok shrink-0" />
             <span className="flex-1 truncate text-[13px]">{r.name}</span>
             <span className="flex group-hover:hidden">
@@ -88,7 +109,7 @@ export function Sidebar() {
               ))}
             </span>
             <button className="hidden group-hover:block text-txt3 hover:text-danger px-1" title={t('sidebar.deleteRoomTitle')} aria-label={t('sidebar.deleteRoomTitle')}
-              onClick={(e) => { e.stopPropagation(); if (confirm(t('sidebar.deleteRoomConfirm', { name: r.name }))) deleteRoom(r.id); }}><IconTrash size={14} /></button>
+              onClick={(e) => { e.stopPropagation(); removeRoom(r); }}><IconTrash size={14} /></button>
           </Item>
         ))}
 
@@ -112,13 +133,18 @@ export function Sidebar() {
         <Section label="LLM Wiki" onAdd={isAdmin ? () => setShowWiki(true) : undefined} />
         {wikiTopics.length === 0 && <div className="text-[11px] text-txt3 px-2 py-1">{isAdmin ? t('sidebar.createTopicHint') : t('common.none')}</div>}
         {wikiTopics.map((wt) => (
-          <Item key={wt.id} active={panel === null && current?.wikiTopicId === wt.id} onClick={() => { setPanel(null); openWiki(wt.id); }}>
+          <Item key={wt.id} active={panel === null && current?.wikiTopicId === wt.id} onClick={() => { setPanel(null); openWiki(wt.id); }}
+            menu={[
+              { label: t('ctx.open'), icon: <IconBook size={14} />, onSelect: () => { setPanel(null); openWiki(wt.id); } },
+              isAdmin && '-',
+              isAdmin && { label: t('sidebar.deleteTopicTitle'), icon: <IconTrash size={14} />, danger: true, onSelect: () => removeTopic(wt) },
+            ]}>
             <span className="opacity-70">{wt.compileStatus === 'compiling' ? <IconClock size={15} /> : wt.compileStatus === 'error' ? <IconWarning size={15} className="text-warn" /> : <IconBook size={15} />}</span>
             <span className="flex-1 truncate text-[13px]">{wt.name}</span>
             {wt.compileStatus === 'compiling' && <span className="text-[10px] text-txt3 group-hover:hidden">{t('sidebar.compiling')}</span>}
             {isAdmin && (
               <button className="hidden group-hover:block text-txt3 hover:text-danger px-1" title={t('sidebar.deleteTopicTitle')} aria-label={t('sidebar.deleteTopicTitle')}
-                onClick={(e) => { e.stopPropagation(); if (confirm(t('sidebar.deleteTopicConfirm', { name: wt.name }))) deleteWikiTopic(wt.id); }}><IconTrash size={14} /></button>
+                onClick={(e) => { e.stopPropagation(); removeTopic(wt); }}><IconTrash size={14} /></button>
             )}
           </Item>
         ))}
@@ -543,9 +569,10 @@ function Section({ label, onAdd, extra }: { label: string; onAdd?: () => void; e
     </div>
   );
 }
-function Item({ active, onClick, children }: { active?: boolean; onClick: () => void; children: React.ReactNode }) {
+// `menu` = the row's own right-click items (falls back to the app-wide default menu when absent).
+function Item({ active, onClick, menu, children }: { active?: boolean; onClick: () => void; menu?: CtxRows; children: React.ReactNode }) {
   return (
-    <div onClick={onClick}
+    <div onClick={onClick} onContextMenu={menu ? (e) => openContextMenu(e, menu) : undefined}
       className={`group flex items-center gap-2.5 px-2.5 py-1.5 rounded-md cursor-pointer text-txt2 ${active ? 'bg-claysoft text-txt' : 'hover:bg-line'}`}>
       {children}
     </div>

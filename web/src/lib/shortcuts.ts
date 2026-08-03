@@ -10,8 +10,8 @@ const ua = typeof navigator !== 'undefined' ? `${(navigator as any).platform || 
 export const isMac = /mac|iphone|ipad|ipod/i.test(ua);
 
 const MODS = ['Ctrl', 'Alt', 'Shift', 'Mod'] as const; // mac renders modifiers in this order: ⌃⌥⇧⌘
-const MAC_SYM: Record<string, string> = { Mod: '⌘', Shift: '⇧', Alt: '⌥', Ctrl: '⌃', Enter: '↩', Esc: 'esc' };
-const PC_SYM: Record<string, string> = { Mod: 'Ctrl' };
+const MAC_SYM: Record<string, string> = { Mod: '⌘', Shift: '⇧', Alt: '⌥', Ctrl: '⌃', Enter: '↩', Esc: 'esc', RClick: 'right-click' };
+const PC_SYM: Record<string, string> = { Mod: 'Ctrl', RClick: 'right-click' };
 
 // 'Mod+Shift+O' → mac '⇧⌘O' (symbols, no separator) · win/linux 'Ctrl+Shift+O'
 // (mac is a parameter, not just the module flag, so the other platform's rendering is checkable)
@@ -39,6 +39,7 @@ export const SHORTCUT_GROUPS: { label: string; rows: ShortcutRow[] }[] = [
       { keys: ['Mod+Shift+H'], label: 'sc.home' },
       { keys: ['Mod+Shift+L'], label: 'sc.theme' },
       { keys: ['?'], label: 'sc.help' },
+      { keys: ['Shift+RClick'], label: 'sc.nativeMenu' },
     ],
   },
   {
@@ -61,6 +62,14 @@ export const SHORTCUT_GROUPS: { label: string; rows: ShortcutRow[] }[] = [
   },
 ];
 
+// Mod+B semantics, shared with the context menu: <md the sidebar is an off-canvas drawer, ≥md it's
+// a collapsible column (same key, both).
+export function toggleSidebar(): void {
+  const s = useStore.getState();
+  if (window.matchMedia('(max-width: 767px)').matches) s.setSidebarOpen(!s.sidebarOpen);
+  else s.setSidebarCollapsed(!s.sidebarCollapsed);
+}
+
 const isTyping = (el: EventTarget | null): boolean => {
   const n = el as HTMLElement | null;
   return !!n && (n.tagName === 'INPUT' || n.tagName === 'TEXTAREA' || n.isContentEditable);
@@ -81,12 +90,8 @@ export function useShortcuts(): void {
           if (!s.searchEnabled) return;
           e.preventDefault(); s.setSearchOpen(true);
         } else if (e.shiftKey && k === 'o') { e.preventDefault(); void s.newSession(); }
-        else if (!e.shiftKey && k === 'b') {
-          e.preventDefault();
-          // <md the sidebar is an off-canvas drawer; ≥md it's a collapsible column (same key, both)
-          if (window.matchMedia('(max-width: 767px)').matches) s.setSidebarOpen(!s.sidebarOpen);
-          else s.setSidebarCollapsed(!s.sidebarCollapsed);
-        } else if (e.shiftKey && k === 'h') { e.preventDefault(); s.goHome(); }
+        else if (!e.shiftKey && k === 'b') { e.preventDefault(); toggleSidebar(); }
+        else if (e.shiftKey && k === 'h') { e.preventDefault(); s.goHome(); }
         else if (e.shiftKey && k === 'l') { e.preventDefault(); s.toggleTheme(); }
         return;
       }

@@ -10,6 +10,7 @@ import { MyTokenModal } from './TokenSettings';
 import { SearchPalette, SearchButton } from './SearchPalette';
 import { ShortcutsHelp } from './ShortcutsHelp';
 import { MobileMenuButton } from '../lib/ui';
+import { AppContextMenu } from '../lib/contextmenu';
 import { useShortcuts } from '../lib/shortcuts';
 import { useT } from '../lib/i18n';
 import { IconX, IconPlus } from '../lib/icons';
@@ -79,6 +80,7 @@ export function Shell() {
       {error && <Toast msg={error} onClose={() => setError(null)} />}
       <SearchPalette />
       <ShortcutsHelp />
+      <AppContextMenu />
       <MyTokenModal open={showNag} nag onClose={() => setNagDismissed(true)} />
     </div>
   );
