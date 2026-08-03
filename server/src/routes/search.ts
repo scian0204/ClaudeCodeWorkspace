@@ -3,11 +3,16 @@
 // DM/group messages, projects, PR-review sessions, the user directory — and returns a flat,
 // type-tagged hit list the client groups.
 //
-// Visibility is NOT re-invented here: each collector reuses the exact gate its own feature route
-// uses (chat_sessions → canViewChat semantics from routes/sessions, rooms.isMember, projects
-// canAccess, review.listReviewSessionsForUser, dm membership). DMs stay membership-only even for
-// admins, matching rooms/dm.ts — an admin can promote a group channel but never read one they're
-// not in.
+// Visibility reuses each feature's own gate (rooms.isMember, review.listReviewSessionsForUser, dm
+// membership, project scope) with ONE deliberate tightening: search never grants an admin reach into
+// somebody else's PERSONAL space. Concretely, no role can search another user's private chats, their
+// wiki query threads, or their user-scoped projects — even though routes/sessions canViewChat and
+// routes/projects canAccess do let an admin open those directly. Searching is a bulk read across the
+// whole workspace at once; "the operator can open one thread when they need to" is not the same
+// permission as "the operator can grep everyone's private conversations". DMs are membership-only for
+// the same reason (matching rooms/dm.ts — an admin can promote a group channel, never read one).
+// Shared-by-design surfaces are unchanged: rooms the caller belongs to (admins already see every room
+// in the sidebar), PR review sessions, the LLM Wiki knowledge base, the user directory.
 //
 // ponytail: SQL `LIKE '%q%'` scan (no FTS5 index). A team workspace's message table is small enough
 // that SQLite's C-side scan stops at the per-type cap; swap in an FTS5 virtual table + triggers if
@@ -89,9 +94,13 @@ export function messageText(content: any): string {
 type Chat = typeof schema.chatSessions.$inferSelect;
 interface ChatCtx { row: Chat; nav: HitNav; label: string }
 
-// Every chat session this user may VIEW, with the label + navigation each hit inside it needs.
-// Same rules as routes/sessions.ts canViewChat, resolved in bulk (one pass) so the message query
-// can be constrained to those ids instead of filtering after the fact.
+// Every chat session this user may SEARCH, with the label + navigation each hit inside it needs.
+// Resolved in bulk (one pass) so the message query can be constrained to those ids instead of
+// filtering after the fact.
+//
+// A private thread — including a wiki query thread — is searchable by its OWNER ONLY. There is no
+// admin branch here on purpose: see the file header. Rooms and review sessions keep their normal
+// gates (shared surfaces, and an admin already sees every room in the sidebar).
 function visibleChats(u: AuthUser): Map<string, ChatCtx> {
   const out = new Map<string, ChatCtx>();
   const isAdmin = u.role === 'admin';
@@ -111,7 +120,7 @@ function visibleChats(u: AuthUser): Map<string, ChatCtx> {
       if (!isAdmin && rv.authorUserId !== u.id) continue;
       out.set(row.id, { row, nav: { kind: 'review', reviewId: rv.id }, label: `#${rv.prNumber} ${rv.prTitle}` });
     } else {
-      if (row.ownerId !== u.id && !isAdmin) continue;
+      if (row.ownerId !== u.id) continue; // personal thread — owner only, admins included
       if (row.wikiTopicId) {
         const topic = topicById.get(row.wikiTopicId);
         out.set(row.id, { row, nav: { kind: 'wiki', topicId: row.wikiTopicId }, label: topic?.name || row.title });
@@ -123,13 +132,15 @@ function visibleChats(u: AuthUser): Map<string, ChatCtx> {
   return out;
 }
 
-// Projects the caller may open — same rule as routes/projects.ts canAccess.
+// Projects the caller may search. Like routes/projects.ts canAccess, minus the blanket admin pass:
+// a user-scoped project is that user's own workspace, so only its owner can find it here (an admin
+// who needs it can still reach it through the project endpoints). Room-scoped follows the room.
 function visibleProjects(u: AuthUser) {
   const isAdmin = u.role === 'admin';
   return db.select().from(schema.projects).all().filter((p) => {
-    if (isAdmin || p.scope === 'common') return true;
+    if (p.scope === 'common') return true;
     if (p.scope === 'user') return p.ownerId === u.id;
-    if (p.scope === 'room') return rooms.isMember(p.ownerId!, u.id);
+    if (p.scope === 'room') return isAdmin || rooms.isMember(p.ownerId!, u.id);
     return false;
   });
 }
@@ -177,20 +188,15 @@ export async function searchRoutes(app: FastifyInstance) {
     const room = (t: HitType) => hits.reduce((n, h) => n + (h.type === t ? 1 : 0), 0) < perType;
     const chats = visibleChats(u);
 
-    // ── private chat titles ──
-    // Owner-scoped in SQL for members (admins legitimately see every private thread, same as
-    // routes/sessions canViewChat). The `chats` lookup below is what actually enforces visibility,
-    // but without this the LIMIT would be spent on other people's rows and a member's own matching
-    // chats could silently fall off the end.
+    // ── private chat titles ── (own threads only, for every role)
     if (want('session')) {
       const rows = db.select().from(schema.chatSessions)
         .where(and(eq(schema.chatSessions.kind, 'private'), isNull(schema.chatSessions.wikiTopicId),
-          likeExpr(schema.chatSessions.title, q),
-          u.role === 'admin' ? undefined : eq(schema.chatSessions.ownerId, u.id)))
+          eq(schema.chatSessions.ownerId, u.id), likeExpr(schema.chatSessions.title, q)))
         .orderBy(order(schema.chatSessions.updatedAt)).limit(perType * 4).all();
       for (const s of rows) {
         if (!room('session')) break;
-        const v = chats.get(s.id); if (!v) continue; // not visible (an admin's cross-user scan)
+        const v = chats.get(s.id); if (!v) continue; // belt-and-braces: visibleChats is the gate
         hits.push({ type: 'session', id: `session:${s.id}`, title: s.title, ts: s.updatedAt, nav: v.nav });
       }
     }
@@ -210,12 +216,12 @@ export async function searchRoutes(app: FastifyInstance) {
 
     // ── chat messages (private + room + wiki thread + review chats) ──
     if (want('chat') && chats.size) {
-      // An admin sees every session, so skip the id list entirely — it would otherwise blow past
-      // SQLite's bound-parameter ceiling on a big workspace. Same escape hatch for anyone with an
-      // implausibly large visible set: `chats.get()` below is the real gate, the IN list is only a
-      // prefilter so the LIMIT isn't spent on rows this user can't see.
+      // Constrained to the caller's own visible sessions — no role-based shortcut, so an admin's
+      // query never even reads another user's private messages off disk. The IN list is dropped only
+      // when it would exceed SQLite's bound-parameter ceiling; `chats.get()` below still gates every
+      // row, so that degrades to a wider scan, never to a wider result.
       const ids = [...chats.keys()];
-      const where = u.role === 'admin' || ids.length > 900
+      const where = ids.length > 900
         ? likeExpr(schema.messages.content, q)
         : and(inArray(schema.messages.sessionId, ids), likeExpr(schema.messages.content, q));
       const rows = db.select().from(schema.messages).where(where)
