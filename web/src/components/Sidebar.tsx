@@ -32,20 +32,27 @@ export function Sidebar() {
       max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:w-[264px] max-md:z-50 max-md:shadow-2xl
       max-md:transition-transform max-md:duration-200 ${sidebarOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full'}
       ${sidebarCollapsed ? 'md:hidden' : ''}`}>
-      <div className="px-3.5 pt-3.5 pb-2 relative">
-        <button className="toolbtn md:hidden absolute top-2.5 right-2.5 z-10" aria-label={t('nav.closeMenu')} onClick={() => setSidebarOpen(false)}><IconX /></button>
-        <button className="toolbtn max-md:hidden absolute top-2.5 right-2.5 z-10" title={t('nav.collapseSidebar')} aria-label={t('nav.collapseSidebar')}
-          onClick={() => setSidebarCollapsed(true)}><IconPanelLeft /></button>
-        <LangToggle className="absolute top-3 right-11 text-[11px] text-txt3 hover:text-txt border border-line rounded px-1.5 py-0.5 z-10" />
-        {/* the logo is the way back to the landing screen */}
-        <button className="flex items-center gap-2.5 mb-3.5 pr-16 text-left w-full rounded-md hover:opacity-80"
-          title={t('nav.home')} onClick={() => goHome()}>
-          <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" className="w-[26px] h-[26px] rounded-md shrink-0" />
-          <div className="leading-tight min-w-0">
-            <div className="font-semibold text-sm whitespace-nowrap">ClaudeCode Workspace</div>
-            <div className="text-[11px] text-txt3 truncate">{t('sidebar.teamName', { name: user?.displayName ?? '' })}</div>
+      <div className="px-3.5 pt-3.5 pb-2">
+        {/* One flow row instead of absolutely-positioned chrome: the title used to run underneath the
+            language toggle, since nowrap text ignores the padding reserved for it. */}
+        <div className="flex items-start gap-1 mb-3.5">
+          {/* the logo is the way back to the landing screen */}
+          <button className="flex items-center gap-2 min-w-0 flex-1 text-left rounded-md hover:opacity-80"
+            title={t('nav.home')} onClick={() => goHome()}>
+            <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" className="w-[26px] h-[26px] rounded-md shrink-0" />
+            <div className="leading-tight min-w-0">
+              {/* tracking-tight buys the few px that keep the full brand name on one line at 264px */}
+              <div className="font-semibold text-[13px] tracking-tight truncate">ClaudeCode Workspace</div>
+              <div className="text-[11px] text-txt3 truncate">{t('sidebar.teamName', { name: user?.displayName ?? '' })}</div>
+            </div>
+          </button>
+          <div className="flex items-center gap-0.5 shrink-0">
+            <LangToggle className="text-[11px] text-txt3 hover:text-txt border border-line rounded px-1.5 py-0.5" />
+            <button className="toolbtn md:hidden" aria-label={t('nav.closeMenu')} onClick={() => setSidebarOpen(false)}><IconX /></button>
+            <button className="toolbtn max-md:hidden" title={t('nav.collapseSidebar')} aria-label={t('nav.collapseSidebar')}
+              onClick={() => setSidebarCollapsed(true)}><IconPanelLeft /></button>
           </div>
-        </button>
+        </div>
         <button className="btn-primary w-full flex items-center justify-center gap-2 !py-2" onClick={() => newSession()}><IconPlus size={16} />{t('sidebar.newChat')}</button>
         <SearchButton label className="mt-2" />
       </div>
