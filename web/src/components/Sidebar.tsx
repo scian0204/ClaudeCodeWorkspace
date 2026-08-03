@@ -1,16 +1,17 @@
 import { useState, useRef, useEffect } from 'react';
 import { useStore, type ReviewSessionSummary, type ReviewRepo, type DmChannel } from '../lib/store';
 import { api, type UploadState } from '../lib/api';
-import { Avatar, avatarUrl, timeAgo, LangToggle } from '../lib/ui';
+import { Avatar, avatarUrl, timeAgo } from '../lib/ui';
 import { Modal } from './Modal';
 import { ImportSessionModal } from './ImportSessionModal';
 import { SearchButton } from './SearchPalette';
 import { UploadProgress } from './UploadProgress';
-import { useT } from '../lib/i18n';
+import { useT, useLang, toggleLang, LANG_LABELS } from '../lib/i18n';
 import {
   IconX, IconDownload, IconMessage, IconPencil, IconTrash, IconUsers, IconClock, IconWarning,
   IconBook, IconPuzzle, IconSliders, IconLogout, IconFile, IconBox, IconRefresh, IconPlus,
   IconCheckCircle, IconBan, IconGitBranch, IconCheckSquare, IconSquare, IconFolder, IconPanelLeft,
+  IconGlobe,
 } from '../lib/icons';
 
 export function Sidebar() {
@@ -22,6 +23,7 @@ export function Sidebar() {
   const [importOpen, setImportOpen] = useState(false);
   const isAdmin = user?.role === 'admin';
   const t = useT();
+  const lang = useLang();
 
   const channelLabel = (ch: DmChannel) => (ch.kind === 'group' ? (ch.name || t('dm.group')) : (ch.members.find((m) => m.userId !== user?.id)?.displayName || t('dm.dm')));
 
@@ -41,13 +43,13 @@ export function Sidebar() {
             title={t('nav.home')} onClick={() => goHome()}>
             <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" className="w-[26px] h-[26px] rounded-md shrink-0" />
             <div className="leading-tight min-w-0">
-              {/* tracking-tight buys the few px that keep the full brand name on one line at 264px */}
-              <div className="font-semibold text-[13px] tracking-tight truncate">ClaudeCode Workspace</div>
+              <div className="font-semibold text-sm tracking-tight truncate">ClaudeCode Workspace</div>
               <div className="text-[11px] text-txt3 truncate">{t('sidebar.teamName', { name: user?.displayName ?? '' })}</div>
             </div>
           </button>
-          <div className="flex items-center gap-0.5 shrink-0">
-            <LangToggle className="text-[11px] text-txt3 hover:text-txt border border-line rounded px-1.5 py-0.5" />
+          {/* only the drawer/collapse control lives up here — the language switch moved to the footer
+              so the brand title gets the full width instead of being truncated */}
+          <div className="shrink-0">
             <button className="toolbtn md:hidden" aria-label={t('nav.closeMenu')} onClick={() => setSidebarOpen(false)}><IconX /></button>
             <button className="toolbtn max-md:hidden" title={t('nav.collapseSidebar')} aria-label={t('nav.collapseSidebar')}
               onClick={() => setSidebarCollapsed(true)}><IconPanelLeft /></button>
@@ -140,6 +142,11 @@ export function Sidebar() {
             {pendingRequestCount > 0 && <span className="ml-auto text-[10px] bg-warnsoft text-warn px-1.5 py-0.5 rounded-full whitespace-nowrap">{pendingRequestCount}</span>}
           </button>
         )}
+        <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full hover:bg-line text-left text-[13px] text-txt2"
+          title={t('lang.toggleTitle')} onClick={() => toggleLang()}>
+          <span className="w-7 grid place-items-center"><IconGlobe size={17} /></span> {t('lang.label')}
+          <span className="ml-auto text-[11px] text-txt3">{LANG_LABELS[lang]}</span>
+        </button>
         <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full hover:bg-line text-left text-[13px] text-txt2" onClick={() => logout()}>
           <span className="w-7 grid place-items-center"><IconLogout size={17} /></span> {t('sidebar.logout')}
         </button>
