@@ -1,17 +1,23 @@
 import { useSyncExternalStore } from 'react';
 
-export type Lang = 'ko' | 'en';
+// Adding a language: extend LANGS, add its label, add its dictionary (DICT at the bottom is typed
+// per-Lang, so TypeScript will point at what's missing). No UI or detection branch to touch.
 export const LANGS = ['ko', 'en'] as const;
+export type Lang = (typeof LANGS)[number];
 export const LANG_LABELS: Record<Lang, string> = { ko: '한국어', en: 'English' };
+
+const isLang = (s: unknown): s is Lang => (LANGS as readonly string[]).includes(s as string);
 
 // i18n owns the current language itself (source of truth) — self-contained state +
 // localStorage persistence + a React subscription. Nothing else needs to store `lang`.
 const listeners = new Set<() => void>();
 let current: Lang = detect();
 
+
 function detect(): Lang {
-  try { const s = localStorage.getItem('lang'); if (s === 'ko' || s === 'en') return s; } catch { /* noop */ }
-  if (typeof navigator !== 'undefined' && navigator.language?.toLowerCase().startsWith('ko')) return 'ko';
+  try { const s = localStorage.getItem('lang'); if (isLang(s)) return s; } catch { /* noop */ }
+  const nav = typeof navigator !== 'undefined' ? navigator.language?.toLowerCase().split('-')[0] : undefined;
+  if (isLang(nav)) return nav;
   return 'ko'; // team default
 }
 
@@ -24,8 +30,6 @@ export function setLang(l: Lang): void {
   document.documentElement.setAttribute('lang', l);
   listeners.forEach((fn) => fn());
 }
-
-export function toggleLang(): void { setLang(current === 'ko' ? 'en' : 'ko'); }
 
 // Subscribe a component to language changes (re-renders on switch).
 export function useLang(): Lang {
@@ -81,7 +85,7 @@ const ko: Dict = {
   // infra
   'app.loading': '로딩…',
   'store.selectProjectFirst': '먼저 프로젝트를 선택하세요.',
-  'lang.toggleTitle': '언어 전환 (한국어/English)',
+  'lang.pickTitle': '언어 선택',
   'lang.label': '언어',
   'nav.openMenu': '메뉴 열기',
   'nav.closeMenu': '메뉴 닫기',
@@ -830,7 +834,7 @@ const en: Dict = {
   // infra
   'app.loading': 'Loading…',
   'store.selectProjectFirst': 'Select a project first.',
-  'lang.toggleTitle': 'Switch language (한국어/English)',
+  'lang.pickTitle': 'Select language',
   'lang.label': 'Language',
   'nav.openMenu': 'Open menu',
   'nav.closeMenu': 'Close menu',

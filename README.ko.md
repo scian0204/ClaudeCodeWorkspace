@@ -518,7 +518,7 @@ flowchart TB
 <details>
 <summary><b>다국어 UI (한국어 / English)</b></summary>
 
-- 사이드바 상단 토글로 즉시 전환, `localStorage` 저장 + 브라우저 언어 자동 감지
+- 사이드바 하단 **언어 선택 목록**에서 즉시 전환, `localStorage` 저장 + 브라우저 언어 자동 감지 (언어를 추가하면 목록에 자동 반영)
 - 사전 1곳(`web/src/lib/i18n.ts`)에서 관리, 신규 UI 문자열은 항상 i18n 처리
 </details>
 

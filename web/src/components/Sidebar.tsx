@@ -1,12 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
 import { useStore, type ReviewSessionSummary, type ReviewRepo, type DmChannel } from '../lib/store';
 import { api, type UploadState } from '../lib/api';
-import { Avatar, avatarUrl, timeAgo } from '../lib/ui';
+import { Avatar, avatarUrl, timeAgo, LangSelect } from '../lib/ui';
 import { Modal } from './Modal';
 import { ImportSessionModal } from './ImportSessionModal';
 import { SearchButton } from './SearchPalette';
 import { UploadProgress } from './UploadProgress';
-import { useT, useLang, toggleLang, LANG_LABELS } from '../lib/i18n';
+import { useT } from '../lib/i18n';
 import {
   IconX, IconDownload, IconMessage, IconPencil, IconTrash, IconUsers, IconClock, IconWarning,
   IconBook, IconPuzzle, IconSliders, IconLogout, IconFile, IconBox, IconRefresh, IconPlus,
@@ -23,7 +23,6 @@ export function Sidebar() {
   const [importOpen, setImportOpen] = useState(false);
   const isAdmin = user?.role === 'admin';
   const t = useT();
-  const lang = useLang();
 
   const channelLabel = (ch: DmChannel) => (ch.kind === 'group' ? (ch.name || t('dm.group')) : (ch.members.find((m) => m.userId !== user?.id)?.displayName || t('dm.dm')));
 
@@ -142,11 +141,10 @@ export function Sidebar() {
             {pendingRequestCount > 0 && <span className="ml-auto text-[10px] bg-warnsoft text-warn px-1.5 py-0.5 rounded-full whitespace-nowrap">{pendingRequestCount}</span>}
           </button>
         )}
-        <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full hover:bg-line text-left text-[13px] text-txt2"
-          title={t('lang.toggleTitle')} onClick={() => toggleLang()}>
+        <div className="flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full text-[13px] text-txt2">
           <span className="w-7 grid place-items-center"><IconGlobe size={17} /></span> {t('lang.label')}
-          <span className="ml-auto text-[11px] text-txt3">{LANG_LABELS[lang]}</span>
-        </button>
+          <LangSelect className="ml-auto shrink-0 max-w-[104px] text-[11px] text-txt2 bg-card border border-line2 rounded-md px-1.5 py-0.5 outline-none cursor-pointer" />
+        </div>
         <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full hover:bg-line text-left text-[13px] text-txt2" onClick={() => logout()}>
           <span className="w-7 grid place-items-center"><IconLogout size={17} /></span> {t('sidebar.logout')}
         </button>

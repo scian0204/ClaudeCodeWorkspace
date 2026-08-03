@@ -518,7 +518,7 @@ flowchart TB
 <details>
 <summary><b>Multilingual UI (Korean / English)</b></summary>
 
-- Instant switch from the sidebar toggle, persisted to `localStorage` + browser-language auto-detect
+- Instant switch from the **language list** in the sidebar footer, persisted to `localStorage` + browser-language auto-detect (a newly added language shows up in the list on its own)
 - Managed from a single dictionary (`web/src/lib/i18n.ts`); new UI strings always go through i18n
 </details>
 

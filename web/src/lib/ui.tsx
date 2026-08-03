@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useSyncExternalStore } from 'react';
-import { t, useT, useLang, toggleLang } from './i18n';
+import { t, useT, useLang, setLang, LANGS, LANG_LABELS, type Lang } from './i18n';
 import { useStore } from './store';
 import { IconMenu, IconSparkle } from './icons';
 
@@ -61,13 +61,15 @@ export function timeAgo(ts: number): string {
   return t('time.days', { n: Math.floor(s / 86400) });
 }
 
-// Language switcher — reused in the chat header and the login page.
-export function LangToggle({ className }: { className?: string }) {
+// Language picker — reused on the login page and in the sidebar footer. A list, not a toggle: adding
+// a language means adding it to LANGS, nothing here changes.
+export function LangSelect({ className }: { className?: string }) {
   const lang = useLang();
   const tr = useT();
   return (
-    <button type="button" className={className || 'toolbtn'} title={tr('lang.toggleTitle')} onClick={toggleLang}>
-      {lang === 'ko' ? '한' : 'EN'}
-    </button>
+    <select className={className || 'input !w-auto !py-1 !text-xs'} value={lang} title={tr('lang.pickTitle')}
+      aria-label={tr('lang.pickTitle')} onChange={(e) => setLang(e.target.value as Lang)}>
+      {LANGS.map((l) => <option key={l} value={l}>{LANG_LABELS[l]}</option>)}
+    </select>
   );
 }

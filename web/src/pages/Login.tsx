@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useStore } from '../lib/store';
 import { useT } from '../lib/i18n';
-import { LangToggle } from '../lib/ui';
+import { LangSelect } from '../lib/ui';
 
 export function Login() {
   const login = useStore((s) => s.login);
@@ -25,7 +25,7 @@ export function Login() {
             <div className="font-semibold">ClaudeCode Workspace</div>
             <div className="text-xs text-txt3">{t('login.subtitle')}</div>
           </div>
-          <LangToggle className="ml-auto text-xs text-txt3 hover:text-txt border border-line rounded px-2 py-1" />
+          <LangSelect className="ml-auto shrink-0 max-w-[92px] text-xs text-txt2 bg-card border border-line rounded px-1.5 py-1 outline-none cursor-pointer" />
         </div>
         <label className="text-xs text-txt2">{t('login.username')}</label>
         <input className="input mt-1 mb-3" value={u} onChange={(e) => setU(e.target.value)} autoFocus />
