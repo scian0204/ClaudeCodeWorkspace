@@ -165,8 +165,9 @@ export async function importRoutes(app: FastifyInstance) {
     const metaByUuid = new Map((slugDir ? listSessions(slugDir, cfg.int('autoTitleMaxChars')) : []).map((m) => [m.uuid, m]));
     const sessionUuids: string[] = Array.isArray(body.sessionUuids) ? body.sessionUuids.map(String) : [];
     const sessions: { id: string; title: string }[] = [];
-    // transcripts the CLI never named: queue a model pass over their conversation once the response
-    // is out, so the first-message snippet we store now gets upgraded to a real title
+    // Transcripts the CLI never named can be re-titled from their own conversation once the response
+    // is out. Opt-in per import (checkbox in the modal) — never assumed; the admin flag still gates.
+    const wantTitles = body.autoTitle === true && cfg.bool('autoTitleEnabled') && cfg.bool('importAutoTitleEnabled');
     const digestMax = cfg.int('importAutoTitleMessages');
     const toTitle: { sessionId: string; text: string; prevTitle: string }[] = [];
     for (const uuid of sessionUuids) {
@@ -197,7 +198,7 @@ export async function importRoutes(app: FastifyInstance) {
         }).run();
       }
       // a title the user set in the CLI is theirs — only the snippet-named ones get re-titled
-      if (!meta?.custom) {
+      if (wantTitles && !meta?.custom) {
         const text = userTexts(msgs, digestMax).join('\n---\n');
         if (text) toTitle.push({ sessionId: chatId, text, prevTitle: title });
       }

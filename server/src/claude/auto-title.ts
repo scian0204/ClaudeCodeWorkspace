@@ -116,15 +116,13 @@ export async function maybeAutoTitle(p: {
 
 // Same naming pass for a chat cloned by the local-session import. The transcript carried no
 // custom-title, so the row currently holds the snippet listSessions read off the first message —
-// upgrade it to a real title read from several turns of the imported conversation. The caller
-// fires this after responding; the new title reaches the client over `session:title`.
+// upgrade it to a real title read from several turns of the imported conversation. Whether to run
+// at all is the importer's choice (a checkbox on the import screen), so there is no preference
+// check here. The caller fires this after responding; the title arrives over `session:title`.
 export async function autoTitleImported(p: {
   sessionId: string; ownerId: string; cwd: string; text: string; prevTitle: string; emit: Emit;
 }): Promise<void> {
-  if (!cfg.bool('autoTitleEnabled') || !cfg.bool('importAutoTitleEnabled')) return;
   if (!p.text.trim()) return;
-  const owner = db.select().from(schema.users).where(eq(schema.users.id, p.ownerId)).get();
-  if (!owner || owner.autoTitle === 0) return;
   // no auth (mock) → the snippet already stored IS the truncation fallback, so there is nothing to do
   const prov = resolveProvider(p.ownerId);
   if (prov.source === 'none') return;

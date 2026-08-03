@@ -71,6 +71,9 @@ function sortChildren(nodes: TreeNode[]): TreeNode[] {
 export function ImportSessionModal({ onClose }: { onClose: () => void }) {
   const importSessions = useStore((s) => s.importSessions);
   const setError = useStore((s) => s.setError);
+  const autoTitleEnabled = useStore((s) => s.autoTitleEnabled);
+  // seeded from the user's own auto-naming preference, but it is this import's call to make
+  const [autoTitle, setAutoTitle] = useState(useStore.getState().user?.autoTitle !== false);
   const [sid] = useState(() => (crypto.randomUUID?.() || `${Date.now()}${Math.random()}`).replace(/[^a-zA-Z0-9]/g, '').slice(0, 32));
   const [step, setStep] = useState<'project' | 'tree' | 'claude' | 'sessions'>('project');
   const [collected, setCollected] = useState<Collected[]>([]);
@@ -155,7 +158,10 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
   const confirm = async () => {
     setBusy(true);
     try {
-      await importSessions({ sid, projectName: projectName.trim() || undefined, sessionUuids: checkedUuids });
+      await importSessions({
+        sid, projectName: projectName.trim() || undefined, sessionUuids: checkedUuids,
+        autoTitle: autoTitle && autoTitleEnabled,
+      });
       onClose();
     } catch (e: any) { setError(e.message); setBusy(false); }
   };
@@ -292,6 +298,15 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
                   </label>
                 ))}
               </div>
+              {autoTitleEnabled && (
+                <label className="flex items-start gap-2 text-xs cursor-pointer select-none mb-3">
+                  <input type="checkbox" className="mt-0.5" checked={autoTitle} onChange={(e) => setAutoTitle(e.target.checked)} />
+                  <span className="min-w-0">
+                    <span className="block">{t('import.autoTitle')}</span>
+                    <span className="block text-[11px] text-txt3 mt-0.5">{t('import.autoTitleHint')}</span>
+                  </span>
+                </label>
+              )}
             </>
           )}
 
