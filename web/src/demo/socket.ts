@@ -35,7 +35,21 @@ function reply(text: string, nAtt = 0) {
 
 function appendMsg(sessionId: string, msg: any) { (db.messages[sessionId] || (db.messages[sessionId] = [])).push(msg); }
 
+// Mirror of the server's auto-titling: a still-unnamed private chat gets named after its topic once
+// the first turn ends. The real thing asks a cheap model; the demo just takes the opening words.
+const DEMO_DEFAULT_TITLE = 'New chat';
+function autoTitle(sessionId: string, text: string) {
+  if (!db.me.autoTitle) return;
+  const s = db.sessions.find((x) => x.id === sessionId);
+  if (!s || s.title !== DEMO_DEFAULT_TITLE) return;
+  const title = String(text || '').trim().split('\n')[0].split(/\s+/).slice(0, 6).join(' ').slice(0, 40);
+  if (!title) return;
+  s.title = title;
+  deliver('session:title', { sessionId, title });
+}
+
 function runTurn(sessionId: string, text: string, nAtt = 0) {
+  const firstText = text;
   const r = reply(text, nAtt);
   const finalBlocks: any[] = [];
 
@@ -47,6 +61,7 @@ function runTurn(sessionId: string, text: string, nAtt = 0) {
       const msg = { id: `m_${rid()}`, role: 'assistant', authorId: null, authorName: 'Claude', content: { blocks: finalBlocks }, createdAt: Date.now() };
       appendMsg(sessionId, msg);
       deliver('turn:end', { sessionId, message: msg });
+      autoTitle(sessionId, firstText);
     });
   };
 

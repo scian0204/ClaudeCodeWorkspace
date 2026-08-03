@@ -45,6 +45,10 @@ export const DEFS: ConfigDef[] = [
   { key: 'turnMaxRetries', group: 'claude', type: 'int', default: '5', min: 0, max: 20 },
   { key: 'turnBackoffBaseMs', group: 'claude', type: 'int', default: '1000', min: 100, max: 60000, unit: 'ms' },
   { key: 'turnBackoffCapMs', group: 'claude', type: 'int', default: '30000', min: 1000, max: 600000, unit: 'ms' },
+  { key: 'autoTitleEnabled', group: 'claude', type: 'bool', default: '1' },
+  { key: 'autoTitleModel', group: 'claude', type: 'string', default: 'claude-haiku-4-5-20251001' },
+  { key: 'autoTitleMaxChars', group: 'claude', type: 'int', default: '40', min: 10, max: 120 },
+  { key: 'autoTitleTimeoutMs', group: 'claude', type: 'int', default: '20000', min: 2000, max: 120000, unit: 'ms' },
   { key: 'usageProbeTtlMs', group: 'claude', type: 'int', default: '15000', min: 1000, max: 600000, unit: 'ms' },
   { key: 'usageProbeTimeoutMs', group: 'claude', type: 'int', default: '8000', min: 1000, max: 120000, unit: 'ms' },
 
@@ -253,8 +257,8 @@ export function imageConfigValues(): string[] {
 }
 
 // Client-facing subset (any authed user): drives the model dropdown.
-export function publicConfig(): { models: Record<string, string>; defaultModel: string; defaultEffort: string; sessionImportEnabled: boolean; llmProvidersEnabled: boolean; approvalsEnabled: boolean; dmEnabled: boolean; searchEnabled: boolean; customContextMenu: boolean; processPollMs: number } {
+export function publicConfig(): { models: Record<string, string>; defaultModel: string; defaultEffort: string; sessionImportEnabled: boolean; llmProvidersEnabled: boolean; approvalsEnabled: boolean; dmEnabled: boolean; searchEnabled: boolean; customContextMenu: boolean; autoTitleEnabled: boolean; processPollMs: number } {
   let models: Record<string, string>;
   try { models = JSON.parse(cfg.str('models')); } catch { models = JSON.parse(DEFAULT_MODELS); }
-  return { models, defaultModel: cfg.str('defaultModel'), defaultEffort: cfg.str('defaultEffort'), sessionImportEnabled: cfg.bool('sessionImportEnabled'), llmProvidersEnabled: cfg.bool('llmProvidersEnabled'), approvalsEnabled: cfg.bool('approvalsEnabled'), dmEnabled: cfg.bool('dmEnabled'), searchEnabled: cfg.bool('searchEnabled'), customContextMenu: cfg.bool('customContextMenu'), processPollMs: cfg.int('processPollMs') };
+  return { models, defaultModel: cfg.str('defaultModel'), defaultEffort: cfg.str('defaultEffort'), sessionImportEnabled: cfg.bool('sessionImportEnabled'), llmProvidersEnabled: cfg.bool('llmProvidersEnabled'), approvalsEnabled: cfg.bool('approvalsEnabled'), dmEnabled: cfg.bool('dmEnabled'), searchEnabled: cfg.bool('searchEnabled'), customContextMenu: cfg.bool('customContextMenu'), autoTitleEnabled: cfg.bool('autoTitleEnabled'), processPollMs: cfg.int('processPollMs') };
 }

@@ -17,7 +17,7 @@ export interface WikiTopic { id: string; name: string; description: string; path
 export interface ReviewRepo { id: string; name: string; provider: string; host: string; slug: string; gitUrl: string; baseBranch: string | null; sandboxImage: string | null; polledAt: number | null; pollError: string | null; openCount: number; createdAt: number; }
 export interface ReviewSessionSummary { id: string; chatSessionId: string; repoId: string; repoName: string; prNumber: number; prTitle: string; prUrl: string; prState: string; authorLogin: string; mergeState: string; verdict: string; verdictSummary: string | null; readOnly: boolean; updatedAt: number; }
 export interface ReviewMeta { reviewId: string; prNumber: number; prTitle: string; prUrl: string; prState: string; authorLogin: string; baseRef: string; headRef: string; mergeState: string; verdict: string; verdictSummary: string | null; repoName: string; provider: string; }
-export interface User { id: string; username: string; role: string; displayName: string; avatarColor: string; avatar?: string | null; hasClaudeToken?: boolean; claudeTokenSetAt?: number | null; }
+export interface User { id: string; username: string; role: string; displayName: string; avatarColor: string; avatar?: string | null; hasClaudeToken?: boolean; claudeTokenSetAt?: number | null; autoTitle?: boolean; }
 export interface DmMemberInfo { userId: string; displayName: string; avatarColor: string; avatar: string | null; username: string; }
 export interface DmChannel { id: string; kind: 'dm' | 'group'; name: string | null; createdBy: string; createdAt: number; members: DmMemberInfo[]; lastMessage: { text: string; createdAt: number; userId: string } | null; unread: number; }
 export interface DmMessage { id: string; channelId: string; userId: string; text: string; createdAt: number; }
@@ -63,6 +63,7 @@ interface State {
   dmEnabled: boolean;            // admin feature flag (from /api/config) — gates the DM/group chat UI
   searchEnabled: boolean;        // admin feature flag (from /api/config) — gates the unified-search UI
   customContextMenuEnabled: boolean; // admin feature flag (from /api/config) — off = browser's own right-click menu everywhere
+  autoTitleEnabled: boolean;     // admin feature flag (from /api/config) — gates the auto session-title toggle
   searchOpen: boolean;           // unified-search palette (Ctrl/Cmd+K)
   shortcutsOpen: boolean;        // keyboard-shortcut cheat sheet (?)
   highlightMsgId: string | null; // message a search hit jumped to (scroll target + ring)
@@ -137,6 +138,7 @@ interface State {
   setSidebarOpen: (open: boolean) => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   setError: (e: string | null) => void;
+  setAutoTitle: (on: boolean) => Promise<void>;
   saveClaudeToken: (token: string) => Promise<void>;
   clearClaudeToken: () => Promise<void>;
   uploadAvatar: (file: File) => Promise<void>;
@@ -154,7 +156,7 @@ export const useStore = create<State>((set, get) => ({
   current: null, messages: [], live: null, turnActive: false,
   queue: { running: null, waiting: [] }, pending: [],
   control: { canApprove: true, canInterrupt: true, canSetMode: true, isOwner: true, delegable: [] },
-  presence: [], congested: false, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenuEnabled: true, searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
+  presence: [], congested: false, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenuEnabled: true, autoTitleEnabled: true, searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
   channels: [], activeChannelId: null, channelMessages: [],
   commands: [],
 
@@ -205,6 +207,7 @@ export const useStore = create<State>((set, get) => ({
       dmEnabled: cf.dmEnabled !== false,
       searchEnabled: cf.searchEnabled !== false,
       customContextMenuEnabled: cf.customContextMenu !== false,
+      autoTitleEnabled: cf.autoTitleEnabled !== false,
       channels: dmc.channels || [],
       processPollMs: cf.processPollMs || 5000,
     });
@@ -514,6 +517,11 @@ export const useStore = create<State>((set, get) => ({
   setSidebarCollapsed: (collapsed) => { localStorage.setItem('sidebarCollapsed', collapsed ? '1' : '0'); set({ sidebarCollapsed: collapsed }); },
   setError: (e) => set({ error: e }),
 
+  setAutoTitle: async (on) => {
+    const { user } = await api.patch('/api/auth/me', { autoTitle: on });
+    set({ user });
+  },
+
   saveClaudeToken: async (token) => {
     const { user } = await api.put('/api/auth/me/claude-token', { token });
     set({ user });
@@ -642,6 +650,13 @@ function wire(set: any, get: () => State) {
       messages: exists ? get().messages : [...get().messages, p.message],
       live: null, turnActive: false,
     });
+  });
+
+  // the server named a fresh chat after its topic — update the sidebar row + the open header
+  sock.on('session:title', (p: { sessionId: string; title: string }) => {
+    set({ sessions: get().sessions.map((s) => (s.id === p.sessionId ? { ...s, title: p.title } : s)) });
+    const c = get().current;
+    if (c && c.chatSessionId === p.sessionId) set({ current: { ...c, title: p.title } });
   });
 
   sock.on('turn:error', (p: any) => {

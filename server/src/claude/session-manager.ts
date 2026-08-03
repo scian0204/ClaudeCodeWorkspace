@@ -17,6 +17,7 @@ import { resolveGitCred, gitIdentity, identityEnv, askpassEnv } from '../auth/gi
 import { getReviewByChat, ensureWorktree } from '../review/manager.js';
 import { sandboxAvailable, ensureSandbox, removeSandbox, sandboxMcpServer } from '../review/sandbox.js';
 import { cfg } from '../lib/config-registry.js';
+import { maybeAutoTitle } from './auto-title.js';
 
 type Emit = (event: string, payload: any) => void;
 
@@ -381,6 +382,11 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
       sessionId: s.id, message: publicMessage(asstMsg),
       usage: { inputTokens: inTok, outputTokens: outTok, costUsd: cost },
     });
+    // a still-unnamed private chat gets named after its topic (best-effort, never blocks the turn)
+    void maybeAutoTitle({
+      sessionId: s.id, cwd, hasAuth: prov.source !== 'none', emit: p.emit,
+      providerEnv: prov.env, providerModel: prov.model,
+    }).catch(() => { /* titling is cosmetic — never surface it as a turn failure */ });
   } catch (e: any) {
     const aborted = abort.signal.aborted;
     p.emit('turn:error', { sessionId: s.id, aborted, error: aborted ? 'interrupted' : String(e?.message || e) });

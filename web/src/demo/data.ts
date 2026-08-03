@@ -11,6 +11,7 @@ export const COLORS = { clay: '#c8613a', blue: '#5b6b8c', green: '#5b8c6b', purp
 export const ME = {
   id: 'u_admin', username: 'admin', role: 'admin', displayName: 'Demo Admin',
   avatarColor: COLORS.clay, avatar: null as string | null, hasClaudeToken: true, claudeTokenSetAt: ago(60 * 24 * 3) as number | null,
+  autoTitle: true,
 };
 const U_JAMIE = { id: 'u_jamie', username: 'jamie', role: 'member', displayName: 'Jamie Park', avatarColor: COLORS.blue };
 const U_RILEY = { id: 'u_riley', username: 'riley', role: 'member', displayName: 'Riley Kim', avatarColor: COLORS.green };
@@ -326,6 +327,9 @@ export const ADMIN = {
     { key: 'models', group: 'claude', type: 'json', value: '{"claude-opus-4-8":"Opus 4.8","claude-sonnet-5":"Sonnet 5","claude-haiku-4-5-20251001":"Haiku 4.5"}', default: '{"claude-opus-4-8":"Opus 4.8"}', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'forceMock', group: 'claude', type: 'bool', value: '1', default: '0', restart: false, readonly: false, secret: false, overridden: true },
     { key: 'maxConcurrentTurns', group: 'claude', type: 'int', value: '3', default: '3', min: 1, max: 100, restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'autoTitleEnabled', group: 'claude', type: 'bool', value: '1', default: '1', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'autoTitleModel', group: 'claude', type: 'string', value: 'claude-haiku-4-5-20251001', default: 'claude-haiku-4-5-20251001', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'autoTitleMaxChars', group: 'claude', type: 'int', value: '40', default: '40', min: 10, max: 120, restart: false, readonly: false, secret: false, overridden: false },
     ...['blockNonessentialTraffic', 'privacyTelemetry', 'privacyErrorReports', 'privacyFeedbackCommands',
         'privacyFeedbackSurvey', 'privacyNonEssentialModelCalls', 'privacyAutoUpdater',
         'privacyWebFetchPreflight', 'privacyArtifact', 'privacyMarketplace'].map((key) => ({

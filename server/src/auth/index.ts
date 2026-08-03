@@ -14,6 +14,7 @@ export type Role = 'admin' | 'member';
 export interface AuthUser {
   id: string; username: string; role: Role; displayName: string; avatarColor: string;
   avatar: string | null; // avatar version token (cache-bust key) or null when unset
+  autoTitle: boolean;    // name a fresh private chat after its topic on the first turn
 }
 
 // ── password hashing (stdlib scrypt; lightweight posture per spec) ──
@@ -43,7 +44,7 @@ export function createUser(opts: {
   db.insert(schema.users).values(row).run();
   ensureUserLayout(id);
   if (opts.claudeToken) setUserToken(id, opts.claudeToken); // throws on bad format
-  return { id, username: row.username, role: row.role, displayName: row.displayName, avatarColor: row.avatarColor, avatar: null };
+  return { id, username: row.username, role: row.role, displayName: row.displayName, avatarColor: row.avatarColor, avatar: null, autoTitle: true };
 }
 
 export function findByUsername(username: string) {
@@ -53,7 +54,7 @@ export function getUserById(id: string) {
   return db.select().from(schema.users).where(eq(schema.users.id, id)).get();
 }
 export function toAuthUser(u: NonNullable<ReturnType<typeof getUserById>>): AuthUser {
-  return { id: u.id, username: u.username, role: u.role as Role, displayName: u.displayName, avatarColor: u.avatarColor, avatar: u.avatar ?? null };
+  return { id: u.id, username: u.username, role: u.role as Role, displayName: u.displayName, avatarColor: u.avatarColor, avatar: u.avatar ?? null, autoTitle: u.autoTitle !== 0 };
 }
 
 // AuthUser + Claude-token status (for /me and /login so the client can drive the nag popup).

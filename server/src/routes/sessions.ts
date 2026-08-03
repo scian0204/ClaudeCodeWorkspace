@@ -6,6 +6,7 @@ import { db, schema } from '../db/index.js';
 import { requireAuth } from '../auth/index.js';
 import { newId } from '../lib/ids.js';
 import { probeCommands, probeUsage } from '../claude/session-manager.js';
+import { DEFAULT_TITLE } from '../claude/auto-title.js';
 import { reviewRoleForChat } from '../review/manager.js';
 import { cfg } from '../lib/config-registry.js';
 import { paths, ensure } from '../lib/paths.js';
@@ -94,7 +95,7 @@ export async function sessionRoutes(app: FastifyInstance) {
     const now = Date.now();
     const row = {
       id: newId(), ownerId: u.id, kind: 'private', roomId: null,
-      title: title ? String(title) : '새 대화', projectId: projectId ? String(projectId) : null,
+      title: title ? String(title) : DEFAULT_TITLE, projectId: projectId ? String(projectId) : null,
       claudeSessionId: null, model: cfg.str('defaultModel'), effort: cfg.str('defaultEffort'),
       permissionMode: 'default', createdAt: now, updatedAt: now,
     };

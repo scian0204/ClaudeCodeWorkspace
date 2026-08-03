@@ -11,6 +11,7 @@ export const users = sqliteTable('users', {
   claudeTokenEnc: text('claude_token_enc'),        // AES-GCM blob of the user's Claude token
   claudeTokenSetAt: integer('claude_token_set_at'), // when it was registered (display only)
   avatar: text('avatar'),                          // version token (set-time millis) for cache-busting; null = no avatar (file lives at <userHome>/avatar.<ext>)
+  autoTitle: integer('auto_title').notNull().default(1), // 1 = name a fresh private chat after its topic on the first turn
 });
 
 export const authSessions = sqliteTable('auth_sessions', {
