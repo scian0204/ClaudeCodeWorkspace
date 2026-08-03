@@ -13,9 +13,11 @@ ClaudeCode Workspace — 서버 1대 상주 Claude Code 팀 워크스페이스. 
 3. **완료 후 docker compose 반영 + Docker Hub 배포.** 기능 개발이 끝나면 `docker compose`로 프로젝트가 실행 중인지 확인하고, 빌드 & 재실행해서 변경을 반영한다. 그 다음 버전을 올려 Docker Hub(`cian0204/claudecode-workspace`)에 이미지를 push 한다.
    ```bash
    docker compose ps
-   docker compose up -d --build
+   npm run compose:up      # = docker compose up -d --build && docker image prune -f
    npm run release:patch   # 버그픽스·자잘한 수정 (새 기능이면 release:minor)
    ```
+   - **로컬 빌드는 반드시 `npm run compose:up`으로** 한다. `docker compose up -d --build`를 맨손으로 돌리면 재빌드마다 이전 이미지가 `:latest` 태그를 잃고 dangling(`<none>`)으로 쌓인다. `compose:up`은 빌드·재실행 후 `docker image prune -f`로 즉시 정리한다(dangling만 삭제 — 태그 달린 이미지·실행 중 컨테이너·볼륨·빌드 캐시는 건드리지 않음).
+   - 릴리스로 생긴 구버전 태그(`:1.2.3`, `:sha-abc1234`)까지 비우려면 명시적으로: `docker image rm cian0204/claudecode-workspace:<태그>`. 빌드 캐시가 커졌으면 `docker builder prune -f`.
    - `release:*`는 `npm version`으로 `package.json` 버전을 올리고 git 태그(`vX.Y.Z`)를 만든 뒤, `scripts/release.mjs`가 `:버전`·`:latest`·`:sha-<short>` 3개 태그로 build & push 한다.
    - **기본은 amd64만**(빠름, 약 1–2분). arm64까지 멀티아치로 올리려면 `npm run release:patch -- --arm` (arm64는 qemu 에뮬 빌드라 느림, 약 20–30분 — **가끔만**).
    - **선행 조건**: 이 머신에서 최초 1회 `docker login`(Docker Hub 토큰) 되어 있어야 한다. 미로그인 시 push가 auth 에러로 실패한다. (Claude은 자격증명을 직접 입력하지 않는다 — 로그인은 사용자가 수행.)

@@ -12,6 +12,7 @@
     "build": "npm run build -w web",
     "start": "npm run start -w server",
     "typecheck": "npm run typecheck -w server && npm run typecheck -w web",
+    "compose:up": "docker compose up -d --build && docker image prune -f",
     "release": "node scripts/release.mjs",
     "release:patch": "npm version patch -m \"chore(release): v%s\" && node scripts/release.mjs",
     "release:minor": "npm version minor -m \"chore(release): v%s\" && node scripts/release.mjs",
