@@ -14,7 +14,7 @@ import {
 } from '../lib/icons';
 
 export function Sidebar() {
-  const { user, sessions, rooms, wikiTopics, current, openPrivate, openRoom, openWiki, newSession, newRoom, logout, setPanel, panel, deleteSession, deleteRoom, deleteWikiTopic, renameSession, sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed, sessionImportEnabled, pendingRequestCount, channels, activeChannelId, openChannel, dmEnabled } = useStore();
+  const { user, sessions, rooms, wikiTopics, current, openPrivate, openRoom, openWiki, newSession, newRoom, logout, setPanel, panel, deleteSession, deleteRoom, deleteWikiTopic, renameSession, sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed, sessionImportEnabled, pendingRequestCount, channels, activeChannelId, openChannel, dmEnabled, goHome } = useStore();
   const [showRoom, setShowRoom] = useState(false);
   const [roomName, setRoomName] = useState('');
   const [showWiki, setShowWiki] = useState(false);
@@ -37,13 +37,15 @@ export function Sidebar() {
         <button className="toolbtn max-md:hidden absolute top-2.5 right-2.5 z-10" title={t('nav.collapseSidebar')} aria-label={t('nav.collapseSidebar')}
           onClick={() => setSidebarCollapsed(true)}><IconPanelLeft /></button>
         <LangToggle className="absolute top-3 right-11 text-[11px] text-txt3 hover:text-txt border border-line rounded px-1.5 py-0.5 z-10" />
-        <div className="flex items-center gap-2.5 mb-3.5 pr-16">
+        {/* the logo is the way back to the landing screen */}
+        <button className="flex items-center gap-2.5 mb-3.5 pr-16 text-left w-full rounded-md hover:opacity-80"
+          title={t('nav.home')} onClick={() => goHome()}>
           <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" className="w-[26px] h-[26px] rounded-md shrink-0" />
           <div className="leading-tight min-w-0">
             <div className="font-semibold text-sm whitespace-nowrap">ClaudeCode Workspace</div>
             <div className="text-[11px] text-txt3 truncate">{t('sidebar.teamName', { name: user?.displayName ?? '' })}</div>
           </div>
-        </div>
+        </button>
         <button className="btn-primary w-full flex items-center justify-center gap-2 !py-2" onClick={() => newSession()}><IconPlus size={16} />{t('sidebar.newChat')}</button>
         <SearchButton label className="mt-2" />
       </div>

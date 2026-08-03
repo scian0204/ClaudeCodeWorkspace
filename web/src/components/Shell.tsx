@@ -25,9 +25,11 @@ function Empty() {
         <SearchButton />
       </div>
       <div className="flex-1 grid place-items-center text-center p-4">
-        <div>
+        <div className="w-full max-w-[440px]">
           <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" className="w-16 h-16 mx-auto mb-3" />
           <div className="text-txt2 mb-4">{t('shell.emptyHint')}</div>
+          {/* search is the other way into the workspace from here, next to starting a new chat */}
+          <SearchButton label className="!py-2 mb-3" />
           <button className="btn-primary inline-flex items-center gap-1.5" onClick={() => newSession()}><IconPlus size={16} />{t('shell.newConversation')}</button>
         </div>
       </div>

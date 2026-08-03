@@ -91,6 +91,7 @@ interface State {
   openWiki: (topicId: string) => Promise<void>;
   openReview: (reviewId: string) => Promise<void>;
   openChannel: (id: string) => Promise<void>;
+  goHome: () => void;
   setSearchOpen: (open: boolean) => void;
   setHighlightMsgId: (id: string | null) => void;
   openHit: (hit: SearchHit) => Promise<void>;
@@ -340,6 +341,19 @@ export const useStore = create<State>((set, get) => ({
   markReadDm: (id) => {
     getSocket().emit('dm:read', { channelId: id });
     set({ channels: get().channels.map((c) => (c.id === id ? { ...c, unread: 0 } : c)) }); // optimistic
+  },
+
+  // Back to the landing screen (the logo click): drop whatever is open — Claude thread, DM channel
+  // or panel — and release the socket room so we stop receiving that session's events.
+  goHome: () => {
+    const prev = get().current;
+    if (prev) getSocket().emit('session:leave', prev.chatSessionId);
+    set({
+      current: null, messages: [], live: null, turnActive: false,
+      queue: { running: null, waiting: [] }, pending: [], presence: [], commands: [],
+      activeChannelId: null, channelMessages: [], highlightMsgId: null,
+      panel: null, viewMode: 'chat', editorUrl: null, sidebarOpen: false,
+    });
   },
 
   // ── unified search ──

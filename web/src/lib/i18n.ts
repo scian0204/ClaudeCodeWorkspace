@@ -84,6 +84,7 @@ const ko: Dict = {
   'lang.toggleTitle': '언어 전환 (한국어/English)',
   'nav.openMenu': '메뉴 열기',
   'nav.closeMenu': '메뉴 닫기',
+  'nav.home': '처음 화면으로',
   'nav.collapseSidebar': '사이드바 접기',
   'nav.expandSidebar': '사이드바 펼치기',
   // relative time
@@ -831,6 +832,7 @@ const en: Dict = {
   'lang.toggleTitle': 'Switch language (한국어/English)',
   'nav.openMenu': 'Open menu',
   'nav.closeMenu': 'Close menu',
+  'nav.home': 'Back to home',
   'nav.collapseSidebar': 'Collapse sidebar',
   'nav.expandSidebar': 'Expand sidebar',
   // relative time
