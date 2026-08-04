@@ -150,16 +150,30 @@ export async function importRoutes(app: FastifyInstance) {
     const tail = tailOf(orig) || 'imported';
     const name0 = safeName(String(body.projectName || tail));
 
-    // place the project working dir
-    const { dir: dest, name } = uniqueDir(paths.userProjects(u.id), name0);
-    ensure(path.dirname(dest));
-    if (fs.existsSync(projectSlot) && fs.readdirSync(projectSlot).length) fs.renameSync(projectSlot, dest);
-    else ensure(dest);
-    const project = { id: newId(), scope: 'user', ownerId: u.id, name, path: dest, createdAt: now };
-    db.insert(schema.projects).values(project).run();
+    // Place the project working dir. "Overwrite" reuses the caller's project of the same name and
+    // copies the upload OVER it — same-path files are replaced, everything else stays. Deliberately
+    // not a wipe: that would take .git, untracked work and anything the editor left behind with it.
+    const prevProject = body.projectOverwrite === true
+      ? db.select().from(schema.projects).where(and(
+          eq(schema.projects.scope, 'user'), eq(schema.projects.ownerId, u.id), eq(schema.projects.name, name0),
+        )).get()
+      : undefined;
+    const staged = fs.existsSync(projectSlot) && fs.readdirSync(projectSlot).length > 0;
+    let project: { id: string; scope: string; ownerId: string | null; name: string; path: string; createdAt: number };
+    if (prevProject) {
+      project = prevProject;
+      if (staged) fs.cpSync(projectSlot, prevProject.path, { recursive: true, force: true });
+    } else {
+      const { dir: dest, name } = uniqueDir(paths.userProjects(u.id), name0);
+      ensure(path.dirname(dest));
+      if (staged) fs.renameSync(projectSlot, dest);
+      else ensure(dest);
+      project = { id: newId(), scope: 'user', ownerId: u.id, name, path: dest, createdAt: now };
+      db.insert(schema.projects).values(project).run();
+    }
 
     // server-side slug dir where the CLI will look for this project's transcripts on resume
-    const serverCwd = path.resolve(dest);
+    const serverCwd = path.resolve(project.path);
     const serverSlug = encodeSlug(serverCwd);
     const projDir = path.join(paths.userClaude(u.id), 'projects', serverSlug);
     ensure(projDir);

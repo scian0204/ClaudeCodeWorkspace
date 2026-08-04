@@ -41,6 +41,10 @@ function stripRoot(list: Collected[]): Collected[] {
 // CLAUDE.md and everything under .claude/ are required — force-checked and locked in the tree.
 const isEssential = (rel: string) => rel === 'CLAUDE.md' || rel.startsWith('.claude/');
 
+// mirrors the server's safeName (routes/import.ts) so the "already exists" badge matches the row
+// the server would actually find
+const safeName = (n: string) => n.replace(/[^a-zA-Z0-9._ -]/g, '').trim() || 'project';
+
 function buildTree(rels: string[]): TreeNode[] {
   const root: TreeNode = { name: '', rel: '', dir: true, children: [] };
   for (const rel of rels) {
@@ -87,6 +91,8 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
   const [sessions, setSessions] = useState<Sess[]>([]);
   const [sessionChecked, setSessionChecked] = useState<Record<string, boolean>>({});
   const [dupMode, setDupMode] = useState<Record<string, DupMode>>({});
+  const [projectMode, setProjectMode] = useState<DupMode>('overwrite');
+  const myProjects = useStore((s) => s.projects.mine);
   const [projectName, setProjectName] = useState('');
   const [claudeNotFound, setClaudeNotFound] = useState(false);
   const projectDirRef = useRef<HTMLInputElement>(null);
@@ -161,6 +167,12 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
   const skipClaude = () => { setSessions([]); setSessionChecked({}); setStep('sessions'); };
 
   const checkedUuids = sessions.filter((s) => sessionChecked[s.uuid]).map((s) => s.uuid);
+  // the name the server will resolve to — collides with a project this user already owns?
+  const projectDup = useMemo(() => {
+    const n = safeName(projectName.trim());
+    return !!projectName.trim() && myProjects.some((p: any) => p.name === n);
+  }, [projectName, myProjects]);
+  const projectOverwrite = projectDup && projectMode === 'overwrite';
   const confirm = async () => {
     setBusy(true);
     try {
@@ -168,6 +180,7 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
         sid, projectName: projectName.trim() || undefined, sessionUuids: checkedUuids,
         autoTitle: autoTitle && autoTitleEnabled,
         overwrite: checkedUuids.filter((id) => dupMode[id] === 'overwrite'),
+        projectOverwrite,
       });
       onClose();
     } catch (e: any) { setError(e.message); setBusy(false); }
@@ -279,7 +292,22 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
       {step === 'sessions' && (
         <div>
           <div className="text-xs text-txt2 mb-1">{t('import.projectName')}</div>
-          <input className="input mb-3" value={projectName} autoFocus onChange={(e) => setProjectName(e.target.value)} />
+          <div className="flex flex-wrap items-center gap-2 mb-1">
+            <input className="input flex-1 min-w-0" value={projectName} autoFocus onChange={(e) => setProjectName(e.target.value)} />
+            {projectDup && (
+              <>
+                <span className="shrink-0 px-1 py-px rounded bg-claysoft text-clay text-[10px]">{t('import.dupBadge')}</span>
+                <select className="input !py-0.5 !text-[11px] !w-auto shrink-0" value={projectMode}
+                  aria-label={t('import.dupStrategy')} onChange={(e) => setProjectMode(e.target.value as DupMode)}>
+                  <option value="overwrite">{t('import.dupOverwrite')}</option>
+                  <option value="clone">{t('import.dupClone')}</option>
+                </select>
+              </>
+            )}
+          </div>
+          <div className={`text-[11px] text-txt3 mb-3 ${projectDup ? '' : 'hidden'}`}>
+            {projectDup && t(projectOverwrite ? 'import.projectDupOverwriteHint' : 'import.projectDupCloneHint')}
+          </div>
 
           {sessions.length === 0 ? (
             <div className="text-[11px] text-txt3 mb-3">{t('import.noSessions')}</div>

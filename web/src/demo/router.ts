@@ -327,14 +327,17 @@ export function route(method: string, rawPath: string, body?: any): Res {
   // ---- local session import ----
   if (seg[1] === 'import' && seg[2] === 'staging' && seg[4] === 'files' && M === 'POST') return ok({ files: [{ name: 'src/index.ts', size: 100 }] });
   if (seg[1] === 'import' && seg[2] === 'staging' && seg[4] === 'file' && M === 'DELETE') return ok({ files: [] });
-  if (seg[1] === 'import' && seg[2] === 'staging' && seg[4] === 'sessions' && M === 'GET') return ok({ found: true, originalCwd: 'C:\\dev\\Demo', projectTail: 'Demo', sessions: IMPORT_SESSIONS });
+  if (seg[1] === 'import' && seg[2] === 'staging' && seg[4] === 'sessions' && M === 'GET') return ok({ found: true, originalCwd: 'C:\\dev\\api-server', projectTail: 'api-server', sessions: IMPORT_SESSIONS });
   if (seg[1] === 'import' && seg[2] === 'staging' && seg[3] && seg.length === 4 && M === 'DELETE') return ok({ ok: true });
   if (seg[1] === 'import' && seg[2] === 'sessions' && M === 'POST') {
     // overwrite reuses the chat row the user already has, so only the cloned ones come back as new
     const overwritten = new Set<string>(Array.isArray(b.overwrite) ? b.overwrite : []);
     const picked: string[] = (Array.isArray(b.sessionUuids) ? b.sessionUuids : []).filter((u: string) => !overwritten.has(u));
     return ok({
-      project: { id: genId('prj'), name: b.projectName || 'Demo' },
+      // overwrite reuses the project the user already has; clone would get a numbered sibling
+      project: b.projectOverwrite
+        ? (db.projects.mine.find((p: any) => p.name === b.projectName) || db.projects.mine[0])
+        : { id: genId('prj'), name: `${b.projectName || 'Demo'}-2` },
       sessions: picked.map((u) => ({ id: genId('ses'), title: IMPORT_SESSIONS.find((s) => s.uuid === u)?.title || u })),
     });
   }
