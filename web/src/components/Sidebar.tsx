@@ -13,18 +13,39 @@ import {
   IconX, IconDownload, IconMessage, IconPencil, IconTrash, IconUsers, IconClock, IconWarning,
   IconBook, IconPuzzle, IconSliders, IconLogout, IconFile, IconBox, IconRefresh, IconPlus,
   IconCheckCircle, IconBan, IconGitBranch, IconCheckSquare, IconSquare, IconFolder, IconPanelLeft,
-  IconGlobe, IconKeyboard, IconSparkle,
+  IconGlobe, IconKeyboard, IconSparkle, IconChevronDown, IconChevronRight,
 } from '../lib/icons';
 
 export function Sidebar() {
-  const { user, sessions, rooms, wikiTopics, current, openPrivate, openRoom, openWiki, newSession, newRoom, logout, setPanel, panel, deleteSession, deleteRoom, deleteWikiTopic, renameSession, retitleSession, autoTitleEnabled, setError, sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed, sessionImportEnabled, pendingRequestCount, channels, activeChannelId, openChannel, dmEnabled, goHome, setShortcutsOpen, titling } = useStore();
+  const { user, sessions, rooms, projects, wikiTopics, current, openPrivate, openRoom, openWiki, newSession, newRoom, logout, setPanel, panel, deleteSession, deleteRoom, deleteWikiTopic, renameSession, retitleSession, autoTitleEnabled, setError, sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed, sessionImportEnabled, pendingRequestCount, channels, activeChannelId, openChannel, dmEnabled, goHome, setShortcutsOpen, titling } = useStore();
   const [showRoom, setShowRoom] = useState(false);
   const [roomName, setRoomName] = useState('');
   const [showWiki, setShowWiki] = useState(false);
   const [showDm, setShowDm] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  // collapsed session groups (project ids, '' = unassigned) — same localStorage habit as sidebarCollapsed
+  const [closedGroups, setClosedGroups] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('sidebarGroups') || '[]'); } catch { return []; }
+  });
   const isAdmin = user?.role === 'admin';
   const t = useT();
+
+  const toggleGroup = (key: string) => setClosedGroups((c) => {
+    const next = c.includes(key) ? c.filter((k) => k !== key) : [...c, key];
+    localStorage.setItem('sidebarGroups', JSON.stringify(next));
+    return next;
+  });
+
+  // Chats sit under their project: common projects first, then personal, unassigned last. A session
+  // pointing at a project the user can't see (removed, room-scoped) falls into unassigned so it
+  // can never disappear from the list. Empty projects get no header.
+  const projList = [
+    ...projects.common.map((p) => ({ ...p, tag: t('chat.tagCommon') })),
+    ...projects.mine.map((p) => ({ ...p, tag: t('chat.tagMine') })),
+  ];
+  const groups = [...projList.map((p) => ({ key: p.id, name: p.name, tag: p.tag })), { key: '', name: t('sidebar.noProjectGroup'), tag: '' }]
+    .map((g) => ({ ...g, items: sessions.filter((s) => (projList.some((p) => p.id === s.projectId) ? s.projectId : '') === g.key) }))
+    .filter((g) => g.items.length > 0);
 
   const channelLabel = (ch: DmChannel) => (ch.kind === 'group' ? (ch.name || t('dm.group')) : (ch.members.find((m) => m.userId !== user?.id)?.displayName || t('dm.dm')));
 
@@ -79,7 +100,10 @@ export function Sidebar() {
         <Section label={t('sidebar.personal')} onAdd={() => newSession()}
           extra={sessionImportEnabled ? <button className="cursor-pointer leading-none text-txt3 hover:text-txt" title={t('import.button')} aria-label={t('import.button')} onClick={() => setImportOpen(true)}><IconDownload size={15} /></button> : undefined} />
         {sessions.length === 0 && <div className="text-[11px] text-txt3 px-2 py-1">{t('common.none')}</div>}
-        {sessions.map((s) => (
+        {groups.map((g) => (<div key={g.key || '_none'}>
+          <GroupHeader name={g.name} tag={g.tag} count={g.items.length}
+            open={!closedGroups.includes(g.key)} onToggle={() => toggleGroup(g.key)} />
+          {!closedGroups.includes(g.key) && g.items.map((s) => (
           <Item key={s.id} active={panel === null && current?.chatSessionId === s.id} onClick={() => { setPanel(null); openPrivate(s.id); }}
             menu={[
               { label: t('ctx.open'), icon: <IconMessage size={14} />, onSelect: () => { setPanel(null); openPrivate(s.id); } },
@@ -108,7 +132,8 @@ export function Sidebar() {
             <button className="hidden group-hover:block text-txt3 hover:text-danger px-1" title={t('sidebar.deleteChatTitle')} aria-label={t('sidebar.deleteChatTitle')}
               onClick={(e) => { e.stopPropagation(); removeChat(s); }}><IconTrash size={14} /></button>
           </Item>
-        ))}
+          ))}
+        </div>))}
 
         <Section label={t('sidebar.rooms')} onAdd={() => setShowRoom(true)} />
         {rooms.length === 0 && <div className="text-[11px] text-txt3 px-2 py-1">{t('common.none')}</div>}
@@ -586,6 +611,18 @@ function Section({ label, onAdd, extra }: { label: string; onAdd?: () => void; e
         {onAdd && <span className="cursor-pointer leading-none text-txt3 hover:text-txt" onClick={onAdd}><IconPlus size={15} /></span>}
       </span>
     </div>
+  );
+}
+// Collapsible project header above a group of chats — same row look as the review-repo header.
+function GroupHeader({ name, tag, count, open, onToggle }: { name: string; tag: string; count: number; open: boolean; onToggle: () => void }) {
+  return (
+    <button className="w-full flex items-center gap-1.5 px-2 py-1 text-[11px] text-txt2 hover:text-txt" aria-expanded={open} onClick={onToggle}>
+      <span className="opacity-70 shrink-0">{open ? <IconChevronDown size={13} /> : <IconChevronRight size={13} />}</span>
+      <span className="opacity-70 shrink-0"><IconFolder size={13} /></span>
+      <span className="flex-1 truncate text-left font-semibold" title={name}>{name}</span>
+      {tag && <span className="text-txt3 shrink-0">{tag}</span>}
+      <span className="text-txt3 shrink-0">{count}</span>
+    </button>
   );
 }
 // `menu` = the row's own right-click items (falls back to the app-wide default menu when absent).

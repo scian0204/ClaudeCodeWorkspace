@@ -508,7 +508,9 @@ export const useStore = create<State>((set, get) => ({
     const c = get().current; if (!c) return;
     if (c.kind === 'private') await api.patch(`/api/sessions/${c.chatSessionId}`, { projectId });
     else await api.patch(`/api/rooms/${c.roomId}/project`, { projectId });
-    set({ current: { ...c, projectId }, editorUrl: null });
+    // patch the list too — the sidebar groups chats by project, so the row has to move right away
+    set({ current: { ...c, projectId }, editorUrl: null,
+      sessions: get().sessions.map((s) => (s.id === c.chatSessionId ? { ...s, projectId } : s)) });
   },
   deleteProject: async (projectId) => {
     await api.del(`/api/projects/${projectId}`);

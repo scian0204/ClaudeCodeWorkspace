@@ -160,6 +160,7 @@ export const db = {
   sessions: [
     { id: 's_auth', title: 'Auth module refactor', updatedAt: ago(11), projectId: 'p_api', model: 'claude-opus-4-8', effort: 'high', permissionMode: 'default' },
     { id: 's_socket', title: 'Socket reconnect bug', updatedAt: ago(138), projectId: 'p_web', model: 'claude-sonnet-5', effort: 'medium', permissionMode: 'acceptEdits' },
+    { id: 's_infra', title: 'Terraform drift check', updatedAt: ago(300), projectId: 'p_shared', model: 'claude-sonnet-5', effort: 'high', permissionMode: 'default' },
     { id: 's_notes', title: 'Release notes v2.3', updatedAt: ago(60 * 20), projectId: null, model: 'claude-opus-4-8', effort: 'high', permissionMode: 'default' },
   ],
   rooms: [
