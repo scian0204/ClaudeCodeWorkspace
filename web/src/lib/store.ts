@@ -123,6 +123,7 @@ interface State {
   newWikiTopic: (payload: { name: string; description: string; stagingId?: string; precompiled?: boolean }) => Promise<void>;
   deleteSession: (id: string) => Promise<void>;
   renameSession: (id: string, title: string) => Promise<void>;
+  retitleSession: (id: string) => Promise<void>;
   deleteRoom: (id: string) => Promise<void>;
   deleteWikiTopic: (id: string) => Promise<void>;
   deleteMessage: (id: string) => Promise<void>;
@@ -428,6 +429,15 @@ export const useStore = create<State>((set, get) => ({
   },
   renameSession: async (id, title) => {
     await api.patch(`/api/sessions/${id}`, { title });
+    set({ sessions: get().sessions.map((s) => (s.id === id ? { ...s, title } : s)) });
+    const c = get().current;
+    if (c && c.chatSessionId === id) set({ current: { ...c, title } });
+  },
+  // Manual LLM naming. Applied locally too: the server also emits session:title, but a client that
+  // has not joined this session's room would otherwise see nothing happen.
+  retitleSession: async (id) => {
+    const { title } = await api.post(`/api/sessions/${id}/retitle`, {});
+    if (!title) return;
     set({ sessions: get().sessions.map((s) => (s.id === id ? { ...s, title } : s)) });
     const c = get().current;
     if (c && c.chatSessionId === id) set({ current: { ...c, title } });

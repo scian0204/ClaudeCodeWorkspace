@@ -13,11 +13,12 @@ import {
   IconX, IconDownload, IconMessage, IconPencil, IconTrash, IconUsers, IconClock, IconWarning,
   IconBook, IconPuzzle, IconSliders, IconLogout, IconFile, IconBox, IconRefresh, IconPlus,
   IconCheckCircle, IconBan, IconGitBranch, IconCheckSquare, IconSquare, IconFolder, IconPanelLeft,
-  IconGlobe, IconKeyboard,
+  IconGlobe, IconKeyboard, IconSparkle,
 } from '../lib/icons';
 
 export function Sidebar() {
-  const { user, sessions, rooms, wikiTopics, current, openPrivate, openRoom, openWiki, newSession, newRoom, logout, setPanel, panel, deleteSession, deleteRoom, deleteWikiTopic, renameSession, sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed, sessionImportEnabled, pendingRequestCount, channels, activeChannelId, openChannel, dmEnabled, goHome, setShortcutsOpen } = useStore();
+  const { user, sessions, rooms, wikiTopics, current, openPrivate, openRoom, openWiki, newSession, newRoom, logout, setPanel, panel, deleteSession, deleteRoom, deleteWikiTopic, renameSession, retitleSession, autoTitleEnabled, setError, sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed, sessionImportEnabled, pendingRequestCount, channels, activeChannelId, openChannel, dmEnabled, goHome, setShortcutsOpen } = useStore();
+  const [retitling, setRetitling] = useState('');
   const [showRoom, setShowRoom] = useState(false);
   const [roomName, setRoomName] = useState('');
   const [showWiki, setShowWiki] = useState(false);
@@ -34,6 +35,14 @@ export function Sidebar() {
   const renameChat = (s: PrivateSession) => {
     const nt = prompt(t('sidebar.renameChatPrompt'), s.title);
     if (nt && nt.trim() && nt.trim() !== s.title) renameSession(s.id, nt.trim());
+  };
+  // Ask the model to name the chat after its conversation. No confirm: it only replaces a title, and
+  // Rename right above it undoes that in one step.
+  const retitleChat = async (s: PrivateSession) => {
+    setRetitling(s.id);
+    try { await retitleSession(s.id); }
+    catch (e: any) { setError(e.message); }
+    finally { setRetitling(''); }
   };
   const removeChat = (s: PrivateSession) => { if (confirm(t('sidebar.deleteChatConfirm', { title: s.title }))) deleteSession(s.id); };
   const removeRoom = (r: RoomSummary) => { if (confirm(t('sidebar.deleteRoomConfirm', { name: r.name }))) deleteRoom(r.id); };
@@ -78,12 +87,21 @@ export function Sidebar() {
             menu={[
               { label: t('ctx.open'), icon: <IconMessage size={14} />, onSelect: () => { setPanel(null); openPrivate(s.id); } },
               { label: t('sidebar.renameChatTitle'), icon: <IconPencil size={14} />, onSelect: () => renameChat(s) },
+              ...(autoTitleEnabled ? [{
+                label: retitling === s.id ? t('sidebar.retitleChatBusy') : t('sidebar.retitleChatTitle'),
+                icon: <IconSparkle size={14} />, onSelect: () => { void retitleChat(s); },
+              }] : []),
               '-',
               { label: t('sidebar.deleteChatTitle'), icon: <IconTrash size={14} />, danger: true, onSelect: () => removeChat(s) },
             ]}>
             <span className="opacity-70"><IconMessage size={15} /></span>
             <span className="flex-1 truncate text-[13px]">{s.title}</span>
             <span className="text-[11px] text-txt3 group-hover:hidden">{timeAgo(s.updatedAt)}</span>
+            {autoTitleEnabled && (
+              <button className="hidden group-hover:block text-txt3 hover:text-clay px-1 disabled:opacity-50"
+                disabled={retitling === s.id} title={t('sidebar.retitleChatTitle')} aria-label={t('sidebar.retitleChatTitle')}
+                onClick={(e) => { e.stopPropagation(); void retitleChat(s); }}><IconSparkle size={14} /></button>
+            )}
             <button className="hidden group-hover:block text-txt3 hover:text-clay px-1" title={t('sidebar.renameChatTitle')} aria-label={t('sidebar.renameChatTitle')}
               onClick={(e) => { e.stopPropagation(); renameChat(s); }}><IconPencil size={14} /></button>
             <button className="hidden group-hover:block text-txt3 hover:text-danger px-1" title={t('sidebar.deleteChatTitle')} aria-label={t('sidebar.deleteChatTitle')}

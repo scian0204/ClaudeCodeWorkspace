@@ -6,7 +6,8 @@ import { db, schema } from '../db/index.js';
 import { requireAuth } from '../auth/index.js';
 import { newId } from '../lib/ids.js';
 import { probeCommands, probeUsage } from '../claude/session-manager.js';
-import { DEFAULT_TITLE } from '../claude/auto-title.js';
+import { DEFAULT_TITLE, retitleSession } from '../claude/auto-title.js';
+import { emitToUser } from '../realtime/io.js';
 import { reviewRoleForChat } from '../review/manager.js';
 import { cfg } from '../lib/config-registry.js';
 import { paths, ensure } from '../lib/paths.js';
@@ -224,6 +225,23 @@ export async function sessionRoutes(app: FastifyInstance) {
     if ('projectId' in b && (b.projectId || null) !== (s.projectId || null)) patch.claudeSessionId = null;
     db.update(schema.chatSessions).set(patch).where(eq(schema.chatSessions.id, id)).run();
     return { ok: true };
+  });
+
+  // Manual "name this chat from the conversation" — the button next to Rename. Same access rule as
+  // an ordinary rename (canEditChat), and it always overwrites: pressing it is the request.
+  app.post('/api/sessions/:id/retitle', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    const { id } = req.params as any;
+    const s = db.select().from(schema.chatSessions).where(eq(schema.chatSessions.id, id)).get();
+    if (!s) return reply.code(404).send({ error: 'not found' });
+    if (!canEditChat(u, s)) return reply.code(403).send({ error: 'forbidden' });
+    try {
+      const title = await retitleSession({
+        sessionId: id, requesterId: u.id,
+        emit: (event, payload) => emitToUser(u.id, event, payload),
+      });
+      return { ok: true, title };
+    } catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
   });
 
   app.delete('/api/sessions/:id', async (req, reply) => {

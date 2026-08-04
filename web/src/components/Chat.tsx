@@ -86,6 +86,7 @@ function Header() {
   const owner = c.room?.members.find((m) => m.isOwner);
   const modeUi = MODES[c.permissionMode];
 
+
   return (
     <header className="flex items-center gap-2 md:gap-2.5 px-3 md:px-4 py-2.5 border-b border-line bg-panel shrink-0 flex-wrap">
       <MobileMenuButton />
@@ -93,6 +94,8 @@ function Header() {
       <div className="font-semibold text-sm flex items-center gap-2 min-w-0">
         <span className="w-[7px] h-[7px] rounded-full bg-ok shrink-0" />
         <span className="truncate">{c.title}</span>
+        {/* Reachable on a phone, unlike the sidebar row actions (hover / right-click only). */}
+        {!c.roomId && !c.wikiTopicId && <RetitleButton sessionId={c.chatSessionId} />}
         <span className="text-txt3 text-xs font-mono truncate hidden md:inline-flex items-center gap-1">{c.wikiTopicId ? <><IconBook size={12} />{t('chat.knowledgeQuery')}</> : (c.projectId ? '' : t('chat.noProject'))}</span>
       </div>
       <div className="flex-1" />
@@ -171,6 +174,28 @@ function Header() {
         />
       )}
     </header>
+  );
+}
+
+// Name the open chat after its conversation, from the header — the one place that works on a phone.
+// Private chats only: a room is named by its room, a wiki thread by its topic, a review by its PR,
+// and the server refuses those anyway.
+function RetitleButton({ sessionId }: { sessionId: string }) {
+  const t = useT();
+  const enabled = useStore((s) => s.autoTitleEnabled);
+  const retitle = useStore((s) => s.retitleSession);
+  const setError = useStore((s) => s.setError);
+  const [busy, setBusy] = useState(false);
+  if (!enabled) return null;
+  return (
+    <button className="shrink-0 text-txt3 hover:text-clay disabled:opacity-50"
+      disabled={busy} title={t('sidebar.retitleChatTitle')} aria-label={t('sidebar.retitleChatTitle')}
+      onClick={async () => {
+        setBusy(true);
+        try { await retitle(sessionId); }
+        catch (e: any) { setError(e.message); }
+        finally { setBusy(false); }
+      }}><IconSparkle size={13} /></button>
   );
 }
 

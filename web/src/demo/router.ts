@@ -237,6 +237,16 @@ export function route(method: string, rawPath: string, body?: any): Res {
     if (M === 'GET' && name) { const a = ATTACHMENTS.get(name); return a ? ok({ name, url: a.url, isImage: a.isImage }) : { status: 404, data: { error: 'not found' } }; }
     return ok({ files: [] });
   }
+  // manual LLM naming — canned, but exercises the real store action, error path and socket handler.
+  // Mirrors the server: a chat with nothing said in it yet is a 400, not a silent no-op.
+  if (seg[1] === 'sessions' && seg[3] === 'retitle' && M === 'POST') {
+    const s = db.sessions.find((x: any) => x.id === idAt(2));
+    const first = String(msgs(idAt(2)).find((m: any) => m.role === 'user')?.content?.text || '').split('\n')[0].trim();
+    if (!first) return { status: 400, data: { error: 'nothing to read yet — send a message first' } };
+    const title = first.replace(/[?.!]+$/, '').slice(0, 40).trim();
+    if (s) s.title = title;
+    return ok({ ok: true, title });
+  }
   if (seg[1] === 'sessions' && seg[2] && M === 'GET') return ok({ session: sessionFor(idAt(2)), messages: msgs(idAt(2)) });
   if (seg[1] === 'sessions' && seg[2] && M === 'PATCH') {
     const s = db.sessions.find((x) => x.id === idAt(2)); if (s) Object.assign(s, b); return ok({});
