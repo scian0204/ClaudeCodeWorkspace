@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useStore, type ReviewSessionSummary, type ReviewRepo, type DmChannel, type PrivateSession, type RoomSummary, type WikiTopic } from '../lib/store';
 import { api, type UploadState } from '../lib/api';
-import { Avatar, avatarUrl, timeAgo, LangSelect } from '../lib/ui';
+import { Avatar, avatarUrl, timeAgo, LangSelect, ClaySpark } from '../lib/ui';
 import { fmtKeys, withKeys } from '../lib/shortcuts';
 import { openContextMenu, type CtxRows } from '../lib/contextmenu';
 import { Modal } from './Modal';
@@ -17,8 +17,7 @@ import {
 } from '../lib/icons';
 
 export function Sidebar() {
-  const { user, sessions, rooms, wikiTopics, current, openPrivate, openRoom, openWiki, newSession, newRoom, logout, setPanel, panel, deleteSession, deleteRoom, deleteWikiTopic, renameSession, retitleSession, autoTitleEnabled, setError, sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed, sessionImportEnabled, pendingRequestCount, channels, activeChannelId, openChannel, dmEnabled, goHome, setShortcutsOpen } = useStore();
-  const [retitling, setRetitling] = useState('');
+  const { user, sessions, rooms, wikiTopics, current, openPrivate, openRoom, openWiki, newSession, newRoom, logout, setPanel, panel, deleteSession, deleteRoom, deleteWikiTopic, renameSession, retitleSession, autoTitleEnabled, setError, sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed, sessionImportEnabled, pendingRequestCount, channels, activeChannelId, openChannel, dmEnabled, goHome, setShortcutsOpen, titling } = useStore();
   const [showRoom, setShowRoom] = useState(false);
   const [roomName, setRoomName] = useState('');
   const [showWiki, setShowWiki] = useState(false);
@@ -38,12 +37,10 @@ export function Sidebar() {
   };
   // Ask the model to name the chat after its conversation. No confirm: it only replaces a title, and
   // Rename right above it undoes that in one step.
-  const retitleChat = async (s: PrivateSession) => {
-    setRetitling(s.id);
-    try { await retitleSession(s.id); }
-    catch (e: any) { setError(e.message); }
-    finally { setRetitling(''); }
-  };
+  // naming in flight: this tab pressed the button, or the server is naming the chat anyway (first
+  // turn just ended, another tab pressed it) — one flag in the store covers both
+  const isNaming = (id: string) => titling.includes(id);
+  const retitleChat = (s: PrivateSession) => { retitleSession(s.id).catch((e: any) => setError(e.message)); };
   const removeChat = (s: PrivateSession) => { if (confirm(t('sidebar.deleteChatConfirm', { title: s.title }))) deleteSession(s.id); };
   const removeRoom = (r: RoomSummary) => { if (confirm(t('sidebar.deleteRoomConfirm', { name: r.name }))) deleteRoom(r.id); };
   const removeTopic = (wt: WikiTopic) => { if (confirm(t('sidebar.deleteTopicConfirm', { name: wt.name }))) deleteWikiTopic(wt.id); };
@@ -88,19 +85,23 @@ export function Sidebar() {
               { label: t('ctx.open'), icon: <IconMessage size={14} />, onSelect: () => { setPanel(null); openPrivate(s.id); } },
               { label: t('sidebar.renameChatTitle'), icon: <IconPencil size={14} />, onSelect: () => renameChat(s) },
               ...(autoTitleEnabled ? [{
-                label: retitling === s.id ? t('sidebar.retitleChatBusy') : t('sidebar.retitleChatTitle'),
+                label: isNaming(s.id) ? t('sidebar.retitleChatBusy') : t('sidebar.retitleChatTitle'),
                 icon: <IconSparkle size={14} />, onSelect: () => { void retitleChat(s); },
               }] : []),
               '-',
               { label: t('sidebar.deleteChatTitle'), icon: <IconTrash size={14} />, danger: true, onSelect: () => removeChat(s) },
             ]}>
             <span className="opacity-70"><IconMessage size={15} /></span>
-            <span className="flex-1 truncate text-[13px]">{s.title}</span>
+            {/* while the model is picking a name, the row title itself waits with the clay glint */}
+            <span className={`flex-1 truncate text-[13px] ${isNaming(s.id) ? 'clay-shimmer' : ''}`}>{s.title}</span>
             <span className="text-[11px] text-txt3 group-hover:hidden">{timeAgo(s.updatedAt)}</span>
             {autoTitleEnabled && (
-              <button className="hidden group-hover:block text-txt3 hover:text-clay px-1 disabled:opacity-50"
-                disabled={retitling === s.id} title={t('sidebar.retitleChatTitle')} aria-label={t('sidebar.retitleChatTitle')}
-                onClick={(e) => { e.stopPropagation(); void retitleChat(s); }}><IconSparkle size={14} /></button>
+              <button className={`${isNaming(s.id) ? 'block' : 'hidden group-hover:block'} text-txt3 hover:text-clay px-1`}
+                disabled={isNaming(s.id)} aria-busy={isNaming(s.id)}
+                title={t(isNaming(s.id) ? 'sidebar.retitleChatBusy' : 'sidebar.retitleChatTitle')}
+                aria-label={t(isNaming(s.id) ? 'sidebar.retitleChatBusy' : 'sidebar.retitleChatTitle')}
+                onClick={(e) => { e.stopPropagation(); void retitleChat(s); }}>
+                {isNaming(s.id) ? <ClaySpark size={15} /> : <IconSparkle size={14} />}</button>
             )}
             <button className="hidden group-hover:block text-txt3 hover:text-clay px-1" title={t('sidebar.renameChatTitle')} aria-label={t('sidebar.renameChatTitle')}
               onClick={(e) => { e.stopPropagation(); renameChat(s); }}><IconPencil size={14} /></button>

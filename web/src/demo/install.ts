@@ -20,14 +20,15 @@ function patchFetch() {
       if (av instanceof File && path.startsWith('/api/auth/me/avatar')) {
         return new Promise<Response>((resolve) => {
           const fr = new FileReader();
-          fr.onload = () => resolve(respond(route(method, path, { avatarDataUrl: fr.result })));
-          fr.onerror = () => resolve(respond(route(method, path, {})));
+          fr.onload = () => resolve(Promise.resolve(route(method, path, { avatarDataUrl: fr.result })).then(respond));
+          fr.onerror = () => resolve(Promise.resolve(route(method, path, {})).then(respond));
           fr.readAsDataURL(av);
         });
       }
       const o: any = {}; body.forEach((v, k) => { o[k] = v instanceof File ? v.name : v; }); body = o;
     }
-    return Promise.resolve(respond(route(method, path, body)));
+    // a route may answer late on purpose (a real model call is not instant) — await either shape
+    return Promise.resolve(route(method, path, body)).then(respond);
   }) as typeof fetch;
 }
 

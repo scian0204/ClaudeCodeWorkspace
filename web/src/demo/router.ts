@@ -7,6 +7,9 @@ import {
 
 type Res = { status: number; data: any };
 const ok = (data: any = {}): Res => ({ status: 200, data });
+// A canned answer returns instantly, which hides whatever the UI shows while it waits. The few
+// routes that are a model call on the real server keep their round-trip so the wait stays visible.
+const slow = (r: Res, ms = 1400): Promise<Res> => new Promise((res) => setTimeout(() => res(r), ms));
 
 // mirror the server's provider status shape + minimal per-type validation (so the demo shows errors)
 function providerStatus(type: string, c: any) {
@@ -151,7 +154,7 @@ function searchDemo(raw: string) {
   return { q, hits, minChars: MIN_Q };
 }
 
-export function route(method: string, rawPath: string, body?: any): Res {
+export function route(method: string, rawPath: string, body?: any): Res | Promise<Res> {
   const P = rawPath.split('?')[0];
   const query = new URLSearchParams(rawPath.split('?')[1] || '');
   const b = (() => { try { return typeof body === 'string' ? JSON.parse(body || '{}') : (body || {}); } catch { return {}; } })();
@@ -245,7 +248,7 @@ export function route(method: string, rawPath: string, body?: any): Res {
     if (!first) return { status: 400, data: { error: 'nothing to read yet — send a message first' } };
     const title = first.replace(/[?.!]+$/, '').slice(0, 40).trim();
     if (s) s.title = title;
-    return ok({ ok: true, title });
+    return slow(ok({ ok: true, title })); // one model round-trip on the real server → keep the wait
   }
   if (seg[1] === 'sessions' && seg[2] && M === 'GET') return ok({ session: sessionFor(idAt(2)), messages: msgs(idAt(2)) });
   if (seg[1] === 'sessions' && seg[2] && M === 'PATCH') {

@@ -5,7 +5,7 @@ import { useStore, type Block, type Msg, type Attachment, type Project } from '.
 import { ProjectCreateForm } from './ProjectCreateForm';
 import { api, type UploadState } from '../lib/api';
 import { UploadProgress } from './UploadProgress';
-import { Avatar, timeAgo, useIsMobile, MobileMenuButton } from '../lib/ui';
+import { Avatar, timeAgo, useIsMobile, MobileMenuButton, ClayDots, ClaySpark, ClayWait } from '../lib/ui';
 import { MembersDialog } from './MembersDialog';
 import { WikiExplorer } from './WikiExplorer';
 import { FileExplorer } from './FileExplorer';
@@ -73,6 +73,7 @@ export function Chat() {
 
 function Header() {
   const { current: c, presence, control, toggleTheme, setViewMode, viewMode, setModel, setEffort, setMode } = useStore();
+  const naming = useStore((s) => (s.current ? s.titling.includes(s.current.chatSessionId) : false));
   const [showMembers, setShowMembers] = useState(false);
   const [explorer, setExplorer] = useState(false);
   const [gitOpen, setGitOpen] = useState(false);
@@ -93,7 +94,8 @@ function Header() {
       <SearchButton />
       <div className="font-semibold text-sm flex items-center gap-2 min-w-0">
         <span className="w-[7px] h-[7px] rounded-full bg-ok shrink-0" />
-        <span className="truncate">{c.title}</span>
+        {/* the model is picking this chat's name right now — the title waits with the clay glint */}
+        <span className={`truncate ${naming ? 'clay-shimmer' : ''}`}>{c.title}</span>
         {/* Reachable on a phone, unlike the sidebar row actions (hover / right-click only). */}
         {!c.roomId && !c.wikiTopicId && <RetitleButton sessionId={c.chatSessionId} />}
         <span className="text-txt3 text-xs font-mono truncate hidden md:inline-flex items-center gap-1">{c.wikiTopicId ? <><IconBook size={12} />{t('chat.knowledgeQuery')}</> : (c.projectId ? '' : t('chat.noProject'))}</span>
@@ -185,17 +187,15 @@ function RetitleButton({ sessionId }: { sessionId: string }) {
   const enabled = useStore((s) => s.autoTitleEnabled);
   const retitle = useStore((s) => s.retitleSession);
   const setError = useStore((s) => s.setError);
-  const [busy, setBusy] = useState(false);
+  // this tab pressed it, or the server is naming the chat anyway (first turn / another tab)
+  const naming = useStore((s) => s.titling.includes(sessionId));
   if (!enabled) return null;
   return (
-    <button className="shrink-0 text-txt3 hover:text-clay disabled:opacity-50"
-      disabled={busy} title={t('sidebar.retitleChatTitle')} aria-label={t('sidebar.retitleChatTitle')}
-      onClick={async () => {
-        setBusy(true);
-        try { await retitle(sessionId); }
-        catch (e: any) { setError(e.message); }
-        finally { setBusy(false); }
-      }}><IconSparkle size={13} /></button>
+    <button className="shrink-0 text-txt3 hover:text-clay"
+      disabled={naming} aria-busy={naming} title={t(naming ? 'sidebar.retitleChatBusy' : 'sidebar.retitleChatTitle')}
+      aria-label={t(naming ? 'sidebar.retitleChatBusy' : 'sidebar.retitleChatTitle')}
+      onClick={() => { retitle(sessionId).catch((e: any) => setError(e.message)); }}>
+      {naming ? <ClaySpark size={15} /> : <IconSparkle size={13} />}</button>
   );
 }
 
@@ -493,9 +493,8 @@ function WikiBanner() {
       </div>
       {explorer && <WikiExplorer topicId={topicId} onClose={() => setExplorer(false)} />}
       {status === 'compiling' && (
-        <div className="px-5 pb-2 text-clay flex items-center gap-2">
-          <span className="tdot" /><span className="tdot" /><span className="tdot" />
-          <span>{t('chat.compilingHint')}</span>
+        <div className="px-5 pb-2 flex items-center gap-2 min-w-0">
+          <ClayWait label={t('chat.compilingHint')} />
           {step && <span className="text-txt3 font-mono truncate">{step}</span>}
         </div>
       )}
@@ -694,9 +693,7 @@ function LiveView() {
       <div className="flex-1 min-w-0">
         <div className="text-xs text-txt2 font-semibold mb-1">Claude</div>
         <BlockList blocks={live.blocks} />
-        <div className="flex items-center gap-1.5 text-txt3 text-[13px] italic mt-1">
-          <span className="tdot" /><span className="tdot" /><span className="tdot" /> {t('chat.working')}
-        </div>
+        <ClayWait label={t('chat.working')} className="text-[13px] italic mt-1" />
       </div>
     </div>
   );
@@ -1045,7 +1042,7 @@ function Composer() {
         )}
         {(queue.running || queue.waiting.length > 0 || congested) && (
           <div className="text-xs text-txt3 mb-2 flex items-center gap-2 flex-wrap">
-            {queue.running && <span className="inline-flex items-center gap-1"><IconClock size={12} />{t('chat.authorWorking', { name: queue.running.author.name })}</span>}
+            {queue.running && <ClayWait size={5} label={t('chat.authorWorking', { name: queue.running.author.name })} />}
             {turnActive && (
               <button className="text-danger hover:underline" onClick={interrupt}>{t('chat.interruptShort')}</button>
             )}
@@ -1148,7 +1145,7 @@ function Composer() {
                   <input type="checkbox" checked={includeChat} onChange={(e) => setIncludeChat(e.target.checked)} /> {t('chat.includeChat')}
                 </label>
               )}
-              <span className="text-xs text-txt3 truncate inline-flex items-center gap-1 min-w-0">{wikiCompiling ? <><IconClock size={12} /><span className="truncate">{wikiStep ? t('chat.compilingStep', { step: wikiStep }) : t('chat.compilingReady')}</span></> : turnActive ? t('chat.claudeResponding') : (isRoom && mode === 'chat' ? t('chat.composerHintChat') : t(canRef ? 'chat.composerHintRef' : 'chat.composerHint'))}</span>
+              <span className="text-xs text-txt3 truncate inline-flex items-center gap-1 min-w-0">{wikiCompiling ? <ClayWait size={5} label={wikiStep ? t('chat.compilingStep', { step: wikiStep }) : t('chat.compilingReady')} /> : turnActive ? <ClayWait size={5} label={t('chat.claudeResponding')} /> : (isRoom && mode === 'chat' ? t('chat.composerHintChat') : t(canRef ? 'chat.composerHintRef' : 'chat.composerHint'))}</span>
               <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => { void uploadPicked(Array.from(e.target.files || [])); }} />
               {canAttach && (
                 <button type="button" className="ml-auto toolbtn shrink-0 disabled:opacity-40" disabled={!!uploading} title={t('chat.attach')} aria-label={t('chat.attach')} onClick={() => fileRef.current?.click()}><IconPaperclip size={16} /></button>

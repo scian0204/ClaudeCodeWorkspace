@@ -7,6 +7,8 @@
   --line:#e3ded3; --line-2:#d6d0c2;
   --txt:#2c2a26; --txt-2:#6b675e; --txt-3:#9a958a;
   --clay:#c8613a; --clay-soft:#f3e2d9;
+  /* the brand mark's tint ladder (favicon.svg) — the loading marks fade along it toward the page */
+  --clay-mid:#e2a184; --clay-pale:#efc4b1;
   --ok:#4f8a52; --ok-soft:#e4efe0; --warn:#b7791f; --warn-soft:#f6ecd6;
   --danger:#b23b32; --danger-soft:#f6e0dd;
   --serif:Georgia,"Times New Roman",serif;
@@ -18,7 +20,7 @@
     --bg:#1c1b19; --panel:#232220; --rail:#191817; --card:#2a2825;
     --line:#34322e; --line-2:#413e39;
     --txt:#ece9e3; --txt-2:#a6a199; --txt-3:#736e65;
-    --clay:#df8763; --clay-soft:#3a2a22;
+    --clay:#df8763; --clay-soft:#3a2a22; --clay-mid:#bf6f51; --clay-pale:#985941;
     --ok:#7bb07d; --ok-soft:#22301f; --warn:#d9a441; --warn-soft:#332a18;
     --danger:#e08a80; --danger-soft:#3a201d;
   }
@@ -27,7 +29,7 @@
   --bg:#1c1b19; --panel:#232220; --rail:#191817; --card:#2a2825;
   --line:#34322e; --line-2:#413e39;
   --txt:#ece9e3; --txt-2:#a6a199; --txt-3:#736e65;
-  --clay:#df8763; --clay-soft:#3a2a22;
+  --clay:#df8763; --clay-soft:#3a2a22; --clay-mid:#bf6f51; --clay-pale:#985941;
   --ok:#7bb07d; --ok-soft:#22301f; --warn:#d9a441; --warn-soft:#332a18;
   --danger:#e08a80; --danger-soft:#3a201d;
 }
@@ -35,7 +37,7 @@
   --bg:#f5f3ee; --panel:#ffffff; --rail:#efece5; --card:#ffffff;
   --line:#e3ded3; --line-2:#d6d0c2;
   --txt:#2c2a26; --txt-2:#6b675e; --txt-3:#9a958a;
-  --clay:#c8613a; --clay-soft:#f3e2d9;
+  --clay:#c8613a; --clay-soft:#f3e2d9; --clay-mid:#e2a184; --clay-pale:#efc4b1;
   --ok:#4f8a52; --ok-soft:#e4efe0; --warn:#b7791f; --warn-soft:#f6ecd6;
   --danger:#b23b32; --danger-soft:#f6e0dd;
 }
@@ -71,7 +73,37 @@ body{margin:0;background:var(--bg);color:var(--txt);font-family:var(--sans);font
 }
 .wiki-cite:hover, .wiki-cite.on{ background:var(--clay); color:#fff; text-decoration:none; }
 
-@keyframes blink{0%,60%,100%{opacity:.3}30%{opacity:1}}
-.tdot{width:6px;height:6px;border-radius:50%;background:var(--clay);animation:blink 1.2s infinite}
-.tdot:nth-child(2){animation-delay:.2s}.tdot:nth-child(3){animation-delay:.4s}
-@media (prefers-reduced-motion:reduce){.tdot{animation:none}}
+/* ── signature waiting marks (see ClayDots / ClaySpark / ClayWait in lib/ui.tsx) ──
+   Not a generic spinner: the three dots off the brand mark (favicon.svg) travel as a wave down its
+   own tint ladder, and the sparkle that names a chat breathes inside a turning clay ring. */
+@keyframes clay-wave{
+  0%,100%{transform:translateY(0) scale(.7)}
+  26%{transform:translateY(-3px) scale(1.05)}
+  58%{transform:translateY(0) scale(.82)}
+}
+.cdot{
+  width:var(--cdot,6px); height:var(--cdot,6px); border-radius:50%; display:inline-block;
+  background:var(--clay); animation:clay-wave 1.35s cubic-bezier(.4,0,.5,1) infinite;
+}
+.cdot:nth-child(2){background:var(--clay-mid);animation-delay:.15s}
+.cdot:nth-child(3){background:var(--clay-pale);animation-delay:.3s}
+
+/* the ring turns while the sparkle inside it breathes — one mark, any icon-button slot */
+@keyframes clay-spin{to{transform:rotate(360deg)}}
+@keyframes clay-breathe{0%,100%{opacity:.55;transform:scale(.84)}50%{opacity:1;transform:scale(1.06)}}
+.cspark{position:relative;display:inline-grid;place-items:center;color:var(--clay)}
+.cspark .cs-ring{position:absolute;inset:0;animation:clay-spin 1.05s linear infinite}
+.cspark .cs-core{display:grid;place-items:center;animation:clay-breathe 1.5s ease-in-out infinite}
+
+/* the label the mark sits next to: a clay glint travels through the text while we wait */
+@keyframes clay-glint{0%{background-position:150% 0}100%{background-position:-50% 0}}
+.clay-shimmer{
+  background-image:linear-gradient(95deg,var(--txt-3) 34%,var(--clay) 50%,var(--txt-3) 66%);
+  background-size:240% 100%; -webkit-background-clip:text; background-clip:text;
+  color:transparent; -webkit-text-fill-color:transparent;
+  animation:clay-glint 2.6s linear infinite;
+}
+@media (prefers-reduced-motion:reduce){
+  .cdot,.cspark .cs-ring,.cspark .cs-core{animation:none}
+  .clay-shimmer{background-image:none;color:var(--txt-3);-webkit-text-fill-color:currentColor;animation:none}
+}

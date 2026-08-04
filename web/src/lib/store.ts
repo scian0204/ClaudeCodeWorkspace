@@ -67,6 +67,7 @@ interface State {
   customContextMenuEnabled: boolean; // admin feature flag (from /api/config) — off = browser's own right-click menu everywhere
   gitPublishEnabled: boolean;    // admin feature flag (from /api/config) — gates git publish in the Git panel
   autoTitleEnabled: boolean;     // admin feature flag (from /api/config) — gates the auto session-title toggle
+  titling: string[];             // sessions the server is naming right now (session:titling) — drives the waiting mark
   autoResumeEnabled: boolean;    // admin feature flag (from /api/config) — gates the 5h-reset auto-resume toggle
   resumes: PendingResume[];      // open session's turns parked for a claude.ai window reset
   windowPrimerEnabled: boolean;  // admin feature flag (from /api/config) — gates the 5h-window primer toggle
@@ -167,7 +168,7 @@ export const useStore = create<State>((set, get) => ({
   queue: { running: null, waiting: [] }, pending: [],
   control: { canApprove: true, canInterrupt: true, canSetMode: true, isOwner: true, delegable: [] },
   presence: [], congested: false, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenuEnabled: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, resumes: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
-  channels: [], activeChannelId: null, channelMessages: [],
+  channels: [], activeChannelId: null, channelMessages: [], titling: [],
   commands: [],
 
   bootstrap: async () => {
@@ -435,12 +436,20 @@ export const useStore = create<State>((set, get) => ({
   },
   // Manual LLM naming. Applied locally too: the server also emits session:title, but a client that
   // has not joined this session's room would otherwise see nothing happen.
+  // The waiting mark is driven from here rather than from a busy flag per button, so the row, the
+  // header title and every naming spot wait together — and `session:titling` from another tab or
+  // from the first-turn naming lights up exactly the same UI.
   retitleSession: async (id) => {
-    const { title } = await api.post(`/api/sessions/${id}/retitle`, {});
-    if (!title) return;
-    set({ sessions: get().sessions.map((s) => (s.id === id ? { ...s, title } : s)) });
-    const c = get().current;
-    if (c && c.chatSessionId === id) set({ current: { ...c, title } });
+    set({ titling: [...get().titling.filter((x) => x !== id), id] });
+    try {
+      const { title } = await api.post(`/api/sessions/${id}/retitle`, {});
+      if (!title) return;
+      set({ sessions: get().sessions.map((s) => (s.id === id ? { ...s, title } : s)) });
+      const c = get().current;
+      if (c && c.chatSessionId === id) set({ current: { ...c, title } });
+    } finally {
+      set({ titling: get().titling.filter((x) => x !== id) });
+    }
   },
   deleteRoom: async (id) => {
     await api.del(`/api/rooms/${id}`);
@@ -691,8 +700,17 @@ function wire(set: any, get: () => State) {
     });
   });
 
+  // a naming call is running (auto after the first turn, the manual button, or an import) — the row
+  // and the header wear the waiting mark until the title lands. `on:false` also covers the calls
+  // that finish without a new title (fallback, or the user renamed it meanwhile).
+  sock.on('session:titling', (p: { sessionId: string; on: boolean }) => {
+    const rest = get().titling.filter((id) => id !== p.sessionId);
+    set({ titling: p.on ? [...rest, p.sessionId] : rest });
+  });
+
   // the server named a fresh chat after its topic — update the sidebar row + the open header
   sock.on('session:title', (p: { sessionId: string; title: string }) => {
+    set({ titling: get().titling.filter((id) => id !== p.sessionId) });
     set({ sessions: get().sessions.map((s) => (s.id === p.sessionId ? { ...s, title: p.title } : s)) });
     const c = get().current;
     if (c && c.chatSessionId === p.sessionId) set({ current: { ...c, title: p.title } });

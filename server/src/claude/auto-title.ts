@@ -16,6 +16,12 @@ export const DEFAULT_TITLE = '새 대화';
 
 type Emit = (event: string, payload: any) => void;
 
+// A naming call is slow enough to be worth showing (one model round-trip). The tabs wear the waiting
+// mark between `on` and `off` — `off` fires even when the call produced no new title (fallback equal
+// to the old one, timeout, or the user renamed the chat while the model was thinking), so the mark
+// can never get stuck. `session:title` alone would not cover those.
+const titling = (emit: Emit, sessionId: string, on: boolean) => emit('session:titling', { sessionId, on });
+
 // One message for a fresh chat, several turns for an imported transcript — same prompt covers both.
 const PROMPT = (text: string, maxChars: number) => `Give this chat a short title, taken from what the user asked about.
 Reply with the title ONLY: no quotes, no markdown, no trailing punctuation, no explanation.
@@ -110,14 +116,19 @@ export async function maybeAutoTitle(p: {
   if (!text.trim()) return;
   const maxChars = cfg.int('autoTitleMaxChars');
 
-  const title = await titleFor({ ...p, ownerId: s.ownerId, text, maxChars });
-  if (!title || title === DEFAULT_TITLE) return;
+  titling(p.emit, p.sessionId, true);
+  try {
+    const title = await titleFor({ ...p, ownerId: s.ownerId, text, maxChars });
+    if (!title || title === DEFAULT_TITLE) return;
 
-  // re-check: the user may have renamed the chat while the model was thinking
-  const fresh = db.select().from(schema.chatSessions).where(eq(schema.chatSessions.id, p.sessionId)).get();
-  if (!fresh || fresh.title !== DEFAULT_TITLE) return;
-  db.update(schema.chatSessions).set({ title }).where(eq(schema.chatSessions.id, p.sessionId)).run();
-  p.emit('session:title', { sessionId: p.sessionId, title });
+    // re-check: the user may have renamed the chat while the model was thinking
+    const fresh = db.select().from(schema.chatSessions).where(eq(schema.chatSessions.id, p.sessionId)).get();
+    if (!fresh || fresh.title !== DEFAULT_TITLE) return;
+    db.update(schema.chatSessions).set({ title }).where(eq(schema.chatSessions.id, p.sessionId)).run();
+    p.emit('session:title', { sessionId: p.sessionId, title });
+  } finally {
+    titling(p.emit, p.sessionId, false);
+  }
 }
 
 // Where a one-shot titling call runs. Private chats only, so this is the project dir or, with no
@@ -151,16 +162,21 @@ export async function retitleSession(p: { sessionId: string; requesterId: string
   const prov = resolveProvider(p.requesterId);
   if (prov.source === 'none') throw new Error('no Claude auth available — register a token first');
 
-  const title = await titleFor({
-    sessionId: p.sessionId, ownerId: p.requesterId, cwd: cwdForPrivate(s), text,
-    maxChars: cfg.int('autoTitleMaxChars'), hasAuth: true,
-    providerEnv: prov.env, providerModel: prov.model,
-  });
-  if (!title) throw new Error('could not generate a name');
+  titling(p.emit, p.sessionId, true);
+  try {
+    const title = await titleFor({
+      sessionId: p.sessionId, ownerId: p.requesterId, cwd: cwdForPrivate(s), text,
+      maxChars: cfg.int('autoTitleMaxChars'), hasAuth: true,
+      providerEnv: prov.env, providerModel: prov.model,
+    });
+    if (!title) throw new Error('could not generate a name');
 
-  db.update(schema.chatSessions).set({ title }).where(eq(schema.chatSessions.id, p.sessionId)).run();
-  p.emit('session:title', { sessionId: p.sessionId, title });
-  return title;
+    db.update(schema.chatSessions).set({ title }).where(eq(schema.chatSessions.id, p.sessionId)).run();
+    p.emit('session:title', { sessionId: p.sessionId, title });
+    return title;
+  } finally {
+    titling(p.emit, p.sessionId, false);
+  }
 }
 
 // Same naming pass for a chat cloned by the local-session import. The transcript carried no
@@ -176,16 +192,21 @@ export async function autoTitleImported(p: {
   const prov = resolveProvider(p.ownerId);
   if (prov.source === 'none') return;
 
-  const title = await titleFor({
-    sessionId: p.sessionId, ownerId: p.ownerId, cwd: p.cwd, text: p.text,
-    maxChars: cfg.int('autoTitleMaxChars'), hasAuth: true,
-    providerEnv: prov.env, providerModel: prov.model,
-  });
-  if (!title || title === p.prevTitle) return;
+  titling(p.emit, p.sessionId, true);
+  try {
+    const title = await titleFor({
+      sessionId: p.sessionId, ownerId: p.ownerId, cwd: p.cwd, text: p.text,
+      maxChars: cfg.int('autoTitleMaxChars'), hasAuth: true,
+      providerEnv: prov.env, providerModel: prov.model,
+    });
+    if (!title || title === p.prevTitle) return;
 
-  // re-check: the user may have renamed the imported chat while the model was thinking
-  const fresh = db.select().from(schema.chatSessions).where(eq(schema.chatSessions.id, p.sessionId)).get();
-  if (!fresh || fresh.title !== p.prevTitle) return;
-  db.update(schema.chatSessions).set({ title }).where(eq(schema.chatSessions.id, p.sessionId)).run();
-  p.emit('session:title', { sessionId: p.sessionId, title });
+    // re-check: the user may have renamed the imported chat while the model was thinking
+    const fresh = db.select().from(schema.chatSessions).where(eq(schema.chatSessions.id, p.sessionId)).get();
+    if (!fresh || fresh.title !== p.prevTitle) return;
+    db.update(schema.chatSessions).set({ title }).where(eq(schema.chatSessions.id, p.sessionId)).run();
+    p.emit('session:title', { sessionId: p.sessionId, title });
+  } finally {
+    titling(p.emit, p.sessionId, false);
+  }
 }

@@ -44,8 +44,13 @@ function autoTitle(sessionId: string, text: string) {
   if (!s || s.title !== DEMO_DEFAULT_TITLE) return;
   const title = String(text || '').trim().split('\n')[0].split(/\s+/).slice(0, 6).join(' ').slice(0, 40);
   if (!title) return;
-  s.title = title;
-  deliver('session:title', { sessionId, title });
+  // same session:titling → session:title pair the server sends, so the naming animation is demoable
+  deliver('session:titling', { sessionId, on: true });
+  later(1500, () => {
+    s.title = title;
+    deliver('session:title', { sessionId, title });
+    deliver('session:titling', { sessionId, on: false });
+  });
 }
 
 function runTurn(sessionId: string, text: string, nAtt = 0) {

@@ -30,6 +30,46 @@ export function MobileMenuButton({ className }: { className?: string }) {
   );
 }
 
+// ── waiting on the model ────────────────────────────────────────────────────────────────────
+// One signature mark for every "Claude is thinking" spot (an answer streaming in, a wiki compile,
+// a chat being named), so the wait always looks like this app and not like a stock spinner. The
+// motion lives in styles/index.css; reduced-motion freezes it into a static badge.
+
+// The brand mark's three dots (favicon.svg) travelling as a wave. Sits next to text.
+export function ClayDots({ size = 6, className }: { size?: number; className?: string }) {
+  return (
+    <span className={`inline-flex items-center gap-[3px] shrink-0 ${className || ''}`}
+      style={{ '--cdot': `${size}px` } as React.CSSProperties} aria-hidden>
+      <i className="cdot" /><i className="cdot" /><i className="cdot" />
+    </span>
+  );
+}
+
+// For icon-button slots: the sparkle that names a chat, breathing inside a turning clay ring —
+// the idle icon coming alive rather than being swapped for a foreign spinner.
+export function ClaySpark({ size = 14 }: { size?: number }) {
+  return (
+    <span className="cspark" style={{ width: size, height: size }} aria-hidden>
+      <svg className="cs-ring" viewBox="0 0 24 24" width={size} height={size} fill="none">
+        <circle cx="12" cy="12" r="10.5" stroke="currentColor" strokeWidth="2.5" strokeOpacity=".18" />
+        <circle cx="12" cy="12" r="10.5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+          strokeDasharray="17 49" />
+      </svg>
+      <span className="cs-core"><IconSparkle size={Math.max(7, Math.round(size * 0.5))} /></span>
+    </span>
+  );
+}
+
+// A whole waiting line: the mark plus a label a clay glint travels through.
+export function ClayWait({ label, size = 6, className }: { label: string; size?: number; className?: string }) {
+  return (
+    <span className={`inline-flex items-center gap-2 min-w-0 ${className || ''}`} role="status">
+      <ClayDots size={size} />
+      <span className="clay-shimmer truncate">{label}</span>
+    </span>
+  );
+}
+
 export function initials(name?: string): string {
   const t = (name || '').trim();
   if (!t) return '?';
