@@ -95,6 +95,8 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
   const [sessionChecked, setSessionChecked] = useState<Record<string, boolean>>({});
   const [dupMode, setDupMode] = useState<Record<string, DupMode>>({});
   const [projectMode, setProjectMode] = useState<DupMode>('overwrite');
+  // what happens to files already in the project dir when overwriting — wipe is never the default
+  const [projectFiles, setProjectFiles] = useState<'keep' | 'wipe'>('keep');
   const myProjects = useStore((s) => s.projects.mine);
   const [projectName, setProjectName] = useState('');
   const [claudeNotFound, setClaudeNotFound] = useState(false);
@@ -187,7 +189,7 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
         sid, projectName: projectName.trim() || undefined, sessionUuids: checkedUuids,
         autoTitle: autoTitle && autoTitleEnabled,
         overwrite: checkedUuids.filter((id) => dupMode[id] === 'overwrite'),
-        projectOverwrite,
+        projectOverwrite, projectWipe: projectOverwrite && projectFiles === 'wipe',
       });
       onClose();
     } catch (e: any) { setError(e.message); setBusy(false); }
@@ -273,8 +275,20 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
               </>
             )}
           </div>
-          <div className={`text-[11px] text-txt3 mb-3 ${projectDup ? '' : 'hidden'}`}>
-            {projectDup && t(projectOverwrite ? 'import.projectDupOverwriteHint' : 'import.projectDupCloneHint')}
+          {projectOverwrite && (
+            <div className="flex flex-wrap items-center gap-2 mb-1">
+              <span className="text-xs text-txt2">{t('import.projectFiles')}</span>
+              <select className="input !py-0.5 !text-[11px] !w-auto shrink-0" value={projectFiles}
+                onChange={(e) => setProjectFiles(e.target.value as 'keep' | 'wipe')}>
+                <option value="keep">{t('import.projectFilesKeep')}</option>
+                <option value="wipe">{t('import.projectFilesWipe')}</option>
+              </select>
+            </div>
+          )}
+          <div className={`text-[11px] mb-3 ${projectDup ? '' : 'hidden'} ${projectOverwrite && projectFiles === 'wipe' ? 'text-warn' : 'text-txt3'}`}>
+            {projectDup && (projectOverwrite
+              ? t(projectFiles === 'wipe' ? 'import.projectWipeHint' : 'import.projectDupOverwriteHint')
+              : t('import.projectDupCloneHint'))}
           </div>
 
           <div className="flex items-center justify-between gap-2 mb-2">
@@ -321,6 +335,7 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
           <div className="text-[11px] text-txt3 mb-3">
             {t('import.projectSummary', { name: projectName.trim() || t('import.projectUnnamed') })}
             {projectDup && ` · ${t(projectOverwrite ? 'import.dupOverwrite' : 'import.dupClone')}`}
+            {projectOverwrite && ` · ${t(projectFiles === 'wipe' ? 'import.projectFilesWipe' : 'import.projectFilesKeep')}`}
           </div>
 
           {sessions.length === 0 ? (

@@ -47,6 +47,21 @@ function uniqueDir(root: string, name: string): { dir: string; name: string } {
   while (fs.existsSync(path.join(root, n))) { n = `${name}-${i++}`; }
   return { dir: path.join(root, n), name: n };
 }
+// Empty a project dir in place, keeping the dir itself (a code-server container may have it mounted,
+// and the path is recorded in the projects row). Guarded rather than trusted: the path comes from our
+// own row, but a wipe is unrecoverable, so refuse anything that is not strictly under this user's
+// projects root — mirrors the same check in routes/projects.ts before a delete.
+function emptyProjectDir(userId: string, dir: string) {
+  const root = path.resolve(paths.userProjects(userId));
+  const target = path.resolve(dir);
+  if (target === root || !target.startsWith(root + path.sep)) {
+    throw new Error('refusing to empty a directory outside the user project root');
+  }
+  for (const entry of fs.readdirSync(target)) {
+    fs.rmSync(path.join(target, entry), { recursive: true, force: true });
+  }
+}
+
 // whitelist the slot segment — never trust the client to name a staging subdir (traversal)
 function slotOf(q: any): 'claude' | 'project' { return q?.slot === 'claude' ? 'claude' : 'project'; }
 
@@ -150,9 +165,12 @@ export async function importRoutes(app: FastifyInstance) {
     const tail = tailOf(orig) || 'imported';
     const name0 = safeName(String(body.projectName || tail));
 
-    // Place the project working dir. "Overwrite" reuses the caller's project of the same name and
-    // copies the upload OVER it — same-path files are replaced, everything else stays. Deliberately
-    // not a wipe: that would take .git, untracked work and anything the editor left behind with it.
+    // Place the project working dir. "Overwrite" reuses the caller's project of the same name; what
+    // happens to the files already there is the importer's choice:
+    //   keep (default) — copy the upload over it, so same-path files are replaced and the rest stays
+    //   wipe           — empty the directory first, so only the upload remains
+    // Wipe takes .git, untracked work and editor state with it, which is why it is never the default
+    // and only ever runs when there are files to put back.
     const prevProject = body.projectOverwrite === true
       ? db.select().from(schema.projects).where(and(
           eq(schema.projects.scope, 'user'), eq(schema.projects.ownerId, u.id), eq(schema.projects.name, name0),
@@ -162,6 +180,7 @@ export async function importRoutes(app: FastifyInstance) {
     let project: { id: string; scope: string; ownerId: string | null; name: string; path: string; createdAt: number };
     if (prevProject) {
       project = prevProject;
+      if (staged && body.projectWipe === true) emptyProjectDir(u.id, prevProject.path);
       if (staged) fs.cpSync(projectSlot, prevProject.path, { recursive: true, force: true });
     } else {
       const { dir: dest, name } = uniqueDir(paths.userProjects(u.id), name0);
