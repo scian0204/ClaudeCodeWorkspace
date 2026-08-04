@@ -8,7 +8,9 @@ import { UploadProgress } from './UploadProgress';
 import { IconFile, IconFolder, IconLock, IconChevronRight, IconChevronDown } from '../lib/icons';
 
 type Collected = { file: File; rel: string };
-type Sess = { uuid: string; title: string; mtime: number; msgCount: number };
+type Sess = { uuid: string; title: string; mtime: number; msgCount: number; dup?: boolean };
+// what to do with a transcript this user already imported once
+type DupMode = 'overwrite' | 'clone';
 type TreeNode = { name: string; rel: string; dir: boolean; children: TreeNode[] };
 
 // Recursively walk a dropped FileSystemEntry tree (all depths), collecting files with their
@@ -84,6 +86,7 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
   const [dragOver, setDragOver] = useState(false);
   const [sessions, setSessions] = useState<Sess[]>([]);
   const [sessionChecked, setSessionChecked] = useState<Record<string, boolean>>({});
+  const [dupMode, setDupMode] = useState<Record<string, DupMode>>({});
   const [projectName, setProjectName] = useState('');
   const [claudeNotFound, setClaudeNotFound] = useState(false);
   const projectDirRef = useRef<HTMLInputElement>(null);
@@ -147,6 +150,9 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
       const ss: Sess[] = r.sessions || [];
       setSessions(ss);
       const sc: Record<string, boolean> = {}; for (const s of ss) sc[s.uuid] = true; setSessionChecked(sc);
+      // default an already-imported transcript to overwrite — a silent second copy is rarely wanted
+      const dm: Record<string, DupMode> = {}; for (const s of ss) if (s.dup) dm[s.uuid] = 'overwrite';
+      setDupMode(dm);
       setStep('sessions');
     } catch (e: any) { setError(e.message); }
     finally { setProgress(null); if (claudeDirRef.current) claudeDirRef.current.value = ''; }
@@ -161,6 +167,7 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
       await importSessions({
         sid, projectName: projectName.trim() || undefined, sessionUuids: checkedUuids,
         autoTitle: autoTitle && autoTitleEnabled,
+        overwrite: checkedUuids.filter((id) => dupMode[id] === 'overwrite'),
       });
       onClose();
     } catch (e: any) { setError(e.message); setBusy(false); }
@@ -286,16 +293,34 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
                   {t('import.selectAll')}
                 </label>
               </div>
+              {sessions.some((s) => s.dup) && (
+                <div className="text-[11px] text-txt3 mb-1">{t('import.dupHint')}</div>
+              )}
               <div className="max-h-[40vh] overflow-auto scrolly border border-line rounded divide-y divide-line mb-3">
                 {sessions.map((s) => (
-                  <label key={s.uuid} className="flex items-center gap-2 px-2 py-1.5 text-xs hover:bg-line/50 cursor-pointer">
-                    <input type="checkbox" checked={!!sessionChecked[s.uuid]}
-                      onChange={(e) => setSessionChecked((p) => ({ ...p, [s.uuid]: e.target.checked }))} />
-                    <span className="flex-1 min-w-0">
-                      <span className="block truncate" title={s.title}>{s.title}</span>
-                      <span className="block text-[10px] text-txt3">{t('import.sessionMeta', { count: s.msgCount, date: new Date(s.mtime).toLocaleDateString() })}</span>
-                    </span>
-                  </label>
+                  // the strategy picker sits OUTSIDE the label — inside it, opening the select
+                  // would toggle the checkbox
+                  <div key={s.uuid} className="flex flex-wrap items-center gap-x-2 gap-y-1 px-2 py-1.5 text-xs hover:bg-line/50">
+                    <label className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer">
+                      <input type="checkbox" checked={!!sessionChecked[s.uuid]}
+                        onChange={(e) => setSessionChecked((p) => ({ ...p, [s.uuid]: e.target.checked }))} />
+                      <span className="flex-1 min-w-0">
+                        <span className="flex items-center gap-1.5 min-w-0">
+                          <span className="truncate" title={s.title}>{s.title}</span>
+                          {s.dup && <span className="shrink-0 px-1 py-px rounded bg-claysoft text-clay text-[10px]">{t('import.dupBadge')}</span>}
+                        </span>
+                        <span className="block text-[10px] text-txt3">{t('import.sessionMeta', { count: s.msgCount, date: new Date(s.mtime).toLocaleDateString() })}</span>
+                      </span>
+                    </label>
+                    {s.dup && (
+                      <select className="input !py-0.5 !text-[11px] !w-auto shrink-0" value={dupMode[s.uuid] || 'overwrite'}
+                        disabled={!sessionChecked[s.uuid]} aria-label={t('import.dupStrategy')}
+                        onChange={(e) => setDupMode((p) => ({ ...p, [s.uuid]: e.target.value as DupMode }))}>
+                        <option value="overwrite">{t('import.dupOverwrite')}</option>
+                        <option value="clone">{t('import.dupClone')}</option>
+                      </select>
+                    )}
+                  </div>
                 ))}
               </div>
               {autoTitleEnabled && (

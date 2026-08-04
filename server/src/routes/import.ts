@@ -1,6 +1,7 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import type { FastifyInstance } from 'fastify';
+import { and, eq } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { requireAuth } from '../auth/index.js';
 import { paths, ensure, ensureUserLayout } from '../lib/paths.js';
@@ -118,9 +119,15 @@ export async function importRoutes(app: FastifyInstance) {
     const slugDir = findSlugDir(claudeSlot);
     if (!slugDir) return { found: false };
     const originalCwd = originalCwdFromSlug(slugDir);
+    // Nothing stops the same transcript being imported twice (no unique key on claude_session_id),
+    // so flag the ones this user already holds and let the picker ask what to do with them.
+    const mine = new Set(db.select().from(schema.chatSessions)
+      .where(eq(schema.chatSessions.ownerId, u.id)).all()
+      .map((s) => s.claudeSessionId).filter(Boolean) as string[]);
     return {
       found: true, originalCwd, projectTail: tailOf(originalCwd),
-      sessions: listSessions(slugDir, cfg.int('autoTitleMaxChars')),
+      sessions: listSessions(slugDir, cfg.int('autoTitleMaxChars'))
+        .map((s) => ({ ...s, dup: mine.has(s.uuid) })),
     };
   });
 
@@ -170,6 +177,9 @@ export async function importRoutes(app: FastifyInstance) {
     const wantTitles = body.autoTitle === true && cfg.bool('autoTitleEnabled') && cfg.bool('importAutoTitleEnabled');
     const digestMax = cfg.int('importAutoTitleMessages');
     const toTitle: { sessionId: string; text: string; prevTitle: string }[] = [];
+    // uuids the picker marked "덮어쓰기": reuse the row the user already has for that transcript
+    // instead of cloning it. Anything not listed keeps the old behaviour and clones.
+    const overwrite = new Set<string>(Array.isArray(body.overwrite) ? body.overwrite.map(String) : []);
     for (const uuid of sessionUuids) {
       const src = slugDir ? path.join(slugDir, uuid + '.jsonl') : '';
       if (!slugDir || !fs.existsSync(src)) continue;
@@ -182,12 +192,24 @@ export async function importRoutes(app: FastifyInstance) {
 
       const meta = metaByUuid.get(uuid);
       const title = meta?.title || uuid;
-      const chatId = newId();
-      db.insert(schema.chatSessions).values({
-        id: chatId, ownerId: u.id, kind: 'private', roomId: null, title,
-        projectId: project.id, wikiTopicId: null, claudeSessionId: uuid,
-        model: cfg.str('defaultModel'), effort: cfg.str('defaultEffort'), permissionMode: 'default', createdAt: now, updatedAt: now,
-      }).run();
+      // Overwrite keeps the existing chat id (links and history survive) but re-points it at the
+      // project we just uploaded, since that is the copy its transcript now resumes against.
+      const prev = overwrite.has(uuid)
+        ? db.select().from(schema.chatSessions)
+            .where(and(eq(schema.chatSessions.ownerId, u.id), eq(schema.chatSessions.claudeSessionId, uuid))).get()
+        : undefined;
+      const chatId = prev?.id || newId();
+      if (prev) {
+        db.delete(schema.messages).where(eq(schema.messages.sessionId, chatId)).run();
+        db.update(schema.chatSessions).set({ title, projectId: project.id, updatedAt: now })
+          .where(eq(schema.chatSessions.id, chatId)).run();
+      } else {
+        db.insert(schema.chatSessions).values({
+          id: chatId, ownerId: u.id, kind: 'private', roomId: null, title,
+          projectId: project.id, wikiTopicId: null, claudeSessionId: uuid,
+          model: cfg.str('defaultModel'), effort: cfg.str('defaultEffort'), permissionMode: 'default', createdAt: now, updatedAt: now,
+        }).run();
+      }
       const msgs = jsonlToMessages(lines, chatId, now);
       for (const msg of msgs) {
         db.insert(schema.messages).values({

@@ -2,7 +2,7 @@
 // Called by the fetch + XHR interceptors in ./install. Returns a plain {status, data}.
 import {
   db, ADMIN, ATTACHMENTS, GIT, PROVIDERS, COMMANDS, USAGE, TREE_PROJECT, TREE_PLUGIN, WIKI_ARTICLES, WIKI_RAW, WIKI_TREE_ARTICLES,
-  REQUEST_ACTIONS, fileContent, wikiFileContent, pluginDetail, EDITOR_URL, genId,
+  REQUEST_ACTIONS, IMPORT_SESSIONS, fileContent, wikiFileContent, pluginDetail, EDITOR_URL, genId,
 } from './data';
 
 type Res = { status: number; data: any };
@@ -327,9 +327,17 @@ export function route(method: string, rawPath: string, body?: any): Res {
   // ---- local session import ----
   if (seg[1] === 'import' && seg[2] === 'staging' && seg[4] === 'files' && M === 'POST') return ok({ files: [{ name: 'src/index.ts', size: 100 }] });
   if (seg[1] === 'import' && seg[2] === 'staging' && seg[4] === 'file' && M === 'DELETE') return ok({ files: [] });
-  if (seg[1] === 'import' && seg[2] === 'staging' && seg[4] === 'sessions' && M === 'GET') return ok({ found: true, originalCwd: 'C:\\dev\\Demo', projectTail: 'Demo', sessions: [{ uuid: 'demo-uuid', title: '데모 세션', mtime: 1, msgCount: 3 }] });
+  if (seg[1] === 'import' && seg[2] === 'staging' && seg[4] === 'sessions' && M === 'GET') return ok({ found: true, originalCwd: 'C:\\dev\\Demo', projectTail: 'Demo', sessions: IMPORT_SESSIONS });
   if (seg[1] === 'import' && seg[2] === 'staging' && seg[3] && seg.length === 4 && M === 'DELETE') return ok({ ok: true });
-  if (seg[1] === 'import' && seg[2] === 'sessions' && M === 'POST') return ok({ project: { id: 'p-demo', name: 'Demo' }, sessions: [{ id: 'imp1', title: '데모 세션' }] });
+  if (seg[1] === 'import' && seg[2] === 'sessions' && M === 'POST') {
+    // overwrite reuses the chat row the user already has, so only the cloned ones come back as new
+    const overwritten = new Set<string>(Array.isArray(b.overwrite) ? b.overwrite : []);
+    const picked: string[] = (Array.isArray(b.sessionUuids) ? b.sessionUuids : []).filter((u: string) => !overwritten.has(u));
+    return ok({
+      project: { id: genId('prj'), name: b.projectName || 'Demo' },
+      sessions: picked.map((u) => ({ id: genId('ses'), title: IMPORT_SESSIONS.find((s) => s.uuid === u)?.title || u })),
+    });
+  }
 
   // ---- plugins / marketplaces ----
   if (P === '/api/plugins' && M === 'GET') return ok({ common: db.plugins.common, mine: db.plugins.mine, prefs: db.plugins.prefs });

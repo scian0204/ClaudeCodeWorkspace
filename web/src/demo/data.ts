@@ -425,6 +425,15 @@ export const EDITOR_URL = 'data:text/html;charset=utf-8,' + encodeURIComponent(
    </div></body>`);
 
 // requestable admin actions (mirrors the server registry projection from /api/requests/actions)
+// What the local-session import finds in an uploaded ~/.claude folder. Two of them are flagged
+// `dup` so the picker's duplicate badge + overwrite/clone select are reachable in the demo.
+export const IMPORT_SESSIONS = [
+  { uuid: 'a1b2c3d4-1111-4aaa-9000-000000000001', title: 'Auth module refactor', custom: false, dup: true, mtime: Date.now() - 3 * 3600_000, msgCount: 42 },
+  { uuid: 'a1b2c3d4-2222-4aaa-9000-000000000002', title: '릴리스 노트 초안', custom: true, dup: false, mtime: Date.now() - 26 * 3600_000, msgCount: 18 },
+  { uuid: 'a1b2c3d4-3333-4aaa-9000-000000000003', title: 'Socket reconnect bug', custom: false, dup: true, mtime: Date.now() - 50 * 3600_000, msgCount: 77 },
+  { uuid: 'a1b2c3d4-4444-4aaa-9000-000000000004', title: 'docker compose 정리', custom: false, dup: false, mtime: Date.now() - 96 * 3600_000, msgCount: 9 },
+];
+
 export const REQUEST_ACTIONS = [
   // common_project carries the real create-feature fields (name + git clone URL + branch + credential ref)
   { type: 'common_project', label: 'common_project', fields: [
