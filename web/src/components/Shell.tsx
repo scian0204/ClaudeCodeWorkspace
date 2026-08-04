@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useStore } from '../lib/store';
+import { useStore, useBrand } from '../lib/store';
 import { Sidebar } from './Sidebar';
 import { Chat } from './Chat';
 import { DmView } from './DmView';
@@ -18,18 +18,19 @@ import { IconX, IconPlus } from '../lib/icons';
 function Empty() {
   const newSession = useStore((s) => s.newSession);
   const collapsed = useStore((s) => s.sidebarCollapsed);
+  const brand = useBrand();
   const t = useT();
   return (
     <div className="h-full flex flex-col">
       {/* top bar so the sidebar stays reachable when no thread is open — mobile always, desktop only while collapsed */}
       <div className={`${collapsed ? '' : 'md:hidden'} flex items-center gap-2.5 px-3 py-2.5 border-b border-line shrink-0`}>
         <MobileMenuButton />
-        <span className="font-semibold text-sm truncate flex-1">ClaudeCode Workspace</span>
+        <span className="font-semibold text-sm truncate flex-1">{brand.title}</span>
         <SearchButton />
       </div>
       <div className="flex-1 grid place-items-center text-center p-4">
         <div className="w-full max-w-[440px]">
-          <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" className="w-16 h-16 mx-auto mb-3" />
+          <img src={brand.logo} alt="" className="w-16 h-16 mx-auto mb-3 object-contain" />
           <div className="text-txt2 mb-4">{t('shell.emptyHint')}</div>
           {/* search is the other way into the workspace from here, next to starting a new chat */}
           <SearchButton label className="!py-2 mb-3" />

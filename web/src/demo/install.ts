@@ -15,14 +15,19 @@ function patchFetch() {
     const respond = (r: { status: number; data: any }) =>
       new Response(JSON.stringify(r.data), { status: r.status, headers: { 'Content-Type': 'application/json' } });
     if (body instanceof FormData) {
-      // avatar upload: read the picked image into a data URL so the demo can render it inline
-      const av = body.get('avatar');
-      if (av instanceof File && path.startsWith('/api/auth/me/avatar')) {
+      // single-image uploads (avatar, brand logo): read the picked file into a data URL so the demo can
+      // render it inline — there is no GET stream here.
+      const inline: [string, string] | undefined =
+        path.startsWith('/api/auth/me/avatar') ? ['avatar', 'avatarDataUrl']
+        : path.startsWith('/api/admin/brand/logo') ? ['logo', 'brandLogoDataUrl']
+        : undefined;
+      const picked = inline && body.get(inline[0]);
+      if (inline && picked instanceof File) {
         return new Promise<Response>((resolve) => {
           const fr = new FileReader();
-          fr.onload = () => resolve(Promise.resolve(route(method, path, { avatarDataUrl: fr.result })).then(respond));
+          fr.onload = () => resolve(Promise.resolve(route(method, path, { [inline[1]]: fr.result })).then(respond));
           fr.onerror = () => resolve(Promise.resolve(route(method, path, {})).then(respond));
-          fr.readAsDataURL(av);
+          fr.readAsDataURL(picked);
         });
       }
       const o: any = {}; body.forEach((v, k) => { o[k] = v instanceof File ? v.name : v; }); body = o;

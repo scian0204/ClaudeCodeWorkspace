@@ -158,6 +158,9 @@ const plugin = (id: string, name: string, source: string, enabled: number, force
 // ---- the mutable "db" ------------------------------------------------------
 export const db = {
   me: { ...ME },
+  // custom branding (GET /api/brand). Seeded empty so the demo opens with the product's own name/mark;
+  // an upload stores the picked image inline as a data URL (install.ts reads the File).
+  brand: { title: '', logo: null as string | null },
   users: [ME, U_JAMIE, U_RILEY, U_SAM].map((u) => ({ id: u.id, username: u.username, role: u.role, displayName: u.displayName, avatarColor: u.avatarColor })),
   sessions: [
     { id: 's_auth', title: 'Auth module refactor', updatedAt: ago(11), projectId: 'p_api', model: 'claude-opus-4-8', effort: 'high', permissionMode: 'default' },
@@ -350,6 +353,8 @@ export const ADMIN = {
     { key: 'autoTitleModel', group: 'claude', type: 'string', value: 'claude-haiku-4-5-20251001', default: 'claude-haiku-4-5-20251001', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'autoTitleMaxChars', group: 'claude', type: 'int', value: '40', default: '40', min: 10, max: 120, restart: false, readonly: false, secret: false, overridden: false },
     { key: 'importAutoTitleEnabled', group: 'claude', type: 'bool', value: '1', default: '1', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'brandTitle', group: 'brand', type: 'string', value: '', default: '', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'brandLogoMaxMB', group: 'brand', type: 'int', value: '2', default: '2', min: 1, max: 20, unit: 'MB', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'gitPublishEnabled', group: 'git', type: 'bool', value: '1', default: '1', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'gitInitBranch', group: 'git', type: 'string', value: 'main', default: 'main', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'importAutoTitleMessages', group: 'claude', type: 'int', value: '6', default: '6', min: 1, max: 30, restart: false, readonly: false, secret: false, overridden: false },

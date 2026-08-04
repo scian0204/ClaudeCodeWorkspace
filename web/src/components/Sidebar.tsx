@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useStore, type ReviewSessionSummary, type ReviewRepo, type DmChannel, type PrivateSession, type RoomSummary, type WikiTopic } from '../lib/store';
+import { useStore, useBrand, type ReviewSessionSummary, type ReviewRepo, type DmChannel, type PrivateSession, type RoomSummary, type WikiTopic } from '../lib/store';
 import { api, type UploadState } from '../lib/api';
 import { Avatar, avatarUrl, timeAgo, LangSelect, ClaySpark } from '../lib/ui';
 import { fmtKeys, withKeys } from '../lib/shortcuts';
@@ -25,6 +25,7 @@ export function Sidebar() {
   const [showWiki, setShowWiki] = useState(false);
   const [showDm, setShowDm] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const brand = useBrand();
   const [srcTopic, setSrcTopic] = useState<string | null>(null); // wiki topic whose sources are open in the explorer
   // collapsed session groups (project ids, '' = unassigned) — same localStorage habit as sidebarCollapsed
   const [closedGroups, setClosedGroups] = useState<string[]>(() => {
@@ -81,9 +82,9 @@ export function Sidebar() {
           {/* the logo is the way back to the landing screen */}
           <button className="flex items-center gap-2 min-w-0 flex-1 text-left rounded-md hover:opacity-80"
             title={withKeys(t('nav.home'), 'Mod+Shift+H')} onClick={() => goHome()}>
-            <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" className="w-[26px] h-[26px] rounded-md shrink-0" />
+            <img src={brand.logo} alt="" className="w-[26px] h-[26px] rounded-md shrink-0 object-contain" />
             <div className="leading-tight min-w-0">
-              <div className="font-semibold text-sm tracking-tight truncate">ClaudeCode Workspace</div>
+              <div className="font-semibold text-sm tracking-tight truncate">{brand.title}</div>
               <div className="text-[11px] text-txt3 truncate">{t('sidebar.teamName', { name: user?.displayName ?? '' })}</div>
             </div>
           </button>

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useStore } from '../lib/store';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useStore, BRAND_NAME, brandLogoUrl } from '../lib/store';
 import { api } from '../lib/api';
 import { useT } from '../lib/i18n';
 import { MobileMenuButton, timeAgo } from '../lib/ui';
@@ -159,6 +159,8 @@ export function AdminPanel() {
 
         {tab === 'config' && (
           <>
+            <BrandManager />
+
             <Section title={t('admin.globalSettingsTitle')}>
               {settings && (
                 <div className="space-y-2 text-sm">
@@ -258,6 +260,53 @@ function RequestsTab({ users }: { users: any[] }) {
         </div>
       </Section>
     </>
+  );
+}
+
+// Branding: the title + logo every screen wears (sidebar, login card, landing screen, browser tab).
+// An empty title falls back to the product's own name; no logo falls back to the bundled mark. Both
+// apply live for everyone — the title is the brandTitle config key, the logo an uploaded file.
+function BrandManager() {
+  const t = useT();
+  const brand = useStore((s) => s.brand);
+  const saveBrandTitle = useStore((s) => s.saveBrandTitle);
+  const uploadBrandLogo = useStore((s) => s.uploadBrandLogo);
+  const clearBrandLogo = useStore((s) => s.clearBrandLogo);
+  const [title, setTitle] = useState(brand.title);
+  const [busy, setBusy] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { setTitle(brand.title); }, [brand.title]);
+
+  const run = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    try { await fn(); }
+    catch (e: any) { useStore.getState().setError(e.message); }
+    finally { setBusy(false); if (fileRef.current) fileRef.current.value = ''; }
+  };
+  const dirty = title.trim() !== brand.title;
+  const saveTitle = () => run(() => saveBrandTitle(title.trim()));
+
+  return (
+    <Section title={t('admin.brand.title')}>
+      <p className="text-[11px] text-txt3 mb-3 leading-snug">{t('admin.brand.hint')}</p>
+      <div className="flex items-center gap-4 flex-wrap">
+        <img src={brandLogoUrl(brand)} alt="" className="w-14 h-14 rounded-lg object-contain bg-panel border border-line p-1 shrink-0" />
+        <div className="flex gap-2 flex-wrap">
+          <button className="btn-ghost !py-1 !text-xs" disabled={busy} onClick={() => fileRef.current?.click()}>{t('admin.brand.uploadLogo')}</button>
+          {brand.logo && <button className="btn-ghost !py-1 !text-xs" disabled={busy} onClick={() => run(clearBrandLogo)}>{t('admin.brand.removeLogo')}</button>}
+        </div>
+        <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) void run(() => uploadBrandLogo(f)); }} />
+      </div>
+      <label className="text-xs text-txt2 block mt-4">{t('admin.brand.titleLabel')}</label>
+      <div className="flex gap-2 mt-1">
+        <input className="input flex-1 min-w-0" value={title} placeholder={BRAND_NAME} disabled={busy}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing && dirty) void saveTitle(); }} />
+        <button className="btn-primary shrink-0" disabled={busy || !dirty} onClick={() => void saveTitle()}>{t('admin.save')}</button>
+      </div>
+      <div className="text-[11px] text-txt3 mt-1.5">{t('admin.brand.titleHint', { name: BRAND_NAME })}</div>
+    </Section>
   );
 }
 

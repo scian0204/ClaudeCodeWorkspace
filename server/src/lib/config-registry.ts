@@ -129,6 +129,12 @@ export const DEFS: ConfigDef[] = [
   { key: 'attachmentMaxMB', group: 'features', type: 'int', default: '20', min: 1, max: 200, unit: 'MB' },
   { key: 'attachmentMaxCount', group: 'features', type: 'int', default: '10', min: 1, max: 50 },
 
+  // branding — the workspace name + logo shown in the sidebar, login card, landing screen, browser tab.
+  // Empty title = the built-in product name. The logo itself is a FILE (<dataDir>/brand/logo.<ext>,
+  // uploaded through /api/admin/brand/logo), so only the text lives here.
+  { key: 'brandTitle', group: 'brand', type: 'string', default: '', env: 'BRAND_TITLE' },
+  { key: 'brandLogoMaxMB', group: 'brand', type: 'int', default: '2', min: 1, max: 20, unit: 'MB' },
+
   // LLM wiki — admins editing an existing topic's raw/ sources (add files / edit in place).
   // off = the endpoints 403 AND the explorer's edit affordances disappear.
   { key: 'wikiSourceEditEnabled', group: 'wiki', type: 'bool', default: '1' },

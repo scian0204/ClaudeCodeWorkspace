@@ -40,8 +40,13 @@ export interface Control { canApprove: boolean; canInterrupt: boolean; canSetMod
 export interface PermReq { requestId: string; tool: string; input: any; }
 export interface Current { chatSessionId: string; kind: 'private' | 'room' | 'review'; roomId?: string; wikiTopicId?: string; reviewId?: string; review?: ReviewMeta; readOnly?: boolean; title: string; projectId: string | null; model: string; effort: string; permissionMode: string; room?: RoomSummary; }
 
+// Workspace branding (GET /api/brand): an admin-set title + logo, both optional. `logo` is a
+// cache-bust version token (the logo file's mtime) — or a data: URL in the static demo.
+export interface Brand { title: string; logo: string | null }
+
 interface State {
   user: User | null;
+  brand: Brand;
   theme: 'light' | 'dark' | null;
   sessions: PrivateSession[];
   rooms: RoomSummary[];
@@ -90,6 +95,10 @@ interface State {
   commands: CmdInfo[];
 
   bootstrap: () => Promise<void>;
+  refreshBrand: () => Promise<void>;
+  saveBrandTitle: (title: string) => Promise<void>;
+  uploadBrandLogo: (file: File) => Promise<void>;
+  clearBrandLogo: () => Promise<void>;
   login: (u: string, p: string) => Promise<void>;
   logout: () => Promise<void>;
   toggleTheme: () => void;
@@ -163,6 +172,7 @@ let wired = false;
 
 export const useStore = create<State>((set, get) => ({
   user: null,
+  brand: { title: '', logo: null },
   theme: (localStorage.getItem('theme') as any) || null,
   sessions: [], rooms: [], wikiTopics: [], reviewRepos: [], reviewSessions: [], wikiProgress: {}, projects: { common: [], mine: [] },
   current: null, messages: [], live: null, turnActive: false,
@@ -174,6 +184,7 @@ export const useStore = create<State>((set, get) => ({
 
   bootstrap: async () => {
     applyTheme(get().theme);
+    await get().refreshBrand(); // public endpoint — the login card is branded too
     try {
       const { user } = await api.get('/api/auth/me');
       set({ user });
@@ -592,7 +603,46 @@ export const useStore = create<State>((set, get) => ({
     const { user } = await api.del('/api/auth/me/avatar');
     set({ user });
   },
+
+  // ── branding (title + logo) ──
+  refreshBrand: async () => {
+    try { setBrand(set, await api.get('/api/brand')); } catch { /* keep the built-in branding */ }
+  },
+  saveBrandTitle: async (title) => { setBrand(set, await api.put('/api/admin/brand', { title })); },
+  uploadBrandLogo: async (file) => {
+    const form = new FormData();
+    form.append('logo', file, file.name);
+    setBrand(set, await api.upload('/api/admin/brand/logo', form));
+  },
+  clearBrandLogo: async () => { setBrand(set, await api.del('/api/admin/brand/logo')); },
 }));
+
+// ── branding helpers ──
+// Fallback name when no custom title is set. Not i18n'd on purpose: it's the product's own name.
+export const BRAND_NAME = 'ClaudeCode Workspace';
+
+// <img src> for the custom logo, or the bundled favicon when none is set. A data: URL (static demo)
+// is used as-is; otherwise the version token busts the browser cache on every change.
+export function brandLogoUrl(brand: Brand): string {
+  if (!brand.logo) return `${import.meta.env.BASE_URL}favicon.svg`;
+  return brand.logo.startsWith('data:') ? brand.logo : `/api/brand/logo?v=${encodeURIComponent(brand.logo)}`;
+}
+
+// Everything the chrome needs to render the brand: resolved title + logo src.
+export function useBrand(): { title: string; logo: string } {
+  const brand = useStore((s) => s.brand);
+  return { title: brand.title || BRAND_NAME, logo: brandLogoUrl(brand) };
+}
+
+function setBrand(set: any, brand: Brand) {
+  const next: Brand = { title: brand?.title || '', logo: brand?.logo ?? null };
+  set({ brand: next });
+  document.title = next.title || BRAND_NAME;
+  // keep the tab icon in step with the sidebar mark (every rel=icon link, incl. apple-touch-icon)
+  const href = brandLogoUrl(next);
+  document.querySelectorAll<HTMLLinkElement>('link[rel~="icon"], link[rel="apple-touch-icon"]')
+    .forEach((l) => { l.href = href; });
+}
 
 function applyTheme(theme: 'light' | 'dark' | null) {
   if (theme) document.documentElement.setAttribute('data-theme', theme);

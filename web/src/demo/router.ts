@@ -172,6 +172,21 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   // avatarUrl() renders a data: URL directly, so no GET stream is needed in the demo.
   if (P === '/api/auth/me/avatar') { db.me.avatar = M === 'DELETE' ? null : (b.avatarDataUrl || db.me.avatar); return ok({ user: db.me }); }
 
+  // ---- branding (custom logo + title) ----
+  // Same inline-data-URL trick as the avatar: brandLogoUrl() renders a data: URL directly, so the demo
+  // needs no GET stream. The title also lands in its config row so the registry list stays in step.
+  if (P === '/api/brand') return ok(db.brand);
+  if (P === '/api/admin/brand/logo') {
+    db.brand.logo = M === 'DELETE' ? null : (b.brandLogoDataUrl || db.brand.logo);
+    return ok(db.brand);
+  }
+  if (P === '/api/admin/brand' && M === 'PUT') {
+    db.brand.title = String(b.title ?? '').trim();
+    const it = ADMIN.config.find((x: any) => x.key === 'brandTitle');
+    if (it) { it.value = db.brand.title; it.overridden = !!db.brand.title; }
+    return ok(db.brand);
+  }
+
   // ---- client-facing config (model dropdown) ----
   if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenu: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, processPollMs: 5000 });
 
@@ -502,6 +517,7 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   if (P === '/api/admin/config' && M === 'PUT') {
     const it = ADMIN.config.find((x: any) => x.key === b.key);
     if (it && !it.readonly) { it.value = it.type === 'bool' ? (b.value ? '1' : '0') : String(b.value); it.overridden = true; }
+    if (b.key === 'brandTitle') db.brand.title = String(b.value ?? '').trim(); // same key, either editor
     return ok({ items: ADMIN.config });
   }
   // model auto-fetch: stand in for the provider's /v1/models and overwrite the map + defaultModel choices

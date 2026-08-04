@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useStore } from '../lib/store';
+import { useStore, useBrand } from '../lib/store';
 import { useT } from '../lib/i18n';
 import { LangSelect } from '../lib/ui';
 
@@ -9,6 +9,7 @@ export function Login() {
   const [p, setP] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const brand = useBrand();
   const t = useT();
 
   const submit = async (e: React.FormEvent) => {
@@ -20,9 +21,9 @@ export function Login() {
     <div className="h-full grid place-items-center bg-bg p-4">
       <form onSubmit={submit} className="w-full max-w-[340px] bg-panel border border-line rounded-xl p-6 md:p-7 shadow-sm">
         <div className="flex items-center gap-2.5 mb-5">
-          <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" className="w-8 h-8 rounded-lg" />
-          <div>
-            <div className="font-semibold">ClaudeCode Workspace</div>
+          <img src={brand.logo} alt="" className="w-8 h-8 rounded-lg object-contain" />
+          <div className="min-w-0">
+            <div className="font-semibold truncate">{brand.title}</div>
             <div className="text-xs text-txt3">{t('login.subtitle')}</div>
           </div>
           <LangSelect className="ml-auto shrink-0 max-w-[92px] text-xs text-txt2 bg-card border border-line rounded px-1.5 py-1 outline-none cursor-pointer" />

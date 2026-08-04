@@ -13,13 +13,12 @@ import { syncPrimer } from '../claude/window-primer.js';
 import * as cs from '../codeserver/manager.js';
 import { cfg, publicConfig } from '../lib/config-registry.js';
 import { paths, ensureUserLayout } from '../lib/paths.js';
+import { EXT_MIME, IMAGE_EXTS, pickImage } from '../lib/images.js';
 
 // Avatar storage: image saved on disk at <userHome>/avatar.<ext>; the users.avatar column holds a
 // version token (set-time millis) for cache-busting. Extension is derived from the validated mime
-// type — the client-supplied filename is never used for the on-disk path.
-const MIME_EXT: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' };
-const EXT_MIME: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif' };
-const AVATAR_EXTS = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
+// type (lib/images.ts) — the client-supplied filename is never used for the on-disk path.
+const AVATAR_EXTS = IMAGE_EXTS;
 function avatarFile(uid: string): string | null {
   for (const ext of AVATAR_EXTS) {
     const f = path.join(paths.userHome(uid), `avatar.${ext}`);
@@ -33,16 +32,6 @@ function removeAvatarFiles(uid: string) {
   }
 }
 function meDto(uid: string) { const u = getUserById(uid); return u ? authUserWithToken(toAuthUser(u)) : null; }
-
-// Verify the buffer's leading bytes match the claimed image type — defends against a spoofed mime
-// on a non-image payload. No dependency; ext comes from MIME_EXT so it's png/jpg/webp/gif.
-function magicOk(ext: string, b: Buffer): boolean {
-  if (ext === 'png') return b.length >= 4 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47;
-  if (ext === 'jpg' || ext === 'jpeg') return b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
-  if (ext === 'gif') return b.length >= 4 && b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x38;
-  if (ext === 'webp') return b.length >= 12 && b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50;
-  return false;
-}
 
 export async function authRoutes(app: FastifyInstance) {
   app.post('/api/auth/login', async (req, reply) => {
@@ -127,15 +116,9 @@ export async function authRoutes(app: FastifyInstance) {
   app.post('/api/auth/me/avatar', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
     const maxMB = cfg.int('avatarMaxMB'); // must stay ≤ httpBodyLimitMB (global body cap) to take effect
-    const data = await (req as any).file({ limits: { fileSize: maxMB * 1024 * 1024 } }); // cap at the streaming layer
-    if (!data) return reply.code(400).send({ error: 'no image uploaded' });
-    const ext = MIME_EXT[data.mimetype];
-    if (!ext) { data.file.resume(); return reply.code(400).send({ error: 'unsupported image type (png/jpeg/webp/gif only)' }); } // drain without buffering
-    let buf: Buffer;
-    try { buf = await data.toBuffer(); } // fileSize limit throws RequestFileTooLargeError on overflow
-    catch { return reply.code(413).send({ error: `image too large (max ${maxMB}MB)` }); }
-    if (data.file.truncated) return reply.code(413).send({ error: `image too large (max ${maxMB}MB)` }); // belt-and-suspenders
-    if (!magicOk(ext, buf)) return reply.code(400).send({ error: 'file content does not match an image type' });
+    const picked = await pickImage(req, maxMB);
+    if (!picked.ok) return reply.code(picked.code).send({ error: picked.error });
+    const { ext, buf } = picked;
     ensureUserLayout(u.id);
     // Write the new file FIRST; only after it lands drop any *other-extension* prior avatar (never the
     // one we just wrote) — so a write failure can't leave a has-avatar DB row pointing at no file.
