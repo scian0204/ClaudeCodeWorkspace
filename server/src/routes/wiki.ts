@@ -17,12 +17,12 @@ function safeSeg(n: string): string {
   const s = String(n).normalize('NFC').replace(/[\x00-\x1f/\\]/g, '').trim();
   return /^\.+$/.test(s) ? '' : s;
 }
-function isText(n: string) { return /\.(md|markdown|txt|json|ya?ml|csv|tsv)$/i.test(n); }
+export function isText(n: string) { return /\.(md|markdown|txt|json|ya?ml|csv|tsv)$/i.test(n); }
 function validSid(sid: string) { return /^[A-Za-z0-9_-]{8,64}$/.test(String(sid)); }
 
 // sanitize a client-supplied relative path (folder drops) segment-by-segment — blocks
 // traversal (.., absolute, drive) and keeps the nested structure under the staging/topic root.
-function safeRelPath(rel: string): string {
+export function safeRelPath(rel: string): string {
   return String(rel).split(/[/\\]/).map(safeSeg).filter((s) => s && s !== '.' && s !== '..').join('/');
 }
 
@@ -302,10 +302,14 @@ export async function wikiRoutes(app: FastifyInstance) {
     return reply.send(fs.createReadStream(full));
   });
 
-  // add more source files to a topic (admin) — into raw/, then recompile
+  // add more source files to an existing topic (admin) — into raw/, overwriting same-path files.
+  // No auto-recompile: the client uploads ONE request per file (api.uploadFiles), so recompiling
+  // here would fire N times — the inflight guard drops all but the first, which may have started
+  // before the later files landed (stale wiki/). The client recompiles once after the batch.
   app.post('/api/wiki/topics/:id/files', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
     if (!requireAdmin(req, reply)) return;
+    if (!cfg.bool('wikiSourceEditEnabled')) return reply.code(403).send({ error: 'wiki source editing is disabled' });
     const { id } = req.params as any;
     const t = getTopic(id); if (!t) return reply.code(404).send({ error: 'not found' });
     const rawDir = path.join(t.path, 'raw'); ensure(rawDir);
@@ -318,8 +322,29 @@ export async function wikiRoutes(app: FastifyInstance) {
       ensure(path.dirname(dest));
       fs.writeFileSync(dest, buf);
     }
-    void compileTopic(id); // sources changed -> recompile
     return { sources: walkFiles(rawDir).map((f) => f.name) };
+  });
+
+  // edit one existing source file in place (admin) — JSON { path, content }, raw/ text files only.
+  // wiki/ is NOT editable: every compile wipes and regenerates it, so an edit there would vanish.
+  // Like upload, this does not recompile — the client does it once when the admin is done editing.
+  app.put('/api/wiki/topics/:id/file', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    if (!requireAdmin(req, reply)) return;
+    if (!cfg.bool('wikiSourceEditEnabled')) return reply.code(403).send({ error: 'wiki source editing is disabled' });
+    const { id } = req.params as any;
+    const t = getTopic(id); if (!t) return reply.code(404).send({ error: 'not found' });
+    const b = (req.body || {}) as any;
+    const rel = safeRelPath(String(b.path || ''));
+    if (!rel) return reply.code(400).send({ error: 'bad path' });
+    if (!isText(rel)) return reply.code(400).send({ error: 'not a text file' });
+    if (typeof b.content !== 'string') return reply.code(400).send({ error: 'content required' });
+    const max = cfg.int('wikiEditMaxKB') * 1024;
+    if (Buffer.byteLength(b.content, 'utf8') > max) return reply.code(413).send({ error: `too large (max ${cfg.int('wikiEditMaxKB')}KB)` });
+    const full = path.join(t.path, 'raw', rel);
+    if (!fs.existsSync(full) || !fs.statSync(full).isFile()) return reply.code(404).send({ error: 'not found' });
+    fs.writeFileSync(full, b.content, 'utf8');
+    return { name: rel, size: fs.statSync(full).size };
   });
 
   // recompile a topic (admin) — regenerate wiki/ from raw/

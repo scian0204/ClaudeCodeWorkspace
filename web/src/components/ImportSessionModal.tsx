@@ -2,33 +2,16 @@ import { useState, useRef, useMemo } from 'react';
 import ignore from 'ignore';
 import { useStore } from '../lib/store';
 import { api, type UploadState } from '../lib/api';
+import { collectDrop, collectPick, type Collected } from '../lib/dropfiles';
 import { useT } from '../lib/i18n';
 import { Modal } from './Modal';
 import { UploadProgress } from './UploadProgress';
 import { IconFile, IconFolder, IconLock, IconChevronRight, IconChevronDown } from '../lib/icons';
 
-type Collected = { file: File; rel: string };
-type Sess = { uuid: string; title: string; mtime: number; msgCount: number; dup?: boolean };
+type Sess ={ uuid: string; title: string; mtime: number; msgCount: number; dup?: boolean };
 // what to do with a transcript this user already imported once
 type DupMode = 'overwrite' | 'clone';
 type TreeNode = { name: string; rel: string; dir: boolean; children: TreeNode[] };
-
-// Recursively walk a dropped FileSystemEntry tree (all depths), collecting files with their
-// path relative to the drop root — mirrors Sidebar.WikiCreateModal's drag-drop recursion.
-function readEntries(reader: any): Promise<any[]> {
-  return new Promise((res, rej) => reader.readEntries(res, rej));
-}
-async function traverseEntry(entry: any, parent: string, out: Collected[]) {
-  if (entry.isFile) {
-    const file: File = await new Promise((res, rej) => entry.file(res, rej));
-    out.push({ file, rel: parent ? `${parent}/${file.name}` : file.name });
-  } else if (entry.isDirectory) {
-    const p = parent ? `${parent}/${entry.name}` : entry.name;
-    const reader = entry.createReader();
-    let batch: any[];
-    do { batch = await readEntries(reader); for (const e of batch) await traverseEntry(e, p, out); } while (batch.length);
-  }
-}
 
 // Folder pickers/drops prepend the picked folder's own name as the first path segment. Strip it
 // so rels are project-root-relative (so `.gitignore`, `CLAUDE.md`, `.claude/` match at the root),
@@ -121,19 +104,14 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
   };
 
   const pickProject = (fl: FileList | null) => {
-    if (!fl?.length) return;
-    enterTree(Array.from(fl).map((f) => ({ file: f, rel: (f as any).webkitRelativePath || f.name })));
+    const list = collectPick(fl);
+    if (!list.length) return;
+    enterTree(list);
     if (projectDirRef.current) projectDirRef.current.value = '';
   };
   const onDropProject = async (ev: React.DragEvent) => {
     ev.preventDefault(); setDragOver(false);
-    const items = ev.dataTransfer.items;
-    const entries: any[] = [];
-    for (let i = 0; i < items.length; i++) { const en = (items[i] as any).webkitGetAsEntry?.(); if (en) entries.push(en); }
-    const out: Collected[] = [];
-    if (entries.length) { for (const en of entries) await traverseEntry(en, '', out); }
-    else { for (const f of Array.from(ev.dataTransfer.files)) out.push({ file: f, rel: f.name }); }
-    await enterTree(out);
+    await enterTree(await collectDrop(ev.dataTransfer));
   };
 
   const toggleDir = (node: TreeNode, value: boolean) => {

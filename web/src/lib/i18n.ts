@@ -396,6 +396,7 @@ const ko: Dict = {
   'admin.cfgGroup.auth': '인증 / 세션',
   'admin.cfgGroup.features': '기능 플래그',
   'admin.cfgGroup.search': '통합 검색',
+  'admin.cfgGroup.wiki': 'LLM Wiki',
   'admin.cfgGroup.server': '서버 한도 (재시작 후 적용)',
   'admin.cfgGroup.infra': '인프라 (읽기전용)',
   'admin.cfgGroup.secret': '시크릿 (읽기전용)',
@@ -487,6 +488,8 @@ const ko: Dict = {
   'cfg.llmProvidersEnabled': 'LLM Provider 대체', 'cfgDesc.llmProvidersEnabled': '사용자/관리자가 기본 Claude 토큰 대신 다른 LLM Provider(bedrock·vertex·custom base URL)로 턴을 실행하는 기능. 끄면 마이페이지·관리자 provider UI와 API가 차단됩니다',
   'cfg.approvalsEnabled': '멤버 요청 승인', 'cfgDesc.approvalsEnabled': '일반 유저가 관리자 전용 동작(공통 프로젝트·위키 주제 생성, 관리자 권한 등)을 요청하고 관리자가 승인/거부하는 기능. 끄면 마이페이지·관리자 요청 UI와 API가 차단됩니다',
   'cfg.searchEnabled': '통합 검색', 'cfgDesc.searchEnabled': '워크스페이스 전체(개인 대화·공통 세션·DM·프로젝트·LLM Wiki·PR 리뷰·사람) 통합 검색. 각 항목은 사용자가 원래 볼 수 있는 범위만 검색됩니다. 끄면 검색 UI와 API가 모두 차단됩니다',
+  'cfg.wikiSourceEditEnabled': '위키 원본 편집', 'cfgDesc.wikiSourceEditEnabled': '관리자가 기존 위키 주제의 raw/ 원본에 파일을 추가하거나 텍스트 원본을 그 자리에서 수정할 수 있게 합니다. 끄면 파일 탐색기의 편집 UI가 사라지고 관련 API도 차단됩니다',
+  'cfg.wikiEditMaxKB': '원본 편집 최대 크기', 'cfgDesc.wikiEditMaxKB': '위키 원본을 그 자리에서 저장할 때 허용하는 본문 최대 크기. 넘으면 저장이 거부됩니다',
   'cfg.searchMaxPerType': '종류별 최대 결과 수', 'cfgDesc.searchMaxPerType': '검색 결과에서 한 종류(대화 내용·프로젝트·위키 문서 등)당 반환할 최대 개수. 올리면 결과가 많아지고 검색이 느려집니다',
   'cfg.searchFileMaxKB': '검색할 파일 최대 크기', 'cfgDesc.searchFileMaxKB': 'LLM Wiki 문서 내용 검색 시 읽어들일 파일 크기 상한. 이보다 큰 파일은 내용 대신 파일명만 검색합니다',
   'cfg.searchScanMaxFiles': '검색 파일 스캔 상한', 'cfgDesc.searchScanMaxFiles': '한 번의 검색에서 훑을 LLM Wiki 파일 총 개수 상한. 대용량 원본이 올라간 주제에서 검색이 디스크를 오래 뒤지지 않게 막는 안전장치',
@@ -725,11 +728,18 @@ const ko: Dict = {
   'fileExplorer.selectFilePrompt': '왼쪽에서 파일을 선택하세요.',
   'fileExplorer.rendered': '렌더',
   'fileExplorer.source': '원문',
+  'fileExplorer.edit': '수정',
+  'fileExplorer.save': '저장',
+  'fileExplorer.saving': '저장 중…',
+  'fileExplorer.dropZone': '파일·폴더를 여기로 끌어다 놓기',
+  'fileExplorer.chooseFiles': '파일 선택',
+  'fileExplorer.chooseFolder': '폴더 선택',
 
   // wikiExplorer
   'wikiExplorer.title': 'LLM Wiki 파일 탐색기',
   'wikiExplorer.sourceRaw': '원본 raw',
   'wikiExplorer.sourceWiki': '컴파일 wiki',
+  'wikiExplorer.recompileNeeded': '원본이 변경됐습니다 — 재컴파일해야 위키에 반영됩니다.',
 
   // wikiSources — 답변이 인용한 출처 패널
   'wikiSources.title': '출처',
@@ -1277,6 +1287,7 @@ const en: Dict = {
   'admin.cfgGroup.auth': 'Auth / session',
   'admin.cfgGroup.features': 'Feature flags',
   'admin.cfgGroup.search': 'Unified search',
+  'admin.cfgGroup.wiki': 'LLM Wiki',
   'admin.cfgGroup.server': 'Server limits (restart to apply)',
   'admin.cfgGroup.infra': 'Infrastructure (read-only)',
   'admin.cfgGroup.secret': 'Secrets (read-only)',
@@ -1368,6 +1379,8 @@ const en: Dict = {
   'cfg.llmProvidersEnabled': 'LLM provider override', 'cfgDesc.llmProvidersEnabled': 'Let users/admins run turns against a non-default LLM provider (bedrock / vertex / custom base URL) instead of the Claude token. Off hides the My Page + admin provider UI and blocks the API',
   'cfg.approvalsEnabled': 'Member request approvals', 'cfgDesc.approvalsEnabled': 'Let members request admin-only actions (create common project / wiki topic, admin role, …) for an admin to approve or reject. Off hides the My Page + admin request UI and blocks the API',
   'cfg.searchEnabled': 'Unified search', 'cfgDesc.searchEnabled': 'Workspace-wide search across personal chats, shared sessions, DMs, projects, LLM Wiki and PR reviews. Every surface is filtered to what the user could already view. Off blocks both the UI and the API',
+  'cfg.wikiSourceEditEnabled': 'Wiki source editing', 'cfgDesc.wikiSourceEditEnabled': 'Lets admins add files to an existing wiki topic\'s raw/ sources and edit text sources in place. Off hides the editing UI in the file explorer and blocks the endpoints',
+  'cfg.wikiEditMaxKB': 'Max source edit size', 'cfgDesc.wikiEditMaxKB': 'Largest body accepted when saving a wiki source in place. Bigger payloads are rejected',
   'cfg.searchMaxPerType': 'Max results per type', 'cfgDesc.searchMaxPerType': 'How many hits one result group (conversation content, projects, wiki documents…) returns. Higher means more results and slower searches',
   'cfg.searchFileMaxKB': 'Max file size to read', 'cfgDesc.searchFileMaxKB': 'Size ceiling when grepping LLM Wiki documents. Larger files are matched on their path only, never read into memory',
   'cfg.searchScanMaxFiles': 'Max files scanned', 'cfgDesc.searchScanMaxFiles': 'Total LLM Wiki files one search may walk — a guard so a topic with a huge raw/ import cannot turn a search into a long disk crawl',
@@ -1606,11 +1619,18 @@ const en: Dict = {
   'fileExplorer.selectFilePrompt': 'Select a file on the left.',
   'fileExplorer.rendered': 'Rendered',
   'fileExplorer.source': 'Source',
+  'fileExplorer.edit': 'Edit',
+  'fileExplorer.save': 'Save',
+  'fileExplorer.saving': 'Saving…',
+  'fileExplorer.dropZone': 'Drop files or folders here',
+  'fileExplorer.chooseFiles': 'Choose files',
+  'fileExplorer.chooseFolder': 'Choose folder',
 
   // wikiExplorer
   'wikiExplorer.title': 'LLM Wiki File Explorer',
   'wikiExplorer.sourceRaw': 'Raw source',
   'wikiExplorer.sourceWiki': 'Compiled wiki',
+  'wikiExplorer.recompileNeeded': 'Sources changed — recompile to fold them into the wiki.',
 
   // wikiSources — cited-sources panel
   'wikiSources.title': 'Sources',

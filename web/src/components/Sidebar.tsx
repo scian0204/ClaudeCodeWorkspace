@@ -4,6 +4,7 @@ import { api, type UploadState } from '../lib/api';
 import { Avatar, avatarUrl, timeAgo, LangSelect, ClaySpark } from '../lib/ui';
 import { fmtKeys, withKeys } from '../lib/shortcuts';
 import { openContextMenu, type CtxRows } from '../lib/contextmenu';
+import { collectDrop, collectPick, type Collected } from '../lib/dropfiles';
 import { Modal } from './Modal';
 import { ImportSessionModal } from './ImportSessionModal';
 import { SearchButton } from './SearchPalette';
@@ -226,23 +227,6 @@ export function Sidebar() {
 
 function fmtSize(n: number) { return n >= 1024 ? `${(n / 1024).toFixed(1)}KB` : `${n}B`; }
 
-// Recursively walk a dropped FileSystemEntry tree (all depths), collecting files with their
-// path relative to the drop root (so nested folders are preserved on the server).
-function readEntries(reader: any): Promise<any[]> {
-  return new Promise((res, rej) => reader.readEntries(res, rej));
-}
-async function traverseEntry(entry: any, parent: string, out: { file: File; rel: string }[]) {
-  if (entry.isFile) {
-    const file: File = await new Promise((res, rej) => entry.file(res, rej));
-    out.push({ file, rel: parent ? `${parent}/${file.name}` : file.name });
-  } else if (entry.isDirectory) {
-    const p = parent ? `${parent}/${entry.name}` : entry.name;
-    const reader = entry.createReader();
-    let batch: any[];
-    do { batch = await readEntries(reader); for (const e of batch) await traverseEntry(e, p, out); } while (batch.length);
-  }
-}
-
 // Bulk-upload flow: drop whole folders (recursed to any depth) or pick files/a folder → each file
 // streams to a server staging area (real progress), the confirmed list shows relative paths with
 // per-file delete, then 확인 finalizes the topic (moves staged tree in) / 취소 discards.
@@ -261,7 +245,7 @@ function WikiCreateModal({ onClose }: { onClose: () => void }) {
   const dirRef = useRef<HTMLInputElement>(null);
   const t = useT();
 
-  const uploadCollected = async (list: { file: File; rel: string }[]) => {
+  const uploadCollected = async (list: Collected[]) => {
     if (!list.length) return;
     try {
       const r = await api.uploadFiles(`/api/wiki/staging/${sid}/files`, list, setProgress);
@@ -270,21 +254,11 @@ function WikiCreateModal({ onClose }: { onClose: () => void }) {
     finally { setProgress(null); if (fileRef.current) fileRef.current.value = ''; if (dirRef.current) dirRef.current.value = ''; }
   };
 
-  const pick = (fl: FileList | null) => {
-    if (!fl?.length) return;
-    // webkitRelativePath is set for the folder picker; empty for the flat picker → use name
-    uploadCollected(Array.from(fl).map((f) => ({ file: f, rel: (f as any).webkitRelativePath || f.name })));
-  };
+  const pick = (fl: FileList | null) => { void uploadCollected(collectPick(fl)); };
 
   const onDrop = async (ev: React.DragEvent) => {
     ev.preventDefault(); setDragOver(false);
-    const items = ev.dataTransfer.items;
-    const entries: any[] = [];
-    for (let i = 0; i < items.length; i++) { const en = (items[i] as any).webkitGetAsEntry?.(); if (en) entries.push(en); }
-    const out: { file: File; rel: string }[] = [];
-    if (entries.length) { for (const en of entries) await traverseEntry(en, '', out); }
-    else { for (const f of Array.from(ev.dataTransfer.files)) out.push({ file: f, rel: f.name }); }
-    await uploadCollected(out);
+    await uploadCollected(await collectDrop(ev.dataTransfer));
   };
 
   const removeFile = async (rel: string) => {

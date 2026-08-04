@@ -2,7 +2,7 @@
 // Called by the fetch + XHR interceptors in ./install. Returns a plain {status, data}.
 import {
   db, ADMIN, ATTACHMENTS, GIT, PROVIDERS, COMMANDS, USAGE, TREE_PROJECT, TREE_PLUGIN, WIKI_ARTICLES, WIKI_RAW, WIKI_TREE_ARTICLES,
-  REQUEST_ACTIONS, IMPORT_SESSIONS, fileContent, wikiFileContent, pluginDetail, EDITOR_URL, genId,
+  REQUEST_ACTIONS, IMPORT_SESSIONS, fileContent, wikiFileContent, WIKI_RAW_EDITS, pluginDetail, EDITOR_URL, genId,
 } from './data';
 
 type Res = { status: number; data: any };
@@ -173,7 +173,7 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   if (P === '/api/auth/me/avatar') { db.me.avatar = M === 'DELETE' ? null : (b.avatarDataUrl || db.me.avatar); return ok({ user: db.me }); }
 
   // ---- client-facing config (model dropdown) ----
-  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenu: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, processPollMs: 5000 });
+  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenu: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, processPollMs: 5000 });
 
   // ---- unified search (mirrors server/src/routes/search.ts over the seed data) ----
   // `sort` is ignored on purpose: the seed data never hits the per-type cap for dated surfaces, so
@@ -349,6 +349,16 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   }
   if (seg[1] === 'wiki' && seg[2] === 'topics' && seg[4] === 'files') return ok({ files: WIKI_ARTICLES, source: 'compiled' });
   if (seg[1] === 'wiki' && seg[2] === 'topics' && seg[4] === 'tree') return ok({ raw: WIKI_RAW, wiki: WIKI_TREE_ARTICLES });
+  // in-place source edit (admin) — mirrors the real PUT: raw/ text files only, no auto-recompile
+  if (seg[1] === 'wiki' && seg[2] === 'topics' && seg[4] === 'file' && M === 'PUT') {
+    const rel = String(b.path || '');
+    if (!rel) return { status: 400, data: { error: 'bad path' } };
+    WIKI_RAW_EDITS[rel] = String(b.content ?? '');
+    const at = WIKI_RAW.findIndex((f) => f.name === rel);
+    const size = WIKI_RAW_EDITS[rel].length;
+    if (at >= 0) WIKI_RAW[at] = { name: rel, size }; else WIKI_RAW.push({ name: rel, size });
+    return ok({ name: rel, size });
+  }
   if (seg[1] === 'wiki' && seg[2] === 'topics' && seg[4] === 'file') { const dir = query.get('dir') || 'wiki'; const path = query.get('path') || ''; return ok({ name: path.split('/').pop(), content: wikiFileContent(dir, path) }); }
   if (seg[1] === 'wiki' && seg[2] === 'topics' && seg[4] === 'recompile') return ok({});
   if (seg[1] === 'wiki' && seg[2] === 'topics' && seg[3] && M === 'DELETE') { db.wikiTopics = db.wikiTopics.filter((x) => x.id !== idAt(3)); return ok({}); }

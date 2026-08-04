@@ -129,6 +129,11 @@ export const DEFS: ConfigDef[] = [
   { key: 'attachmentMaxMB', group: 'features', type: 'int', default: '20', min: 1, max: 200, unit: 'MB' },
   { key: 'attachmentMaxCount', group: 'features', type: 'int', default: '10', min: 1, max: 50 },
 
+  // LLM wiki — admins editing an existing topic's raw/ sources (add files / edit in place).
+  // off = the endpoints 403 AND the explorer's edit affordances disappear.
+  { key: 'wikiSourceEditEnabled', group: 'wiki', type: 'bool', default: '1' },
+  { key: 'wikiEditMaxKB', group: 'wiki', type: 'int', default: '512', min: 1, max: 10240, unit: 'KB' },
+
   // workspace-wide search (routes/search.ts) — off hard-404s the endpoint AND hides the UI
   { key: 'searchEnabled', group: 'search', type: 'bool', default: '1' },
   { key: 'searchMaxPerType', group: 'search', type: 'int', default: '8', min: 1, max: 100 },
@@ -301,6 +306,6 @@ export function modelMap(): Record<string, string> {
 }
 
 // Client-facing subset (any authed user): drives the model dropdown.
-export function publicConfig(): { models: Record<string, string>; defaultModel: string; defaultEffort: string; sessionImportEnabled: boolean; llmProvidersEnabled: boolean; approvalsEnabled: boolean; dmEnabled: boolean; searchEnabled: boolean; customContextMenu: boolean; autoTitleEnabled: boolean; autoResumeEnabled: boolean; windowPrimerEnabled: boolean; gitPublishEnabled: boolean; processPollMs: number } {
-  return { models: modelMap(), defaultModel: cfg.str('defaultModel'), defaultEffort: cfg.str('defaultEffort'), sessionImportEnabled: cfg.bool('sessionImportEnabled'), llmProvidersEnabled: cfg.bool('llmProvidersEnabled'), approvalsEnabled: cfg.bool('approvalsEnabled'), dmEnabled: cfg.bool('dmEnabled'), searchEnabled: cfg.bool('searchEnabled'), customContextMenu: cfg.bool('customContextMenu'), autoTitleEnabled: cfg.bool('autoTitleEnabled'), autoResumeEnabled: cfg.bool('autoResumeEnabled'), windowPrimerEnabled: cfg.bool('windowPrimerEnabled'), gitPublishEnabled: cfg.bool('gitPublishEnabled'), processPollMs: cfg.int('processPollMs') };
+export function publicConfig(): { models: Record<string, string>; defaultModel: string; defaultEffort: string; sessionImportEnabled: boolean; llmProvidersEnabled: boolean; approvalsEnabled: boolean; dmEnabled: boolean; searchEnabled: boolean; customContextMenu: boolean; autoTitleEnabled: boolean; autoResumeEnabled: boolean; windowPrimerEnabled: boolean; gitPublishEnabled: boolean; wikiSourceEditEnabled: boolean; processPollMs: number } {
+  return { models: modelMap(), defaultModel: cfg.str('defaultModel'), defaultEffort: cfg.str('defaultEffort'), sessionImportEnabled: cfg.bool('sessionImportEnabled'), llmProvidersEnabled: cfg.bool('llmProvidersEnabled'), approvalsEnabled: cfg.bool('approvalsEnabled'), dmEnabled: cfg.bool('dmEnabled'), searchEnabled: cfg.bool('searchEnabled'), customContextMenu: cfg.bool('customContextMenu'), autoTitleEnabled: cfg.bool('autoTitleEnabled'), autoResumeEnabled: cfg.bool('autoResumeEnabled'), windowPrimerEnabled: cfg.bool('windowPrimerEnabled'), gitPublishEnabled: cfg.bool('gitPublishEnabled'), wikiSourceEditEnabled: cfg.bool('wikiSourceEditEnabled'), processPollMs: cfg.int('processPollMs') };
 }

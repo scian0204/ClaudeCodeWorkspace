@@ -1,7 +1,7 @@
 // Demo bootstrap (VITE_DEMO build only): route /api/* to the mock router by patching fetch +
 // XHR, drop a small DEMO badge, and auto-open the first chat so the app lands populated.
 import { route } from './router';
-import { ATTACHMENTS } from './data';
+import { ATTACHMENTS, WIKI_RAW } from './data';
 import { useStore } from '../lib/store';
 
 function patchFetch() {
@@ -39,14 +39,26 @@ function patchXHR() {
   proto.send = function (body: any) {
     if (!this.__demo) return realSend.call(this, body);
     const isAttach = String(this.__url || '').includes('/attachments');
+    // adding sources to an existing wiki topic: keep them so the explorer tree shows the new files
+    const isWikiSource = /\/api\/wiki\/topics\/[^/]+\/files/.test(String(this.__url || ''));
     const raw: File[] = [];
-    if (body instanceof FormData) body.forEach((v) => { if (v instanceof File) raw.push(v); });
+    const rels: string[] = [];
+    if (body instanceof FormData) body.forEach((v, k) => { if (v instanceof File) { raw.push(v); rels.push(k); } }); // rel carried in field NAME
     const files = raw.map((f) => ({ name: f.name, size: f.size, isImage: /^image\/(png|jpe?g|webp|gif)$/.test(f.type) }));
     const total = files.reduce((s, f) => s + f.size, 0) || 1000;
     const finish = () => {
+      let payload: any = { files };
+      if (isWikiSource) {
+        raw.forEach((f, i) => {
+          const name = rels[i] || f.name;
+          const at = WIKI_RAW.findIndex((x) => x.name === name);
+          if (at >= 0) WIKI_RAW[at] = { name, size: f.size }; else WIKI_RAW.push({ name, size: f.size });
+        });
+        payload = { sources: WIKI_RAW.map((f) => f.name) };
+      }
       this.upload && this.upload.onprogress && this.upload.onprogress({ lengthComputable: true, loaded: total, total });
       Object.defineProperty(this, 'status', { value: 200, configurable: true });
-      Object.defineProperty(this, 'responseText', { value: JSON.stringify({ files }), configurable: true });
+      Object.defineProperty(this, 'responseText', { value: JSON.stringify(payload), configurable: true });
       if (this.onload) this.onload();
     };
     setTimeout(() => this.upload && this.upload.onprogress && this.upload.onprogress({ lengthComputable: true, loaded: total * 0.5, total }), 60);

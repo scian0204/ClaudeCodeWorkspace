@@ -120,9 +120,11 @@ export const WIKI_RAW = [
   { name: 'raw/billing-spec.pdf', size: 40320 }, { name: 'raw/gateway-notes.md', size: 2210 }, { name: 'raw/ledger.sql', size: 1180 },
 ];
 export const WIKI_TREE_ARTICLES = WIKI_ARTICLES.map((a) => ({ name: a.name, size: a.content.length }));
+// in-place edits of raw/ sources (admin), keyed by relative path — so a save survives reopening
+export const WIKI_RAW_EDITS: Record<string, string> = {};
 export const wikiFileContent = (dir: string, path: string) => {
   if (dir === 'wiki') return WIKI_ARTICLES.find((a) => a.name === path)?.content ?? `# ${path}`;
-  return `# ${path}\n\n(raw source document — illustrative content for the demo)`;
+  return WIKI_RAW_EDITS[path] ?? `# ${path}\n\n(raw source document — illustrative content for the demo)`;
 };
 
 // ---- slash commands (the "/" palette) --------------------------------------

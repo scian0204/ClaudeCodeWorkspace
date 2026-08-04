@@ -1,12 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../lib/store';
 import { md } from '../lib/md';
 import { useT } from '../lib/i18n';
+import { type UploadState } from '../lib/api';
+import { collectDrop, collectPick, type Collected } from '../lib/dropfiles';
 import { Modal } from './Modal';
-import { IconChevronDown, IconChevronRight, IconFolder, IconFile, IconEye, IconTerminal } from '../lib/icons';
+import { UploadProgress } from './UploadProgress';
+import { IconChevronDown, IconChevronRight, IconFolder, IconFile, IconEye, IconTerminal, IconPencil, IconCheck, IconX } from '../lib/icons';
 
 export const isImage = (n: string) => /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(n);
 export const isMarkdown = (n: string) => /\.(md|markdown)$/i.test(n);
+// mirrors the server's isText (routes/wiki.ts) — what the editor can safely round-trip as text
+export const isTextFile = (n: string) => /\.(md|markdown|txt|json|ya?ml|csv|tsv)$/i.test(n);
 
 // Resolve a relative asset href (e.g. a markdown image) against the containing file's directory.
 // The href is URL-encoded in the source; server-side path sanitizing trims stray segment spaces.
@@ -87,8 +92,12 @@ export type Source = { key: string; label: string };
 // Generic file-explorer modal: a tree pane + a preview pane (image / markdown / text).
 // `loadTree` returns a map keyed by each source.key; single source hides the tab bar.
 // `initialDir`/`initialPath` open straight onto one file (a search hit jumping to a wiki article).
+// Optional write mode (admin surfaces): `uploadDir`+`onUpload` add a dropzone to that source's tab,
+// `editDir`+`onSave` put an inline text editor in the preview. Both refresh the tree afterwards and
+// report through `onChanged` so the owner can offer a follow-up action via `notice`.
 export function FileExplorer({
   title, width = 780, sources, loadTree, fileUrl, blobUrl, onClose, initialDir, initialPath,
+  uploadDir, onUpload, editDir, onSave, onChanged, notice,
 }: {
   title: string;
   width?: number;
@@ -99,6 +108,12 @@ export function FileExplorer({
   onClose: () => void;
   initialDir?: string;
   initialPath?: string;
+  uploadDir?: string;
+  onUpload?: (items: Collected[], onProgress: (s: UploadState) => void) => Promise<void>;
+  editDir?: string;
+  onSave?: (dir: string, path: string, content: string) => Promise<void>;
+  onChanged?: () => void;
+  notice?: React.ReactNode;
 }) {
   const t = useT();
   const [dir, setDir] = useState(initialDir && sources.some((s) => s.key === initialDir) ? initialDir : sources[0].key);
@@ -108,13 +123,18 @@ export function FileExplorer({
   const [loading, setLoading] = useState(false);
   const [mdRaw, setMdRaw] = useState(false); // markdown: false=rendered, true=source
   const [openMap, setOpenMap] = useState<Record<string, boolean>>({}); // dir path -> open (expand/collapse-all)
+  const [draft, setDraft] = useState<string | null>(null); // non-null = editing the open file
+  const [saving, setSaving] = useState(false);
+  const [progress, setProgress] = useState<UploadState | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const dirRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    loadTree().then(setTree).catch((e) => useStore.getState().setError(e.message));
-  }, []);
+  const refreshTree = () => loadTree().then(setTree).catch((e) => useStore.getState().setError(e.message));
+  useEffect(() => { void refreshTree(); }, []);
 
   const openFile = async (p: string) => {
-    setSel(p); setFile(null); setMdRaw(false);
+    setSel(p); setFile(null); setMdRaw(false); setDraft(null);
     if (isImage(p)) return; // rendered via <img>, no text fetch
     setLoading(true);
     try {
@@ -124,6 +144,32 @@ export function FileExplorer({
       setFile(d);
     } catch (e: any) { useStore.getState().setError(e.message); }
     finally { setLoading(false); }
+  };
+
+  const canUpload = !!onUpload && dir === uploadDir;
+  const canEdit = !!onSave && dir === editDir && !!sel && !isImage(sel) && isTextFile(sel) && !!file;
+
+  const upload = async (items: Collected[]) => {
+    if (!onUpload || !items.length) return;
+    try {
+      await onUpload(items, setProgress);
+      await refreshTree();
+      onChanged?.();
+    } catch (e: any) { useStore.getState().setError(e.message); }
+    finally { setProgress(null); if (fileRef.current) fileRef.current.value = ''; if (dirRef.current) dirRef.current.value = ''; }
+  };
+
+  const save = async () => {
+    if (!onSave || !sel || draft === null) return;
+    setSaving(true);
+    try {
+      await onSave(dir, sel, draft);
+      setFile({ name: sel, content: draft });
+      setDraft(null);
+      await refreshTree();
+      onChanged?.();
+    } catch (e: any) { useStore.getState().setError(e.message); }
+    finally { setSaving(false); }
   };
 
   // Search hit: once the tree lands, expand the file's folders and preview it right away.
@@ -149,6 +195,22 @@ export function FileExplorer({
           ))}
         </div>
       )}
+      {canUpload && (
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={async (e) => { e.preventDefault(); setDragOver(false); await upload(await collectDrop(e.dataTransfer)); }}
+          className={`border-2 border-dashed rounded-lg px-3 py-2 mb-2 flex flex-wrap items-center justify-center gap-2 text-xs transition-colors ${dragOver ? 'border-clay bg-claysoft' : 'border-line'}`}>
+          <span className="text-txt2 inline-flex items-center gap-1"><IconFolder size={14} />{t('fileExplorer.dropZone')}</span>
+          <button className="btn-ghost !py-0.5 !text-[11px]" disabled={progress !== null} onClick={() => fileRef.current?.click()}>{t('fileExplorer.chooseFiles')}</button>
+          <button className="btn-ghost !py-0.5 !text-[11px]" disabled={progress !== null} onClick={() => dirRef.current?.click()}>{t('fileExplorer.chooseFolder')}</button>
+          <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => void upload(collectPick(e.target.files))} />
+          <input ref={dirRef} type="file" multiple className="hidden"
+            {...{ webkitdirectory: '', directory: '' } as any} onChange={(e) => void upload(collectPick(e.target.files))} />
+        </div>
+      )}
+      {progress && <div className="mb-2"><UploadProgress s={progress} /></div>}
+      {notice && <div className="mb-2">{notice}</div>}
       <div className="grid gap-2 h-[68vh] md:h-[60vh] grid-cols-1 grid-rows-[38%_minmax(0,1fr)] md:grid-cols-[260px_minmax(0,1fr)] md:grid-rows-1">
         <div className="border border-line rounded flex flex-col min-h-0 overflow-hidden">
           {nodes.length > 0 && (
@@ -169,13 +231,31 @@ export function FileExplorer({
             <>
               <div className="sticky top-0 bg-card border-b border-line px-3 py-1.5 text-xs font-mono flex items-center gap-2">
                 <span className="truncate flex-1">{sel}</span>
-                {isMarkdown(sel) && !isImage(sel) && (
+                {isMarkdown(sel) && !isImage(sel) && draft === null && (
                   <button className="shrink-0 px-1.5 py-0.5 rounded border border-line hover:text-clay inline-flex items-center gap-1" onClick={() => setMdRaw(!mdRaw)}>
                     {mdRaw ? <><IconEye size={12} />{t('fileExplorer.rendered')}</> : <><IconTerminal size={12} />{t('fileExplorer.source')}</>}
                   </button>
                 )}
+                {canEdit && draft === null && (
+                  <button className="shrink-0 px-1.5 py-0.5 rounded border border-line hover:text-clay inline-flex items-center gap-1" onClick={() => setDraft(file!.content)}>
+                    <IconPencil size={12} />{t('fileExplorer.edit')}
+                  </button>
+                )}
+                {draft !== null && (
+                  <>
+                    <button className="shrink-0 px-1.5 py-0.5 rounded border border-line hover:text-clay inline-flex items-center gap-1 disabled:opacity-40" disabled={saving} onClick={save}>
+                      <IconCheck size={12} />{saving ? t('fileExplorer.saving') : t('fileExplorer.save')}
+                    </button>
+                    <button className="shrink-0 px-1.5 py-0.5 rounded border border-line hover:text-danger inline-flex items-center gap-1 disabled:opacity-40" disabled={saving} onClick={() => setDraft(null)}>
+                      <IconX size={12} />{t('common.cancel')}
+                    </button>
+                  </>
+                )}
               </div>
-              {isImage(sel) ? (
+              {draft !== null ? (
+                <textarea className="w-full h-[calc(100%-30px)] min-h-[240px] bg-bg text-txt2 font-mono text-[11px] p-3 outline-none resize-none"
+                  value={draft} spellCheck={false} autoFocus onChange={(e) => setDraft(e.target.value)} />
+              ) : isImage(sel) ? (
                 <div className="p-3">
                   <img src={blobUrl(dir, sel)} alt={sel} className="max-w-full h-auto rounded border border-line" />
                 </div>
