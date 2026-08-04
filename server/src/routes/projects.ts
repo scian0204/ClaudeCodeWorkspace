@@ -14,6 +14,7 @@ import * as cs from '../codeserver/manager.js';
 import {
   gitStatus, gitCommit, gitPush, originHost, gitBranches, gitCheckout, gitFetchRemotes,
   gitInit, gitHasCommits, gitSetOrigin, isRepo,
+  gitRemotes, gitRemoteAdd, gitRemoteSetUrl, gitRemoteRemove, validRemoteName, validRemoteUrl,
 } from '../lib/git-ops.js';
 import { createRemoteRepo, safeRepoName } from '../lib/git-publish.js';
 import { cfg } from '../lib/config-registry.js';
@@ -299,6 +300,51 @@ export async function projectRoutes(app: FastifyInstance) {
     return await gitBranches(ctx.dir);
   });
 
+  // ── remotes: list / add / retarget / remove, per project ──
+  // Names and URLs are validated rather than escaped: `git remote add` has no `--` separator, so a
+  // leading '-' would be parsed as a flag. See validRemoteName / validRemoteUrl in git-ops.
+  app.get('/api/projects/:id/git/remotes', async (req, reply) => {
+    const ctx = loadForGit(req, reply); if (!ctx) return;
+    return { remotes: await gitRemotes(ctx.dir) };
+  });
+
+  app.post('/api/projects/:id/git/remotes', async (req, reply) => {
+    const ctx = loadForGit(req, reply); if (!ctx) return;
+    const { name, url } = (req.body || {}) as any;
+    if (!validRemoteName(name)) return reply.code(400).send({ error: 'invalid remote name' });
+    if (!validRemoteUrl(url)) return reply.code(400).send({ error: 'invalid remote url (http(s), ssh, git, or user@host:path)' });
+    if (!(await isRepo(ctx.dir))) return reply.code(400).send({ error: 'not a git repository' });
+    if ((await gitRemotes(ctx.dir)).some((r) => r.name === String(name))) {
+      return reply.code(400).send({ error: `remote '${name}' already exists` });
+    }
+    try {
+      await gitRemoteAdd(ctx.dir, String(name), String(url).trim());
+      return { ok: true, remotes: await gitRemotes(ctx.dir) };
+    } catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
+  });
+
+  app.put('/api/projects/:id/git/remotes/:name', async (req, reply) => {
+    const ctx = loadForGit(req, reply); if (!ctx) return;
+    const name = String((req.params as any).name || '');
+    const { url } = (req.body || {}) as any;
+    if (!validRemoteName(name)) return reply.code(400).send({ error: 'invalid remote name' });
+    if (!validRemoteUrl(url)) return reply.code(400).send({ error: 'invalid remote url (http(s), ssh, git, or user@host:path)' });
+    try {
+      await gitRemoteSetUrl(ctx.dir, name, String(url).trim());
+      return { ok: true, remotes: await gitRemotes(ctx.dir) };
+    } catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
+  });
+
+  app.delete('/api/projects/:id/git/remotes/:name', async (req, reply) => {
+    const ctx = loadForGit(req, reply); if (!ctx) return;
+    const name = String((req.params as any).name || '');
+    if (!validRemoteName(name)) return reply.code(400).send({ error: 'invalid remote name' });
+    try {
+      await gitRemoteRemove(ctx.dir, name);
+      return { ok: true, remotes: await gitRemotes(ctx.dir) };
+    } catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
+  });
+
   // ── publish: take an untracked project (an import lands as plain files) all the way to a remote ──
   // Split in two so the cheap half stands alone: init just makes it a repo, publish does the whole
   // init → first commit → create remote → push chain. Both are no-ops on the parts already done.
@@ -335,6 +381,9 @@ export async function projectRoutes(app: FastifyInstance) {
     if (!cfg.bool('gitPublishEnabled')) return reply.code(403).send({ error: 'git publish is disabled' });
     const b = (req.body || {}) as any;
     const remoteUrl = String(b.remoteUrl || '').trim();
+    if (remoteUrl && !validRemoteUrl(remoteUrl)) {
+      return reply.code(400).send({ error: 'invalid remote url (http(s), ssh, git, or user@host:path)' });
+    }
 
     // The credential does double duty: it authenticates the create-repo API call and the push.
     // With a pasted URL we still need one, resolved by that URL's host.

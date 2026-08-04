@@ -279,6 +279,13 @@ export function route(method: string, rawPath: string, body?: any): Res {
   if (seg[1] === 'projects' && seg[3] === 'open-editor') return ok({ url: EDITOR_URL });
   if (seg[1] === 'projects' && seg[3] === 'file') { const path = query.get('path') || ''; return ok({ name: path.split('/').pop(), content: fileContent(path) }); }
   if (seg[1] === 'projects' && seg[3] === 'git' && seg[4] === 'status') return ok(GIT.status(idAt(2)));
+  if (seg[1] === 'projects' && seg[3] === 'git' && seg[4] === 'remotes') {
+    const name = seg[5] ? decodeURIComponent(idAt(5)) : String(b.name || '');
+    if (M === 'POST') GIT.remotes.push({ name, url: String(b.url || '') });
+    if (M === 'PUT') { const r = GIT.remotes.find((x) => x.name === name); if (r) r.url = String(b.url || ''); }
+    if (M === 'DELETE') GIT.remotes = GIT.remotes.filter((x) => x.name !== name);
+    return ok({ ok: true, remotes: GIT.remotes });
+  }
   if (seg[1] === 'projects' && seg[3] === 'git' && seg[4] === 'init' && M === 'POST') {
     GIT.untracked = GIT.untracked.filter((p) => p !== idAt(2));
     return ok({ ok: true, ...GIT.status(idAt(2)) });

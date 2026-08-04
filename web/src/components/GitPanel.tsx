@@ -3,7 +3,7 @@ import { api } from '../lib/api';
 import { useStore } from '../lib/store';
 import { Modal } from './Modal';
 import { useT } from '../lib/i18n';
-import { IconGitBranch } from '../lib/icons';
+import { IconGitBranch, IconChevronDown, IconChevronRight } from '../lib/icons';
 
 interface GitFile { path: string; index: string; work: string; staged: boolean; }
 interface CredMeta { scope: 'user' | 'common'; provider: string; host: string; username: string; authorEmail: string | null; }
@@ -78,7 +78,8 @@ export function GitPanel({ projectId, open, onClose }: { projectId: string; open
       {st && !st.repo && <PublishForm projectId={projectId} onDone={load} setErr={setErr} setNote={setNote} />}
       {st && st.repo && (
         <>
-          <div className="flex items-center gap-2 text-sm mb-3">
+          {/* wraps on a phone — the branch select plus ahead/behind plus host does not fit 375px */}
+          <div className="flex flex-wrap items-center gap-2 text-sm mb-3">
             <span className="text-clay" title={t('git.branchLabel')}><IconGitBranch size={15} /></span>
             {branches
               ? (
@@ -127,6 +128,10 @@ export function GitPanel({ projectId, open, onClose }: { projectId: string; open
             </div>
           )}
 
+          {st.repo && (
+            <RemotesSection projectId={projectId} onChanged={load} setErr={setErr} setNote={setNote} />
+          )}
+
           {st.files.length === 0
             ? <div className="text-sm text-txt3 mb-3">{t('git.clean')}</div>
             : (
@@ -162,6 +167,91 @@ export function GitPanel({ projectId, open, onClose }: { projectId: string; open
       )}
       {err && !st && <div className="text-xs text-danger mt-2">{err}</div>}
     </Modal>
+  );
+}
+
+// Manual remote management. Collapsed by default — most projects have one origin nobody touches,
+// and it only matters when retargeting a fork, adding an upstream, or fixing a stale URL. Editing
+// origin changes which credential push resolves to, so every mutation reloads the panel's status.
+function RemotesSection({ projectId, onChanged, setErr, setNote }: {
+  projectId: string; onChanged: () => Promise<void> | void;
+  setErr: (s: string) => void; setNote: (s: string) => void;
+}) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const [remotes, setRemotes] = useState<{ name: string; url: string }[]>([]);
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [newName, setNewName] = useState('');
+  const [newUrl, setNewUrl] = useState('');
+  const [busy, setBusy] = useState('');
+
+  const load = async () => {
+    try {
+      const r = await api.get(`/api/projects/${projectId}/git/remotes`);
+      setRemotes(r.remotes || []); setDraft({});
+    } catch (e: any) { setErr(e.message); }
+  };
+  useEffect(() => { if (open) load(); /* eslint-disable-next-line */ }, [open, projectId]);
+
+  // Every mutation returns the fresh list, so the section never needs a second round-trip.
+  const mutate = async (key: string, run: () => Promise<any>, note: string) => {
+    setBusy(key); setErr(''); setNote('');
+    try {
+      const r = await run();
+      setRemotes(r.remotes || []); setDraft({}); setNote(note);
+      await onChanged();
+    } catch (e: any) { setErr(e.message); }
+    finally { setBusy(''); }
+  };
+
+  return (
+    <div className="border border-line rounded-lg mb-3">
+      <button type="button" className="w-full flex items-center gap-2 px-2.5 py-2 text-xs"
+        onClick={() => setOpen((o) => !o)}>
+        <span className="text-txt3">{open ? <IconChevronDown size={13} /> : <IconChevronRight size={13} />}</span>
+        <span>{t('git.remotes')}</span>
+        {!open && remotes.length > 0 && <span className="text-txt3">{remotes.length}</span>}
+      </button>
+
+      {open && (
+        <div className="px-2.5 pb-2.5">
+          {remotes.length === 0 && <div className="text-[11px] text-txt3 mb-2">{t('git.remotesNone')}</div>}
+          {remotes.map((r) => {
+            const val = draft[r.name] ?? r.url;
+            const dirty = val.trim() !== r.url;
+            return (
+              <div key={r.name} className="flex flex-wrap items-center gap-2 mb-2">
+                <span className="font-mono text-[11px] shrink-0 min-w-[64px]">{r.name}</span>
+                <input className="input w-full md:w-auto md:flex-1 min-w-0 !py-1 !text-[11px] font-mono" value={val}
+                  onChange={(e) => setDraft((p) => ({ ...p, [r.name]: e.target.value }))} />
+                <button className="btn-ghost !py-0.5 !px-2 !text-[11px] shrink-0" disabled={!dirty || !!busy}
+                  onClick={() => mutate(`u:${r.name}`, () => api.put(`/api/projects/${projectId}/git/remotes/${encodeURIComponent(r.name)}`, { url: val.trim() }), t('git.remoteSaved', { name: r.name }))}>
+                  {busy === `u:${r.name}` ? '…' : t('git.remoteSave')}
+                </button>
+                <button className="btn-ghost !py-0.5 !px-2 !text-[11px] shrink-0 text-danger" disabled={!!busy}
+                  onClick={() => mutate(`d:${r.name}`, () => api.del(`/api/projects/${projectId}/git/remotes/${encodeURIComponent(r.name)}`), t('git.remoteRemoved', { name: r.name }))}>
+                  {busy === `d:${r.name}` ? '…' : t('git.remoteRemove')}
+                </button>
+              </div>
+            );
+          })}
+
+          <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-line">
+            <input className="input !py-1 !text-[11px] font-mono w-full md:w-[110px] shrink-0 mt-2" value={newName}
+              placeholder={t('git.remoteNamePlaceholder')} onChange={(e) => setNewName(e.target.value)} />
+            <input className="input w-full md:w-auto md:flex-1 min-w-0 !py-1 !text-[11px] font-mono mt-2" value={newUrl}
+              placeholder="https://github.com/me/repo.git" onChange={(e) => setNewUrl(e.target.value)} />
+            <button className="btn-ghost !py-0.5 !px-2 !text-[11px] shrink-0 md:mt-2"
+              disabled={!!busy || !newName.trim() || !newUrl.trim()}
+              onClick={() => mutate('add', () => api.post(`/api/projects/${projectId}/git/remotes`, { name: newName.trim(), url: newUrl.trim() }), t('git.remoteAdded', { name: newName.trim() }))
+                .then(() => { setNewName(''); setNewUrl(''); })}>
+              {busy === 'add' ? '…' : t('git.remoteAdd')}
+            </button>
+          </div>
+          <div className="text-[11px] text-txt3 mt-2">{t('git.remotesHint')}</div>
+        </div>
+      )}
+    </div>
   );
 }
 

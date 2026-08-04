@@ -60,6 +60,7 @@ The Claude Code CLI is powerful, but it's tied to **one terminal — yours**. Cl
 - Risky actions that need approval → **approve/deny live, in the browser**
 - Open **VS Code (code-server)** right there for editing, terminal, and git
 - **git init & publish** a project that is not a repository yet (an imported one arrives as plain files) — the Git panel runs init, the first commit, creates the repository on your registered GitHub/GitLab/Bitbucket account and pushes, or pushes to a URL you paste (`gitPublishEnabled`)
+- **Manual remote management** per project — list, add, retarget and remove remotes from the Git panel (retargeting `origin` also re-resolves which credential push uses)
 - **Commit & push** a cloned repo from the chat header (or let Claude do it) with encrypted per-user git credentials
 - Build a team **LLM Wiki** — upload docs, Claude compiles them into a queryable knowledge base
 - **Import a local session** — upload a project folder plus its `~/.claude` session files to clone the conversation as a resumable private session. Transcripts the CLI never named show a snippet of their first message instead of a raw uuid, and you can tick a box on the import screen to have their conversation read and named properly (`importAutoTitleEnabled`). Anything you already have — the project and each individual session — is flagged in the picker, with a choice to overwrite it or add a copy

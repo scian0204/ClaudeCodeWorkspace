@@ -398,6 +398,7 @@ export const GIT = {
   // projects that are plain directories, not repos yet — what an imported project looks like, so
   // the Git panel's init / publish form is reachable in the demo. init or publish clears the flag.
   untracked: ['p_web'] as string[],
+  remotes: [{ name: 'origin', url: 'https://github.com/acme/webapp.git' }] as { name: string; url: string }[],
   status(projectId?: string) {
     if (projectId && this.untracked.includes(projectId)) {
       return { repo: false, branch: '', upstream: false, ahead: 0, behind: 0, files: [], clean: true,

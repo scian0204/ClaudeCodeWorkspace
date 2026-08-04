@@ -125,6 +125,47 @@ export async function gitHasCommits(dir: string): Promise<boolean> {
   try { await git(dir, ['rev-parse', '--verify', 'HEAD']); return true; } catch { return false; }
 }
 
+export interface GitRemote { name: string; url: string; }
+
+// `git remote add` takes no `--` separator, so a name or URL starting with '-' would be read as a
+// flag. Both are validated instead of escaped — the shell is never involved (execFile), so the only
+// real hazard is argument injection.
+export function validRemoteName(n: string): boolean {
+  const s = String(n || '');
+  return s.length <= 100 && /^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(s) && !s.includes('..');
+}
+// Accepted: http(s)://, ssh://, git://, and scp-like user@host:path. A bare local path is rejected
+// on purpose — as a remote it would let one user fetch out of another user's project directory.
+export function validRemoteUrl(u: string): boolean {
+  const s = String(u || '').trim();
+  if (!s || s.length > 2000 || s.startsWith('-') || /\s/.test(s)) return false;
+  if (/^(https?|ssh|git):\/\/[^/\s]+/.test(s)) return true;
+  return /^[^@\s:/]+@[^@\s:/]+:[^\s]+$/.test(s);
+}
+
+// Fetch URL per remote. `git remote -v` prints a fetch and a push row for each; the fetch row is
+// what plain `set-url` writes, so that is the one shown and edited.
+export async function gitRemotes(dir: string): Promise<GitRemote[]> {
+  if (!(await isRepo(dir))) return [];
+  const { stdout } = await git(dir, ['remote', '-v']);
+  const seen = new Map<string, string>();
+  for (const line of stdout.split('\n')) {
+    const m = line.match(/^(\S+)\t(.*?)\s+\((fetch|push)\)$/);
+    if (m && m[3] === 'fetch' && !seen.has(m[1])) seen.set(m[1], m[2]);
+  }
+  return [...seen].map(([name, url]) => ({ name, url }));
+}
+
+export async function gitRemoteAdd(dir: string, name: string, url: string): Promise<void> {
+  try { await git(dir, ['remote', 'add', name, url]); } catch (e: any) { throw new Error(gitErr(e)); }
+}
+export async function gitRemoteSetUrl(dir: string, name: string, url: string): Promise<void> {
+  try { await git(dir, ['remote', 'set-url', name, url]); } catch (e: any) { throw new Error(gitErr(e)); }
+}
+export async function gitRemoteRemove(dir: string, name: string): Promise<void> {
+  try { await git(dir, ['remote', 'remove', name]); } catch (e: any) { throw new Error(gitErr(e)); }
+}
+
 // Point origin at `url`, whether or not the remote already exists.
 export async function gitSetOrigin(dir: string, url: string): Promise<void> {
   try {
