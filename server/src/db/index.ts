@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS review_repos (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, provider TEXT NOT NULL, host TEXT NOT NULL,
   git_url TEXT NOT NULL, slug TEXT NOT NULL, credential_id TEXT NOT NULL, path TEXT NOT NULL,
   base_branch TEXT, sandbox_image TEXT, webhook_secret TEXT,
+  poll_enabled INTEGER NOT NULL DEFAULT 1,
   created_by TEXT NOT NULL, created_at INTEGER NOT NULL,
   polled_at INTEGER, poll_error TEXT
 );
@@ -155,6 +156,8 @@ export function initDb() {
   try { sqlite.exec("ALTER TABLE review_repos ADD COLUMN sandbox_image TEXT"); } catch { /* already present */ }
   // per-repo inbound webhook secret (null → the repo's webhook endpoint is off)
   try { sqlite.exec("ALTER TABLE review_repos ADD COLUMN webhook_secret TEXT"); } catch { /* already present */ }
+  // per-repo interval polling (0 = webhook/manual only; existing repos keep polling)
+  try { sqlite.exec("ALTER TABLE review_repos ADD COLUMN poll_enabled INTEGER NOT NULL DEFAULT 1"); } catch { /* already present */ }
   // per-session SDK effort level (unsupported models silently downgrade)
   try { sqlite.exec("ALTER TABLE chat_sessions ADD COLUMN effort TEXT NOT NULL DEFAULT 'high'"); } catch { /* already present */ }
   db = drizzle(sqlite, { schema });

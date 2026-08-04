@@ -177,6 +177,7 @@ export const reviewRepos = sqliteTable('review_repos', {
   baseBranch: text('base_branch'),           // default base for PRs whose base ref we can't read
   sandboxImage: text('sandbox_image'),       // per-repo review build image; null → global reviewSandboxImage
   webhookSecret: text('webhook_secret'),     // inbound webhook secret; null → this repo's hook endpoint is off
+  pollEnabled: integer('poll_enabled').notNull().default(1), // 0 → interval poller skips it (webhook/manual only)
   createdBy: text('created_by').notNull(),   // admin uid (owner of the review chat sessions)
   createdAt: integer('created_at').notNull(),
   polledAt: integer('polled_at'),            // last successful poll

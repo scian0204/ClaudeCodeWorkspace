@@ -38,6 +38,7 @@ export async function reviewRoutes(app: FastifyInstance) {
         baseBranch: b.baseBranch !== undefined ? String(b.baseBranch) : undefined,
         sandboxImage: b.sandboxImage !== undefined ? String(b.sandboxImage) : undefined,
         credentialId: b.credentialId ? String(b.credentialId) : undefined,
+        pollEnabled: b.pollEnabled !== undefined ? !!b.pollEnabled : undefined,
       });
       return { repo: review.listRepoSummaries().find((r) => r.id === id) };
     } catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }

@@ -75,6 +75,7 @@ export async function createRepo(admin: AuthUser, p: {
     id, name: (p.name || slug).trim(), provider, host, gitUrl, slug, credentialId: p.credentialId,
     path: dir, baseBranch: p.baseBranch?.trim() || null, sandboxImage: p.sandboxImage?.trim() || null,
     webhookSecret: null, // opt-in per repo (admin enables it in the repo's edit dialog)
+    pollEnabled: 1,      // poll by default; the admin turns it off once a webhook is wired up
     createdBy: admin.id, createdAt: now, polledAt: null, pollError: null,
   };
   db.insert(schema.reviewRepos).values(row).run();
@@ -86,7 +87,7 @@ export async function createRepo(admin: AuthUser, p: {
 // are immutable (changing them means a different repo → delete + re-add). credentialId, when given,
 // re-validates host binding + scope exactly like createRepo. baseBranch/sandboxImage: '' clears to null.
 export async function updateRepo(admin: AuthUser, id: string, p: {
-  name?: string; baseBranch?: string; sandboxImage?: string; credentialId?: string;
+  name?: string; baseBranch?: string; sandboxImage?: string; credentialId?: string; pollEnabled?: boolean;
 }): Promise<Repo> {
   const repo = getRepo(id);
   if (!repo) throw new Error('저장소를 찾을 수 없습니다');
@@ -98,6 +99,7 @@ export async function updateRepo(admin: AuthUser, id: string, p: {
   }
   if (p.baseBranch !== undefined) patch.baseBranch = p.baseBranch.trim() || null;
   if (p.sandboxImage !== undefined) patch.sandboxImage = p.sandboxImage.trim() || null;
+  if (p.pollEnabled !== undefined) patch.pollEnabled = p.pollEnabled ? 1 : 0;
   if (p.credentialId) {
     const credRow = getGitCredRow(p.credentialId);
     if (!credRow) throw new Error('자격증명을 찾을 수 없습니다');
@@ -258,7 +260,14 @@ export async function pollRepo(id: string): Promise<{ opened: number; closed: nu
 }
 
 let timer: ReturnType<typeof setInterval> | null = null;
-const pollTick = async () => { for (const r of listRepos()) { try { await pollRepo(r.id); } catch { /* on row */ } } };
+// Interval tick only. Repos with polling switched off (webhook-driven) are skipped here — a webhook
+// delivery and the manual "refresh now" button still call pollRepo directly, on purpose.
+const pollTick = async () => {
+  for (const r of listRepos()) {
+    if (!r.pollEnabled) continue;
+    try { await pollRepo(r.id); } catch { /* on row */ }
+  }
+};
 export function startReviewPoller() {
   scheduleReviewPoller();
   setTimeout(() => { void pollTick(); }, 5000); // one shortly after boot
@@ -635,13 +644,14 @@ export interface ReviewRepoSummary {
   id: string; name: string; provider: string; host: string; slug: string; gitUrl: string;
   baseBranch: string | null; sandboxImage: string | null; polledAt: number | null; pollError: string | null;
   webhookSecret: string | null; // admin-only route: the admin must be able to re-read it to reconfigure the hook
+  pollEnabled: boolean;         // off → this repo runs on webhook deliveries + the manual refresh only
   openCount: number; createdAt: number;
 }
 export function listRepoSummaries(): ReviewRepoSummary[] {
   return listRepos().map((r) => ({
     id: r.id, name: r.name, provider: r.provider, host: r.host, slug: r.slug, gitUrl: r.gitUrl,
     baseBranch: r.baseBranch, sandboxImage: r.sandboxImage, polledAt: r.polledAt, pollError: r.pollError,
-    webhookSecret: r.webhookSecret, createdAt: r.createdAt,
+    webhookSecret: r.webhookSecret, pollEnabled: !!r.pollEnabled, createdAt: r.createdAt,
     openCount: db.select().from(schema.reviewSessions)
       .where(and(eq(schema.reviewSessions.repoId, r.id), eq(schema.reviewSessions.prState, 'open'))).all().length,
   }));

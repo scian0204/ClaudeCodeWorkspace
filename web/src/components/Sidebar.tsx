@@ -450,6 +450,7 @@ function ReviewSection() {
               <div className="group flex items-center gap-1.5 px-2 py-1 text-[11px] text-txt2">
                 <span className="opacity-70"><IconBox size={14} /></span>
                 <span className="flex-1 truncate font-semibold" title={`${r.host}/${r.slug}`}>{r.name}</span>
+                {!r.pollEnabled && <span className="text-txt3 shrink-0" title={t('review.pollDisabledHint')}>{t('review.pollOffTag')}</span>}
                 <span className="text-txt3 group-hover:hidden">{t('review.openCount', { count: r.openCount })}</span>
                 <button className="hidden group-hover:block hover:text-clay disabled:opacity-40" title={t('review.pollNow')} aria-label={t('review.pollNow')}
                   disabled={busyPoll === r.id} onClick={() => poll(r.id)}>{busyPoll === r.id ? '…' : <IconRefresh size={13} />}</button>
@@ -540,6 +541,7 @@ function EditReviewRepoModal({ repo, onClose }: { repo: ReviewRepo; onClose: () 
   const [busy, setBusy] = useState(false);
   const [secret, setSecret] = useState(repo.webhookSecret);
   const [hookBusy, setHookBusy] = useState(false);
+  const [pollEnabled, setPollEnabled] = useState(repo.pollEnabled);
   const t = useT();
 
   // GitHub/GitLab take the secret in their own field, so their URL stays bare; Bitbucket has no
@@ -559,7 +561,7 @@ function EditReviewRepoModal({ repo, onClose }: { repo: ReviewRepo; onClose: () 
     if (!name.trim()) { setError(t('review.repoNameRequired')); return; }
     setBusy(true);
     try {
-      await updateReviewRepo(repo.id, { name: name.trim(), baseBranch: baseBranch.trim(), sandboxImage: sandboxImage.trim(), credentialId: credentialId || undefined });
+      await updateReviewRepo(repo.id, { name: name.trim(), baseBranch: baseBranch.trim(), sandboxImage: sandboxImage.trim(), credentialId: credentialId || undefined, pollEnabled });
       onClose();
     } catch (e: any) { setError(e.message); setBusy(false); }
   };
@@ -575,6 +577,14 @@ function EditReviewRepoModal({ repo, onClose }: { repo: ReviewRepo; onClose: () 
         <option value="">{t('review.credKeep')}</option>
         {creds.filter((cr) => cr.host === repo.host).map((cr) => <option key={cr.id} value={cr.id}>[{cr.provider}] {cr.host} · {cr.username}</option>)}
       </select>
+      <div className="border-t border-line pt-2 mb-3">
+        <button className="flex items-center gap-2 text-left w-full" aria-pressed={pollEnabled}
+          onClick={() => setPollEnabled(!pollEnabled)}>
+          <span className={pollEnabled ? 'text-clay' : 'text-txt3'}>{pollEnabled ? <IconCheckSquare size={16} /> : <IconSquare size={16} />}</span>
+          <span className="text-[12px] flex-1">{t('review.pollEnabledLabel')}</span>
+        </button>
+        <div className="text-[11px] text-txt3 mt-1">{t(pollEnabled ? 'review.pollEnabledHint' : 'review.pollDisabledHint')}</div>
+      </div>
       {webhookEnabled && (
         <div className="border-t border-line pt-2 mb-3">
           <div className="text-[12px] font-semibold mb-1">{t('review.webhookTitle')}</div>
