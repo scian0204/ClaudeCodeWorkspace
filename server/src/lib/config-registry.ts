@@ -73,6 +73,16 @@ export const DEFS: ConfigDef[] = [
   { key: 'windowPrimerRetryMs', group: 'claude', type: 'int', default: '900000', min: 60000, max: 21600000, unit: 'ms' },
   { key: 'windowPrimerTimeoutMs', group: 'claude', type: 'int', default: '20000', min: 2000, max: 120000, unit: 'ms' },
 
+  // guide assistant — the floating product-guide / control agent (server/src/guide)
+  { key: 'guideEnabled', group: 'guide', type: 'bool', default: '1' },
+  // off = it can still explain the product and navigate the UI, but every state-changing API call is refused
+  { key: 'guideWriteEnabled', group: 'guide', type: 'bool', default: '1' },
+  { key: 'guideModel', group: 'guide', type: 'string', default: 'claude-sonnet-5' },
+  { key: 'guideMaxTurns', group: 'guide', type: 'int', default: '20', min: 1, max: 100 },
+  { key: 'guideHistoryMax', group: 'guide', type: 'int', default: '100', min: 10, max: 1000 },
+  { key: 'guideMaxInputChars', group: 'guide', type: 'int', default: '4000', min: 100, max: 100000 },
+  { key: 'guideMaxToolChars', group: 'guide', type: 'int', default: '20000', min: 1000, max: 200000 },
+
   // privacy — non-essential egress to Anthropic (the inference call itself is never affected).
   // Every key here means the same thing: on = blocked. The master switch OVERRIDES the channel keys
   // (on = block everything), so they are locked in the UI while it is on. See privacy.ts for the env.
@@ -313,6 +323,6 @@ export function modelMap(): Record<string, string> {
 }
 
 // Client-facing subset (any authed user): drives the model dropdown.
-export function publicConfig(): { models: Record<string, string>; defaultModel: string; defaultEffort: string; sessionImportEnabled: boolean; llmProvidersEnabled: boolean; approvalsEnabled: boolean; dmEnabled: boolean; searchEnabled: boolean; customContextMenu: boolean; autoTitleEnabled: boolean; autoResumeEnabled: boolean; windowPrimerEnabled: boolean; gitPublishEnabled: boolean; wikiSourceEditEnabled: boolean; reviewWebhookEnabled: boolean; processPollMs: number } {
-  return { models: modelMap(), defaultModel: cfg.str('defaultModel'), defaultEffort: cfg.str('defaultEffort'), sessionImportEnabled: cfg.bool('sessionImportEnabled'), llmProvidersEnabled: cfg.bool('llmProvidersEnabled'), approvalsEnabled: cfg.bool('approvalsEnabled'), dmEnabled: cfg.bool('dmEnabled'), searchEnabled: cfg.bool('searchEnabled'), customContextMenu: cfg.bool('customContextMenu'), autoTitleEnabled: cfg.bool('autoTitleEnabled'), autoResumeEnabled: cfg.bool('autoResumeEnabled'), windowPrimerEnabled: cfg.bool('windowPrimerEnabled'), gitPublishEnabled: cfg.bool('gitPublishEnabled'), wikiSourceEditEnabled: cfg.bool('wikiSourceEditEnabled'), reviewWebhookEnabled: cfg.bool('reviewWebhook'), processPollMs: cfg.int('processPollMs') };
+export function publicConfig(): { models: Record<string, string>; defaultModel: string; defaultEffort: string; sessionImportEnabled: boolean; llmProvidersEnabled: boolean; approvalsEnabled: boolean; dmEnabled: boolean; searchEnabled: boolean; customContextMenu: boolean; autoTitleEnabled: boolean; autoResumeEnabled: boolean; windowPrimerEnabled: boolean; gitPublishEnabled: boolean; wikiSourceEditEnabled: boolean; reviewWebhookEnabled: boolean; guideEnabled: boolean; guideWriteEnabled: boolean; processPollMs: number } {
+  return { models: modelMap(), defaultModel: cfg.str('defaultModel'), defaultEffort: cfg.str('defaultEffort'), sessionImportEnabled: cfg.bool('sessionImportEnabled'), llmProvidersEnabled: cfg.bool('llmProvidersEnabled'), approvalsEnabled: cfg.bool('approvalsEnabled'), dmEnabled: cfg.bool('dmEnabled'), searchEnabled: cfg.bool('searchEnabled'), customContextMenu: cfg.bool('customContextMenu'), autoTitleEnabled: cfg.bool('autoTitleEnabled'), autoResumeEnabled: cfg.bool('autoResumeEnabled'), windowPrimerEnabled: cfg.bool('windowPrimerEnabled'), gitPublishEnabled: cfg.bool('gitPublishEnabled'), wikiSourceEditEnabled: cfg.bool('wikiSourceEditEnabled'), reviewWebhookEnabled: cfg.bool('reviewWebhook'), guideEnabled: cfg.bool('guideEnabled'), guideWriteEnabled: cfg.bool('guideWriteEnabled'), processPollMs: cfg.int('processPollMs') };
 }

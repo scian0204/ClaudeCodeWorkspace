@@ -9,6 +9,7 @@ import { MyPage } from './MyPage';
 import { MyTokenModal } from './TokenSettings';
 import { SearchPalette, SearchButton } from './SearchPalette';
 import { ShortcutsHelp } from './ShortcutsHelp';
+import { Guide } from './Guide';
 import { MobileMenuButton } from '../lib/ui';
 import { AppContextMenu } from '../lib/contextmenu';
 import { useShortcuts } from '../lib/shortcuts';
@@ -82,6 +83,7 @@ export function Shell() {
       <SearchPalette />
       <ShortcutsHelp />
       <AppContextMenu />
+      <Guide />
       <MyTokenModal open={showNag} nag onClose={() => setNagDismissed(true)} />
     </div>
   );

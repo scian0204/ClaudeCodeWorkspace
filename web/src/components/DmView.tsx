@@ -17,7 +17,7 @@ function fmtTime(ts: number): string {
 
 // Lightweight human-only chat view (NOT the heavy Claude Chat). Pure text bubbles + composer.
 export function DmView() {
-  const { user, channels, activeChannelId, channelMessages, sendDm, promoteChannel } = useStore();
+  const { user, channels, activeChannelId, channelMessages, sendDm, promoteChannel, guideEnabled } = useStore();
   const t = useT();
   const [text, setText] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -102,7 +102,8 @@ export function DmView() {
 
       {/* composer */}
       <div className="border-t border-line px-3 md:px-5 py-2.5 shrink-0">
-        <div className="flex items-end gap-2">
+        {/* pr-14: the guide launcher floats over this corner — keep Send clickable */}
+        <div className={`flex items-end gap-2 ${guideEnabled ? 'pr-14' : ''}`}>
           <textarea
             className="input flex-1 resize-none max-h-40" rows={1} value={text} autoFocus
             placeholder={t('dm.composerPlaceholder', { name: label })}

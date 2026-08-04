@@ -23,6 +23,7 @@ import { requestRoutes } from './routes/requests.js';
 import { dmRoutes } from './routes/dm.js';
 import { searchRoutes } from './routes/search.js';
 import { brandRoutes } from './routes/brand.js';
+import { guideRoutes } from './routes/guide.js';
 import { startReviewPoller, reapReviewOrphans } from './review/manager.js';
 import { scheduleModelRefresh } from './claude/models.js';
 import { armPendingResumes } from './claude/auto-resume.js';
@@ -79,6 +80,7 @@ async function main() {
   await app.register(dmRoutes);
   await app.register(searchRoutes);
   await app.register(brandRoutes);
+  await app.register(guideRoutes);
 
   app.get('/api/health', async () => ({ ok: true, mock: cfg.bool('forceMock') }));
 
