@@ -21,6 +21,7 @@ const TABS = [
   { key: 'usage', label: 'admin.tab.usage' },
   { key: 'processes', label: 'admin.tab.processes' },
   { key: 'config', label: 'admin.tab.config' },
+  { key: 'update', label: 'admin.tab.update' },
   { key: 'resources', label: 'admin.tab.resources' },
 ] as const;
 type AdminTab = (typeof TABS)[number]['key'];
@@ -85,6 +86,9 @@ export function AdminPanel() {
               {tb.key === 'requests' && pendingRequestCount > 0 && (
                 <span className="text-[10px] bg-warnsoft text-warn px-1.5 py-0.5 rounded-full">{pendingRequestCount}</span>
               )}
+              {tb.key === 'update' && ov?.updateAvailable && (
+                <span className="w-1.5 h-1.5 rounded-full bg-clay" aria-label={t('admin.upd.available')} />
+              )}
             </button>
           ))}
         </div>
@@ -96,6 +100,14 @@ export function AdminPanel() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <Stat label={t('admin.statUsers')} v={ov.users} /><Stat label={t('admin.statRooms')} v={ov.rooms} />
                 <Stat label={t('admin.statSessions')} v={ov.sessions} /><Stat label={t('admin.statConcurrentTurns')} v={`${ov.throttle.inUse}/${ov.throttle.max}${ov.throttle.waiting ? ` (+${ov.throttle.waiting})` : ''}`} />
+              </div>
+            )}
+            {ov?.version && (
+              <div className="text-xs text-txt3 flex items-center gap-2 flex-wrap">
+                <span>{t('admin.upd.current')}: <span className="font-mono text-txt2">v{ov.version}</span></span>
+                {ov.updateAvailable && (
+                  <button className="text-clay hover:underline" onClick={() => setTab('update')}>{t('admin.upd.available')}</button>
+                )}
               </div>
             )}
             {ov?.forceMock && <div className="text-xs text-warn bg-warnsoft border border-warn rounded-lg px-3 py-2">{t('admin.mockForcedWarning')}</div>}
@@ -175,6 +187,8 @@ export function AdminPanel() {
             <ConfigManager />
           </>
         )}
+
+        {tab === 'update' && <UpdateManager />}
 
         {tab === 'processes' && <ProcessesManager />}
 
@@ -542,6 +556,131 @@ function ImageControl({ it, edit, onEdit, onSave }: {
         <button className="text-clay hover:underline disabled:opacity-40" disabled={busy !== null || dirty}
           onClick={pull}>{busy === 'pull' ? t('admin.cfgImagePulling') : t('admin.cfgImagePull')}</button>
       </div>
+    </div>
+  );
+}
+
+// Self-update: version check against the published image + the container swap. Applying kills this
+// very server, so the button hands off to a poll loop that waits for the NEW version to answer (or
+// for the automatic rollback to land) instead of assuming success.
+function UpdateManager() {
+  const t = useT();
+  const [st, setSt] = useState<any>(null);
+  const [busy, setBusy] = useState<'check' | 'apply' | null>(null);
+  const [swap, setSwap] = useState<{ from: string; timedOut?: boolean } | null>(null);
+
+  const load = async (force?: boolean) => {
+    setBusy('check');
+    try { setSt(force ? await api.post('/api/admin/update/check', {}) : await api.get('/api/admin/update')); }
+    catch (e: any) { useStore.getState().setError(e.message); }
+    finally { setBusy(null); }
+  };
+  useEffect(() => { void load(); }, []);
+
+  // The endpoint simply fails while the container is being swapped — that's expected, keep waiting.
+  // Done = a different version answers, OR this attempt's own record reached 'done' (an image rebuild
+  // of the SAME version is a real update too, and then the version never changes).
+  const watchSwap = async (from: string, beforeAttempt: number | undefined) => {
+    const deadline = Date.now() + 240_000;
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 2500));
+      try {
+        const s = await api.get('/api/admin/update');
+        if (s.current && s.current !== from) { location.reload(); return; }
+        if (s.last?.phase === 'done' && s.last.startedAt !== beforeAttempt) { location.reload(); return; }
+        const ph = s.last?.phase;
+        if (ph === 'rolled-back' || ph === 'failed' || ph === 'unknown') {
+          setSwap(null); setBusy(null); setSt(s);
+          useStore.getState().setError(t(ph === 'rolled-back' ? 'admin.upd.rolledBack' : 'admin.upd.failed'));
+          return;
+        }
+      } catch { /* server down mid-swap */ }
+    }
+    setSwap((s) => (s ? { ...s, timedOut: true } : s));
+  };
+
+  const apply = async () => {
+    if (!confirm(t('admin.upd.applyConfirm', { target: st.latest ? `v${st.latest}` : st.tag }))) return;
+    setBusy('apply');
+    try {
+      const r = await api.post('/api/admin/update/apply', {});
+      if (!r.changed) { setBusy(null); alert(r.note ? `${t('admin.upd.noChange')}\n${r.note}` : t('admin.upd.noChange')); await load(); return; }
+      setSwap({ from: st.current });
+      void watchSwap(st.current, st.last?.startedAt);
+    } catch (e: any) { setBusy(null); useStore.getState().setError(e.message); }
+  };
+
+  if (!st) return <div className="text-sm text-txt3">{t('admin.cleanup.rescanning')}</div>;
+  const last = st.last;
+  const phaseLabel: Record<string, string> = {
+    done: t('admin.upd.done'), 'rolled-back': t('admin.upd.rolledBack'),
+    failed: t('admin.upd.failed'), applying: t('admin.upd.applying'), unknown: t('admin.upd.unknown'),
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="font-semibold">{t('admin.upd.title')}</div>
+        <button className="ml-auto text-xs border border-line rounded-lg px-2.5 py-1 hover:border-clay disabled:opacity-40 inline-flex items-center gap-1.5"
+          disabled={busy !== null || !!swap || !st.enabled} onClick={() => void load(true)}>
+          <IconRefresh size={13} />{busy === 'check' ? t('admin.upd.checking') : t('admin.upd.check')}
+        </button>
+      </div>
+      <p className="text-[11px] text-txt3 leading-snug">{t('admin.upd.intro')}</p>
+
+      {!st.enabled && <div className="text-xs text-warn bg-warnsoft border border-warn rounded-lg px-3 py-2">{t('admin.upd.disabledNote')}</div>}
+
+      {swap && (
+        <div className="text-xs bg-claysoft text-clay border border-clay rounded-lg px-3 py-2">
+          <div className="font-semibold">{swap.timedOut ? t('admin.upd.timeout') : t('admin.upd.applying')}</div>
+          <div className="mt-0.5 leading-snug">{swap.timedOut ? t('admin.upd.timeoutNote') : t('admin.upd.applyingNote')}</div>
+        </div>
+      )}
+
+      <Section title={t('admin.upd.versionTitle')}>
+        <div className="space-y-1.5 text-sm">
+          <KV k={t('admin.upd.current')} v={`v${st.current}`} />
+          <KV k={t('admin.upd.latest')} v={st.latest ? `v${st.latest}` : '—'} />
+          <KV k={t('admin.upd.image')} v={st.image || '—'} mono />
+          <KV k={t('admin.upd.container')} v={st.container ? `${st.container.name} · ${st.container.id}` : '—'} mono />
+          <KV k={t('admin.upd.checkedAt')} v={st.checkedAt ? timeAgo(st.checkedAt) : '—'} />
+        </div>
+        <div className="mt-3 text-xs">
+          {st.updateAvailable
+            ? <span className="text-clay inline-flex items-center gap-1"><IconDot size={10} />{st.newerVersion ? t('admin.upd.available') : t('admin.upd.imageChanged')}</span>
+            : <span className="text-ok inline-flex items-center gap-1"><IconDot size={10} />{t('admin.upd.upToDate')}</span>}
+        </div>
+        {!st.registrySupported && <div className="mt-1.5 text-[11px] text-txt3">{t('admin.upd.registryNa')}</div>}
+        {st.checkError && <div className="mt-1.5 text-[11px] text-warn">{t('admin.upd.checkError', { err: st.checkError })}</div>}
+        {st.dockerUnavailable && <div className="mt-1.5 text-[11px] text-txt3">{t('admin.upd.dockerNa')}</div>}
+        <button className="btn-primary mt-3 disabled:opacity-40" disabled={busy !== null || !!swap || !st.enabled || st.dockerUnavailable}
+          onClick={apply}>{busy === 'apply' ? t('admin.upd.pulling') : t('admin.upd.apply')}</button>
+      </Section>
+
+      {last && (
+        <Section title={t('admin.upd.lastResult')}>
+          <div className="space-y-1.5 text-sm">
+            <KV k={t('admin.upd.phase')} v={phaseLabel[last.phase] || last.phase} />
+            <KV k={t('admin.upd.target')} v={last.toImage || '—'} mono />
+            <KV k={t('admin.upd.startedAt')} v={timeAgo(last.startedAt)} />
+            {last.version && <KV k={t('admin.upd.resultVersion')} v={`v${last.fromVersion} → v${last.version}`} />}
+          </div>
+          {last.log && (
+            <div className="mt-2">
+              <div className="text-[11px] text-txt3 mb-1">{t('admin.upd.log')}</div>
+              <pre className="text-[11px] font-mono bg-card border border-line rounded-lg p-2 overflow-x-auto scrolly whitespace-pre-wrap break-all">{last.log}</pre>
+            </div>
+          )}
+        </Section>
+      )}
+    </div>
+  );
+}
+function KV({ k, v, mono }: { k: string; v: string; mono?: boolean }) {
+  return (
+    <div className="flex items-start gap-2">
+      <span className="text-txt2 shrink-0">{k}</span>
+      <span className={`ml-auto text-right break-all${mono ? ' font-mono text-[11px] text-txt3' : ''}`}>{v}</span>
     </div>
   );
 }

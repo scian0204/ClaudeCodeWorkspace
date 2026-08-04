@@ -31,6 +31,7 @@ import { startWindowPrimer } from './claude/window-primer.js';
 import { cleanupSandboxOrphans } from './review/sandbox.js';
 import { initRealtime } from './realtime/io.js';
 import { startReaper, cleanupOrphans, ensureNetwork } from './codeserver/manager.js';
+import { reconcileSelfUpdate, scheduleUpdateCheck } from './admin/self-update.js';
 import { isCsPath, handleHttp, handleUpgrade } from './codeserver/proxy.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -113,6 +114,8 @@ async function main() {
   scheduleModelRefresh(); // pull the live model list into the `models` config (frontier ids move fast)
   armPendingResumes(); // re-arm turns parked for a claude.ai window reset (must follow initRealtime: they emit)
   startWindowPrimer(); // keep opted-in users' claude.ai 5h window open so idle time isn't wasted
+  void reconcileSelfUpdate().catch(() => {}); // decide how a self-update swap ended (we may BE the new image)
+  scheduleUpdateCheck(); // periodic "is a newer image published" check (cache only — never auto-applies)
 
   await app.listen({ port: config.port, host: '0.0.0.0' });
   console.log(`[ccw] listening on ${tls ? 'https' : 'http'}://:${config.port}  forceMock=${cfg.bool('forceMock')}  data=${config.dataDir}`);

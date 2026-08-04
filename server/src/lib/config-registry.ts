@@ -122,6 +122,16 @@ export const DEFS: ConfigDef[] = [
   { key: 'codeServerReaperMs', group: 'codeserver', type: 'int', default: '60000', min: 10000, max: 3600000, unit: 'ms' },
   { key: 'codeServerWaitReadyMs', group: 'codeserver', type: 'int', default: '30000', min: 5000, max: 300000, unit: 'ms' },
 
+  // self-update: check the published image for a newer version and swap this container for it
+  // (admin/self-update.ts). Off = both the check and the apply endpoint are refused.
+  { key: 'selfUpdateEnabled', group: 'update', type: 'bool', default: '1', env: 'SELF_UPDATE_ENABLED' },
+  { key: 'selfUpdateAutoCheckMs', group: 'update', type: 'int', default: '21600000', min: 0, max: 604800000, unit: 'ms' },
+  { key: 'selfUpdateCheckTimeoutMs', group: 'update', type: 'int', default: '10000', min: 1000, max: 120000, unit: 'ms' },
+  { key: 'selfUpdateHealthWaitMs', group: 'update', type: 'int', default: '30000', min: 5000, max: 600000, unit: 'ms' },
+  // empty = find our own container by hostname (its short id under Docker); set it when a deploy
+  // overrides the hostname so that lookup can't work
+  { key: 'selfUpdateContainer', group: 'update', type: 'string', default: '', env: 'CCW_CONTAINER' },
+
   // auth
   { key: 'sessionTtlDays', group: 'auth', type: 'int', default: '30', min: 1, max: 365, unit: 'days' },
   { key: 'allow_bypass', group: 'auth', type: 'bool', default: '1' },

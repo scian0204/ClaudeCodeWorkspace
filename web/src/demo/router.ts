@@ -564,6 +564,9 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   if (P === '/api/admin/cleanup' && M === 'POST') return ok(ADMIN.runCleanup(b.action));
   if (P === '/api/admin/processes' && M === 'GET') return ok(ADMIN.processes);
   if (P === '/api/admin/processes' && M === 'POST') return ok(ADMIN.runProcess(b));
+  if (P === '/api/admin/update' && M === 'GET') return ok(ADMIN.update.status());
+  if (P === '/api/admin/update/check' && M === 'POST') return ok(ADMIN.update.status());
+  if (P === '/api/admin/update/apply' && M === 'POST') return ok(ADMIN.update.apply());
   if (P === '/api/admin/restart' && M === 'POST') return ok({ ok: true });
   if (P === '/api/admin/claude-token') return ok({});
 
