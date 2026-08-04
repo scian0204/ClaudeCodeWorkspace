@@ -7,6 +7,7 @@ import { cfg, listConfigForApi, setConfigValue, resetConfigValue, imageConfigVal
 import { inspectImage, pullImage } from '../lib/docker-images.js';
 import { scanResources, runCleanup } from '../admin/cleanup.js';
 import { listProcesses, controlProcess } from '../admin/processes.js';
+import { appVersion, cachedStatus, checkForUpdate, updateStatus, applyUpdate } from '../admin/self-update.js';
 import { turnLimiter } from '../claude/throttle.js';
 import { setCommonToken, clearCommonToken, commonTokenMeta } from '../auth/claude-token.js';
 import { getProvider, setProvider, clearProvider } from '../auth/provider.js';
@@ -22,6 +23,9 @@ export async function adminRoutes(app: FastifyInstance) {
       throttle: { max: turnLimiter.max, inUse: turnLimiter.inUse, waiting: turnLimiter.waiting },
       forceMock: cfg.bool('forceMock'),
       commonToken: commonTokenMeta(), // shared fallback status (admin-set DB token or env)
+      // version + "newer image published" badge, from the LAST check only (never a fetch here)
+      version: appVersion(),
+      updateAvailable: !!cachedStatus()?.updateAvailable,
     };
   });
 
@@ -129,6 +133,28 @@ export async function adminRoutes(app: FastifyInstance) {
       });
       return await listProcesses();
     } catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
+  });
+
+  // ── self-update: version check against the published image + container swap ──
+  // Gated by selfUpdateEnabled on the server (UI hiding is cosmetic). Apply only ever pulls OUR own
+  // repo (the tag is validated in applyUpdate) and rolls back automatically if the new image is bad.
+  app.get('/api/admin/update', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    try { return await updateStatus(); }
+    catch (e: any) { return reply.code(500).send({ error: String(e?.message || e).slice(0, 300) }); }
+  });
+  app.post('/api/admin/update/check', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    if (!cfg.bool('selfUpdateEnabled')) return reply.code(403).send({ error: 'self-update disabled' });
+    try { return await checkForUpdate(); }
+    catch (e: any) { return reply.code(500).send({ error: String(e?.message || e).slice(0, 300) }); }
+  });
+  app.post('/api/admin/update/apply', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    if (!cfg.bool('selfUpdateEnabled')) return reply.code(403).send({ error: 'self-update disabled' });
+    const tag = (req.body as any)?.tag;
+    try { return await applyUpdate(tag ? String(tag) : undefined); }
+    catch (e: any) { return reply.code(400).send({ error: String(e?.message || e).slice(0, 300) }); }
   });
 
   // ── restart the server process; docker's restart policy (unless-stopped) brings it back ──

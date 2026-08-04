@@ -257,7 +257,37 @@ export const ADMIN = {
     throttle: { inUse: 1, max: 3, waiting: 0 },
     forceMock: true,
     commonToken: { hasToken: true, setAt: ago(60 * 24 * 20) },
+    version: ADMIN.update.status().current,
+    updateAvailable: ADMIN.update.status().updateAvailable,
   }),
+  // self-update: a newer image is "published"; applying flips the version after a few seconds so the
+  // panel's watch loop reloads exactly like it does against the real server. The flip is persisted —
+  // otherwise that reload would re-seed the demo and offer the same update again.
+  update: {
+    applied: (() => { try { return localStorage.getItem('ccw-demo-updated') === '1'; } catch { return false; } })(),
+    startedAt: 0,
+    status() {
+      const u = ADMIN.update;
+      const image = 'cian0204/claudecode-workspace:latest';
+      return {
+        enabled: true, current: u.applied ? '1.9.0' : '1.8.0', image,
+        repo: 'cian0204/claudecode-workspace', tag: 'latest', registrySupported: true,
+        latest: '1.9.0', newerVersion: !u.applied, imageChanged: false, updateAvailable: !u.applied,
+        checkedAt: Date.now(), checkError: null,
+        container: { id: 'c0ffee123456', name: 'claudecode-app' },
+        dockerUnavailable: false, applying: false,
+        last: u.applied
+          ? { phase: 'done', fromVersion: '1.8.0', toImage: image, startedAt: u.startedAt || ago(2), finishedAt: Date.now(), version: '1.9.0' }
+          : null,
+      };
+    },
+    apply() {
+      const u = ADMIN.update;
+      u.startedAt = Date.now();
+      setTimeout(() => { u.applied = true; try { localStorage.setItem('ccw-demo-updated', '1'); } catch { /* private mode */ } }, 4000);
+      return { started: true, target: 'cian0204/claudecode-workspace:latest', changed: true };
+    },
+  },
   usage: {
     totals: { turns: 128, inputTokens: 842_000, outputTokens: 210_500, costUsd: 12.8342 },
     byUser: [
@@ -379,6 +409,10 @@ export const ADMIN = {
     { key: 'attachmentMaxMB', group: 'features', type: 'int', value: '20', default: '20', unit: 'MB', min: 1, max: 200, restart: false, readonly: false, secret: false, overridden: false },
     { key: 'attachmentMaxCount', group: 'features', type: 'int', value: '10', default: '10', min: 1, max: 50, restart: false, readonly: false, secret: false, overridden: false },
     { key: 'resourceCleanupEnabled', group: 'features', type: 'bool', value: '1', default: '1', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'selfUpdateEnabled', group: 'update', type: 'bool', value: '1', default: '1', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'selfUpdateAutoCheckMs', group: 'update', type: 'int', value: '21600000', default: '21600000', min: 0, max: 604800000, unit: 'ms', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'selfUpdateHealthWaitMs', group: 'update', type: 'int', value: '30000', default: '30000', min: 5000, max: 600000, unit: 'ms', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'selfUpdateContainer', group: 'update', type: 'string', value: '', default: '', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'sessionTtlDays', group: 'auth', type: 'int', value: '30', default: '30', unit: 'days', min: 1, max: 365, restart: false, readonly: false, secret: false, overridden: false },
     { key: 'httpBodyLimitMB', group: 'server', type: 'int', value: '6', default: '6', unit: 'MB', restart: true, readonly: false, secret: false, overridden: false },
     { key: 'port', group: 'infra', type: 'int', value: '3000', default: '3000', restart: true, readonly: true, secret: false, overridden: false },
