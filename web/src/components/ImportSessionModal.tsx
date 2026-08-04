@@ -31,11 +31,12 @@ async function traverseEntry(entry: any, parent: string, out: Collected[]) {
 }
 
 // Folder pickers/drops prepend the picked folder's own name as the first path segment. Strip it
-// so rels are project-root-relative (so `.gitignore`, `CLAUDE.md`, `.claude/` match at the root).
-function stripRoot(list: Collected[]): Collected[] {
+// so rels are project-root-relative (so `.gitignore`, `CLAUDE.md`, `.claude/` match at the root),
+// and hand the name back — it is the obvious default for the project being created.
+function stripRoot(list: Collected[]): { list: Collected[]; root: string } {
   const first = list[0]?.rel.split('/')[0];
-  if (!first || !list.every((x) => x.rel === first || x.rel.startsWith(first + '/'))) return list;
-  return list.map((x) => ({ file: x.file, rel: x.rel.slice(first.length + 1) })).filter((x) => x.rel);
+  if (!first || !list.every((x) => x.rel === first || x.rel.startsWith(first + '/'))) return { list, root: '' };
+  return { list: list.map((x) => ({ file: x.file, rel: x.rel.slice(first.length + 1) })).filter((x) => x.rel), root: first };
 }
 
 // CLAUDE.md and everything under .claude/ are required — force-checked and locked in the tree.
@@ -72,8 +73,10 @@ function sortChildren(nodes: TreeNode[]): TreeNode[] {
 }
 
 // Multi-step local-session import: pick a project folder (collected, not uploaded) → prune a
-// gitignore-aware file tree and upload the checked files → pick the ~/.claude session folder (or
-// skip) → choose which transcripts to clone as private sessions. Mirrors the wiki staging flow.
+// gitignore-aware file tree, name the project and settle overwrite-vs-clone, then upload the
+// checked files → pick the ~/.claude session folder (or skip) → choose which transcripts to clone
+// as private sessions. Everything about the project is decided on the step that uploads it.
+// Mirrors the wiki staging flow.
 export function ImportSessionModal({ onClose }: { onClose: () => void }) {
   const importSessions = useStore((s) => s.importSessions);
   const setError = useStore((s) => s.setError);
@@ -103,14 +106,16 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
 
   // Collect the project folder WITHOUT uploading; seed default checks from root .gitignore + .git/.
   const enterTree = async (raw: Collected[]) => {
-    const list = stripRoot(raw);
+    const { list, root } = stripRoot(raw);
     if (!list.length) return;
     let ig: ReturnType<typeof ignore> | null = null;
     const gi = list.find((x) => x.rel === '.gitignore');
     if (gi) { try { ig = ignore().add(await gi.file.text()); } catch { /* ignore malformed */ } }
     const init: Record<string, boolean> = {};
     for (const { rel } of list) init[rel] = isEssential(rel) || (!(ig && ig.ignores(rel)) && !rel.split('/').includes('.git'));
-    setCollected(list); setChecked(init); setStep('tree');
+    setCollected(list); setChecked(init);
+    if (root) setProjectName(root); // the picked folder names the project — asked for on this step
+    setStep('tree');
   };
 
   const pickProject = (fl: FileList | null) => {
@@ -152,7 +157,9 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
       await api.uploadFiles(`/api/import/staging/${sid}/files?slot=claude`, items, setProgress);
       const r = await api.get(`/api/import/staging/${sid}/sessions`);
       if (r.found === false) { setClaudeNotFound(true); return; }
-      setProjectName(r.projectTail || '');
+      // the folder the user picked already named the project — only fall back to the transcript's
+      // own cwd tail when we could not read a root folder name (a flat multi-file drop)
+      setProjectName((p) => p || r.projectTail || '');
       const ss: Sess[] = r.sessions || [];
       setSessions(ss);
       const sc: Record<string, boolean> = {}; for (const s of ss) sc[s.uuid] = true; setSessionChecked(sc);
@@ -251,6 +258,25 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
 
       {step === 'tree' && (
         <div>
+          {/* the project is settled here — this step is what actually uploads it */}
+          <div className="text-xs text-txt2 mb-1">{t('import.projectName')}</div>
+          <div className="flex flex-wrap items-center gap-2 mb-1">
+            <input className="input flex-1 min-w-0" value={projectName} autoFocus onChange={(e) => setProjectName(e.target.value)} />
+            {projectDup && (
+              <>
+                <span className="shrink-0 px-1 py-px rounded bg-claysoft text-clay text-[10px]">{t('import.dupBadge')}</span>
+                <select className="input !py-0.5 !text-[11px] !w-auto shrink-0" value={projectMode}
+                  aria-label={t('import.dupStrategy')} onChange={(e) => setProjectMode(e.target.value as DupMode)}>
+                  <option value="overwrite">{t('import.dupOverwrite')}</option>
+                  <option value="clone">{t('import.dupClone')}</option>
+                </select>
+              </>
+            )}
+          </div>
+          <div className={`text-[11px] text-txt3 mb-3 ${projectDup ? '' : 'hidden'}`}>
+            {projectDup && t(projectOverwrite ? 'import.projectDupOverwriteHint' : 'import.projectDupCloneHint')}
+          </div>
+
           <div className="flex items-center justify-between gap-2 mb-2">
             <div className="text-[11px] text-txt3 min-w-0 flex-1">{t('import.gitignoreHint')}</div>
             <div className="flex gap-3 text-[11px] shrink-0">
@@ -291,22 +317,10 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
 
       {step === 'sessions' && (
         <div>
-          <div className="text-xs text-txt2 mb-1">{t('import.projectName')}</div>
-          <div className="flex flex-wrap items-center gap-2 mb-1">
-            <input className="input flex-1 min-w-0" value={projectName} autoFocus onChange={(e) => setProjectName(e.target.value)} />
-            {projectDup && (
-              <>
-                <span className="shrink-0 px-1 py-px rounded bg-claysoft text-clay text-[10px]">{t('import.dupBadge')}</span>
-                <select className="input !py-0.5 !text-[11px] !w-auto shrink-0" value={projectMode}
-                  aria-label={t('import.dupStrategy')} onChange={(e) => setProjectMode(e.target.value as DupMode)}>
-                  <option value="overwrite">{t('import.dupOverwrite')}</option>
-                  <option value="clone">{t('import.dupClone')}</option>
-                </select>
-              </>
-            )}
-          </div>
-          <div className={`text-[11px] text-txt3 mb-3 ${projectDup ? '' : 'hidden'}`}>
-            {projectDup && t(projectOverwrite ? 'import.projectDupOverwriteHint' : 'import.projectDupCloneHint')}
+          {/* the project was named and settled on the tree step — recap it, do not re-ask */}
+          <div className="text-[11px] text-txt3 mb-3">
+            {t('import.projectSummary', { name: projectName.trim() || t('import.projectUnnamed') })}
+            {projectDup && ` · ${t(projectOverwrite ? 'import.dupOverwrite' : 'import.dupClone')}`}
           </div>
 
           {sessions.length === 0 ? (
