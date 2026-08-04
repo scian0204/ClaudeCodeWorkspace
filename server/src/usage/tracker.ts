@@ -53,7 +53,7 @@ export function recordSkillUse(userId: string, skill: string) {
 // installed skill list is known — that keeps write-time free of an fs scan per turn.
 export function turnSkillKeys(
   promptText: string,
-  blocks: { type: string; name?: string; input?: any }[],
+  blocks: { type: string; name?: string; input?: any; [k: string]: unknown }[], // SDK blocks carry more per type (text, thinking, …)
 ): string[] {
   const out: string[] = [];
   const push = (raw: unknown) => {

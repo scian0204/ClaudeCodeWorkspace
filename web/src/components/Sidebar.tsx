@@ -105,16 +105,7 @@ export function Sidebar() {
             open={!closedGroups.includes(g.key)} onToggle={() => toggleGroup(g.key)} />
           {!closedGroups.includes(g.key) && g.items.map((s) => (
           <Item key={s.id} active={panel === null && current?.chatSessionId === s.id} onClick={() => { setPanel(null); openPrivate(s.id); }}
-            menu={[
-              { label: t('ctx.open'), icon: <IconMessage size={14} />, onSelect: () => { setPanel(null); openPrivate(s.id); } },
-              { label: t('sidebar.renameChatTitle'), icon: <IconPencil size={14} />, onSelect: () => renameChat(s) },
-              ...(autoTitleEnabled ? [{
-                label: isNaming(s.id) ? t('sidebar.retitleChatBusy') : t('sidebar.retitleChatTitle'),
-                icon: <IconSparkle size={14} />, onSelect: () => { void retitleChat(s); },
-              }] : []),
-              '-',
-              { label: t('sidebar.deleteChatTitle'), icon: <IconTrash size={14} />, danger: true, onSelect: () => removeChat(s) },
-            ]}>
+            menu={[{ label: t('ctx.open'), icon: <IconMessage size={14} />, onSelect: () => { setPanel(null); openPrivate(s.id); } }]}>
             <span className="opacity-70"><IconMessage size={15} /></span>
             {/* while the model is picking a name, the row title itself waits with the clay glint */}
             <span className={`flex-1 truncate text-[13px] ${isNaming(s.id) ? 'clay-shimmer' : ''}`}>{s.title}</span>
@@ -139,11 +130,7 @@ export function Sidebar() {
         {rooms.length === 0 && <div className="text-[11px] text-txt3 px-2 py-1">{t('common.none')}</div>}
         {rooms.map((r) => (
           <Item key={r.id} active={panel === null && current?.roomId === r.id} onClick={() => { setPanel(null); openRoom(r.id); }}
-            menu={[
-              { label: t('ctx.open'), icon: <IconMessage size={14} />, onSelect: () => { setPanel(null); openRoom(r.id); } },
-              '-',
-              { label: t('sidebar.deleteRoomTitle'), icon: <IconTrash size={14} />, danger: true, onSelect: () => removeRoom(r) },
-            ]}>
+            menu={[{ label: t('ctx.open'), icon: <IconMessage size={14} />, onSelect: () => { setPanel(null); openRoom(r.id); } }]}>
             <span className="w-[7px] h-[7px] rounded-full bg-ok shrink-0" />
             <span className="flex-1 truncate text-[13px]">{r.name}</span>
             <span className="flex group-hover:hidden">
@@ -178,11 +165,7 @@ export function Sidebar() {
         {wikiTopics.length === 0 && <div className="text-[11px] text-txt3 px-2 py-1">{isAdmin ? t('sidebar.createTopicHint') : t('common.none')}</div>}
         {wikiTopics.map((wt) => (
           <Item key={wt.id} active={panel === null && current?.wikiTopicId === wt.id} onClick={() => { setPanel(null); openWiki(wt.id); }}
-            menu={[
-              { label: t('ctx.open'), icon: <IconBook size={14} />, onSelect: () => { setPanel(null); openWiki(wt.id); } },
-              isAdmin && '-',
-              isAdmin && { label: t('sidebar.deleteTopicTitle'), icon: <IconTrash size={14} />, danger: true, onSelect: () => removeTopic(wt) },
-            ]}>
+            menu={[{ label: t('ctx.open'), icon: <IconBook size={14} />, onSelect: () => { setPanel(null); openWiki(wt.id); } }]}>
             <span className="opacity-70">{wt.compileStatus === 'compiling' ? <IconClock size={15} /> : wt.compileStatus === 'error' ? <IconWarning size={15} className="text-warn" /> : <IconBook size={15} />}</span>
             <span className="flex-1 truncate text-[13px]">{wt.name}</span>
             {wt.compileStatus === 'compiling' && <span className="text-[10px] text-txt3 group-hover:hidden">{t('sidebar.compiling')}</span>}
@@ -615,8 +598,11 @@ function Section({ label, onAdd, extra }: { label: string; onAdd?: () => void; e
 }
 // Collapsible project header above a group of chats — same row look as the review-repo header.
 function GroupHeader({ name, tag, count, open, onToggle }: { name: string; tag: string; count: number; open: boolean; onToggle: () => void }) {
+  const t = useT();
   return (
-    <button className="w-full flex items-center gap-1.5 px-2 py-1 text-[11px] text-txt2 hover:text-txt" aria-expanded={open} onClick={onToggle}>
+    // named for screen readers (and for the right-click menu, which reads controls off the DOM)
+    <button className="w-full flex items-center gap-1.5 px-2 py-1 text-[11px] text-txt2 hover:text-txt" aria-expanded={open}
+      aria-label={t(open ? 'sidebar.collapseGroup' : 'sidebar.expandGroup', { name })} onClick={onToggle}>
       <span className="opacity-70 shrink-0">{open ? <IconChevronDown size={13} /> : <IconChevronRight size={13} />}</span>
       <span className="opacity-70 shrink-0"><IconFolder size={13} /></span>
       <span className="flex-1 truncate text-left font-semibold" title={name}>{name}</span>

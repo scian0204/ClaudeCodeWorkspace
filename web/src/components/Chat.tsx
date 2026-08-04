@@ -16,7 +16,6 @@ import { extractSources, markCitations, type WikiSource } from '../lib/wikiCite'
 import { md } from '../lib/md';
 import { useT } from '../lib/i18n';
 import { withKeys } from '../lib/shortcuts';
-import { openContextMenu } from '../lib/contextmenu';
 import {
   IconChevronDown, IconChevronRight, IconChevronUp, IconTheme, IconFolder, IconFile, IconTrash,
   IconGauge, IconEye, IconBook, IconArchive, IconSparkle, IconCopy, IconPencil, IconHelp,
@@ -638,14 +637,8 @@ function MessageView({ m }: { m: Msg }) {
   const remove = () => { if (confirm(t('chat.deleteMessageConfirm'))) deleteMessage(m.id); };
 
   return (
-    <div id={`msg-${m.id}`} className={`group flex gap-3 mb-5 ${highlighted ? 'ring-2 ring-clay rounded-lg -m-1 p-1 scroll-mt-6' : ''}`}
-      onContextMenu={(e) => openContextMenu(e, [
-        // right-clicking a message gives the same three actions as the hover row
-        !!copyText && { label: t('chat.copy'), icon: <IconCopy size={14} />, onSelect: copy },
-        canEdit && { label: t('chat.edit'), icon: <IconPencil size={14} />, onSelect: startEdit },
-        '-',
-        { label: t('common.delete'), icon: <IconTrash size={14} />, danger: true, onSelect: remove },
-      ])}>
+    // right-click needs no wiring here: the menu mirrors the row's own hover buttons (copy/edit/delete)
+    <div id={`msg-${m.id}`} className={`group flex gap-3 mb-5 ${highlighted ? 'ring-2 ring-clay rounded-lg -m-1 p-1 scroll-mt-6' : ''}`}>
       <Avatar name={m.authorName || undefined} claude={isClaude} color={colorFromMsg(m)} />
       <div className="flex-1 min-w-0">
         <div className="text-xs text-txt2 font-semibold mb-1 flex items-center gap-2">
