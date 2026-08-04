@@ -122,7 +122,7 @@ interface State {
   createGroup: (name: string, memberIds: string[]) => Promise<void>;
   promoteChannel: (id: string) => Promise<void>;
   markReadDm: (id: string) => void;
-  newReviewRepo: (payload: { name?: string; gitUrl: string; credentialId: string; provider?: string; baseBranch?: string; sandboxImage?: string }) => Promise<void>;
+  newReviewRepo: (payload: { name?: string; gitUrl: string; credentialId: string; provider?: string; baseBranch?: string; sandboxImage?: string; webhook?: boolean; pollEnabled?: boolean }) => Promise<ReviewRepo | undefined>;
   updateReviewRepo: (id: string, payload: { name?: string; baseBranch?: string; sandboxImage?: string; credentialId?: string; pollEnabled?: boolean }) => Promise<void>;
   deleteReviewRepo: (id: string) => Promise<void>;
   pollReviewRepo: (id: string) => Promise<void>;
@@ -307,9 +307,11 @@ export const useStore = create<State>((set, get) => ({
       },
     }, messages);
   },
+  // returns the created repo — the caller shows its freshly issued webhook URL/secret
   newReviewRepo: async (payload) => {
-    await api.post('/api/review/repos', payload);
+    const r = await api.post('/api/review/repos', payload);
     await get().refreshLists();
+    return r.repo as ReviewRepo | undefined;
   },
   updateReviewRepo: async (id, payload) => {
     await api.patch(`/api/review/repos/${id}`, payload);

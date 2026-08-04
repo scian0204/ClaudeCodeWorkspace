@@ -45,6 +45,7 @@ export function getReviewByChat(chatSessionId: string) {
 // ── repo lifecycle ──
 export async function createRepo(admin: AuthUser, p: {
   name?: string; gitUrl: string; credentialId: string; provider?: string; baseBranch?: string; sandboxImage?: string;
+  webhook?: boolean; pollEnabled?: boolean;
 }): Promise<Repo> {
   const gitUrl = (p.gitUrl || '').trim();
   const host = hostFromGitUrl(gitUrl);
@@ -74,8 +75,10 @@ export async function createRepo(admin: AuthUser, p: {
   const row: Repo = {
     id, name: (p.name || slug).trim(), provider, host, gitUrl, slug, credentialId: p.credentialId,
     path: dir, baseBranch: p.baseBranch?.trim() || null, sandboxImage: p.sandboxImage?.trim() || null,
-    webhookSecret: null, // opt-in per repo (admin enables it in the repo's edit dialog)
-    pollEnabled: 1,      // poll by default; the admin turns it off once a webhook is wired up
+    // Both decided at registration and changeable later (edit dialog): webhook off + polling on by
+    // default, since a brand-new repo has no hook wired on the host yet.
+    webhookSecret: p.webhook ? newWebhookSecret() : null,
+    pollEnabled: p.pollEnabled === false ? 0 : 1,
     createdBy: admin.id, createdAt: now, polledAt: null, pollError: null,
   };
   db.insert(schema.reviewRepos).values(row).run();

@@ -16,12 +16,18 @@ export async function reviewRoutes(app: FastifyInstance) {
     const b = (req.body || {}) as any;
     if (!b.gitUrl || !String(b.gitUrl).trim()) return reply.code(400).send({ error: '원격지 URL이 필요합니다' });
     if (!b.credentialId) return reply.code(400).send({ error: '병합권한 자격증명을 선택하세요' });
+    // UI hides the option when webhooks are off; a request asking for one anyway is refused, not
+    // silently downgraded to a repo whose hook never fires.
+    if (b.webhook && !cfg.bool('reviewWebhook'))
+      return reply.code(403).send({ error: '웹훅이 비활성화되어 있습니다 (관리자 설정)' });
     try {
       const repo = await review.createRepo(u, {
         name: b.name ? String(b.name) : undefined, gitUrl: String(b.gitUrl),
         credentialId: String(b.credentialId), provider: b.provider ? String(b.provider) : undefined,
         baseBranch: b.baseBranch ? String(b.baseBranch) : undefined,
         sandboxImage: b.sandboxImage ? String(b.sandboxImage) : undefined,
+        webhook: !!b.webhook,
+        pollEnabled: b.pollEnabled !== undefined ? !!b.pollEnabled : undefined,
       });
       return { repo: review.listRepoSummaries().find((r) => r.id === repo.id) };
     } catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }

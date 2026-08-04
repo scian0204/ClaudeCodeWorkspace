@@ -477,6 +477,7 @@ function ReviewSection() {
 // Admin-only: register a remote to watch. Requires a merge/push-capable git credential for that host.
 function AddReviewRepoModal({ onClose }: { onClose: () => void }) {
   const newReviewRepo = useStore((s) => s.newReviewRepo);
+  const webhookEnabled = useStore((s) => s.reviewWebhookEnabled);
   const setError = useStore((s) => s.setError);
   const [name, setName] = useState('');
   const [gitUrl, setGitUrl] = useState('');
@@ -486,6 +487,11 @@ function AddReviewRepoModal({ onClose }: { onClose: () => void }) {
   const [provider, setProvider] = useState('');
   const [creds, setCreds] = useState<any[]>([]);
   const [busy, setBusy] = useState(false);
+  const [pollEnabled, setPollEnabled] = useState(true);
+  const [webhook, setWebhook] = useState(false);
+  // Set once the repo is created with a webhook: its URL/secret are shown right here, because this
+  // is the moment the admin needs them — otherwise they'd have to reopen the edit dialog to look.
+  const [created, setCreated] = useState<ReviewRepo | null>(null);
   const t = useT();
 
   useEffect(() => { api.get('/api/git-credentials').then((r) => setCreds([...(r.mine || []), ...(r.common || [])])).catch(() => {}); }, []);
@@ -495,10 +501,23 @@ function AddReviewRepoModal({ onClose }: { onClose: () => void }) {
     if (!credentialId) { setError(t('review.credRequired')); return; }
     setBusy(true);
     try {
-      await newReviewRepo({ name: name.trim() || undefined, gitUrl: gitUrl.trim(), credentialId, provider: provider || undefined, baseBranch: baseBranch.trim() || undefined, sandboxImage: sandboxImage.trim() || undefined });
+      const repo = await newReviewRepo({ name: name.trim() || undefined, gitUrl: gitUrl.trim(), credentialId, provider: provider || undefined, baseBranch: baseBranch.trim() || undefined, sandboxImage: sandboxImage.trim() || undefined, webhook, pollEnabled });
+      if (repo?.webhookSecret) { setCreated(repo); setBusy(false); return; } // show the hook fields first
       onClose();
     } catch (e: any) { setError(e.message); setBusy(false); }
   };
+
+  if (created?.webhookSecret) {
+    return (
+      <Modal open onOpenChange={(o) => { if (!o) onClose(); }} title={t('review.webhookIssuedTitle')} width={460}>
+        <div className="text-[11px] text-txt3 mb-2">{t('review.webhookIssuedHint')}</div>
+        <WebhookFields repo={created} secret={created.webhookSecret} />
+        <div className="flex justify-end">
+          <button className="btn-primary" onClick={onClose}>{t('common.close')}</button>
+        </div>
+      </Modal>
+    );
+  }
 
   return (
     <Modal open onOpenChange={(o) => { if (!o) onClose(); }} title={t('review.addRepoTitle')} width={460}>
@@ -518,6 +537,14 @@ function AddReviewRepoModal({ onClose }: { onClose: () => void }) {
         <option value="gitlab">GitLab</option>
         <option value="bitbucket">Bitbucket</option>
       </select>
+      <div className="border-t border-line pt-2 mb-3">
+        <CheckRow checked={pollEnabled} onToggle={() => setPollEnabled(!pollEnabled)}
+          label={t('review.pollEnabledLabel')} hint={t(pollEnabled ? 'review.pollEnabledHint' : 'review.pollDisabledHint')} />
+        {webhookEnabled && (
+          <CheckRow checked={webhook} onToggle={() => setWebhook(!webhook)}
+            label={t('review.webhookAtCreate')} hint={t('review.webhookHint')} />
+        )}
+      </div>
       <div className="flex justify-end gap-2">
         <button className="btn-ghost" onClick={onClose} disabled={busy}>{t('common.cancel')}</button>
         <button className="btn-primary" onClick={submit} disabled={busy}>{busy ? t('review.cloning') : t('review.addRepoBtn')}</button>
@@ -544,12 +571,6 @@ function EditReviewRepoModal({ repo, onClose }: { repo: ReviewRepo; onClose: () 
   const [pollEnabled, setPollEnabled] = useState(repo.pollEnabled);
   const t = useT();
 
-  // GitHub/GitLab take the secret in their own field, so their URL stays bare; Bitbucket has no
-  // secret field at all, so its secret has to ride in the query string.
-  const hookUrl = `${location.origin}/api/review/hooks/${repo.id}`
-    + (repo.provider === 'bitbucket' && secret ? `?token=${encodeURIComponent(secret)}` : '');
-  const hookHintKey = repo.provider === 'gitlab' ? 'review.webhookGitlab'
-    : repo.provider === 'bitbucket' ? 'review.webhookBitbucket' : 'review.webhookGithub';
   const toggleHook = async (enable: boolean) => {
     setHookBusy(true);
     try { setSecret(await setReviewWebhook(repo.id, enable)); } catch (e: any) { setError(e.message); } finally { setHookBusy(false); }
@@ -578,12 +599,8 @@ function EditReviewRepoModal({ repo, onClose }: { repo: ReviewRepo; onClose: () 
         {creds.filter((cr) => cr.host === repo.host).map((cr) => <option key={cr.id} value={cr.id}>[{cr.provider}] {cr.host} · {cr.username}</option>)}
       </select>
       <div className="border-t border-line pt-2 mb-3">
-        <button className="flex items-center gap-2 text-left w-full" aria-pressed={pollEnabled}
-          onClick={() => setPollEnabled(!pollEnabled)}>
-          <span className={pollEnabled ? 'text-clay' : 'text-txt3'}>{pollEnabled ? <IconCheckSquare size={16} /> : <IconSquare size={16} />}</span>
-          <span className="text-[12px] flex-1">{t('review.pollEnabledLabel')}</span>
-        </button>
-        <div className="text-[11px] text-txt3 mt-1">{t(pollEnabled ? 'review.pollEnabledHint' : 'review.pollDisabledHint')}</div>
+        <CheckRow checked={pollEnabled} onToggle={() => setPollEnabled(!pollEnabled)}
+          label={t('review.pollEnabledLabel')} hint={t(pollEnabled ? 'review.pollEnabledHint' : 'review.pollDisabledHint')} />
       </div>
       {webhookEnabled && (
         <div className="border-t border-line pt-2 mb-3">
@@ -591,9 +608,7 @@ function EditReviewRepoModal({ repo, onClose }: { repo: ReviewRepo; onClose: () 
           <div className="text-[11px] text-txt3 mb-2">{t('review.webhookHint')}</div>
           {secret ? (
             <>
-              <CopyField label={t('review.webhookUrl')} value={hookUrl} />
-              {repo.provider !== 'bitbucket' && <CopyField label={t('review.webhookSecretLabel')} value={secret} />}
-              <div className="text-[11px] text-txt3 mb-2">{t(hookHintKey)}</div>
+              <WebhookFields repo={repo} secret={secret} />
               <div className="flex flex-wrap gap-2">
                 <button className="btn-ghost" disabled={hookBusy}
                   onClick={() => { if (confirm(t('review.webhookRotateConfirm'))) void toggleHook(true); }}>{t('review.webhookRotate')}</button>
@@ -611,6 +626,37 @@ function EditReviewRepoModal({ repo, onClose }: { repo: ReviewRepo; onClose: () 
         <button className="btn-primary" onClick={submit} disabled={busy}>{busy ? t('review.saving') : t('common.save')}</button>
       </div>
     </Modal>
+  );
+}
+
+// The webhook URL + secret + per-provider setup steps. Shown right after a repo is created with a
+// hook, and in the edit dialog for an existing one. GitHub/GitLab take the secret in their own field
+// so their URL stays bare; Bitbucket has no secret field, so its secret rides in the query string.
+function WebhookFields({ repo, secret }: { repo: { id: string; provider: string }; secret: string }) {
+  const t = useT();
+  const url = `${location.origin}/api/review/hooks/${repo.id}`
+    + (repo.provider === 'bitbucket' ? `?token=${encodeURIComponent(secret)}` : '');
+  const hintKey = repo.provider === 'gitlab' ? 'review.webhookGitlab'
+    : repo.provider === 'bitbucket' ? 'review.webhookBitbucket' : 'review.webhookGithub';
+  return (
+    <>
+      <CopyField label={t('review.webhookUrl')} value={url} />
+      {repo.provider !== 'bitbucket' && <CopyField label={t('review.webhookSecretLabel')} value={secret} />}
+      <div className="text-[11px] text-txt3 mb-2">{t(hintKey)}</div>
+    </>
+  );
+}
+
+// Checkbox row with a hint line under it (repo polling / webhook opt-in).
+function CheckRow({ checked, onToggle, label, hint }: { checked: boolean; onToggle: () => void; label: string; hint: string }) {
+  return (
+    <div className="mb-1">
+      <button className="flex items-center gap-2 text-left w-full" aria-pressed={checked} onClick={onToggle}>
+        <span className={`shrink-0 ${checked ? 'text-clay' : 'text-txt3'}`}>{checked ? <IconCheckSquare size={16} /> : <IconSquare size={16} />}</span>
+        <span className="text-[12px] flex-1">{label}</span>
+      </button>
+      <div className="text-[11px] text-txt3 mt-0.5">{hint}</div>
+    </div>
   );
 }
 
