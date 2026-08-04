@@ -60,7 +60,6 @@ assert.equal(rewriteCwd('not json', '/x'), 'not json');
   const lines = [
     JSON.stringify({ type: 'user', isMeta: true, message: { role: 'user', content: caveat } }),
     JSON.stringify({ type: 'user', isMeta: true, message: { role: 'user', content: 'Continue from where you left off.' } }),
-    JSON.stringify({ type: 'user', message: { role: 'user', content: '<command-name>/clear</command-name>\n<command-message>clear</command-message>\n<command-args></command-args>' } }),
     JSON.stringify({ type: 'user', message: { role: 'user', content: '<local-command-stdout>Compacted</local-command-stdout>' } }),
     JSON.stringify({ type: 'user', message: { role: 'user', content: 'real question' } }),
     // a reminder tacked onto a genuine message must NOT take the message down with it
@@ -70,6 +69,25 @@ assert.equal(rewriteCwd('not json', '/x'), 'not json');
   assert.deepEqual(msgs.map((m) => (m.content as any).text), ['real question', 'still mine <system-reminder>ignore me</system-reminder>']);
   // ...and the plumbing never leaks into the generated title either
   assert.equal(cleanTitle(userTexts(msgs, 1)[0], 40), 'real question');
+}
+
+// --- jsonlToMessages: a slash command is rewritten to the plain form Chat.tsx folds on ---
+{
+  const cmdLine = (name: string, args = '') =>
+    JSON.stringify({ type: 'user', message: { role: 'user', content:
+      `<command-name>/${name}</command-name>\n            <command-message>${name}</command-message>\n            <command-args>${args}</command-args>` } });
+  const msgs = jsonlToMessages([
+    JSON.stringify({ type: 'user', message: { role: 'user', content: 'before' } }),
+    cmdLine('clear'),
+    JSON.stringify({ type: 'user', message: { role: 'user', content: 'after' } }),
+    cmdLine('compact', '다국어 관련'),
+  ], 's');
+  assert.deepEqual(msgs.map((m) => (m.content as any).text), ['before', '/clear', 'after', '/compact 다국어 관련']);
+  // Chat.tsx boundaryCmd is `/^\/(clear|compact)\b/` on the message text — these must match it
+  assert.ok(/^\/(clear|compact)\b/.test((msgs[1].content as any).text));
+  assert.ok(/^\/(clear|compact)\b/.test((msgs[3].content as any).text));
+  // and a command never becomes the title
+  assert.deepEqual(userTexts(msgs, 10), ['before', 'after']);
 }
 
 // --- cleanTitle: unwraps what a model (or a markdown first message) leads with, caps length ---

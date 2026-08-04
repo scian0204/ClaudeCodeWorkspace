@@ -38,6 +38,17 @@ function isCliPlumbing(text: string): boolean {
   return !text.replace(new RegExp(`<(${CLI_TAGS})>[\\s\\S]*?</\\1>`, 'g'), '').trim();
 }
 
+// One kind of plumbing IS worth keeping: a slash command the user ran. The CLI files it as tag soup,
+// while the workspace stores the plain `/name args` its own composer sent — and the chat folds the
+// history above an imported /clear or /compact only if it sees that plain form (Chat.tsx boundaryCmd).
+// Rewrite it so the fold works and other commands read as commands instead of markup.
+function slashCommand(text: string): string | null {
+  const name = text.match(/<command-name>\s*(\/[^<\s]+)\s*<\/command-name>/);
+  if (!name) return null;
+  const args = (text.match(/<command-args>([\s\S]*?)<\/command-args>/)?.[1] || '').trim();
+  return args ? `${name[1]} ${args}` : name[1];
+}
+
 function textFrom(content: any): string {
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) return content.filter((b) => b?.type === 'text').map((b) => b.text).join('');
@@ -88,9 +99,13 @@ export function jsonlToMessages(
       }
       if (mergedOnly) continue; // tool_result-only line: merged, no message
       const text = textFrom(content);
-      if (!text || isCliPlumbing(text)) continue;
+      if (!text) continue;
+      // only a pure-plumbing line is rewritten or dropped — a real message that quotes a tag stands
+      const plumbing = isCliPlumbing(text);
+      const cmd = plumbing ? slashCommand(text) : null;
+      if (plumbing && !cmd) continue;
       flush(ts);
-      out.push({ role: 'user', content: { text }, createdAt: ts });
+      out.push({ role: 'user', content: { text: cmd ?? text }, createdAt: ts });
     }
   }
   flush(baseTs + (seq++));
@@ -134,6 +149,7 @@ export function userTexts(msgs: ReturnType<typeof jsonlToMessages>, limit: numbe
   for (const m of msgs) {
     if (m.role !== 'user') continue;
     const t = String((m.content as any)?.text || '').trim();
+    if (/^\/[a-z][\w:-]*(\s|$)/i.test(t)) continue; // a slash command is never what the chat is about
     if (t) out.push(t);
     if (out.length >= limit) break;
   }
