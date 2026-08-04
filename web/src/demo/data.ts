@@ -347,6 +347,8 @@ export const ADMIN = {
     { key: 'autoTitleModel', group: 'claude', type: 'string', value: 'claude-haiku-4-5-20251001', default: 'claude-haiku-4-5-20251001', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'autoTitleMaxChars', group: 'claude', type: 'int', value: '40', default: '40', min: 10, max: 120, restart: false, readonly: false, secret: false, overridden: false },
     { key: 'importAutoTitleEnabled', group: 'claude', type: 'bool', value: '1', default: '1', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'gitPublishEnabled', group: 'git', type: 'bool', value: '1', default: '1', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'gitInitBranch', group: 'git', type: 'string', value: 'main', default: 'main', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'importAutoTitleMessages', group: 'claude', type: 'int', value: '6', default: '6', min: 1, max: 30, restart: false, readonly: false, secret: false, overridden: false },
     ...['blockNonessentialTraffic', 'privacyTelemetry', 'privacyErrorReports', 'privacyFeedbackCommands',
         'privacyFeedbackSurvey', 'privacyNonEssentialModelCalls', 'privacyAutoUpdater',
@@ -393,7 +395,15 @@ export const GIT = {
     local: ['main', 'feat/auth-refactor'],
     remote: ['origin/main', 'origin/feat/auth-refactor', 'origin/release/2.3'],
   },
-  status() {
+  // projects that are plain directories, not repos yet — what an imported project looks like, so
+  // the Git panel's init / publish form is reachable in the demo. init or publish clears the flag.
+  untracked: ['p_web'] as string[],
+  status(projectId?: string) {
+    if (projectId && this.untracked.includes(projectId)) {
+      return { repo: false, branch: '', upstream: false, ahead: 0, behind: 0, files: [], clean: true,
+        host: null, hasCredential: false, credential: null,
+        identity: { name: 'Demo User', email: 'demo@ccw.local' } };
+    }
     return { repo: true, branch: this.branches.current, upstream: true, ahead: this.ahead, behind: this.behind,
       files: this.files, clean: this.files.length === 0, host: 'github.com', hasCredential: true,
       credential: { scope: 'user', provider: 'github', host: 'github.com', username: 'x-access-token', authorEmail: 'demo@ccw.local' },

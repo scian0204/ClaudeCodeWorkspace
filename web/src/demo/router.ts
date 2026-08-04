@@ -170,7 +170,7 @@ export function route(method: string, rawPath: string, body?: any): Res {
   if (P === '/api/auth/me/avatar') { db.me.avatar = M === 'DELETE' ? null : (b.avatarDataUrl || db.me.avatar); return ok({ user: db.me }); }
 
   // ---- client-facing config (model dropdown) ----
-  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenu: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, processPollMs: 5000 });
+  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenu: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, processPollMs: 5000 });
 
   // ---- unified search (mirrors server/src/routes/search.ts over the seed data) ----
   // `sort` is ignored on purpose: the seed data never hits the per-type cap for dated surfaces, so
@@ -278,7 +278,17 @@ export function route(method: string, rawPath: string, body?: any): Res {
   if (seg[1] === 'projects' && seg[3] === 'tree') return ok({ files: TREE_PROJECT });
   if (seg[1] === 'projects' && seg[3] === 'open-editor') return ok({ url: EDITOR_URL });
   if (seg[1] === 'projects' && seg[3] === 'file') { const path = query.get('path') || ''; return ok({ name: path.split('/').pop(), content: fileContent(path) }); }
-  if (seg[1] === 'projects' && seg[3] === 'git' && seg[4] === 'status') return ok(GIT.status());
+  if (seg[1] === 'projects' && seg[3] === 'git' && seg[4] === 'status') return ok(GIT.status(idAt(2)));
+  if (seg[1] === 'projects' && seg[3] === 'git' && seg[4] === 'init' && M === 'POST') {
+    GIT.untracked = GIT.untracked.filter((p) => p !== idAt(2));
+    return ok({ ok: true, ...GIT.status(idAt(2)) });
+  }
+  if (seg[1] === 'projects' && seg[3] === 'git' && seg[4] === 'publish' && M === 'POST') {
+    GIT.untracked = GIT.untracked.filter((p) => p !== idAt(2));
+    const cred = [...GIT.creds.mine, ...GIT.creds.common].find((c: any) => c.id === b.credentialId);
+    const url = b.remoteUrl || `https://${cred?.host || 'github.com'}/${cred?.username || 'demo'}/${b.name || 'demo'}.git`;
+    return ok({ ok: true, url, output: `To ${url}\n * [new branch] main -> main (demo)`, ...GIT.status(idAt(2)) });
+  }
   if (seg[1] === 'projects' && seg[3] === 'git' && seg[4] === 'commit') {
     const picked: string[] = Array.isArray(b.files) ? b.files : [];
     GIT.files = picked.length ? GIT.files.filter((f: any) => !picked.includes(f.path)) : [];

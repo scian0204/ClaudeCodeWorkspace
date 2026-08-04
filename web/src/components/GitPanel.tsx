@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { useStore } from '../lib/store';
 import { Modal } from './Modal';
 import { useT } from '../lib/i18n';
 import { IconGitBranch } from '../lib/icons';
 
 interface GitFile { path: string; index: string; work: string; staged: boolean; }
 interface CredMeta { scope: 'user' | 'common'; provider: string; host: string; username: string; authorEmail: string | null; }
+interface CredOption extends CredMeta { id: string; }
 interface Status { repo: boolean; branch: string; upstream: boolean; ahead: number; behind: number; files: GitFile[]; clean: boolean; host: string | null; hasCredential: boolean; credential: CredMeta | null; identity: { name: string; email: string }; }
 
 // Commit (with file-level staging) + push for a project's workspace. Opened from the chat header.
@@ -73,7 +75,7 @@ export function GitPanel({ projectId, open, onClose }: { projectId: string; open
   return (
     <Modal open={open} onOpenChange={(o) => { if (!o) onClose(); }} title={t('git.title')} width={560}>
       {busy === 'load' && !st && <div className="text-sm text-txt3">…</div>}
-      {st && !st.repo && <div className="text-sm text-txt2">{t('git.noRepo')}</div>}
+      {st && !st.repo && <PublishForm projectId={projectId} onDone={load} setErr={setErr} setNote={setNote} />}
       {st && st.repo && (
         <>
           <div className="flex items-center gap-2 text-sm mb-3">
@@ -160,5 +162,118 @@ export function GitPanel({ projectId, open, onClose }: { projectId: string; open
       )}
       {err && !st && <div className="text-xs text-danger mt-2">{err}</div>}
     </Modal>
+  );
+}
+
+// An imported project lands as plain files, so its Git panel would otherwise be a dead end. Offer
+// the two ways out: make it a repo and stop there, or go all the way — init, first commit, create
+// the repo on the provider, push. A pasted URL skips the creation step for a repo that exists (and
+// is the only route for a provider whose API we do not speak).
+function PublishForm({ projectId, onDone, setErr, setNote }: {
+  projectId: string; onDone: () => Promise<void> | void;
+  setErr: (s: string) => void; setNote: (s: string) => void;
+}) {
+  const t = useT();
+  const publishEnabled = useStore((s) => s.gitPublishEnabled);
+  const project = useStore((s) => [...s.projects.mine, ...s.projects.common].find((p: any) => p.id === projectId));
+  const [creds, setCreds] = useState<CredOption[]>([]);
+  const [credentialId, setCredentialId] = useState('');
+  const [name, setName] = useState('');
+  const [priv, setPriv] = useState(true);
+  const [manual, setManual] = useState(false);
+  const [remoteUrl, setRemoteUrl] = useState('');
+  const [busy, setBusy] = useState<'' | 'init' | 'publish'>('');
+
+  useEffect(() => {
+    setName((n) => n || (project as any)?.name || '');
+    if (!publishEnabled) return;
+    api.get('/api/git-credentials')
+      .then((r) => {
+        const all: CredOption[] = [...(r.mine || []), ...(r.common || [])];
+        setCreds(all);
+        setCredentialId((c) => c || all[0]?.id || '');
+      })
+      .catch(() => {});
+    /* eslint-disable-next-line */
+  }, [projectId, publishEnabled]);
+
+  const run = async (kind: 'init' | 'publish') => {
+    setBusy(kind); setErr(''); setNote('');
+    try {
+      if (kind === 'init') {
+        await api.post(`/api/projects/${projectId}/git/init`, {});
+        setNote(t('git.initDone'));
+      } else {
+        const r = await api.post(`/api/projects/${projectId}/git/publish`,
+          manual ? { remoteUrl: remoteUrl.trim() } : { credentialId, name: name.trim(), private: priv });
+        setNote(t('git.publishDone', { url: r.url }));
+      }
+      await onDone();
+    } catch (e: any) { setErr(e.message); }
+    finally { setBusy(''); }
+  };
+
+  const canPublish = !busy && (manual ? !!remoteUrl.trim() : !!credentialId && !!name.trim());
+
+  return (
+    <div>
+      <div className="text-sm text-txt2 mb-3">{t('git.noRepo')}</div>
+      {!publishEnabled ? (
+        <div className="flex justify-end">
+          <button className="btn-primary" disabled={!!busy} onClick={() => run('init')}>{t('git.init')}</button>
+        </div>
+      ) : (
+        <>
+          <label className="flex items-center gap-2 text-xs mb-3 cursor-pointer select-none">
+            <input type="checkbox" checked={manual} onChange={(e) => setManual(e.target.checked)} />
+            {t('git.publishManual')}
+          </label>
+
+          {manual ? (
+            <>
+              <div className="text-xs text-txt2 mb-1">{t('git.publishUrl')}</div>
+              <input className="input mb-1 font-mono !text-xs" value={remoteUrl} placeholder="https://github.com/me/repo.git"
+                onChange={(e) => setRemoteUrl(e.target.value)} />
+              <div className="text-[11px] text-txt3 mb-3">{t('git.publishUrlHint')}</div>
+            </>
+          ) : creds.length === 0 ? (
+            <div className="text-[11px] text-warn mb-3">{t('git.publishNoCred')}</div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-1">
+                <div>
+                  <div className="text-xs text-txt2 mb-1">{t('git.publishAccount')}</div>
+                  <select className="input !text-xs w-full" value={credentialId} onChange={(e) => setCredentialId(e.target.value)}>
+                    {creds.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.host} · {c.username}{c.scope === 'common' ? ` (${t('git.publishShared')})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <div className="text-xs text-txt2 mb-1">{t('git.publishRepoName')}</div>
+                  <input className="input w-full !text-xs font-mono" value={name} onChange={(e) => setName(e.target.value)} />
+                </div>
+              </div>
+              <label className="flex items-center gap-2 text-xs mb-1 cursor-pointer select-none">
+                <input type="checkbox" checked={priv} onChange={(e) => setPriv(e.target.checked)} />
+                {t('git.publishPrivate')}
+              </label>
+              <div className="text-[11px] text-txt3 mb-3">{t('git.publishHint')}</div>
+            </>
+          )}
+
+          <div className="flex flex-col md:flex-row md:justify-end gap-2">
+            <button className="btn-ghost" disabled={!!busy} onClick={() => run('init')}>
+              {busy === 'init' ? '…' : t('git.init')}
+            </button>
+            <button className="btn-primary" disabled={!canPublish} onClick={() => run('publish')}>
+              {busy === 'publish' ? '…' : t('git.publish')}
+            </button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }

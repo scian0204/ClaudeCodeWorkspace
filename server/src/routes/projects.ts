@@ -11,7 +11,12 @@ import { newId } from '../lib/ids.js';
 import { walkFiles, resolveUnder, IMG_CT } from '../lib/filetree.js';
 import * as rooms from '../rooms/manager.js';
 import * as cs from '../codeserver/manager.js';
-import { gitStatus, gitCommit, gitPush, originHost, gitBranches, gitCheckout, gitFetchRemotes } from '../lib/git-ops.js';
+import {
+  gitStatus, gitCommit, gitPush, originHost, gitBranches, gitCheckout, gitFetchRemotes,
+  gitInit, gitHasCommits, gitSetOrigin, isRepo,
+} from '../lib/git-ops.js';
+import { createRemoteRepo, safeRepoName } from '../lib/git-publish.js';
+import { cfg } from '../lib/config-registry.js';
 import {
   resolveGitCred, resolveGitCredById, resolveGitCredMeta, getGitCredRow, gitIdentity, askpassEnv, identityEnv, hostFromGitUrl,
 } from '../auth/git-cred.js';
@@ -292,6 +297,73 @@ export async function projectRoutes(app: FastifyInstance) {
     const cred = host ? resolveGitCred(ctx.u.id, host) : null;
     await gitFetchRemotes(ctx.dir, cred ? askpassEnv(cred) : undefined);
     return await gitBranches(ctx.dir);
+  });
+
+  // ── publish: take an untracked project (an import lands as plain files) all the way to a remote ──
+  // Split in two so the cheap half stands alone: init just makes it a repo, publish does the whole
+  // init → first commit → create remote → push chain. Both are no-ops on the parts already done.
+
+  // Resolve the credential the caller picked, enforcing ownership. Common creds are shared, user
+  // creds are only ever the caller's own — never trust an id straight from the body.
+  function credFor(u: AuthUser, id: string) {
+    const row = getGitCredRow(String(id || ''));
+    if (!row) return null;
+    if (row.scope === 'user' && row.ownerId !== u.id) return null;
+    const resolved = resolveGitCredById(row.id);
+    return resolved ? { row, cred: resolved } : null;
+  }
+
+  app.post('/api/projects/:id/git/init', async (req, reply) => {
+    const ctx = loadForGit(req, reply); if (!ctx) return;
+    if (!cfg.bool('gitPublishEnabled')) return reply.code(403).send({ error: 'git publish is disabled' });
+    if (await isRepo(ctx.dir)) return reply.code(400).send({ error: 'already a git repository' });
+    const { message } = (req.body || {}) as any;
+    const ident = gitIdentity({ username: ctx.u.username, displayName: ctx.u.displayName }, null);
+    try {
+      await gitInit(ctx.dir, cfg.str('gitInitBranch'));
+      // an empty dir has nothing to commit — leave the repo unborn rather than failing the call
+      const st = await gitStatus(ctx.dir);
+      if (st.files.length) {
+        await gitCommit(ctx.dir, { message: String(message || 'Initial commit'), env: identityEnv(ident) });
+      }
+      return { ok: true, ...(await gitStatus(ctx.dir)) };
+    } catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
+  });
+
+  app.post('/api/projects/:id/git/publish', async (req, reply) => {
+    const ctx = loadForGit(req, reply); if (!ctx) return;
+    if (!cfg.bool('gitPublishEnabled')) return reply.code(403).send({ error: 'git publish is disabled' });
+    const b = (req.body || {}) as any;
+    const remoteUrl = String(b.remoteUrl || '').trim();
+
+    // The credential does double duty: it authenticates the create-repo API call and the push.
+    // With a pasted URL we still need one, resolved by that URL's host.
+    const picked = b.credentialId ? credFor(ctx.u, b.credentialId) : null;
+    if (b.credentialId && !picked) return reply.code(403).send({ error: 'credential not found' });
+    // creating the repo needs a provider to create it on — only a pasted URL can go without one
+    if (!picked && !remoteUrl) return reply.code(400).send({ error: 'pick a credential, or paste a repository URL' });
+    const host = picked?.row.host || (remoteUrl ? hostFromGitUrl(remoteUrl) : null);
+    const cred = picked?.cred || (host ? resolveGitCred(ctx.u.id, host) : null);
+    if (!cred) return reply.code(400).send({ error: `${host || 'this host'} 자격증명이 없습니다 — 설정에서 등록하세요` });
+
+    const ident = gitIdentity({ username: ctx.u.username, displayName: ctx.u.displayName }, cred);
+    try {
+      await gitInit(ctx.dir, cfg.str('gitInitBranch'));
+      if (!(await gitHasCommits(ctx.dir))) {
+        const st = await gitStatus(ctx.dir);
+        if (!st.files.length) return reply.code(400).send({ error: 'nothing to publish — the project is empty' });
+        await gitCommit(ctx.dir, { message: String(b.message || 'Initial commit'), env: identityEnv(ident) });
+      }
+      // Create the repo only when the user did not bring their own URL. Ordering matters: the
+      // remote is wired up after creation succeeds, so a failed create leaves origin untouched.
+      const url = remoteUrl || await createRemoteRepo(
+        { provider: picked!.row.provider as any, host: picked!.row.host, username: cred.username, token: cred.token },
+        { name: safeRepoName(b.name || ctx.p.name), private: b.private !== false },
+      );
+      await gitSetOrigin(ctx.dir, url);
+      const { output } = await gitPush(ctx.dir, { env: askpassEnv(cred) });
+      return { ok: true, url, output, ...(await gitStatus(ctx.dir)) };
+    } catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
   });
 
   app.post('/api/projects/:id/git/checkout', async (req, reply) => {

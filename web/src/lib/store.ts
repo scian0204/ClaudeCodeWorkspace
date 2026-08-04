@@ -65,6 +65,7 @@ interface State {
   dmEnabled: boolean;            // admin feature flag (from /api/config) — gates the DM/group chat UI
   searchEnabled: boolean;        // admin feature flag (from /api/config) — gates the unified-search UI
   customContextMenuEnabled: boolean; // admin feature flag (from /api/config) — off = browser's own right-click menu everywhere
+  gitPublishEnabled: boolean;    // admin feature flag (from /api/config) — gates git publish in the Git panel
   autoTitleEnabled: boolean;     // admin feature flag (from /api/config) — gates the auto session-title toggle
   autoResumeEnabled: boolean;    // admin feature flag (from /api/config) — gates the 5h-reset auto-resume toggle
   resumes: PendingResume[];      // open session's turns parked for a claude.ai window reset
@@ -164,7 +165,7 @@ export const useStore = create<State>((set, get) => ({
   current: null, messages: [], live: null, turnActive: false,
   queue: { running: null, waiting: [] }, pending: [],
   control: { canApprove: true, canInterrupt: true, canSetMode: true, isOwner: true, delegable: [] },
-  presence: [], congested: false, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenuEnabled: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, resumes: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
+  presence: [], congested: false, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenuEnabled: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, resumes: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
   channels: [], activeChannelId: null, channelMessages: [],
   commands: [],
 
@@ -216,6 +217,7 @@ export const useStore = create<State>((set, get) => ({
       searchEnabled: cf.searchEnabled !== false,
       customContextMenuEnabled: cf.customContextMenu !== false,
       autoTitleEnabled: cf.autoTitleEnabled !== false,
+      gitPublishEnabled: cf.gitPublishEnabled !== false,
       autoResumeEnabled: cf.autoResumeEnabled !== false,
       windowPrimerEnabled: cf.windowPrimerEnabled !== false,
       channels: dmc.channels || [],

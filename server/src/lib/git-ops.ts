@@ -109,6 +109,30 @@ export async function gitPush(dir: string, opts: { env?: Env }): Promise<{ outpu
   } catch (e: any) { throw new Error(gitErr(e)); }
 }
 
+// Turn a plain directory into a repo. Idempotent — an existing repo is left exactly as it is, so
+// publishing an already-tracked project never rewrites its history. `init -b` wants git >= 2.28;
+// older git reaches the same state by pointing the still-unborn HEAD at the branch itself.
+export async function gitInit(dir: string, branch: string): Promise<void> {
+  if (await isRepo(dir)) return;
+  try {
+    try { await git(dir, ['init', '-b', branch]); }
+    catch { await git(dir, ['init']); await git(dir, ['symbolic-ref', 'HEAD', `refs/heads/${branch}`]); }
+  } catch (e: any) { throw new Error(gitErr(e)); }
+}
+
+// A freshly initialised repo has an unborn HEAD until the first commit lands.
+export async function gitHasCommits(dir: string): Promise<boolean> {
+  try { await git(dir, ['rev-parse', '--verify', 'HEAD']); return true; } catch { return false; }
+}
+
+// Point origin at `url`, whether or not the remote already exists.
+export async function gitSetOrigin(dir: string, url: string): Promise<void> {
+  try {
+    try { await git(dir, ['remote', 'set-url', 'origin', url]); }
+    catch { await git(dir, ['remote', 'add', 'origin', url]); }
+  } catch (e: any) { throw new Error(gitErr(e)); }
+}
+
 export interface GitBranches { repo: boolean; current: string; local: string[]; remote: string[]; }
 
 export async function gitBranches(dir: string): Promise<GitBranches> {
