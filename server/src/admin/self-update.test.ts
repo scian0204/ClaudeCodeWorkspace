@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { parseRef, cmpSemver, newestSemver, recreateSpec, demuxLogs } from './self-update.js';
 
+// Runnable check: npx vitest run server/src/admin/self-update.test.ts
+// (vitest is a ROOT devDependency — the runtime image installs `-w server` without the workspace
+// root, so it never ships. Most other *.test.ts files here are standalone `npx tsx` scripts.)
+//
 // Pure helpers only — importing the module is safe because `db` is assigned in initDb(), so nothing
 // here opens a database.
 
