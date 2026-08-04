@@ -29,6 +29,14 @@ CREATE TABLE IF NOT EXISTS messages (
   author_name TEXT, content TEXT NOT NULL, chat INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, created_at);
+CREATE TABLE IF NOT EXISTS guide_threads (
+  user_id TEXT PRIMARY KEY, claude_session_id TEXT, updated_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS guide_messages (
+  id TEXT PRIMARY KEY, user_id TEXT NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_guide_messages_user ON guide_messages(user_id, created_at);
 CREATE TABLE IF NOT EXISTS rooms (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, owner_id TEXT NOT NULL, chat_session_id TEXT NOT NULL,
   permission_mode TEXT NOT NULL DEFAULT 'default', created_at INTEGER NOT NULL

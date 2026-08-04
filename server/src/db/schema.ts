@@ -67,6 +67,24 @@ export const messages = sqliteTable('messages', {
   createdAt: integer('created_at').notNull(),
 });
 
+// ── Guide agent (the floating product-guide / control assistant) ──
+// One private thread per user. Deliberately NOT stored in chat_sessions/messages: those rows are
+// reachable through /api/sessions/:id, whose viewer check falls through to `true` for unknown kinds.
+// Keying every row by user_id makes cross-user access impossible by construction.
+export const guideThreads = sqliteTable('guide_threads', {
+  userId: text('user_id').primaryKey(),
+  claudeSessionId: text('claude_session_id'), // SDK resume id → the guide remembers the conversation
+  updatedAt: integer('updated_at').notNull(),
+});
+
+export const guideMessages = sqliteTable('guide_messages', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  role: text('role').notNull(),       // 'user' | 'assistant'
+  content: text('content').notNull(), // JSON: {text} for user, {blocks} for assistant
+  createdAt: integer('created_at').notNull(),
+});
+
 export const rooms = sqliteTable('rooms', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),

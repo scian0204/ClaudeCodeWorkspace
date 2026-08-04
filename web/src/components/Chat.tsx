@@ -1126,7 +1126,9 @@ function Composer() {
               }} />
             {uploading && <div className="mt-2"><UploadProgress s={uploading} /></div>}
             <AttachmentList atts={atts} sessionId={c.chatSessionId} onRemove={removeAtt} />
-            <div className="flex items-center gap-2 mt-2 flex-wrap">
+            {/* pr-14 keeps send/attach clear of the guide launcher, which floats in this exact
+                corner. Only reserved when the guide is actually on. */}
+            <div className={`flex items-center gap-2 mt-2 flex-wrap ${store.guideEnabled ? 'pr-14' : ''}`}>
               {isRoom && (
                 <div className="flex items-center gap-1 shrink-0">
                   <button type="button" onClick={() => setMode('chat')} className={`text-xs px-2 py-0.5 rounded-full border inline-flex items-center gap-1 ${mode === 'chat' ? 'bg-clay text-white border-clay' : 'border-line text-txt2 hover:border-clay'}`}><IconMessage size={12} />{t('chat.modeChat')}</button>

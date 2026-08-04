@@ -158,6 +158,8 @@ const plugin = (id: string, name: string, source: string, enabled: number, force
 // ---- the mutable "db" ------------------------------------------------------
 export const db = {
   me: { ...ME },
+  // guide assistant thread (mirrors the server's guide_messages rows: {id, role, content, createdAt})
+  guideMessages: [] as any[],
   // custom branding (GET /api/brand). Seeded empty so the demo opens with the product's own name/mark;
   // an upload stores the picked image inline as a data URL (install.ts reads the File).
   brand: { title: '', logo: null as string | null },

@@ -119,6 +119,13 @@ export const IconMessage = (p: IconProps) => (
 export const IconSparkle = (p: IconProps) => (
   <Svg {...p}><path d="M9.94 15.5A2 2 0 0 0 8.5 14.06l-6.14-1.58a.5.5 0 0 1 0-.96L8.5 9.94A2 2 0 0 0 9.94 8.5l1.58-6.14a.5.5 0 0 1 .96 0L14.06 8.5A2 2 0 0 0 15.5 9.94l6.14 1.58a.5.5 0 0 1 0 .96L15.5 14.06a2 2 0 0 0-1.44 1.44l-1.58 6.14a.5.5 0 0 1-.96 0z" /></Svg>
 );
+// Guide assistant launcher: a speech bubble with the app's sparkle inside — "talk to the product".
+export const IconGuide = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M21 14a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z" />
+    <path d="M12.5 6.2 13.4 8a2 2 0 0 0 1.1 1.1l1.8.9-1.8.9a2 2 0 0 0-1.1 1.1l-.9 1.8-.9-1.8A2 2 0 0 0 10.5 11l-1.8-.9 1.8-.9A2 2 0 0 0 11.6 8z" />
+  </Svg>
+);
 export const IconEye = (p: IconProps) => (
   <Svg {...p}><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" /></Svg>
 );

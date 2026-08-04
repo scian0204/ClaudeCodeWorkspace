@@ -4,6 +4,7 @@ import {
   db, ADMIN, ATTACHMENTS, GIT, PROVIDERS, COMMANDS, USAGE, TREE_PROJECT, TREE_PLUGIN, WIKI_ARTICLES, WIKI_RAW, WIKI_TREE_ARTICLES,
   REQUEST_ACTIONS, IMPORT_SESSIONS, fileContent, wikiFileContent, WIKI_RAW_EDITS, pluginDetail, EDITOR_URL, genId,
 } from './data';
+import { runDemoGuide, clearDemoGuide } from './socket';
 
 type Res = { status: number; data: any };
 const ok = (data: any = {}): Res => ({ status: 200, data });
@@ -188,7 +189,20 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   }
 
   // ---- client-facing config (model dropdown) ----
-  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenu: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true, processPollMs: 5000 });
+  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenu: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true, guideEnabled: true, guideWriteEnabled: true, processPollMs: 5000 });
+
+  // ---- guide assistant (floating corner panel) ----
+  // The turn itself is synthesized in ./socket (it has to emit the guide:* stream); this only
+  // stores and serves the thread, exactly like the real endpoints.
+  if (P === '/api/guide/messages' && M === 'GET') return ok({ messages: db.guideMessages, busy: false });
+  if (P === '/api/guide/messages' && M === 'DELETE') { clearDemoGuide(); return ok(); }
+  if (P === '/api/guide/interrupt') return ok({ ok: true });
+  if (P === '/api/guide/message' && M === 'POST') {
+    const text = String(b.text || '').trim();
+    if (!text) return { status: 400, data: { error: 'empty' } };
+    runDemoGuide(text);
+    return ok();
+  }
 
   // ---- unified search (mirrors server/src/routes/search.ts over the seed data) ----
   // `sort` is ignored on purpose: the seed data never hits the per-type cap for dated surfaces, so

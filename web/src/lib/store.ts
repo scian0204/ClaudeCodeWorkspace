@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { api } from './api';
 import { getSocket } from './socket';
-import { t } from './i18n';
+import { t, getLang, setLang, LANGS, type Lang } from './i18n';
 
 export type Block =
   | { type: 'text'; text: string }
@@ -33,6 +33,8 @@ export interface HitNav {
 }
 export interface SearchHit { type: HitType; id: string; title: string; subtitle?: string; snippet?: string; ts?: number; nav: HitNav; }
 export interface Live { blocks: Block[]; toolMap: Record<string, number>; }
+// Guide assistant (the floating corner panel). Its own per-user thread, never a chat session.
+export interface GuideMsg { id: string; role: 'user' | 'assistant'; content: { text?: string; blocks?: Block[]; interrupted?: boolean }; createdAt: number; }
 export interface QueueState { running: { id: string; author: { id: string; name: string } } | null; waiting: { id: string; author: { id: string; name: string } }[]; }
 // A turn parked until the author's claude.ai plan window (5h / weekly) resets — see server/src/claude/auto-resume.ts.
 export interface PendingResume { id: string; sessionId: string; author: { id: string; name: string }; text: string; attempts: number; resumeAt: number; }
@@ -78,6 +80,15 @@ interface State {
   windowPrimerEnabled: boolean;  // admin feature flag (from /api/config) — gates the 5h-window primer toggle
   wikiSourceEditEnabled: boolean; // admin feature flag (from /api/config) — gates wiki raw/ source add+edit
   reviewWebhookEnabled: boolean;  // admin feature flag (from /api/config) — gates the PR-review webhook UI
+  // ── guide assistant (floating corner panel) ──
+  guideEnabled: boolean;         // admin feature flag (from /api/config) — off hides the button entirely
+  guideWriteEnabled: boolean;    // admin feature flag — off = the guide explains but never changes state
+  guideOpen: boolean;            // panel open
+  guideLoaded: boolean;          // history pulled at least once (first open)
+  guideMessages: GuideMsg[];
+  guideLive: Live | null;        // in-flight answer (streamed blocks)
+  guideBusy: boolean;
+  guideUnread: boolean;          // an answer landed while the panel was closed → dot on the button
   searchOpen: boolean;           // unified-search palette (Ctrl/Cmd+K)
   shortcutsOpen: boolean;        // keyboard-shortcut cheat sheet (?)
   highlightMsgId: string | null; // message a search hit jumped to (scroll target + ring)
@@ -115,6 +126,10 @@ interface State {
   goHome: () => void;
   setSearchOpen: (open: boolean) => void;
   setShortcutsOpen: (open: boolean) => void;
+  setGuideOpen: (open: boolean) => void;
+  sendGuide: (text: string) => Promise<void>;
+  clearGuideThread: () => Promise<void>;
+  interruptGuide: () => Promise<void>;
   setHighlightMsgId: (id: string | null) => void;
   openHit: (hit: SearchHit) => Promise<void>;
   sendDm: (text: string) => void;
@@ -180,7 +195,9 @@ export const useStore = create<State>((set, get) => ({
   current: null, messages: [], live: null, turnActive: false,
   queue: { running: null, waiting: [] }, pending: [],
   control: { canApprove: true, canInterrupt: true, canSetMode: true, isOwner: true, delegable: [] },
-  presence: [], congested: false, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenuEnabled: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true, resumes: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
+  presence: [], congested: false, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenuEnabled: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true,
+  guideEnabled: true, guideWriteEnabled: true, guideOpen: false, guideLoaded: false, guideMessages: [], guideLive: null, guideBusy: false, guideUnread: false,
+  resumes: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
   channels: [], activeChannelId: null, channelMessages: [], titling: [],
   commands: [],
 
@@ -204,7 +221,8 @@ export const useStore = create<State>((set, get) => ({
 
   logout: async () => {
     await api.post('/api/auth/logout');
-    set({ user: null, current: null, messages: [], sessions: [], rooms: [], wikiTopics: [], reviewRepos: [], reviewSessions: [], requests: [], pendingRequestCount: 0, channels: [], activeChannelId: null, channelMessages: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null });
+    set({ user: null, current: null, messages: [], sessions: [], rooms: [], wikiTopics: [], reviewRepos: [], reviewSessions: [], requests: [], pendingRequestCount: 0, channels: [], activeChannelId: null, channelMessages: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null,
+      guideOpen: false, guideLoaded: false, guideMessages: [], guideLive: null, guideBusy: false, guideUnread: false });
   },
 
   toggleTheme: () => {
@@ -238,6 +256,8 @@ export const useStore = create<State>((set, get) => ({
       windowPrimerEnabled: cf.windowPrimerEnabled !== false,
       wikiSourceEditEnabled: cf.wikiSourceEditEnabled !== false,
       reviewWebhookEnabled: cf.reviewWebhookEnabled !== false,
+      guideEnabled: cf.guideEnabled !== false,
+      guideWriteEnabled: cf.guideWriteEnabled !== false,
       channels: dmc.channels || [],
       processPollMs: cf.processPollMs || 5000,
     });
@@ -402,6 +422,28 @@ export const useStore = create<State>((set, get) => ({
   },
 
   // ── unified search ──
+  // ── guide assistant ──
+  // History is pulled on the FIRST open only; after that the socket keeps it live (including turns
+  // this tab did not start), so reopening the panel is instant.
+  setGuideOpen: (open) => {
+    set({ guideOpen: open, ...(open ? { guideUnread: false, sidebarOpen: false } : {}) });
+    if (!open || get().guideLoaded) return;
+    api.get('/api/guide/messages')
+      .then((r) => set({ guideMessages: r.messages || [], guideBusy: !!r.busy, guideLoaded: true }))
+      .catch(() => set({ guideLoaded: true })); // disabled/offline → empty thread, the send will report
+  },
+  sendGuide: async (text) => {
+    const t = text.trim(); if (!t || get().guideBusy) return;
+    set({ guideBusy: true }); // optimistic: the composer locks before the socket echoes the message
+    try { await api.post('/api/guide/message', { text: t, lang: getLang() }); }
+    catch (e: any) { set({ guideBusy: false, error: e.message }); }
+  },
+  clearGuideThread: async () => {
+    set({ guideMessages: [], guideLive: null, guideBusy: false });
+    await api.del('/api/guide/messages').catch(() => {});
+  },
+  interruptGuide: async () => { await api.post('/api/guide/interrupt').catch(() => {}); },
+
   setSearchOpen: (open) => set({ searchOpen: open, sidebarOpen: false }),
   setShortcutsOpen: (open) => set({ shortcutsOpen: open, sidebarOpen: false }),
   setHighlightMsgId: (id) => set({ highlightMsgId: id }),
@@ -655,6 +697,42 @@ function setBrand(set: any, brand: Brand) {
     .forEach((l) => { l.href = href; });
 }
 
+// Apply one `guide:action` from the assistant. Mirror of server/src/guide/ui-actions.ts — an action
+// missing here is an action the agent thinks it has, so keep the two tables in step.
+// Admin-scoped actions are re-checked client-side: the server already filters them out per role,
+// this is the second lock (and it keeps a member out of a panel whose every call would 403 anyway).
+async function applyGuideAction(get: () => State, action: string, value: string | null): Promise<void> {
+  const s = get();
+  const v = value || '';
+  switch (action) {
+    case 'openSession': if (v) await s.openPrivate(v).catch(() => {}); break;
+    case 'openRoom': if (v) await s.openRoom(v).catch(() => {}); break;
+    case 'openWiki': if (v) await s.openWiki(v).catch(() => {}); break;
+    case 'openReview': if (v) await s.openReview(v).catch(() => {}); break;
+    case 'openChannel': if (v) await s.openChannel(v).catch(() => {}); break;
+    case 'openPanel': if (v === 'plugins' || v === 'me') s.setPanel(v); break;
+    case 'openAdmin': if (s.user?.role === 'admin') s.setPanel('admin'); break;
+    case 'newChat': await s.newSession().catch(() => {}); break;
+    case 'goHome': s.goHome(); break;
+    case 'openShortcuts': s.setShortcutsOpen(true); break;
+    case 'openSearch': if (s.searchEnabled) s.setSearchOpen(true); break;
+    case 'setLanguage': if ((LANGS as readonly string[]).includes(v)) setLang(v as Lang); break;
+    case 'setTheme': if (v === 'light' || v === 'dark') setTheme(v); break;
+    case 'toggleSidebar':
+      if (window.matchMedia('(max-width: 767px)').matches) s.setSidebarOpen(!s.sidebarOpen);
+      else s.setSidebarCollapsed(!s.sidebarCollapsed);
+      break;
+    case 'refresh': await s.refreshLists().catch(() => {}); break;
+    default: break; // unknown action (older client, newer server) → ignore rather than throw
+  }
+}
+
+function setTheme(theme: 'light' | 'dark') {
+  localStorage.setItem('theme', theme);
+  useStore.setState({ theme });
+  applyTheme(theme);
+}
+
 function applyTheme(theme: 'light' | 'dark' | null) {
   if (theme) document.documentElement.setAttribute('data-theme', theme);
   else document.documentElement.removeAttribute('data-theme');
@@ -861,6 +939,49 @@ function wire(set: any, get: () => State) {
     if (!get().user) return;
     api.get('/api/dm/channels').then((r) => set({ channels: r.channels || [] })).catch(() => {});
   });
+
+  // ── guide assistant ──
+  // Every event is per-user (the server emits to `user:<id>`), so no session filter is needed —
+  // and a turn started in another tab renders here too.
+  sock.on('guide:message', (p: any) => {
+    if (get().guideMessages.some((m) => m.id === p.message.id)) return;
+    set({ guideMessages: [...get().guideMessages, p.message] });
+  });
+  sock.on('guide:start', () => set({ guideLive: emptyLive(), guideBusy: true }));
+  sock.on('guide:delta', (p: any) => {
+    const live = get().guideLive || emptyLive();
+    const blocks = live.blocks.slice();
+    const last = blocks[blocks.length - 1];
+    if (last && last.type === 'text') blocks[blocks.length - 1] = { type: 'text', text: last.text + p.text };
+    else blocks.push({ type: 'text', text: p.text });
+    set({ guideLive: { ...live, blocks } });
+  });
+  sock.on('guide:tool', (p: any) => {
+    const live = get().guideLive || emptyLive();
+    const blocks = live.blocks.slice();
+    const idx = blocks.push({ type: 'tool_use', id: p.id, name: p.name, input: p.input }) - 1;
+    set({ guideLive: { ...live, blocks, toolMap: { ...live.toolMap, [p.id]: idx } } });
+  });
+  sock.on('guide:toolResult', (p: any) => {
+    const live = get().guideLive; if (!live) return;
+    const idx = live.toolMap[p.id]; if (idx == null) return;
+    const blocks = live.blocks.slice();
+    const b = blocks[idx];
+    if (b && b.type === 'tool_use') blocks[idx] = { ...b, output: p.output, isError: p.isError };
+    set({ guideLive: { ...live, blocks } });
+  });
+  sock.on('guide:end', (p: any) => {
+    const exists = get().guideMessages.some((m) => m.id === p.message.id);
+    set({
+      guideMessages: exists ? get().guideMessages : [...get().guideMessages, p.message],
+      guideLive: null, guideBusy: false, guideUnread: !get().guideOpen,
+    });
+  });
+  sock.on('guide:error', (p: any) => {
+    set({ guideLive: null, guideBusy: false, error: p.aborted ? null : t('common.errorPrefix', { msg: p.error }) });
+  });
+  sock.on('guide:cleared', () => set({ guideMessages: [], guideLive: null, guideBusy: false }));
+  sock.on('guide:action', (p: any) => { void applyGuideAction(get, p?.action, p?.value ?? null); });
 
   sock.on('queue:update', (p: any) => { if (isCur(p.sessionId)) set({ queue: { running: p.running, waiting: p.waiting } }); });
   sock.on('presence:update', (p: any) => { if (isCur(p.sessionId)) set({ presence: p.users }); });

@@ -121,6 +121,107 @@ function parkTurn(sessionId: string, text: string) {
   parked.set(id, { sessionId, text, timer });
 }
 
+// ── guide assistant (the floating corner panel) ──────────────────────────────
+// The real thing runs a Claude agent whose tools call this app's own API. Here we recognise the
+// handful of intents the panel's suggestion chips produce and replay the same event stream
+// (guide:message → guide:start → deltas → tool chips → guide:end), including the guide:action the
+// store applies — so language switching, the shortcut sheet and session creation really work.
+function guideMsg(role: 'user' | 'assistant', content: any) {
+  const m = { id: `g_${rid()}`, role, content, createdAt: Date.now() };
+  db.guideMessages.push(m);
+  return m;
+}
+
+// one tool chip: the call goes out, its result lands a beat later
+function guideTool(input: any, output: string, blocks: any[], at: number): number {
+  const id = `gt_${rid()}`;
+  const name = input.action ? 'mcp__ccw__ui' : 'mcp__ccw__api';
+  later(at, () => deliver('guide:tool', { id, name, input }));
+  blocks.push({ type: 'tool_use', id, name, input });
+  const i = blocks.length - 1;
+  later(at + 500, () => {
+    blocks[i].output = output;
+    deliver('guide:toolResult', { id, output, isError: false });
+    if (input.action) deliver('guide:action', { action: input.action, value: input.value ?? null });
+  });
+  return at + 700;
+}
+
+// Which canned answer this question gets. Order matters: the URL cases win over the keywords.
+function guidePlan(text: string): { steps: { input: any; output: string }[]; reply: string } {
+  const q = text.toLowerCase();
+  const url = /https?:\/\/\S+/.exec(text)?.[0];
+  if (url && /(skill|plugin|스킬|플러그인)/.test(q)) {
+    const name = url.replace(/\.git$/, '').split('/').pop() || 'plugin';
+    return {
+      steps: [
+        { input: { method: 'POST', path: '/api/plugins/install', body: { scope: 'user', name, repo: url } }, output: `status=200\n{"plugin":{"id":"pl_demo","name":"${name}","scope":"user","enabled":true}}` },
+        { input: { action: 'refresh' }, output: 'ok — dispatched refresh' },
+      ],
+      reply: `\`${name}\` 플러그인을 개인 범위로 설치했습니다. 함께 들어 있는 스킬은 이제 채팅에서 바로 쓸 수 있어요.\n\n플러그인 패널에서 켜고 끌 수 있습니다.`,
+    };
+  }
+  if (url) {
+    const name = url.replace(/\.git$/, '').split('/').pop() || 'repo';
+    const sid = `s_${rid().slice(0, 6)}`;
+    const pid = `p_${rid().slice(0, 6)}`;
+    db.projects.mine.unshift({ id: pid, scope: 'user', ownerId: db.me.id, name, path: `/data/users/me/projects/${name}` });
+    db.sessions.unshift({ id: sid, title: name, updatedAt: Date.now(), projectId: pid, model: 'claude-opus-4-8', effort: 'high', permissionMode: 'default' });
+    return {
+      steps: [
+        { input: { method: 'POST', path: '/api/projects', body: { gitUrl: url } }, output: `status=200\n{"project":{"id":"${pid}","name":"${name}"}}` },
+        { input: { method: 'POST', path: '/api/sessions', body: { projectId: pid } }, output: `status=200\n{"session":{"id":"${sid}"}}` },
+        { input: { action: 'refresh' }, output: 'ok — dispatched refresh' },
+        { input: { action: 'openSession', value: sid }, output: `ok — dispatched openSession (${sid})` },
+      ],
+      reply: `\`${name}\` 저장소를 클론해 개인 프로젝트로 만들고, 그 프로젝트를 작업 디렉터리로 쓰는 새 세션을 열었습니다.`,
+    };
+  }
+  if (/(english|영어|한국어|korean|언어|language)/.test(q)) {
+    const to = /(korean|한국어)/.test(q) ? 'ko' : 'en';
+    return {
+      steps: [{ input: { action: 'setLanguage', value: to }, output: `ok — dispatched setLanguage (${to})` }],
+      reply: to === 'en'
+        ? 'Switched the interface to English. You can also change it from the picker in the sidebar footer.'
+        : '인터페이스를 한국어로 바꿨습니다. 사이드바 하단 선택기에서도 바꿀 수 있어요.',
+    };
+  }
+  if (/(shortcut|단축키|키보드)/.test(q)) {
+    return {
+      steps: [{ input: { action: 'openShortcuts' }, output: 'ok — dispatched openShortcuts' }],
+      reply: '자주 쓰는 것들:\n\n- `Ctrl/Cmd+K` 검색\n- `Ctrl/Cmd+Shift+O` 새 채팅\n- `Ctrl/Cmd+B` 사이드바\n- `Ctrl/Cmd+Shift+L` 테마\n- `Esc` 실행 중인 턴 중단\n- `?` 전체 목록\n\n전체 목록을 방금 열었습니다.',
+    };
+  }
+  if (/(5시간|선점|primer|prime)/.test(q)) {
+    db.me.primeWindow = true;
+    return {
+      steps: [{ input: { method: 'PATCH', path: '/api/auth/me', body: { primeWindow: true } }, output: 'status=200\n{"user":{"primeWindow":true}}' }],
+      reply: '5시간 창 선점을 켰습니다. 이제 창이 열려 있지 않을 때 서버가 아주 작은 질의를 한 번 보내 창을 미리 열어 둡니다.\n\n마이 페이지에서도 켜고 끌 수 있어요.',
+    };
+  }
+  return {
+    steps: [],
+    reply: '핵심 기능은 이렇습니다:\n\n- **개인 채팅** — 사용자마다 격리된 Claude Code 세션\n- **공유 룸** — 여러 명이 하나의 Claude를 함께 조작 (FIFO 큐)\n- **웹 권한 승인** — 위험한 도구 실행 전 브라우저에서 허용/거부\n- **LLM Wiki** — 문서를 올리면 질의 가능한 지식베이스로 컴파일\n- **PR 자동 리뷰** — 열린 PR마다 머지→빌드→리뷰→판정 파이프라인\n- **통합 검색** (`Ctrl/Cmd+K`), **code-server** 편집기, **DM/그룹 채팅**\n\n더 궁금한 기능을 말씀하시면 자세히 설명하고, 필요하면 대신 실행해 드립니다.',
+  };
+}
+
+export function runDemoGuide(text: string) {
+  deliver('guide:message', { message: guideMsg('user', { text }) });
+  const plan = guidePlan(text);
+  const blocks: any[] = [];
+  let at = 350;
+  later(at, () => deliver('guide:start', {}));
+  for (const s of plan.steps) at = guideTool(s.input, s.output, blocks, at + 250);
+  chunks(plan.reply, 5).forEach((c) => later(at += 170, () => deliver('guide:delta', { text: c })));
+  blocks.push({ type: 'text', text: plan.reply });
+  later(at + 350, () => deliver('guide:end', { message: guideMsg('assistant', { blocks }) }));
+}
+
+export function clearDemoGuide() {
+  db.guideMessages.length = 0;
+  deliver('guide:cleared', {});
+}
+
 const sock = {
   connected: true,
   id: `demo_${rid()}`,
