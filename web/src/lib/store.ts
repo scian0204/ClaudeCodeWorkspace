@@ -14,7 +14,7 @@ export interface RoomSummary { id: string; name: string; ownerId: string; chatSe
 export interface PrivateSession { id: string; title: string; updatedAt: number; projectId: string | null; model: string; effort: string; permissionMode: string; }
 export interface Project { id: string; scope: string; ownerId: string | null; name: string; path: string; }
 export interface WikiTopic { id: string; name: string; description: string; path: string; createdBy: string; createdAt: number; compileStatus?: string; compiledAt?: number | null; compileError?: string | null; }
-export interface ReviewRepo { id: string; name: string; provider: string; host: string; slug: string; gitUrl: string; baseBranch: string | null; sandboxImage: string | null; polledAt: number | null; pollError: string | null; openCount: number; createdAt: number; }
+export interface ReviewRepo { id: string; name: string; provider: string; host: string; slug: string; gitUrl: string; baseBranch: string | null; sandboxImage: string | null; polledAt: number | null; pollError: string | null; webhookSecret: string | null; openCount: number; createdAt: number; }
 export interface ReviewSessionSummary { id: string; chatSessionId: string; repoId: string; repoName: string; prNumber: number; prTitle: string; prUrl: string; prState: string; authorLogin: string; mergeState: string; verdict: string; verdictSummary: string | null; readOnly: boolean; updatedAt: number; }
 export interface ReviewMeta { reviewId: string; prNumber: number; prTitle: string; prUrl: string; prState: string; authorLogin: string; baseRef: string; headRef: string; mergeState: string; verdict: string; verdictSummary: string | null; repoName: string; provider: string; }
 export interface User { id: string; username: string; role: string; displayName: string; avatarColor: string; avatar?: string | null; hasClaudeToken?: boolean; claudeTokenSetAt?: number | null; autoTitle?: boolean; autoResume?: boolean; primeWindow?: boolean; primedAt?: number | null; }
@@ -77,6 +77,7 @@ interface State {
   resumes: PendingResume[];      // open session's turns parked for a claude.ai window reset
   windowPrimerEnabled: boolean;  // admin feature flag (from /api/config) — gates the 5h-window primer toggle
   wikiSourceEditEnabled: boolean; // admin feature flag (from /api/config) — gates wiki raw/ source add+edit
+  reviewWebhookEnabled: boolean;  // admin feature flag (from /api/config) — gates the PR-review webhook UI
   searchOpen: boolean;           // unified-search palette (Ctrl/Cmd+K)
   shortcutsOpen: boolean;        // keyboard-shortcut cheat sheet (?)
   highlightMsgId: string | null; // message a search hit jumped to (scroll target + ring)
@@ -125,6 +126,7 @@ interface State {
   updateReviewRepo: (id: string, payload: { name?: string; baseBranch?: string; sandboxImage?: string; credentialId?: string }) => Promise<void>;
   deleteReviewRepo: (id: string) => Promise<void>;
   pollReviewRepo: (id: string) => Promise<void>;
+  setReviewWebhook: (id: string, enabled: boolean) => Promise<string | null>;
   mergeReview: (reviewId: string) => Promise<{ mergeState: string; output: string }>;
   autoReviewRun: (reviewId: string) => Promise<void>;
   approveReview: (reviewId: string) => Promise<{ output: string }>;
@@ -178,7 +180,7 @@ export const useStore = create<State>((set, get) => ({
   current: null, messages: [], live: null, turnActive: false,
   queue: { running: null, waiting: [] }, pending: [],
   control: { canApprove: true, canInterrupt: true, canSetMode: true, isOwner: true, delegable: [] },
-  presence: [], congested: false, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenuEnabled: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, resumes: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
+  presence: [], congested: false, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenuEnabled: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true, resumes: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
   channels: [], activeChannelId: null, channelMessages: [], titling: [],
   commands: [],
 
@@ -235,6 +237,7 @@ export const useStore = create<State>((set, get) => ({
       autoResumeEnabled: cf.autoResumeEnabled !== false,
       windowPrimerEnabled: cf.windowPrimerEnabled !== false,
       wikiSourceEditEnabled: cf.wikiSourceEditEnabled !== false,
+      reviewWebhookEnabled: cf.reviewWebhookEnabled !== false,
       channels: dmc.channels || [],
       processPollMs: cf.processPollMs || 5000,
     });
@@ -317,6 +320,12 @@ export const useStore = create<State>((set, get) => ({
     await get().refreshLists();
     const c = get().current;
     if (c?.kind === 'review' && !get().reviewSessions.some((s) => s.id === c.reviewId)) set({ current: null, messages: [] });
+  },
+  // issue/rotate (enabled) or clear (disabled) the repo's webhook secret; returns the new secret
+  setReviewWebhook: async (id, enabled) => {
+    const r = await api.post(`/api/review/repos/${id}/webhook`, { enabled });
+    await get().refreshLists();
+    return r.secret ?? null;
   },
   pollReviewRepo: async (id) => {
     await api.post(`/api/review/repos/${id}/poll`);

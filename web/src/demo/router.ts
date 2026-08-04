@@ -188,7 +188,7 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   }
 
   // ---- client-facing config (model dropdown) ----
-  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenu: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, processPollMs: 5000 });
+  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenu: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true, processPollMs: 5000 });
 
   // ---- unified search (mirrors server/src/routes/search.ts over the seed data) ----
   // `sort` is ignored on purpose: the seed data never hits the per-type cap for dated surfaces, so
@@ -429,7 +429,7 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   if (P === '/api/review/repos' && M === 'GET') return ok({ repos: db.reviewRepos });
   if (P === '/api/review/repos' && M === 'POST') {
     const slug = String(b.gitUrl || '').replace(/\.git$/, '').split('/').slice(-2).join('/') || 'repo/x';
-    const repo = { id: genId('rr'), name: b.name || slug, provider: b.provider || 'github', host: 'github.com', slug, gitUrl: b.gitUrl, baseBranch: b.baseBranch || 'main', sandboxImage: b.sandboxImage || null, polledAt: Date.now(), pollError: null, openCount: 0, createdAt: Date.now() };
+    const repo = { id: genId('rr'), name: b.name || slug, provider: b.provider || 'github', host: 'github.com', slug, gitUrl: b.gitUrl, baseBranch: b.baseBranch || 'main', sandboxImage: b.sandboxImage || null, webhookSecret: null, polledAt: Date.now(), pollError: null, openCount: 0, createdAt: Date.now() };
     db.reviewRepos.unshift(repo); return ok({ repo });
   }
   if (seg[1] === 'review' && seg[2] === 'repos' && seg[3] && M === 'PATCH') {
@@ -441,6 +441,13 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
     return ok({ repo: r });
   }
   if (seg[1] === 'review' && seg[2] === 'repos' && seg[4] === 'poll') return ok({ ok: true, opened: 0, closed: 0 });
+  if (seg[1] === 'review' && seg[2] === 'repos' && seg[4] === 'webhook' && M === 'POST') {
+    const r: any = db.reviewRepos.find((x: any) => x.id === idAt(3));
+    if (!r) return { status: 404, data: { error: 'not found' } };
+    // demo secret: regenerated per click so "rotate" visibly changes the value
+    r.webhookSecret = b.enabled ? `demo-${Math.random().toString(36).slice(2, 10)}-webhook-secret` : null;
+    return ok({ ok: true, secret: r.webhookSecret });
+  }
   if (seg[1] === 'review' && seg[2] === 'repos' && seg[3] && M === 'DELETE') {
     db.reviewSessions = db.reviewSessions.filter((s: any) => s.repoId !== idAt(3));
     db.reviewRepos = db.reviewRepos.filter((r: any) => r.id !== idAt(3));

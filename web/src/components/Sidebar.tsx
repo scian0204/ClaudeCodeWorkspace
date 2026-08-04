@@ -15,7 +15,7 @@ import {
   IconX, IconDownload, IconMessage, IconPencil, IconTrash, IconUsers, IconClock, IconWarning,
   IconBook, IconPuzzle, IconSliders, IconLogout, IconFile, IconBox, IconRefresh, IconPlus,
   IconCheckCircle, IconBan, IconGitBranch, IconCheckSquare, IconSquare, IconFolder, IconPanelLeft,
-  IconGlobe, IconKeyboard, IconSparkle, IconChevronDown, IconChevronRight,
+  IconGlobe, IconKeyboard, IconSparkle, IconChevronDown, IconChevronRight, IconCopy,
 } from '../lib/icons';
 
 export function Sidebar() {
@@ -529,6 +529,8 @@ function AddReviewRepoModal({ onClose }: { onClose: () => void }) {
 // gitUrl/provider are immutable here — changing them means a different repo (delete + re-add).
 function EditReviewRepoModal({ repo, onClose }: { repo: ReviewRepo; onClose: () => void }) {
   const updateReviewRepo = useStore((s) => s.updateReviewRepo);
+  const setReviewWebhook = useStore((s) => s.setReviewWebhook);
+  const webhookEnabled = useStore((s) => s.reviewWebhookEnabled);
   const setError = useStore((s) => s.setError);
   const [name, setName] = useState(repo.name);
   const [baseBranch, setBaseBranch] = useState(repo.baseBranch || '');
@@ -536,7 +538,20 @@ function EditReviewRepoModal({ repo, onClose }: { repo: ReviewRepo; onClose: () 
   const [credentialId, setCredentialId] = useState('');
   const [creds, setCreds] = useState<any[]>([]);
   const [busy, setBusy] = useState(false);
+  const [secret, setSecret] = useState(repo.webhookSecret);
+  const [hookBusy, setHookBusy] = useState(false);
   const t = useT();
+
+  // GitHub/GitLab take the secret in their own field, so their URL stays bare; Bitbucket has no
+  // secret field at all, so its secret has to ride in the query string.
+  const hookUrl = `${location.origin}/api/review/hooks/${repo.id}`
+    + (repo.provider === 'bitbucket' && secret ? `?token=${encodeURIComponent(secret)}` : '');
+  const hookHintKey = repo.provider === 'gitlab' ? 'review.webhookGitlab'
+    : repo.provider === 'bitbucket' ? 'review.webhookBitbucket' : 'review.webhookGithub';
+  const toggleHook = async (enable: boolean) => {
+    setHookBusy(true);
+    try { setSecret(await setReviewWebhook(repo.id, enable)); } catch (e: any) { setError(e.message); } finally { setHookBusy(false); }
+  };
 
   useEffect(() => { api.get('/api/git-credentials').then((r) => setCreds([...(r.mine || []), ...(r.common || [])])).catch(() => {}); }, []);
 
@@ -560,11 +575,47 @@ function EditReviewRepoModal({ repo, onClose }: { repo: ReviewRepo; onClose: () 
         <option value="">{t('review.credKeep')}</option>
         {creds.filter((cr) => cr.host === repo.host).map((cr) => <option key={cr.id} value={cr.id}>[{cr.provider}] {cr.host} · {cr.username}</option>)}
       </select>
+      {webhookEnabled && (
+        <div className="border-t border-line pt-2 mb-3">
+          <div className="text-[12px] font-semibold mb-1">{t('review.webhookTitle')}</div>
+          <div className="text-[11px] text-txt3 mb-2">{t('review.webhookHint')}</div>
+          {secret ? (
+            <>
+              <CopyField label={t('review.webhookUrl')} value={hookUrl} />
+              {repo.provider !== 'bitbucket' && <CopyField label={t('review.webhookSecretLabel')} value={secret} />}
+              <div className="text-[11px] text-txt3 mb-2">{t(hookHintKey)}</div>
+              <div className="flex flex-wrap gap-2">
+                <button className="btn-ghost" disabled={hookBusy}
+                  onClick={() => { if (confirm(t('review.webhookRotateConfirm'))) void toggleHook(true); }}>{t('review.webhookRotate')}</button>
+                <button className="btn-ghost text-danger" disabled={hookBusy}
+                  onClick={() => { if (confirm(t('review.webhookDisableConfirm'))) void toggleHook(false); }}>{t('review.webhookDisable')}</button>
+              </div>
+            </>
+          ) : (
+            <button className="btn-ghost" disabled={hookBusy} onClick={() => void toggleHook(true)}>{t('review.webhookEnable')}</button>
+          )}
+        </div>
+      )}
       <div className="flex justify-end gap-2">
         <button className="btn-ghost" onClick={onClose} disabled={busy}>{t('common.cancel')}</button>
         <button className="btn-primary" onClick={submit} disabled={busy}>{busy ? t('review.saving') : t('common.save')}</button>
       </div>
     </Modal>
+  );
+}
+
+// Read-only value + copy button (webhook URL / secret — both get pasted into the provider's form).
+function CopyField({ label, value }: { label: string; value: string }) {
+  const t = useT();
+  return (
+    <div className="mb-2">
+      <div className="text-[10px] uppercase tracking-wider text-txt3 mb-0.5">{label}</div>
+      <div className="flex items-center gap-1">
+        <input className="input flex-1 min-w-0 text-[11px] font-mono" readOnly value={value} onFocus={(e) => e.currentTarget.select()} />
+        <button className="btn-ghost px-2 shrink-0" title={t('ctx.copy')} aria-label={t('ctx.copy')}
+          onClick={() => void navigator.clipboard?.writeText(value)}><IconCopy size={13} /></button>
+      </div>
+    </div>
   );
 }
 

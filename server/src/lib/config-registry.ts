@@ -85,6 +85,7 @@ export const DEFS: ConfigDef[] = [
   // PR review pipeline
   { key: 'reviewAuto', group: 'review', type: 'bool', default: '1', env: 'REVIEW_AUTO' },
   { key: 'reviewComment', group: 'review', type: 'bool', default: '1', env: 'REVIEW_COMMENT' },
+  { key: 'reviewWebhook', group: 'review', type: 'bool', default: '1', env: 'REVIEW_WEBHOOK' },
   { key: 'reviewPollMs', group: 'review', type: 'int', default: '60000', env: 'REVIEW_POLL_MS', min: 0, max: 86400000, unit: 'ms' },
   { key: 'reviewTurnTimeoutMs', group: 'review', type: 'int', default: '1800000', env: 'REVIEW_TURN_TIMEOUT_MS', min: 60000, max: 7200000, unit: 'ms' },
   { key: 'reviewMaxRetries', group: 'review', type: 'int', default: '2', min: 0, max: 10 },
@@ -312,6 +313,6 @@ export function modelMap(): Record<string, string> {
 }
 
 // Client-facing subset (any authed user): drives the model dropdown.
-export function publicConfig(): { models: Record<string, string>; defaultModel: string; defaultEffort: string; sessionImportEnabled: boolean; llmProvidersEnabled: boolean; approvalsEnabled: boolean; dmEnabled: boolean; searchEnabled: boolean; customContextMenu: boolean; autoTitleEnabled: boolean; autoResumeEnabled: boolean; windowPrimerEnabled: boolean; gitPublishEnabled: boolean; wikiSourceEditEnabled: boolean; processPollMs: number } {
-  return { models: modelMap(), defaultModel: cfg.str('defaultModel'), defaultEffort: cfg.str('defaultEffort'), sessionImportEnabled: cfg.bool('sessionImportEnabled'), llmProvidersEnabled: cfg.bool('llmProvidersEnabled'), approvalsEnabled: cfg.bool('approvalsEnabled'), dmEnabled: cfg.bool('dmEnabled'), searchEnabled: cfg.bool('searchEnabled'), customContextMenu: cfg.bool('customContextMenu'), autoTitleEnabled: cfg.bool('autoTitleEnabled'), autoResumeEnabled: cfg.bool('autoResumeEnabled'), windowPrimerEnabled: cfg.bool('windowPrimerEnabled'), gitPublishEnabled: cfg.bool('gitPublishEnabled'), wikiSourceEditEnabled: cfg.bool('wikiSourceEditEnabled'), processPollMs: cfg.int('processPollMs') };
+export function publicConfig(): { models: Record<string, string>; defaultModel: string; defaultEffort: string; sessionImportEnabled: boolean; llmProvidersEnabled: boolean; approvalsEnabled: boolean; dmEnabled: boolean; searchEnabled: boolean; customContextMenu: boolean; autoTitleEnabled: boolean; autoResumeEnabled: boolean; windowPrimerEnabled: boolean; gitPublishEnabled: boolean; wikiSourceEditEnabled: boolean; reviewWebhookEnabled: boolean; processPollMs: number } {
+  return { models: modelMap(), defaultModel: cfg.str('defaultModel'), defaultEffort: cfg.str('defaultEffort'), sessionImportEnabled: cfg.bool('sessionImportEnabled'), llmProvidersEnabled: cfg.bool('llmProvidersEnabled'), approvalsEnabled: cfg.bool('approvalsEnabled'), dmEnabled: cfg.bool('dmEnabled'), searchEnabled: cfg.bool('searchEnabled'), customContextMenu: cfg.bool('customContextMenu'), autoTitleEnabled: cfg.bool('autoTitleEnabled'), autoResumeEnabled: cfg.bool('autoResumeEnabled'), windowPrimerEnabled: cfg.bool('windowPrimerEnabled'), gitPublishEnabled: cfg.bool('gitPublishEnabled'), wikiSourceEditEnabled: cfg.bool('wikiSourceEditEnabled'), reviewWebhookEnabled: cfg.bool('reviewWebhook'), processPollMs: cfg.int('processPollMs') };
 }

@@ -10,6 +10,7 @@ import {
   gitCloneFull, gitFetch, gitFetchRemotes, gitWorktreeAdd, gitWorktreeRemove, gitResetHard, gitMerge, gitDiffNames,
 } from '../lib/git-ops.js';
 import { hasSourceChange } from './classify.js';
+import { newWebhookSecret } from './webhook.js';
 import {
   resolveGitCredById, getGitCredRow, askpassEnv, identityEnv, gitIdentity, hostFromGitUrl,
 } from '../auth/git-cred.js';
@@ -73,6 +74,7 @@ export async function createRepo(admin: AuthUser, p: {
   const row: Repo = {
     id, name: (p.name || slug).trim(), provider, host, gitUrl, slug, credentialId: p.credentialId,
     path: dir, baseBranch: p.baseBranch?.trim() || null, sandboxImage: p.sandboxImage?.trim() || null,
+    webhookSecret: null, // opt-in per repo (admin enables it in the repo's edit dialog)
     createdBy: admin.id, createdAt: now, polledAt: null, pollError: null,
   };
   db.insert(schema.reviewRepos).values(row).run();
@@ -111,8 +113,20 @@ export async function updateRepo(admin: AuthUser, id: string, p: {
   return getRepo(id)!;
 }
 
+// Enable (or rotate) this repo's inbound webhook secret, or clear it to turn the endpoint off.
+// Returns the new secret — the only time it leaves the server in full; the admin pastes it into the
+// provider's webhook form. Rotating invalidates whatever the provider currently sends.
+export function setWebhook(id: string, enable: boolean): string | null {
+  if (!getRepo(id)) throw new Error('저장소를 찾을 수 없습니다');
+  const secret = enable ? newWebhookSecret() : null;
+  db.update(schema.reviewRepos).set({ webhookSecret: secret }).where(eq(schema.reviewRepos.id, id)).run();
+  notify();
+  return secret;
+}
+
 export function deleteRepo(id: string) {
   const repo = getRepo(id); if (!repo) return;
+  pollPending.delete(id); // don't let a queued poll fire for a repo we're deleting
   const rows = db.select().from(schema.reviewSessions).where(eq(schema.reviewSessions.repoId, id)).all();
   for (const rv of rows) {
     forgetReview(rv.id); // clear any in-flight guard/retry state for reviews we're about to delete
@@ -140,6 +154,11 @@ export function deleteReview(rv: Review) {
 
 // ── polling ──
 const polling = new Set<string>();
+// Repos whose poll was requested while one was already in flight. Without this, a webhook delivery
+// (or a push burst) that lands mid-poll is dropped: the running poll read the PR list BEFORE that
+// push, and nothing re-reads it — the new commit keeps a stale verdict until the next interval tick,
+// or forever when polling is disabled (REVIEW_POLL_MS=0, webhook-only deployments).
+const pollPending = new Set<string>();
 
 // Grants the read-only "reader" role to the local user whose username equals the PR author's host
 // login. ponytail: trusts a free-text host login == local username (trusted-team posture, DESIGN §2);
@@ -195,7 +214,7 @@ function upsertReview(repo: Repo, pr: PullInfo): UpsertResult {
 }
 
 export async function pollRepo(id: string): Promise<{ opened: number; closed: number }> {
-  if (polling.has(id)) return { opened: 0, closed: 0 };
+  if (polling.has(id)) { pollPending.add(id); return { opened: 0, closed: 0 }; }
   polling.add(id);
   try {
     const repo = getRepo(id);
@@ -231,7 +250,11 @@ export async function pollRepo(id: string): Promise<{ opened: number; closed: nu
       .where(eq(schema.reviewRepos.id, id)).run();
     notify();
     throw e;
-  } finally { polling.delete(id); }
+  } finally {
+    polling.delete(id);
+    // a request arrived while this one was running → run exactly one more (fire-and-forget)
+    if (pollPending.delete(id) && getRepo(id)) void pollRepo(id).catch(() => { /* error recorded on the row */ });
+  }
 }
 
 let timer: ReturnType<typeof setInterval> | null = null;
@@ -611,12 +634,14 @@ export function listReviewSessionsForUser(user: AuthUser): ReviewSessionSummary[
 export interface ReviewRepoSummary {
   id: string; name: string; provider: string; host: string; slug: string; gitUrl: string;
   baseBranch: string | null; sandboxImage: string | null; polledAt: number | null; pollError: string | null;
+  webhookSecret: string | null; // admin-only route: the admin must be able to re-read it to reconfigure the hook
   openCount: number; createdAt: number;
 }
 export function listRepoSummaries(): ReviewRepoSummary[] {
   return listRepos().map((r) => ({
     id: r.id, name: r.name, provider: r.provider, host: r.host, slug: r.slug, gitUrl: r.gitUrl,
-    baseBranch: r.baseBranch, sandboxImage: r.sandboxImage, polledAt: r.polledAt, pollError: r.pollError, createdAt: r.createdAt,
+    baseBranch: r.baseBranch, sandboxImage: r.sandboxImage, polledAt: r.polledAt, pollError: r.pollError,
+    webhookSecret: r.webhookSecret, createdAt: r.createdAt,
     openCount: db.select().from(schema.reviewSessions)
       .where(and(eq(schema.reviewSessions.repoId, r.id), eq(schema.reviewSessions.prState, 'open'))).all().length,
   }));

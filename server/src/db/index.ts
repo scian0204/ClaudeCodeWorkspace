@@ -80,7 +80,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_providers_scope_owner ON llm_providers
 CREATE TABLE IF NOT EXISTS review_repos (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, provider TEXT NOT NULL, host TEXT NOT NULL,
   git_url TEXT NOT NULL, slug TEXT NOT NULL, credential_id TEXT NOT NULL, path TEXT NOT NULL,
-  base_branch TEXT, sandbox_image TEXT, created_by TEXT NOT NULL, created_at INTEGER NOT NULL,
+  base_branch TEXT, sandbox_image TEXT, webhook_secret TEXT,
+  created_by TEXT NOT NULL, created_at INTEGER NOT NULL,
   polled_at INTEGER, poll_error TEXT
 );
 CREATE TABLE IF NOT EXISTS review_sessions (
@@ -152,6 +153,8 @@ export function initDb() {
   try { sqlite.exec("ALTER TABLE messages ADD COLUMN chat INTEGER NOT NULL DEFAULT 0"); } catch { /* already present */ }
   // per-repo review build image (null → global reviewSandboxImage)
   try { sqlite.exec("ALTER TABLE review_repos ADD COLUMN sandbox_image TEXT"); } catch { /* already present */ }
+  // per-repo inbound webhook secret (null → the repo's webhook endpoint is off)
+  try { sqlite.exec("ALTER TABLE review_repos ADD COLUMN webhook_secret TEXT"); } catch { /* already present */ }
   // per-session SDK effort level (unsupported models silently downgrade)
   try { sqlite.exec("ALTER TABLE chat_sessions ADD COLUMN effort TEXT NOT NULL DEFAULT 'high'"); } catch { /* already present */ }
   db = drizzle(sqlite, { schema });
