@@ -135,6 +135,17 @@ export const pluginPrefs = sqliteTable('plugin_prefs', {
   enabled: integer('enabled').notNull(),
 });
 
+// Per-user skill invocation counter (one row per user + skill key). `skill` is the raw invocation
+// string as it reached the CLI ('brainstorming', 'caveman:caveman-stats'); it is matched to a
+// plugin's exposed skills at READ time (plugins/manager.skillKey), so a renamed or reinstalled
+// plugin never needs a migration here.
+export const skillUsage = sqliteTable('skill_usage', {
+  userId: text('user_id').notNull(),
+  skill: text('skill').notNull(),
+  count: integer('count').notNull().default(0),
+  lastAt: integer('last_at').notNull(),
+});
+
 export const usage = sqliteTable('usage', {
   id: text('id').primaryKey(),
   userId: text('user_id').notNull(),

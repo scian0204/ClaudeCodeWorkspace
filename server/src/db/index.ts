@@ -60,6 +60,10 @@ CREATE TABLE IF NOT EXISTS usage (
   cost_usd REAL NOT NULL DEFAULT 0, created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_usage_user ON usage(user_id, created_at);
+CREATE TABLE IF NOT EXISTS skill_usage (
+  user_id TEXT NOT NULL, skill TEXT NOT NULL, count INTEGER NOT NULL DEFAULT 0,
+  last_at INTEGER NOT NULL, PRIMARY KEY (user_id, skill)
+);
 CREATE TABLE IF NOT EXISTS settings ( key TEXT PRIMARY KEY, value TEXT NOT NULL );
 CREATE TABLE IF NOT EXISTS git_credentials (
   id TEXT PRIMARY KEY, scope TEXT NOT NULL, owner_id TEXT NOT NULL,

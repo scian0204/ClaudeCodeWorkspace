@@ -687,7 +687,7 @@ function CleanupManager() {
   const rowDefs: [string, number][] = [
     ['admin.cleanup.rowMessages', rows.messages], ['admin.cleanup.rowReviewSessions', rows.reviewSessions],
     ['admin.cleanup.rowRoomMembers', rows.roomMembers], ['admin.cleanup.rowUsage', rows.usage],
-    ['admin.cleanup.rowPluginPrefs', rows.pluginPrefs],
+    ['admin.cleanup.rowPluginPrefs', rows.pluginPrefs], ['admin.cleanup.rowSkillUsage', rows.skillUsage],
   ];
 
   return (

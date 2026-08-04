@@ -86,6 +86,14 @@ export function pluginDetail(dir: string) {
   return { manifest, skills };
 }
 
+// A skill invocation reaches the CLI as "<plugin>:<skill>" (slash command / palette) or bare
+// "<skill>" (Skill tool), while a plugin exposes it as a dir + frontmatter name. Compare on the last
+// path/namespace segment, lowercased, so all three spellings resolve to the same skill.
+export function skillKey(raw: string): string {
+  const parts = String(raw || '').split(/[:/\\]/);
+  return (parts[parts.length - 1] || '').trim().toLowerCase();
+}
+
 // Update a git-installed plugin in place: refresh to the remote's latest HEAD.
 // Shallow-clone-safe (fetch depth 1 + hard reset); discards any local edits in the plugin dir.
 export async function updatePlugin(id: string) {

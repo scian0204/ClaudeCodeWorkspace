@@ -479,6 +479,7 @@ flowchart TB
 - Common tier = admin-only (register marketplaces · git/local upload · force-required)
 - Personal tier = user-controlled (add marketplaces · install · toggle common class-2)
 - Per-plugin detail view (manifest · skills · file tree) with one-click update for git-sourced plugins
+- Per-skill usage counters: expand a skill to see how many times the workspace and you invoked it (admins also get the per-user breakdown)
 </details>
 
 <details>

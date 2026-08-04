@@ -9,6 +9,8 @@ import { requireAuth, requireAdmin, type AuthUser } from '../auth/index.js';
 import { newId } from '../lib/ids.js';
 import { walkFiles, resolveUnder, IMG_CT } from '../lib/filetree.js';
 import * as pm from '../plugins/manager.js';
+import { skillUsageRows } from '../usage/tracker.js';
+import { cfg } from '../lib/config-registry.js';
 
 function ownsPlugin(id: string, userId: string): boolean {
   const p = db.select().from(schema.plugins).where(eq(schema.plugins.id, id)).get();
@@ -22,6 +24,32 @@ function canViewPlugin(u: AuthUser, p: NonNullable<ReturnType<typeof pluginScope
   if (u.role === 'admin') return true;
   if (p.scope === 'common') return true;
   return p.scope === 'user' && p.ownerId === u.id;
+}
+
+// Attach invocation counters to a plugin's skills: `total` (workspace-wide) + `mine` (the viewer's
+// own) for everyone, plus the per-user breakdown for admins — that one is other people's activity.
+// Counters are keyed by the raw invocation string, so match on skillKey of both dir and frontmatter
+// name (a skill is invoked as "plugin:dir" from the palette and as its name from the Skill tool).
+type PluginSkill = ReturnType<typeof pm.pluginDetail>['skills'][number];
+function withSkillUsage(skills: PluginSkill[], viewer: AuthUser) {
+  const rows = skillUsageRows();
+  return skills.map((s) => {
+    const keys = new Set([pm.skillKey(s.dir), pm.skillKey(s.name)]);
+    const byUser = new Map<string, { name: string; count: number }>();
+    for (const r of rows) {
+      if (!keys.has(pm.skillKey(r.skill))) continue;
+      const e = byUser.get(r.userId) || { name: r.name || r.userId, count: 0 };
+      e.count += r.count;
+      byUser.set(r.userId, e);
+    }
+    const list = [...byUser].map(([userId, v]) => ({ userId, ...v })).sort((a, b) => b.count - a.count);
+    return {
+      ...s,
+      total: list.reduce((n, r) => n + r.count, 0),
+      mine: byUser.get(viewer.id)?.count || 0,
+      ...(viewer.role === 'admin' ? { byUser: list } : {}),
+    };
+  });
 }
 
 export async function pluginRoutes(app: FastifyInstance) {
@@ -121,7 +149,12 @@ export async function pluginRoutes(app: FastifyInstance) {
     const u = requireAuth(req, reply); if (!u) return;
     const p = pluginScope((req.params as any).id); if (!p) return reply.code(404).send({ error: 'not found' });
     if (!canViewPlugin(u, p)) return reply.code(403).send({ error: 'forbidden' });
-    return { plugin: { id: p.id, name: p.name, scope: p.scope, source: p.source, repo: p.repo }, ...pm.pluginDetail(path.resolve(p.path)) };
+    const d = pm.pluginDetail(path.resolve(p.path));
+    return {
+      plugin: { id: p.id, name: p.name, scope: p.scope, source: p.source, repo: p.repo },
+      ...d,
+      skills: cfg.bool('skillUsageEnabled') ? withSkillUsage(d.skills, u) : d.skills,
+    };
   });
 
   // file tree of a plugin dir (paths + sizes) — reuses the shared explorer

@@ -10,7 +10,7 @@ import { turnLimiter, withRateLimitRetry } from './throttle.js';
 import { buildOptions, clampMode, rootsFor, type SessionContext, type PermMode } from './config-layering.js';
 import { makeCanUseTool, makeAutoAllow } from './permissions.js';
 import { resolvePluginPaths } from '../plugins/manager.js';
-import { recordUsage } from '../usage/tracker.js';
+import { recordUsage, recordSkillUse, turnSkillKeys } from '../usage/tracker.js';
 import { resolveProvider } from '../auth/provider.js';
 import { originHost } from '../lib/git-ops.js';
 import { resolveGitCred, gitIdentity, identityEnv, askpassEnv } from '../auth/git-cred.js';
@@ -421,6 +421,12 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
   } finally {
     active.delete(s.id);
     release();
+    // Per-user skill counters. In `finally` on purpose: a skill that ran is a skill that ran, even
+    // if the turn was later interrupted or failed. Never let a counter write break the turn result.
+    if (cfg.bool('skillUsageEnabled')) {
+      try { for (const k of turnSkillKeys(p.text, blocks)) recordSkillUse(p.author.id, k); }
+      catch { /* counters are cosmetic */ }
+    }
     // Await sandbox teardown BEFORE onDone. onDone can fire a review re-run (watchdog retry / new push)
     // whose git reset --hard + merge rewrite the PR worktree; removeSandbox force-removes the container,
     // which is what actually kills any build still writing into that same bind-mounted worktree. Firing

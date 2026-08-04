@@ -280,7 +280,7 @@ export const ADMIN = {
       attachmentDirs: { count: 2, size: 1_500_000 },
       homeDirs: { count: 0, size: 0 },
     },
-    orphanRows: { messages: 12, reviewSessions: 1, roomMembers: 0, usage: 4, pluginPrefs: 2 },
+    orphanRows: { messages: 12, reviewSessions: 1, roomMembers: 0, usage: 4, pluginPrefs: 2, skillUsage: 3 },
   },
   runCleanup(action: string) {
     const c = ADMIN.cleanup;
@@ -288,7 +288,7 @@ export const ADMIN = {
     const sandboxes = () => { const n = c.containers.filter((x: any) => x.kind === 'sandbox').length; c.containers = c.containers.filter((x: any) => x.kind !== 'sandbox'); return n; };
     const dangling = () => { const n = c.danglingImages.count; c.danglingImages = { count: 0, size: 0 }; return n; };
     const dirs = () => { const n = c.orphanDirs.reviewDirs.count + c.orphanDirs.attachmentDirs.count; c.orphanDirs.reviewDirs = { count: 0, size: 0 }; c.orphanDirs.attachmentDirs = { count: 0, size: 0 }; return n; };
-    const rows = () => { const r = c.orphanRows; const n = r.messages + r.reviewSessions + r.roomMembers + r.usage + r.pluginPrefs; c.orphanRows = { messages: 0, reviewSessions: 0, roomMembers: 0, usage: 0, pluginPrefs: 0 }; return n; };
+    const rows = () => { const r = c.orphanRows; const n = r.messages + r.reviewSessions + r.roomMembers + r.usage + r.pluginPrefs + r.skillUsage; c.orphanRows = { messages: 0, reviewSessions: 0, roomMembers: 0, usage: 0, pluginPrefs: 0, skillUsage: 0 }; return n; };
     let summary: any = { removed: 0 };
     if (action === 'editors') summary = { removed: editors() };
     else if (action === 'sandboxes') summary = { removed: sandboxes() };
@@ -413,6 +413,21 @@ export const GIT = {
   },
 };
 
+// Per-skill invocation counters, same shape the server attaches in withSkillUsage(). The demo user
+// is an admin, so the per-user breakdown rides along too (a member would only get total + mine).
+const skillUses = (seed: number) => {
+  const byUser = [
+    { userId: ME.id, name: ME.displayName, count: 5 + seed * 2 },
+    { userId: U_JAMIE.id, name: U_JAMIE.displayName, count: 3 + seed },
+    { userId: U_RILEY.id, name: U_RILEY.displayName, count: seed },
+  ].filter((r) => r.count > 0).sort((a, b) => b.count - a.count);
+  return {
+    total: byUser.reduce((n, r) => n + r.count, 0),
+    mine: byUser.find((r) => r.userId === ME.id)?.count || 0,
+    byUser,
+  };
+};
+
 export const pluginDetail = (id: string) => {
   const all = [...db.plugins.common, ...db.plugins.mine];
   const p = all.find((x) => x.id === id) || db.plugins.common[0];
@@ -421,8 +436,8 @@ export const pluginDetail = (id: string) => {
     plugin: { id: p.id, name: p.name, scope: isCommon ? 'common' : 'user', source: p.source, repo: p.repo ?? null },
     manifest: { name: p.name, description: `${p.name} — packaged skills for Claude Code.`, version: '1.2.0', homepage: p.repo ?? undefined },
     skills: [
-      { dir: `${p.name}/review`, name: 'review', description: 'One-line code review comments' },
-      { dir: `${p.name}/summarize`, name: 'summarize', description: 'Summarize a diff or file' },
+      { dir: `${p.name}/review`, name: 'review', description: 'One-line code review comments', ...skillUses(p.name.length % 4) },
+      { dir: `${p.name}/summarize`, name: 'summarize', description: 'Summarize a diff or file', ...skillUses(0) },
     ],
   };
 };

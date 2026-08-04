@@ -4,9 +4,14 @@ import { api } from '../lib/api';
 import { Modal } from './Modal';
 import { FileExplorer } from './FileExplorer';
 import { useT } from '../lib/i18n';
-import { IconPuzzle, IconFolder, IconDownload, IconLink } from '../lib/icons';
+import { IconPuzzle, IconFolder, IconDownload, IconLink, IconChevronRight } from '../lib/icons';
 
-type Skill = { dir: string; name: string; description: string };
+// total/mine/byUser ride along only while skill-usage counting is on (admin feature flag);
+// byUser is admin-only — it is other members' activity.
+type Skill = {
+  dir: string; name: string; description: string;
+  total?: number; mine?: number; byUser?: { userId: string; name: string; count: number }[];
+};
 type Detail = {
   plugin: { id: string; name: string; scope: string; source: string; repo: string | null };
   manifest: { name?: string; description?: string; version?: string; homepage?: string } | null;
@@ -78,17 +83,63 @@ export function PluginDetail({ pluginId, canUpdate, onClose, onChanged }: {
               <div className="text-xs text-txt3">{t('pluginDetail.noSkills')}</div>
             ) : (
               <div className="space-y-1.5 max-h-[40vh] overflow-y-auto scrolly">
-                {d.skills.map((s) => (
-                  <div key={s.dir} className="border border-line rounded-lg px-3 py-2">
-                    <div className="text-sm font-medium">{s.name}</div>
-                    {s.description && <div className="text-xs text-txt3 mt-0.5">{s.description}</div>}
-                  </div>
-                ))}
+                {d.skills.map((s) => <SkillRow key={s.dir} s={s} />)}
               </div>
             )}
           </div>
         </div>
       )}
     </Modal>
+  );
+}
+
+// One skill in the list. With usage counting on it expands into that skill's detail: the workspace
+// total sits in the row, the viewer's own count and (admins only) the per-user breakdown inside.
+// Counting off → the server sends no counters, so the row stays a plain, non-expandable card.
+function SkillRow({ s }: { s: Skill }) {
+  const t = useT();
+  if (s.total == null) {
+    return (
+      <div className="border border-line rounded-lg px-3 py-2">
+        <div className="text-sm font-medium">{s.name}</div>
+        {s.description && <div className="text-xs text-txt3 mt-0.5">{s.description}</div>}
+      </div>
+    );
+  }
+  return (
+    <details className="group border border-line rounded-lg px-3 py-2">
+      <summary className="flex items-start gap-2 cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
+        <span className="text-txt3 mt-0.5 shrink-0 transition-transform group-open:rotate-90 inline-flex"><IconChevronRight size={13} /></span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-medium">{s.name}</span>
+          {s.description && <span className="block text-xs text-txt3 mt-0.5">{s.description}</span>}
+        </span>
+        <span className={`text-[10px] px-1.5 py-0.5 rounded-full whitespace-nowrap shrink-0 ${s.total > 0 ? 'bg-claysoft text-clay' : 'bg-line text-txt3'}`}>
+          {t('pluginDetail.usesTotal', { n: s.total })}
+        </span>
+      </summary>
+      <div className="mt-2 pl-5 space-y-1.5 text-xs">
+        <div className="text-txt2">{t('pluginDetail.usesMine', { n: s.mine ?? 0 })}</div>
+        {s.byUser && (
+          s.byUser.length === 0 ? <div className="text-txt3">{t('pluginDetail.usesNone')}</div> : (
+            <div>
+              <div className="text-txt3 mb-0.5">{t('pluginDetail.usesByUser')}</div>
+              <div className="overflow-x-auto scrolly">
+                <table className="w-full min-w-[200px]">
+                  <tbody>
+                    {s.byUser.map((r) => (
+                      <tr key={r.userId} className="border-t border-line">
+                        <td className="py-1 pr-2 break-all">{r.name}</td>
+                        <td className="py-1 text-right tabular-nums whitespace-nowrap">{t('pluginDetail.usesCount', { n: r.count })}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )
+        )}
+      </div>
+    </details>
   );
 }

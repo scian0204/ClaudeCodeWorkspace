@@ -28,7 +28,7 @@ export interface CleanupScan {
   images: ScanImage[];
   danglingImages: { count: number; size: number };
   orphanDirs: { reviewDirs: OrphanDirGroup; attachmentDirs: OrphanDirGroup; homeDirs: OrphanDirGroup };
-  orphanRows: { messages: number; reviewSessions: number; roomMembers: number; usage: number; pluginPrefs: number };
+  orphanRows: { messages: number; reviewSessions: number; roomMembers: number; usage: number; pluginPrefs: number; skillUsage: number };
 }
 
 // ── fs helpers ──
@@ -126,12 +126,14 @@ const ORPHAN_ROW_SQL = {
   roomMembers: `SELECT COUNT(*) FROM room_members WHERE room_id NOT IN (SELECT id FROM rooms)`,
   usage: `SELECT COUNT(*) FROM usage WHERE user_id NOT IN (SELECT id FROM users) OR (session_id IS NOT NULL AND session_id NOT IN (SELECT id FROM chat_sessions))`,
   pluginPrefs: `SELECT COUNT(*) FROM plugin_prefs WHERE user_id NOT IN (SELECT id FROM users) OR plugin_id NOT IN (SELECT id FROM plugins)`,
+  skillUsage: `SELECT COUNT(*) FROM skill_usage WHERE user_id NOT IN (SELECT id FROM users)`,
 } as const;
 function orphanRowCounts(): CleanupScan['orphanRows'] {
   const c = (sql: string) => Number(sqlite.prepare(sql).pluck().get() || 0);
   return {
     messages: c(ORPHAN_ROW_SQL.messages), reviewSessions: c(ORPHAN_ROW_SQL.reviewSessions),
     roomMembers: c(ORPHAN_ROW_SQL.roomMembers), usage: c(ORPHAN_ROW_SQL.usage), pluginPrefs: c(ORPHAN_ROW_SQL.pluginPrefs),
+    skillUsage: c(ORPHAN_ROW_SQL.skillUsage),
   };
 }
 

@@ -122,6 +122,8 @@ export const DEFS: ConfigDef[] = [
   { key: 'approvalsEnabled', group: 'features', type: 'bool', default: '1' },
   { key: 'dmEnabled', group: 'features', type: 'bool', default: '1' },
   { key: 'customContextMenu', group: 'features', type: 'bool', default: '1' },
+  // count skill invocations per user (shown in a plugin's skill detail); off = stop counting AND hide
+  { key: 'skillUsageEnabled', group: 'features', type: 'bool', default: '1' },
   { key: 'processPollMs', group: 'features', type: 'int', default: '5000', min: 1000, max: 60000, unit: 'ms' },
   { key: 'avatarMaxMB', group: 'features', type: 'int', default: '5', min: 1, max: 50, unit: 'MB' },
   { key: 'attachmentMaxMB', group: 'features', type: 'int', default: '20', min: 1, max: 200, unit: 'MB' },
