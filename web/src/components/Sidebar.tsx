@@ -7,6 +7,7 @@ import { openContextMenu, type CtxRows } from '../lib/contextmenu';
 import { collectDrop, collectPick, type Collected } from '../lib/dropfiles';
 import { Modal } from './Modal';
 import { ImportSessionModal } from './ImportSessionModal';
+import { WikiExplorer } from './WikiExplorer';
 import { SearchButton } from './SearchPalette';
 import { UploadProgress } from './UploadProgress';
 import { useT } from '../lib/i18n';
@@ -24,6 +25,7 @@ export function Sidebar() {
   const [showWiki, setShowWiki] = useState(false);
   const [showDm, setShowDm] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [srcTopic, setSrcTopic] = useState<string | null>(null); // wiki topic whose sources are open in the explorer
   // collapsed session groups (project ids, '' = unassigned) — same localStorage habit as sidebarCollapsed
   const [closedGroups, setClosedGroups] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('sidebarGroups') || '[]'); } catch { return []; }
@@ -171,6 +173,11 @@ export function Sidebar() {
             <span className="flex-1 truncate text-[13px]">{wt.name}</span>
             {wt.compileStatus === 'compiling' && <span className="text-[10px] text-txt3 group-hover:hidden">{t('sidebar.compiling')}</span>}
             {isAdmin && (
+              // source manager: the same explorer the chat banner opens, reachable without switching threads
+              <button className="hidden group-hover:block text-txt3 hover:text-clay px-1" title={t('sidebar.manageSourcesTitle')} aria-label={t('sidebar.manageSourcesTitle')}
+                onClick={(e) => { e.stopPropagation(); setSrcTopic(wt.id); }}><IconFolder size={14} /></button>
+            )}
+            {isAdmin && (
               <button className="hidden group-hover:block text-txt3 hover:text-danger px-1" title={t('sidebar.deleteTopicTitle')} aria-label={t('sidebar.deleteTopicTitle')}
                 onClick={(e) => { e.stopPropagation(); removeTopic(wt); }}><IconTrash size={14} /></button>
             )}
@@ -219,6 +226,7 @@ export function Sidebar() {
       </Modal>
 
       {showWiki && <WikiCreateModal onClose={() => setShowWiki(false)} />}
+      {srcTopic && <WikiExplorer topicId={srcTopic} onClose={() => setSrcTopic(null)} />}
       {showDm && <NewChannelModal onClose={() => setShowDm(false)} />}
       {importOpen && sessionImportEnabled && <ImportSessionModal onClose={() => setImportOpen(false)} />}
     </aside>
