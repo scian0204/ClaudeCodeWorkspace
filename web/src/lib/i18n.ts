@@ -764,6 +764,11 @@ const ko: Dict = {
 
   // my page
   'mypage.title': '마이페이지',
+  'mypage.tab.profile': '프로필',
+  'mypage.tab.session': '세션',
+  'mypage.tab.requests': '요청',
+  'mypage.tab.creds': '자격증명',
+  'mypage.tab.projects': '프로젝트',
   'mypage.profile': '프로필',
   'mypage.autoTitle': '세션 이름 자동 생성',
   'mypage.autoTitleLabel': '새 개인 대화의 이름을 주제에 맞게 자동으로 짓기',
@@ -1768,6 +1773,11 @@ const en: Dict = {
 
   // my page
   'mypage.title': 'My Page',
+  'mypage.tab.profile': 'Profile',
+  'mypage.tab.session': 'Session',
+  'mypage.tab.requests': 'Requests',
+  'mypage.tab.creds': 'Credentials',
+  'mypage.tab.projects': 'Projects',
   'mypage.profile': 'Profile',
   'mypage.autoTitle': 'Automatic session names',
   'mypage.autoTitleLabel': 'Name a new private chat after its topic',

@@ -18,8 +18,18 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return <div className="bg-card border border-line rounded-xl p-4"><div className="font-semibold mb-3">{title}</div>{children}</div>;
 }
 
+// Tab bar model — same shape as AdminPanel's TABS. `label` is an i18n key resolved at render.
+const TABS = [
+  { key: 'profile', label: 'mypage.tab.profile' },
+  { key: 'session', label: 'mypage.tab.session' },
+  { key: 'requests', label: 'mypage.tab.requests' },
+  { key: 'creds', label: 'mypage.tab.creds' },
+  { key: 'projects', label: 'mypage.tab.projects' },
+] as const;
+type MyTab = (typeof TABS)[number]['key'];
+
 // Per-user settings page: profile image, Claude token, git credentials, personal projects.
-// Structure mirrors AdminPanel (sticky header + max-w content + Section cards).
+// Structure mirrors AdminPanel (sticky header + tab bar + max-w content + Section cards).
 export function MyPage() {
   const setPanel = useStore((s) => s.setPanel);
   const llmProvidersEnabled = useStore((s) => s.llmProvidersEnabled);
@@ -28,6 +38,11 @@ export function MyPage() {
   const autoResumeEnabled = useStore((s) => s.autoResumeEnabled);
   const windowPrimerEnabled = useStore((s) => s.windowPrimerEnabled);
   const t = useT();
+  const [tab, setTab] = useState<MyTab>('profile');
+  // Session tab holds the three per-user automation toggles — hidden when the admin disabled all three.
+  const sessionTab = autoTitleEnabled || autoResumeEnabled || windowPrimerEnabled;
+  const tabs = TABS.filter((tb) =>
+    (tb.key !== 'requests' || approvalsEnabled) && (tb.key !== 'session' || sessionTab));
   return (
     <div className="h-full overflow-y-auto scrolly">
       <div className="flex items-center gap-3 px-4 md:px-5 py-3 border-b border-line sticky top-0 bg-panel z-10">
@@ -35,29 +50,48 @@ export function MyPage() {
         <button className="toolbtn" aria-label={t('common.back')} onClick={() => setPanel(null)}><IconArrowLeft /></button>
         <div className="font-semibold inline-flex items-center gap-1.5"><IconUser size={16} />{t('mypage.title')}</div>
       </div>
+      {/* Tab bar — scrolls horizontally inside its own container so it never widens the page on mobile. */}
+      <div className="border-b border-line overflow-x-auto scrolly">
+        <div className="flex gap-1 px-4 md:px-5">
+          {tabs.map((tb) => (
+            <button key={tb.key} onClick={() => setTab(tb.key)}
+              className={`shrink-0 px-3 py-2.5 text-sm whitespace-nowrap border-b-2 ${tab === tb.key ? 'border-clay text-clay' : 'border-transparent text-txt3 hover:text-txt'}`}>
+              {t(tb.label)}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="max-w-[860px] mx-auto p-4 md:p-5 space-y-6">
-        <Section title={t('mypage.profile')}><ProfileSection /></Section>
-        {autoTitleEnabled && <Section title={t('mypage.autoTitle')}><AutoTitleSection /></Section>}
-        {autoResumeEnabled && <Section title={t('mypage.autoResume')}><AutoResumeSection /></Section>}
-        {windowPrimerEnabled && <Section title={t('mypage.primeWindow')}><PrimeWindowSection /></Section>}
-        {approvalsEnabled && (
+        {tab === 'profile' && <Section title={t('mypage.profile')}><ProfileSection /></Section>}
+        {tab === 'session' && (
+          <>
+            {autoTitleEnabled && <Section title={t('mypage.autoTitle')}><AutoTitleSection /></Section>}
+            {autoResumeEnabled && <Section title={t('mypage.autoResume')}><AutoResumeSection /></Section>}
+            {windowPrimerEnabled && <Section title={t('mypage.primeWindow')}><PrimeWindowSection /></Section>}
+          </>
+        )}
+        {tab === 'requests' && approvalsEnabled && (
           <Section title={t('mypage.requests')}>
             <div className="text-xs text-txt2 bg-claysoft border border-line rounded-lg px-3 py-2 mb-3">{t('requests.intro')}</div>
             <RequestsSection />
           </Section>
         )}
-        <Section title={t('mypage.claudeToken')}><TokenSection /></Section>
-        {llmProvidersEnabled && (
-          <Section title={t('mypage.llmProvider')}>
-            <div className="text-xs text-txt2 bg-claysoft border border-line rounded-lg px-3 py-2 mb-3">{t('provider.intro')}</div>
-            <LlmProviderForm scope="user" />
-          </Section>
+        {tab === 'creds' && (
+          <>
+            <Section title={t('mypage.claudeToken')}><TokenSection /></Section>
+            {llmProvidersEnabled && (
+              <Section title={t('mypage.llmProvider')}>
+                <div className="text-xs text-txt2 bg-claysoft border border-line rounded-lg px-3 py-2 mb-3">{t('provider.intro')}</div>
+                <LlmProviderForm scope="user" />
+              </Section>
+            )}
+            <Section title={t('mypage.gitCreds')}>
+              <div className="text-xs text-txt2 bg-claysoft border border-line rounded-lg px-3 py-2 mb-3">{t('gitcred.notice')}</div>
+              <GitCredList scope="user" />
+            </Section>
+          </>
         )}
-        <Section title={t('mypage.gitCreds')}>
-          <div className="text-xs text-txt2 bg-claysoft border border-line rounded-lg px-3 py-2 mb-3">{t('gitcred.notice')}</div>
-          <GitCredList scope="user" />
-        </Section>
-        <Section title={t('mypage.projects')}><ProjectsSection /></Section>
+        {tab === 'projects' && <Section title={t('mypage.projects')}><ProjectsSection /></Section>}
       </div>
     </div>
   );
