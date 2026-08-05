@@ -43,11 +43,16 @@ for (const bad of [
 }
 
 // --- pull argv ---
-// Default must stay --ff-only (never a surprise merge commit); no upstream means an explicit refspec.
-assert.deepEqual(pullArgs({ branch: 'main', upstream: true }), ['pull', '--ff-only']);
+// Default must stay --ff-only (never a surprise merge commit) and carry --all so branches created
+// upstream come along. A refspec (no upstream configured) is the one case that cannot say --all:
+// git rejects the pair with "fetch --all does not make sense with refspecs".
+assert.deepEqual(pullArgs({ branch: 'main', upstream: true }), ['pull', '--all', '--ff-only']);
 assert.deepEqual(pullArgs({ branch: 'main' }), ['pull', '--ff-only', 'origin', 'main']);
-assert.deepEqual(pullArgs({ branch: 'feat/x', upstream: true, rebase: true }), ['pull', '--rebase', '--autostash']);
+assert.deepEqual(pullArgs({ branch: 'feat/x', upstream: true, rebase: true }), ['pull', '--all', '--rebase', '--autostash']);
 assert.deepEqual(pullArgs({ branch: 'feat/x', rebase: true }), ['pull', '--rebase', '--autostash', 'origin', 'feat/x']);
+for (const a of [pullArgs({ branch: 'main' }), pullArgs({ branch: 'main', rebase: true })]) {
+  assert.equal(a.includes('--all'), false, 'a refspec pull must not pass --all');
+}
 assert.throws(() => pullArgs({ branch: 'HEAD', upstream: true }), /detached HEAD/);
 assert.throws(() => pullArgs({ branch: '' }), /detached HEAD/);
 

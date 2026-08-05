@@ -63,14 +63,15 @@ export function GitPanel({ projectId, open, onClose }: { projectId: string; open
     } catch (e: any) { setErr(e.message); }
     finally { setBusy(''); }
   };
-  // Pull is fast-forward only server-side; `rebase` replays local commits instead. Git's own last
-  // output line ("Already up to date.", "Fast-forward", …) says more than any label we could write.
+  // Pull is `--all` + fast-forward only server-side; `rebase` replays local commits instead. Git's own
+  // output says more than any label we could write — and with --all its "* [new branch] …" lines are
+  // the point, so keep the tail rather than just the last line (the note box already preserves \n).
   const pull = async () => {
     setBusy('pull'); setErr(''); setNote('');
     try {
       const r = await api.post(`/api/projects/${projectId}/git/pull`, { rebase });
-      const last = String(r.output || '').split('\n').map((l: string) => l.trim()).filter(Boolean).pop();
-      setNote(last ? `${t('git.pullDone')} — ${last}` : t('git.pullDone'));
+      const tail = String(r.output || '').split('\n').map((l: string) => l.trim()).filter(Boolean).slice(-6);
+      setNote([t('git.pullDone'), ...tail].join('\n'));
       await load();
     } catch (e: any) { setErr(e.message); }
     finally { setBusy(''); }

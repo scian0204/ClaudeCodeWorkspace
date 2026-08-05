@@ -109,21 +109,33 @@ export async function gitPush(dir: string, opts: { env?: Env }): Promise<{ outpu
   } catch (e: any) { throw new Error(gitErr(e)); }
 }
 
-// Pull the current branch from origin. Fast-forward only by default — a pull that cannot fast-forward
-// fails loudly instead of inventing a merge commit in someone's workspace. `rebase` replays the local
-// commits on top of the remote ones instead (--autostash so a dirty tree does not block it).
-// Without a configured upstream the refspec is explicit (`origin <branch>`), since bare `git pull`
-// would have nothing to pull from.
+// Pull the current branch. `--all` so every remote is fetched in the same pass — branches created
+// upstream after the clone land as remote-tracking refs instead of staying invisible until something
+// else fetches. Fast-forward only by default: a pull that cannot fast-forward fails loudly instead of
+// inventing a merge commit in someone's workspace. `rebase` replays the local commits on top of the
+// remote ones instead (--autostash so a dirty tree does not block it).
+// Without a configured upstream the refspec has to be explicit (`origin <branch>`) — and git refuses
+// `--all` alongside a refspec ("fetch --all does not make sense with refspecs"), so that case drops
+// `--all` here and gitPull fetches all remotes in a separate step.
 export function pullArgs(opts: { rebase?: boolean; branch: string; upstream?: boolean }): string[] {
   const br = (opts.branch || '').trim();
   if (!br || br === 'HEAD') throw new Error('detached HEAD — check out a branch first');
-  const args = ['pull', ...(opts.rebase ? ['--rebase', '--autostash'] : ['--ff-only'])];
+  const args = ['pull', ...(opts.upstream ? ['--all'] : []),
+    ...(opts.rebase ? ['--rebase', '--autostash'] : ['--ff-only'])];
   if (!opts.upstream) args.push('origin', br);
   return args;
 }
 
 export async function gitPull(dir: string, opts: { env?: Env; rebase?: boolean; branch: string; upstream?: boolean }): Promise<{ output: string }> {
   const args = pullArgs(opts);
+  // A --single-branch clone only tracks one branch, so widen the refspec first or even --all cannot
+  // see the other upstream branches. Best-effort — no origin at all is reported by the pull below.
+  try { await git(dir, ['remote', 'set-branches', 'origin', '*'], opts.env); } catch { /* leave as is */ }
+  // The no-upstream pull carries a refspec and therefore cannot also say --all; fetch every remote
+  // separately so new branches still arrive. Failure here is not fatal — the pull reports the reason.
+  if (!opts.upstream) {
+    try { await git(dir, ['fetch', '--all'], opts.env, cfg.int('gitNetworkTimeoutMs')); } catch { /* pull reports it */ }
+  }
   try {
     const { stdout, stderr } = await git(dir, args, opts.env, cfg.int('gitNetworkTimeoutMs'));
     return { output: (stdout || stderr || '').trim().slice(0, 2000) };
