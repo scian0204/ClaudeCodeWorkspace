@@ -363,6 +363,13 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
     return ok({ ok: true, output: lines.join('\n'), ...GIT.status(idAt(2)) });
   }
   if (seg[1] === 'projects' && seg[3] === 'git' && seg[4] === 'push') { GIT.ahead = 0; GIT.behind = 0; return ok({ ok: true, output: 'Everything up-to-date (demo)' }); }
+  if (seg[1] === 'projects' && seg[3] === 'git' && seg[4] === 'log') {
+    const all = query.get('all') === '1';
+    return ok({ repo: true, commits: GIT.log(all, Number(query.get('limit')) || 50) });
+  }
+  if (seg[1] === 'projects' && seg[3] === 'git' && seg[4] === 'diff') {
+    return ok({ ok: true, diff: GIT.patch({ commit: query.get('commit') || undefined, path: query.get('path') || undefined }), truncated: false });
+  }
   if (seg[1] === 'projects' && seg[3] === 'git' && seg[4] === 'branches') return ok({ repo: true, ...GIT.branches });
   if (seg[1] === 'projects' && seg[3] === 'git' && seg[4] === 'checkout') {
     const name = String(b.branch || '').trim();

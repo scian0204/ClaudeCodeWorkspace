@@ -14,6 +14,7 @@ import * as cs from '../codeserver/manager.js';
 import { dockerStatus } from '../lib/docker-status.js';
 import {
   gitStatus, gitCommit, gitPush, gitPull, originHost, gitBranches, gitCheckout, gitFetchRemotes,
+  gitLog, gitDiff,
   gitInit, gitHasCommits, gitSetOrigin, isRepo,
   gitRemotes, gitRemoteAdd, gitRemoteSetUrl, gitRemoteRemove, validRemoteName, validRemoteUrl,
 } from '../lib/git-ops.js';
@@ -315,6 +316,34 @@ export async function projectRoutes(app: FastifyInstance) {
         env: { ...(cred ? askpassEnv(cred) : {}), ...identityEnv(ident) },
       });
       return { ok: true, output, ...(await gitStatus(ctx.dir)) };
+    } catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
+  });
+
+  // Commit history for the graph. Read-only and local (no fetch) so it stays fast. Query:
+  // ?limit=<n> (capped by gitLogMaxCount), ?all=1 to walk every branch/remote/tag instead of HEAD.
+  app.get('/api/projects/:id/git/log', async (req, reply) => {
+    const ctx = loadForGit(req, reply); if (!ctx) return;
+    const q = (req.query || {}) as any;
+    try {
+      const commits = await gitLog(ctx.dir, { limit: Number(q.limit) || 50, all: q.all === '1' || q.all === 'true' });
+      return { repo: true, commits };
+    } catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
+  });
+
+  // One patch: ?commit=<sha> (whole commit, stat + patch) or ?path=<repo-relative> (uncommitted
+  // changes vs HEAD; &untracked=1 for a file git does not track yet). Both may be combined to narrow
+  // a commit to one file. Validation lives in git-ops (validSha / safeRepoPath).
+  app.get('/api/projects/:id/git/diff', async (req, reply) => {
+    const ctx = loadForGit(req, reply); if (!ctx) return;
+    const q = (req.query || {}) as any;
+    if (!(await isRepo(ctx.dir))) return reply.code(400).send({ error: 'not a git repository' });
+    try {
+      const r = await gitDiff(ctx.dir, {
+        commit: q.commit ? String(q.commit) : undefined,
+        path: q.path ? String(q.path) : undefined,
+        untracked: q.untracked === '1' || q.untracked === 'true',
+      });
+      return { ok: true, ...r };
     } catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
   });
 

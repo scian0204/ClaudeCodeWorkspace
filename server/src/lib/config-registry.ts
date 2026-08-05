@@ -112,6 +112,9 @@ export const DEFS: ConfigDef[] = [
   { key: 'gitNetworkTimeoutMs', group: 'git', type: 'int', default: '300000', min: 10000, max: 3600000, unit: 'ms' },
   { key: 'gitMaxBufferMB', group: 'git', type: 'int', default: '8', min: 1, max: 512, unit: 'MB' },
   { key: 'git_author_domain', group: 'git', type: 'string', default: 'ccw.local' },
+  // history graph + diff viewer: how much history one request may walk, and how big a patch may get
+  { key: 'gitLogMaxCount', group: 'git', type: 'int', default: '200', min: 10, max: 5000 },
+  { key: 'gitDiffMaxKB', group: 'git', type: 'int', default: '512', min: 16, max: 8192, unit: 'KB' },
   // publish: git init an untracked project and push it to a repo created through the provider API
   { key: 'gitPublishEnabled', group: 'git', type: 'bool', default: '1' },
   { key: 'gitInitBranch', group: 'git', type: 'string', default: 'main' },
