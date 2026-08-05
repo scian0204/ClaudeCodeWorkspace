@@ -31,6 +31,13 @@ export const IconChevronRight = (p: IconProps) => <Svg {...p}><path d="m9 6 6 6-
 export const IconChevronUp = (p: IconProps) => <Svg {...p}><path d="m6 15 6-6 6 6" /></Svg>;
 export const IconPlus = (p: IconProps) => <Svg {...p}><path d="M12 5v14M5 12h14" /></Svg>;
 export const IconPanelLeft = (p: IconProps) => <Svg {...p}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></Svg>;
+// corner arrows: out = grow a dialog to the viewport, in = shrink it back
+export const IconMaximize = (p: IconProps) => (
+  <Svg {...p}><path d="M15 3h6v6M21 3l-7 7M9 21H3v-6M3 21l7-7" /></Svg>
+);
+export const IconMinimize = (p: IconProps) => (
+  <Svg {...p}><path d="M14 10h6V4M20 4l-7 7M10 14H4v6M4 20l7-7" /></Svg>
+);
 export const IconSearch = (p: IconProps) => <Svg {...p}><circle cx="11" cy="11" r="7" /><path d="m20 20-4.3-4.3" /></Svg>;
 export const IconKeyboard = (p: IconProps) => (
   <Svg {...p}><rect x="2" y="6" width="20" height="12" rx="2" /><path d="M6.5 10h.01M10.5 10h.01M14.5 10h.01M18 10h.01M8 14h8" /></Svg>

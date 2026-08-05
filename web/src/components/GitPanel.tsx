@@ -3,7 +3,7 @@ import { api } from '../lib/api';
 import { useStore } from '../lib/store';
 import { Modal } from './Modal';
 import { useT } from '../lib/i18n';
-import { IconGitBranch, IconChevronDown, IconChevronRight } from '../lib/icons';
+import { IconGitBranch, IconChevronDown, IconChevronRight, IconMaximize, IconMinimize } from '../lib/icons';
 import { DiffView, GitHistory, type DiffTarget } from './GitDiff';
 
 interface GitFile { path: string; index: string; work: string; staged: boolean; }
@@ -25,6 +25,8 @@ export function GitPanel({ projectId, open, onClose }: { projectId: string; open
   const [switching, setSwitching] = useState(false);
   // Which patch the diff box shows: a changed file, or a commit picked out of the history graph.
   const [diff, setDiff] = useState<DiffTarget | null>(null);
+  // The default dialog is sized for commit+push; a graph and a patch want the whole window.
+  const [big, setBig] = useState(false);
 
   const load = async () => {
     setBusy('load'); setErr('');
@@ -90,7 +92,14 @@ export function GitPanel({ projectId, open, onClose }: { projectId: string; open
   };
 
   return (
-    <Modal open={open} onOpenChange={(o) => { if (!o) onClose(); }} title={t('git.title')} width={560}>
+    <Modal open={open} onOpenChange={(o) => { if (!o) onClose(); }} title={t('git.title')} width={560}
+      fullscreen={big}
+      titleExtra={(
+        <button type="button" className="text-txt3 hover:text-clay" onClick={() => setBig((b) => !b)}
+          title={t(big ? 'git.shrink' : 'git.expand')} aria-label={t(big ? 'git.shrink' : 'git.expand')}>
+          {big ? <IconMinimize size={15} /> : <IconMaximize size={15} />}
+        </button>
+      )}>
       {busy === 'load' && !st && <div className="text-sm text-txt3">…</div>}
       {st && !st.repo && <PublishForm projectId={projectId} onDone={load} setErr={setErr} setNote={setNote} />}
       {st && st.repo && (
@@ -149,13 +158,13 @@ export function GitPanel({ projectId, open, onClose }: { projectId: string; open
             <RemotesSection projectId={projectId} onChanged={load} setErr={setErr} setNote={setNote} />
           )}
 
-          <GitHistory projectId={projectId} selected={diff?.kind === 'commit' ? diff.hash : undefined}
+          <GitHistory projectId={projectId} tall={big} selected={diff?.kind === 'commit' ? diff.hash : undefined}
             onPick={(c) => setDiff({ kind: 'commit', hash: c.hash, short: c.short, subject: c.subject })} />
 
           {st.files.length === 0
             ? <div className="text-sm text-txt3 mb-3">{t('git.clean')}</div>
             : (
-              <div className="border border-line rounded-lg mb-2 max-h-52 overflow-auto scrolly">
+              <div className={`border border-line rounded-lg mb-2 overflow-auto scrolly ${big ? 'max-h-[30vh]' : 'max-h-52'}`}>
                 <label className="flex items-center gap-2 px-2.5 py-1.5 border-b border-line text-xs text-txt2 cursor-pointer sticky top-0 bg-panel">
                   <input type="checkbox" checked={allSelected} onChange={toggleAll} />
                   {t('git.changes', { n: st.files.length })}
@@ -176,7 +185,7 @@ export function GitPanel({ projectId, open, onClose }: { projectId: string; open
               </div>
             )}
 
-          {diff && <DiffView projectId={projectId} target={diff} onClose={() => setDiff(null)} />}
+          {diff && <DiffView projectId={projectId} target={diff} tall={big} onClose={() => setDiff(null)} />}
 
           <textarea className="input w-full mb-2" rows={2} placeholder={t('git.messagePlaceholder')}
             value={message} onChange={(e) => setMessage(e.target.value)} />

@@ -27,8 +27,9 @@ function lineClass(l: string): string {
 
 // Unified patch viewer. Its own horizontal scroller — a patch has long lines and the page body must
 // never scroll sideways on a phone.
-export function DiffView({ projectId, target, onClose }: {
-  projectId: string; target: DiffTarget; onClose: () => void;
+// `tall` = the dialog went fullscreen, so the patch may use the height instead of a fixed 18rem box.
+export function DiffView({ projectId, target, tall, onClose }: {
+  projectId: string; target: DiffTarget; tall?: boolean; onClose: () => void;
 }) {
   const t = useT();
   const [diff, setDiff] = useState('');
@@ -66,7 +67,7 @@ export function DiffView({ projectId, target, onClose }: {
       {err && <div className="px-2.5 py-2 text-xs text-danger whitespace-pre-wrap break-words">{err}</div>}
       {!busy && !err && !diff.trim() && <div className="px-2.5 py-2 text-xs text-txt3">{t('git.diffEmpty')}</div>}
       {!busy && !err && !!diff.trim() && (
-        <div className="max-h-72 overflow-auto scrolly">
+        <div className={`overflow-auto scrolly ${tall ? 'max-h-[58vh]' : 'max-h-72'}`}>
           <pre className="text-[11px] leading-[1.5] font-mono px-2.5 py-1.5 w-max min-w-full">
             {shown.map((l, i) => <div key={i} className={lineClass(l)}>{l || ' '}</div>)}
           </pre>
@@ -107,8 +108,8 @@ function RowGraph({ row, width }: { row: GraphRow; width: number }) {
 
 // Collapsed by default like the remotes section: history is a look-at-it-when-you-need-it view, and
 // it costs a `git log` per open. Clicking a commit hands it up so the panel shows its patch.
-export function GitHistory({ projectId, selected, onPick }: {
-  projectId: string; selected?: string; onPick: (c: Commit) => void;
+export function GitHistory({ projectId, selected, tall, onPick }: {
+  projectId: string; selected?: string; tall?: boolean; onPick: (c: Commit) => void;
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -152,7 +153,7 @@ export function GitHistory({ projectId, selected, onPick }: {
           {err && <div className="text-xs text-danger mb-2 whitespace-pre-wrap break-words">{err}</div>}
           {!err && !busy && rows.length === 0 && <div className="text-[11px] text-txt3">{t('git.historyNone')}</div>}
           {rows.length > 0 && (
-            <div className="border border-line rounded-lg max-h-64 overflow-auto scrolly">
+            <div className={`border border-line rounded-lg overflow-auto scrolly ${tall ? 'max-h-[40vh]' : 'max-h-64'}`}>
               {rows.map((r) => (
                 <button key={r.c.hash} type="button" title={`${r.c.short} · ${r.c.author} · ${r.c.date}`}
                   className={`w-full flex items-center gap-2 pr-2 text-left hover:bg-line ${selected === r.c.hash ? 'bg-line' : ''}`}
