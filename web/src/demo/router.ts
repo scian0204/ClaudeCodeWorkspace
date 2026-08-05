@@ -344,6 +344,16 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
     GIT.ahead += 1;
     return ok({ ok: true, commit: genId('c').slice(2, 9) });
   }
+  if (seg[1] === 'projects' && seg[3] === 'git' && seg[4] === 'pull' && M === 'POST') {
+    const had = GIT.behind;
+    GIT.behind = 0;
+    const output = had
+      ? (b.rebase
+        ? `Successfully rebased and updated refs/heads/${GIT.branches.current}. (demo)`
+        : `Updating a1b2c3d..e4f5a6b\nFast-forward — ${had} commit(s) (demo)`)
+      : 'Already up to date. (demo)';
+    return ok({ ok: true, output, ...GIT.status(idAt(2)) });
+  }
   if (seg[1] === 'projects' && seg[3] === 'git' && seg[4] === 'push') { GIT.ahead = 0; GIT.behind = 0; return ok({ ok: true, output: 'Everything up-to-date (demo)' }); }
   if (seg[1] === 'projects' && seg[3] === 'git' && seg[4] === 'branches') return ok({ repo: true, ...GIT.branches });
   if (seg[1] === 'projects' && seg[3] === 'git' && seg[4] === 'checkout') {

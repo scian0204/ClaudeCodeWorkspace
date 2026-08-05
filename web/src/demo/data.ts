@@ -431,7 +431,7 @@ export const GIT = {
     mine: [{ id: 'gc_gh', scope: 'user', provider: 'github', host: 'github.com', username: 'x-access-token', authorEmail: 'demo@ccw.local', setAt: ago(60 * 24 * 4) }],
     common: [{ id: 'gc_gl', scope: 'common', provider: 'gitlab', host: 'gitlab.com', username: 'oauth2', authorEmail: null, setAt: ago(60 * 24 * 15) }],
   } as Record<string, any[]>,
-  ahead: 1, behind: 0,
+  ahead: 1, behind: 2, // behind > 0 so the Git panel's Pull actually fetches something in the demo
   files: [
     { path: 'src/auth/middleware.ts', index: 'M', work: ' ', staged: true },
     { path: 'src/auth/tokenService.ts', index: ' ', work: 'M', staged: false },

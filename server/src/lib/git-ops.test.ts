@@ -1,8 +1,9 @@
 // Runnable check (no framework): npx tsx server/src/lib/git-ops.test.ts
-// Covers the remote name/URL validators only — they are what stands between a request body and
-// `git remote add`, which has no `--` separator, so a leading '-' would become a flag.
+// Covers the remote name/URL validators (they are what stands between a request body and
+// `git remote add`, which has no `--` separator, so a leading '-' would become a flag) plus the
+// pull argv builder (ff-only vs rebase, and the explicit refspec when no upstream is configured).
 import assert from 'node:assert';
-import { validRemoteName, validRemoteUrl } from './git-ops.js';
+import { validRemoteName, validRemoteUrl, pullArgs } from './git-ops.js';
 
 // --- names ---
 for (const ok of ['origin', 'upstream', 'my-fork', 'a.b', 'team/fork', 'x_1']) {
@@ -40,5 +41,14 @@ for (const bad of [
 ]) {
   assert.equal(validRemoteUrl(bad), false, `expected invalid: ${JSON.stringify(bad)}`);
 }
+
+// --- pull argv ---
+// Default must stay --ff-only (never a surprise merge commit); no upstream means an explicit refspec.
+assert.deepEqual(pullArgs({ branch: 'main', upstream: true }), ['pull', '--ff-only']);
+assert.deepEqual(pullArgs({ branch: 'main' }), ['pull', '--ff-only', 'origin', 'main']);
+assert.deepEqual(pullArgs({ branch: 'feat/x', upstream: true, rebase: true }), ['pull', '--rebase', '--autostash']);
+assert.deepEqual(pullArgs({ branch: 'feat/x', rebase: true }), ['pull', '--rebase', '--autostash', 'origin', 'feat/x']);
+assert.throws(() => pullArgs({ branch: 'HEAD', upstream: true }), /detached HEAD/);
+assert.throws(() => pullArgs({ branch: '' }), /detached HEAD/);
 
 console.log('git-ops: all checks passed');

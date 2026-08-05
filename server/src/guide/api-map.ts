@@ -64,6 +64,7 @@ export const API_ROUTES: ApiRoute[] = [
   r('PATCH', '/api/sessions/:id', 'change a chat: { title?, projectId?, model?, effort? (low|medium|high|xhigh|max), permissionMode? (default|acceptEdits|plan|bypassPermissions) }.'),
   r('POST', '/api/sessions/:id/retitle', 'name a chat from its conversation (no body).'),
   r('POST', '/api/projects', 'create a project. Body: { name?, gitUrl?, branch?, credentialId? }. With gitUrl the repository is CLONED (a private repo needs a git credential already stored for that host). Omit `scope` for a personal project; scope:"common" is admin-only — a member must file a request instead.'),
+  r('POST', '/api/projects/:id/git/pull', 'pull origin into a project working dir (no body, or { rebase: true }). Fast-forward only by default — if local commits diverged it fails, and rebase:true replays them on top instead.'),
   r('POST', '/api/rooms', 'create a shared room. Body: { name }.'),
   r('POST', '/api/wiki/topics', 'create an LLM Wiki topic. Body: { name, description? }. Admin-only — a member must file a request instead.', true),
   r('POST', '/api/dm/channels', 'open a DM or group channel. Body: { kind:"dm", userId } or { kind:"group", name, memberIds }.'),

@@ -6,7 +6,8 @@ import { MobileMenuButton, Avatar, avatarUrl } from '../lib/ui';
 import { GitCredList } from './GitCredentials';
 import { LlmProviderForm } from './LlmProvider';
 import { ProjectCreateForm } from './ProjectCreateForm';
-import { IconArrowLeft, IconDot, IconFolder, IconUser } from '../lib/icons';
+import { GitPanel } from './GitPanel';
+import { IconArrowLeft, IconDot, IconFolder, IconGitBranch, IconUser } from '../lib/icons';
 
 function fmtDate(ms?: number | null) {
   if (!ms) return '';
@@ -282,8 +283,10 @@ function TokenSection() {
   );
 }
 
-// The user's personal projects: create (name), delete (with the shared confirm), or open one in a
-// fresh private chat (new session → attach the project → leave My Page to the chat).
+// The user's personal projects: create (name), delete (with the shared confirm), open one in a
+// fresh private chat (new session → attach the project → leave My Page to the chat), or manage its
+// git state right here — the same panel the chat header opens (pull / commit / push / branches /
+// remotes / publish), so a project never has to be attached to a session just to be pulled.
 function ProjectsSection() {
   const projects = useStore((s) => s.projects);
   const createProject = useStore((s) => s.createProject);
@@ -295,6 +298,7 @@ function ProjectsSection() {
   const t = useT();
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
+  const [gitFor, setGitFor] = useState<string | null>(null); // project whose Git panel is open
 
   const create = async () => {
     if (busy || !name.trim()) return;
@@ -321,11 +325,16 @@ function ProjectsSection() {
           <div key={p.id} className="flex items-center gap-2 text-sm border-b border-line py-1.5">
             <span className="opacity-70"><IconFolder size={15} /></span>
             <span className="flex-1 truncate" title={p.path}>{p.name}</span>
-            <button className="text-xs text-txt3 hover:text-clay" onClick={() => openInChat(p.id)}>{t('mypage.openInChat')}</button>
-            <button className="text-xs text-txt3 hover:text-danger" onClick={() => del(p.id, p.name)}>{t('common.delete')}</button>
+            <button className="text-xs text-txt3 hover:text-clay inline-flex items-center gap-1 shrink-0"
+              title={t('git.title')} onClick={() => setGitFor(p.id)}>
+              <IconGitBranch size={13} />{t('git.pill')}
+            </button>
+            <button className="text-xs text-txt3 hover:text-clay shrink-0" onClick={() => openInChat(p.id)}>{t('mypage.openInChat')}</button>
+            <button className="text-xs text-txt3 hover:text-danger shrink-0" onClick={() => del(p.id, p.name)}>{t('common.delete')}</button>
           </div>
         ))}
       </div>
+      {gitFor && <GitPanel projectId={gitFor} open onClose={() => setGitFor(null)} />}
       <div className="flex gap-2">
         <input className="input flex-1" placeholder={t('mypage.projectNamePlaceholder')} value={name} disabled={busy}
           onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && create()} />

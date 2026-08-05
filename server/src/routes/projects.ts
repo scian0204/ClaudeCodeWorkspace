@@ -13,7 +13,7 @@ import * as rooms from '../rooms/manager.js';
 import * as cs from '../codeserver/manager.js';
 import { dockerStatus } from '../lib/docker-status.js';
 import {
-  gitStatus, gitCommit, gitPush, originHost, gitBranches, gitCheckout, gitFetchRemotes,
+  gitStatus, gitCommit, gitPush, gitPull, originHost, gitBranches, gitCheckout, gitFetchRemotes,
   gitInit, gitHasCommits, gitSetOrigin, isRepo,
   gitRemotes, gitRemoteAdd, gitRemoteSetUrl, gitRemoteRemove, validRemoteName, validRemoteUrl,
 } from '../lib/git-ops.js';
@@ -294,6 +294,27 @@ export async function projectRoutes(app: FastifyInstance) {
     try {
       const { output } = await gitPush(ctx.dir, { env: askpassEnv(cred) });
       return { ok: true, output };
+    } catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
+  });
+
+  // Pull origin into the project's working dir. No credential requirement — a public repo pulls fine;
+  // when one exists it is passed so a private repo authenticates. An identity goes in too because
+  // `--rebase` writes commits. Body: { rebase?: boolean } (see gitPull: ff-only otherwise).
+  app.post('/api/projects/:id/git/pull', async (req, reply) => {
+    const ctx = loadForGit(req, reply); if (!ctx) return;
+    const st = await gitStatus(ctx.dir);
+    if (!st.repo) return reply.code(400).send({ error: 'not a git repository' });
+    if (!st.branch || st.branch === 'HEAD') return reply.code(400).send({ error: 'detached HEAD — 브랜치를 먼저 체크아웃하세요' });
+    const host = await originHost(ctx.dir);
+    if (!host) return reply.code(400).send({ error: 'origin remote 없음 — 가져올 원격지가 없습니다' });
+    const cred = resolveGitCred(ctx.u.id, host);
+    const ident = gitIdentity({ username: ctx.u.username, displayName: ctx.u.displayName }, cred);
+    try {
+      const { output } = await gitPull(ctx.dir, {
+        rebase: !!(req.body as any)?.rebase, branch: st.branch, upstream: st.upstream,
+        env: { ...(cred ? askpassEnv(cred) : {}), ...identityEnv(ident) },
+      });
+      return { ok: true, output, ...(await gitStatus(ctx.dir)) };
     } catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
   });
 

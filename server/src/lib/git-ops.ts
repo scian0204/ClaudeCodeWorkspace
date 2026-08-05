@@ -109,6 +109,27 @@ export async function gitPush(dir: string, opts: { env?: Env }): Promise<{ outpu
   } catch (e: any) { throw new Error(gitErr(e)); }
 }
 
+// Pull the current branch from origin. Fast-forward only by default — a pull that cannot fast-forward
+// fails loudly instead of inventing a merge commit in someone's workspace. `rebase` replays the local
+// commits on top of the remote ones instead (--autostash so a dirty tree does not block it).
+// Without a configured upstream the refspec is explicit (`origin <branch>`), since bare `git pull`
+// would have nothing to pull from.
+export function pullArgs(opts: { rebase?: boolean; branch: string; upstream?: boolean }): string[] {
+  const br = (opts.branch || '').trim();
+  if (!br || br === 'HEAD') throw new Error('detached HEAD — check out a branch first');
+  const args = ['pull', ...(opts.rebase ? ['--rebase', '--autostash'] : ['--ff-only'])];
+  if (!opts.upstream) args.push('origin', br);
+  return args;
+}
+
+export async function gitPull(dir: string, opts: { env?: Env; rebase?: boolean; branch: string; upstream?: boolean }): Promise<{ output: string }> {
+  const args = pullArgs(opts);
+  try {
+    const { stdout, stderr } = await git(dir, args, opts.env, cfg.int('gitNetworkTimeoutMs'));
+    return { output: (stdout || stderr || '').trim().slice(0, 2000) };
+  } catch (e: any) { throw new Error(gitErr(e)); }
+}
+
 // Turn a plain directory into a repo. Idempotent — an existing repo is left exactly as it is, so
 // publishing an already-tracked project never rewrites its history. `init -b` wants git >= 2.28;
 // older git reaches the same state by pointing the still-unborn HEAD at the branch itself.

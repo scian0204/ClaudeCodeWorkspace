@@ -16,7 +16,8 @@ export function GitPanel({ projectId, open, onClose }: { projectId: string; open
   const [st, setSt] = useState<Status | null>(null);
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [message, setMessage] = useState('');
-  const [busy, setBusy] = useState<'' | 'load' | 'commit' | 'push'>('');
+  const [busy, setBusy] = useState<'' | 'load' | 'commit' | 'push' | 'pull'>('');
+  const [rebase, setRebase] = useState(false);
   const [err, setErr] = useState('');
   const [note, setNote] = useState('');
   const [branches, setBranches] = useState<{ current: string; local: string[]; remote: string[] } | null>(null);
@@ -58,6 +59,18 @@ export function GitPanel({ projectId, open, onClose }: { projectId: string; open
     try {
       const r = await api.post(`/api/projects/${projectId}/git/commit`, { message: message.trim(), files: [...sel] });
       setMessage(''); setNote(t('git.commitDone', { commit: r.commit }));
+      await load();
+    } catch (e: any) { setErr(e.message); }
+    finally { setBusy(''); }
+  };
+  // Pull is fast-forward only server-side; `rebase` replays local commits instead. Git's own last
+  // output line ("Already up to date.", "Fast-forward", …) says more than any label we could write.
+  const pull = async () => {
+    setBusy('pull'); setErr(''); setNote('');
+    try {
+      const r = await api.post(`/api/projects/${projectId}/git/pull`, { rebase });
+      const last = String(r.output || '').split('\n').map((l: string) => l.trim()).filter(Boolean).pop();
+      setNote(last ? `${t('git.pullDone')} — ${last}` : t('git.pullDone'));
       await load();
     } catch (e: any) { setErr(e.message); }
     finally { setBusy(''); }
@@ -154,8 +167,17 @@ export function GitPanel({ projectId, open, onClose }: { projectId: string; open
             value={message} onChange={(e) => setMessage(e.target.value)} />
           {err && <div className="text-xs text-danger mb-2 whitespace-pre-wrap break-words">{err}</div>}
           {note && <div className="text-xs text-ok mb-2 whitespace-pre-wrap break-words">{note}</div>}
-          <div className="flex justify-end gap-2">
+          {/* wraps: four actions plus the rebase toggle do not fit one 375px row */}
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <label className="flex items-center gap-1.5 text-[11px] text-txt3 mr-auto cursor-pointer select-none"
+              title={t('git.pullHint')}>
+              <input type="checkbox" checked={rebase} onChange={(e) => setRebase(e.target.checked)} />
+              {t('git.pullRebase')}
+            </label>
             <button className="btn-ghost" onClick={onClose}>{t('token.close')}</button>
+            <button className="btn-ghost" disabled={!!busy} onClick={pull} title={t('git.pullHint')}>
+              {busy === 'pull' ? '…' : t('git.pull')}
+            </button>
             <button className="btn-ghost" disabled={!!busy || st.clean || sel.size === 0} onClick={commit}>
               {busy === 'commit' ? '…' : t('git.commit', { n: sel.size })}
             </button>
