@@ -354,7 +354,18 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
     ? makeAutoAllow(roots)
     : makeCanUseTool({ sessionId: s.id, roots, mode, emit: p.emit, signal: abort.signal });
 
+  // The CLI session id is what lets the NEXT turn resume this conversation, so persist it the moment
+  // the CLI reports it instead of only after a clean finish. A turn that fails, gets interrupted, or
+  // dies with the container (rebuild!) still wrote a real transcript to disk — dropping its id there
+  // silently restarts Claude with an empty context on the next message, which is invisible to the user
+  // because the transcript the UI renders comes from our own DB.
   let newClaudeSessionId: string | null = s.claudeSessionId ?? null;
+  const rememberSessionId = (id: string) => {
+    if (!id || id === newClaudeSessionId) return;
+    newClaudeSessionId = id;
+    db.update(schema.chatSessions).set({ claudeSessionId: id, updatedAt: Date.now() })
+      .where(eq(schema.chatSessions.id, s.id)).run();
+  };
   let inTok = 0, outTok = 0, cost = 0;
 
   try {
@@ -364,7 +375,7 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
     } else {
       const runOnce = (resume: string | null) => withRateLimitRetry(
         () => runReal({ ctx, prompt, canUseTool, emit: p.emit, sessionId: s.id, blocks, resume, abort,
-          onQuery: (q) => { turn.query = q; } }),
+          onQuery: (q) => { turn.query = q; }, onSessionId: rememberSessionId }),
         (ms) => p.emit('turn:congested', { sessionId: s.id, backoffMs: ms }),
         abort.signal, // a stop during rate-limit backoff must break the sleep, not wait it out
       );
@@ -379,16 +390,12 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
           res = await runOnce(null);
         } else throw e;
       }
-      newClaudeSessionId = res.claudeSessionId ?? newClaudeSessionId;
+      if (res.claudeSessionId) rememberSessionId(res.claudeSessionId); // no-op unless the stream never reported it
       inTok = res.inputTokens; outTok = res.outputTokens; cost = res.costUsd;
     }
 
     const asstMsg = saveMessage({ sessionId: s.id, role: 'assistant', authorName: 'Claude', content: { blocks } });
-    if (newClaudeSessionId && newClaudeSessionId !== s.claudeSessionId) {
-      db.update(schema.chatSessions).set({ claudeSessionId: newClaudeSessionId, updatedAt: Date.now() })
-        .where(eq(schema.chatSessions.id, s.id)).run();
-    }
-    recordUsage({
+    recordUsage({ // (the resume id is already stored — rememberSessionId wrote it mid-stream)
       userId: p.author.id, sessionId: s.id, roomId: kind === 'room' ? ownerId : null,
       inputTokens: inTok, outputTokens: outTok, costUsd: cost,
     });
@@ -454,6 +461,7 @@ async function runReal(a: {
   ctx: SessionContext; prompt: string; canUseTool: any; emit: Emit; sessionId: string;
   blocks: Block[]; resume?: string | null; abort: AbortController;
   onQuery?: (q: { interrupt: () => Promise<unknown> }) => void;
+  onSessionId?: (id: string) => void; // fires as soon as the CLI reports its id, before the turn ends
 }): Promise<{ claudeSessionId: string | null; inputTokens: number; outputTokens: number; costUsd: number }> {
   const { query } = await import('@anthropic-ai/claude-agent-sdk');
   const options = buildOptions(a.ctx, { canUseTool: a.canUseTool, resume: a.resume, abortController: a.abort });
@@ -465,8 +473,13 @@ async function runReal(a: {
   const toolIndex = new Map<string, number>();
 
   for await (const msg of q as any) {
+    // id first, abort check second: a turn stopped on its very first message still has a transcript
+    // worth resuming, and losing the id here is exactly what wipes the next turn's context.
+    if (msg?.session_id && msg.session_id !== claudeSessionId) {
+      claudeSessionId = msg.session_id;
+      a.onSessionId?.(claudeSessionId as string);
+    }
     if (a.abort.signal.aborted) break; // interrupted: stop emitting now, don't wait for the SDK to drain
-    if (msg?.session_id) claudeSessionId = msg.session_id;
     switch (msg?.type) {
       case 'stream_event': {
         const ev = msg.event;
