@@ -110,6 +110,9 @@ export function AdminPanel() {
                 )}
               </div>
             )}
+            {ov?.docker && !(ov.docker.ok && ov.docker.configured) && (
+              <DockerWarning docker={ov.docker} onProbed={(d: any) => setOv({ ...ov, docker: d })} />
+            )}
             {ov?.forceMock && <div className="text-xs text-warn bg-warnsoft border border-warn rounded-lg px-3 py-2">{t('admin.mockForcedWarning')}</div>}
             {!ov?.forceMock && ov?.commonToken && !ov.commonToken.hasToken && <div className="text-xs text-warn bg-warnsoft border border-warn rounded-lg px-3 py-2">{t('admin.commonTokenUnsetWarning')}</div>}
           </>
@@ -556,6 +559,32 @@ function ImageControl({ it, edit, onEdit, onSave }: {
         <button className="text-clay hover:underline disabled:opacity-40" disabled={busy !== null || dirty}
           onClick={pull}>{busy === 'pull' ? t('admin.cfgImagePulling') : t('admin.cfgImagePull')}</button>
       </div>
+    </div>
+  );
+}
+
+// Docker is down or unwired: name the three features that stop working, the actual reason, and the
+// fix — then let the admin re-probe without waiting for the interval or restarting.
+function DockerWarning({ docker, onProbed }: { docker: any; onProbed: (d: any) => void }) {
+  const t = useT();
+  const [busy, setBusy] = useState(false);
+  // the server already resolved precedence: a ping failure beats "env unset" (compose fixes both, but
+  // a missing socket is the deeper problem, so it must be the one named)
+  const reason: string = docker.reason;
+  const probe = async () => {
+    setBusy(true);
+    try { const r = await api.post('/api/admin/docker/probe', {}); onProbed(r.docker); }
+    catch (e: any) { useStore.getState().setError(e.message); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div className="text-xs text-warn bg-warnsoft border border-warn rounded-lg px-3 py-2 space-y-1.5">
+      <div className="font-semibold">{t('admin.docker.title', { reason: t(`docker.reason.${reason}`) })}</div>
+      <div className="leading-snug">{t('admin.docker.affected')}</div>
+      <div className="leading-snug text-txt2">{t(`admin.docker.fix.${reason}`)}</div>
+      {docker.error && <div className="font-mono text-[10px] text-txt3 break-all">{docker.error}</div>}
+      <button className="text-xs border border-warn rounded-lg px-2 py-0.5 hover:opacity-80 disabled:opacity-40 inline-flex items-center gap-1.5"
+        disabled={busy} onClick={probe}><IconRefresh size={12} />{busy ? t('admin.upd.checking') : t('admin.docker.recheck')}</button>
     </div>
   );
 }

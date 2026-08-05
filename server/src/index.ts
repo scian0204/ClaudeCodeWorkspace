@@ -32,6 +32,7 @@ import { cleanupSandboxOrphans } from './review/sandbox.js';
 import { initRealtime } from './realtime/io.js';
 import { startReaper, cleanupOrphans, ensureNetwork } from './codeserver/manager.js';
 import { reconcileSelfUpdate, scheduleUpdateCheck } from './admin/self-update.js';
+import { startDockerProbe } from './lib/docker-status.js';
 import { isCsPath, handleHttp, handleUpgrade } from './codeserver/proxy.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -106,6 +107,9 @@ async function main() {
   server.on('upgrade', (req, socket, head) => {
     if (isCsPath(req.url)) handleUpgrade(req, socket, head as Buffer);
   });
+  // probe the daemon first: editors, review sandboxes and self-update all need it, and the boot log +
+  // admin banner + UI gating all read this one verdict (a failure here is logged, never fatal)
+  await startDockerProbe().catch(() => {});
   await ensureNetwork(); // plain-`docker run` deploys: self-provision + join the code-server network
   await cleanupOrphans(); // clear orphans from a previous run
   await cleanupSandboxOrphans(); // clear leftover review build sandboxes from a previous run

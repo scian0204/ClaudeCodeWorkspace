@@ -51,7 +51,10 @@ export function Chat() {
   const isMobile = useIsMobile();
   // On a phone force chat-only: the split view and the code-server editor iframe are unusable at
   // that width, and the wiki sources panel would crowd out the answer. Citations still render inline.
-  const vm = isMobile ? 'chat' : viewMode;
+  // Same coercion without a working Docker daemon — a remembered 'editor' mode would otherwise render
+  // an iframe pointing at a container that can never be spawned.
+  const dockerReady = useStore((s) => s.dockerReady);
+  const vm = isMobile || !dockerReady ? 'chat' : viewMode;
   const showSources = isWiki && !isMobile;
   const cols = isMobile ? '1fr'
     : isWiki ? (sourcesOpen ? `1fr ${panelW}px` : '1fr 44px')
@@ -71,7 +74,7 @@ export function Chat() {
 }
 
 function Header() {
-  const { current: c, presence, control, toggleTheme, setViewMode, viewMode, setModel, setEffort, setMode } = useStore();
+  const { current: c, presence, control, toggleTheme, setViewMode, viewMode, setModel, setEffort, setMode, dockerReady, dockerReason } = useStore();
   const naming = useStore((s) => (s.current ? s.titling.includes(s.current.chatSessionId) : false));
   const [showMembers, setShowMembers] = useState(false);
   const [explorer, setExplorer] = useState(false);
@@ -153,11 +156,18 @@ function Header() {
 
       {!c.wikiTopicId && !isReview && (
         <div className="seg hidden md:flex">
-          {(['chat', 'split', 'editor'] as const).map((m) => (
-            <button key={m} className={viewMode === m ? 'on' : ''} onClick={() => setViewMode(m)}>
-              {m === 'chat' ? t('chat.viewChat') : m === 'split' ? t('chat.viewSplit') : t('chat.viewEditor')}
-            </button>
-          ))}
+          {(['chat', 'split', 'editor'] as const).map((m) => {
+            // the editor is a spawned code-server container — with no working daemon the button can
+            // only fail, so disable it and say why instead of letting the click 501
+            const off = m !== 'chat' && !dockerReady;
+            return (
+              <button key={m} className={viewMode === m ? 'on' : ''} disabled={off}
+                title={off ? t('chat.editorNeedsDocker', { reason: t(`docker.reason.${dockerReason}`) }) : undefined}
+                onClick={() => setViewMode(m)}>
+                {m === 'chat' ? t('chat.viewChat') : m === 'split' ? t('chat.viewSplit') : t('chat.viewEditor')}
+              </button>
+            );
+          })}
         </div>
       )}
       <button className="toolbtn" title={withKeys(t('chat.toggleTheme'), 'Mod+Shift+L')} aria-label={t('chat.toggleTheme')} onClick={toggleTheme}><IconTheme /></button>

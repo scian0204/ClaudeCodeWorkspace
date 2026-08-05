@@ -71,6 +71,8 @@ interface State {
   approvalsEnabled: boolean;     // admin feature flag (from /api/config) — gates the member-request UI
   dmEnabled: boolean;            // admin feature flag (from /api/config) — gates the DM/group chat UI
   searchEnabled: boolean;        // admin feature flag (from /api/config) — gates the unified-search UI
+  dockerReady: boolean;          // daemon reachable AND wired (from /api/config) — gates the editor views
+  dockerReason: string;          // why not: socket-missing | denied | unreachable | unconfigured | ok
   customContextMenuEnabled: boolean; // admin feature flag (from /api/config) — off = browser's own right-click menu everywhere
   gitPublishEnabled: boolean;    // admin feature flag (from /api/config) — gates git publish in the Git panel
   autoTitleEnabled: boolean;     // admin feature flag (from /api/config) — gates the auto session-title toggle
@@ -195,7 +197,7 @@ export const useStore = create<State>((set, get) => ({
   current: null, messages: [], live: null, turnActive: false,
   queue: { running: null, waiting: [] }, pending: [],
   control: { canApprove: true, canInterrupt: true, canSetMode: true, isOwner: true, delegable: [] },
-  presence: [], congested: false, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenuEnabled: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true,
+  presence: [], congested: false, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenuEnabled: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true, dockerReady: true, dockerReason: 'ok',
   guideEnabled: true, guideWriteEnabled: true, guideOpen: false, guideLoaded: false, guideMessages: [], guideLive: null, guideBusy: false, guideUnread: false,
   resumes: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
   channels: [], activeChannelId: null, channelMessages: [], titling: [],
@@ -260,6 +262,8 @@ export const useStore = create<State>((set, get) => ({
       guideWriteEnabled: cf.guideWriteEnabled !== false,
       channels: dmc.channels || [],
       processPollMs: cf.processPollMs || 5000,
+      dockerReady: cf.dockerReady !== false,
+      dockerReason: cf.dockerReason || 'ok',
     });
     await get().refreshRequests();
   },

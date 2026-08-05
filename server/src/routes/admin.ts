@@ -8,6 +8,7 @@ import { inspectImage, pullImage } from '../lib/docker-images.js';
 import { scanResources, runCleanup } from '../admin/cleanup.js';
 import { listProcesses, controlProcess } from '../admin/processes.js';
 import { appVersion, cachedStatus, checkForUpdate, updateStatus, applyUpdate } from '../admin/self-update.js';
+import { dockerStatus, probeDocker } from '../lib/docker-status.js';
 import { turnLimiter } from '../claude/throttle.js';
 import { setCommonToken, clearCommonToken, commonTokenMeta } from '../auth/claude-token.js';
 import { getProvider, setProvider, clearProvider } from '../auth/provider.js';
@@ -26,7 +27,16 @@ export async function adminRoutes(app: FastifyInstance) {
       // version + "newer image published" badge, from the LAST check only (never a fetch here)
       version: appVersion(),
       updateAvailable: !!cachedStatus()?.updateAvailable,
+      // daemon reachability: editors, review sandboxes and self-update all hang off it, so the panel
+      // warns up front with the real reason instead of letting each feature fail on use
+      docker: dockerStatus(),
     };
+  });
+
+  // re-probe on demand (an admin who just fixed the socket mount shouldn't wait for the interval)
+  app.post('/api/admin/docker/probe', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    return { docker: await probeDocker() };
   });
 
   app.get('/api/admin/usage', async (req, reply) => {

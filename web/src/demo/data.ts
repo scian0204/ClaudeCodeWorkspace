@@ -259,7 +259,10 @@ export const ADMIN = {
     commonToken: { hasToken: true, setAt: ago(60 * 24 * 20) },
     version: ADMIN.update.status().current,
     updateAvailable: ADMIN.update.status().updateAvailable,
+    docker: ADMIN.docker,
   }),
+  // healthy daemon in the demo, so the warning banner stays hidden and the editor views stay enabled
+  docker: { ok: true, configured: true, reason: 'ok', version: '27.4.0', error: null as string | null, checkedAt: Date.now() },
   // self-update: a newer image is "published"; applying flips the version after a few seconds so the
   // panel's watch loop reloads exactly like it does against the real server. The flip is persisted —
   // otherwise that reload would re-seed the demo and offer the same update again.

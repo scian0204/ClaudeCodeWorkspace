@@ -11,6 +11,7 @@ import { newId } from '../lib/ids.js';
 import { walkFiles, resolveUnder, IMG_CT } from '../lib/filetree.js';
 import * as rooms from '../rooms/manager.js';
 import * as cs from '../codeserver/manager.js';
+import { dockerStatus } from '../lib/docker-status.js';
 import {
   gitStatus, gitCommit, gitPush, originHost, gitBranches, gitCheckout, gitFetchRemotes,
   gitInit, gitHasCommits, gitSetOrigin, isRepo,
@@ -172,7 +173,12 @@ export async function projectRoutes(app: FastifyInstance) {
     const p = getProject(id);
     if (!p) return reply.code(404).send({ error: 'not found' });
     if (!canAccess(u, p)) return reply.code(403).send({ error: 'forbidden' });
-    if (!cs.dockerAvailable()) return reply.code(501).send({ error: 'code-server unavailable — run via Docker deployment' });
+    // 501 with the actual reason (socket missing / permission denied / daemon down / env unset) so the
+    // toast tells an operator what to fix, instead of a generic spawn failure from deep inside dockerode
+    if (!cs.dockerAvailable() || !dockerStatus().ok) {
+      const { reason } = dockerStatus(); // already resolves ping failure vs "env unset"
+      return reply.code(501).send({ error: `code-server unavailable — docker ${reason}`, dockerReason: reason });
+    }
     try {
       const { url } = await cs.open(u.id, p.id, p.path);
       return { url };

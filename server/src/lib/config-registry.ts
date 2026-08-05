@@ -122,6 +122,11 @@ export const DEFS: ConfigDef[] = [
   { key: 'codeServerReaperMs', group: 'codeserver', type: 'int', default: '60000', min: 10000, max: 3600000, unit: 'ms' },
   { key: 'codeServerWaitReadyMs', group: 'codeserver', type: 'int', default: '30000', min: 5000, max: 300000, unit: 'ms' },
 
+  // docker reachability probe (lib/docker-status.ts) — editors, review sandboxes and self-update all
+  // depend on the daemon, so its state is surfaced instead of failing at the moment of use.
+  { key: 'dockerProbeMs', group: 'docker', type: 'int', default: '30000', min: 0, max: 3600000, unit: 'ms' },
+  { key: 'dockerProbeTimeoutMs', group: 'docker', type: 'int', default: '5000', min: 500, max: 60000, unit: 'ms' },
+
   // self-update: check the published image for a newer version and swap this container for it
   // (admin/self-update.ts). Off = both the check and the apply endpoint are refused.
   { key: 'selfUpdateEnabled', group: 'update', type: 'bool', default: '1', env: 'SELF_UPDATE_ENABLED' },
@@ -333,6 +338,8 @@ export function modelMap(): Record<string, string> {
 }
 
 // Client-facing subset (any authed user): drives the model dropdown.
+// The Docker-readiness flags the UI also gates on are merged in by the /api/config route — importing
+// lib/docker-status.ts here would make the two modules circular (it reads cfg).
 export function publicConfig(): { models: Record<string, string>; defaultModel: string; defaultEffort: string; sessionImportEnabled: boolean; llmProvidersEnabled: boolean; approvalsEnabled: boolean; dmEnabled: boolean; searchEnabled: boolean; customContextMenu: boolean; autoTitleEnabled: boolean; autoResumeEnabled: boolean; windowPrimerEnabled: boolean; gitPublishEnabled: boolean; wikiSourceEditEnabled: boolean; reviewWebhookEnabled: boolean; guideEnabled: boolean; guideWriteEnabled: boolean; processPollMs: number } {
   return { models: modelMap(), defaultModel: cfg.str('defaultModel'), defaultEffort: cfg.str('defaultEffort'), sessionImportEnabled: cfg.bool('sessionImportEnabled'), llmProvidersEnabled: cfg.bool('llmProvidersEnabled'), approvalsEnabled: cfg.bool('approvalsEnabled'), dmEnabled: cfg.bool('dmEnabled'), searchEnabled: cfg.bool('searchEnabled'), customContextMenu: cfg.bool('customContextMenu'), autoTitleEnabled: cfg.bool('autoTitleEnabled'), autoResumeEnabled: cfg.bool('autoResumeEnabled'), windowPrimerEnabled: cfg.bool('windowPrimerEnabled'), gitPublishEnabled: cfg.bool('gitPublishEnabled'), wikiSourceEditEnabled: cfg.bool('wikiSourceEditEnabled'), reviewWebhookEnabled: cfg.bool('reviewWebhook'), guideEnabled: cfg.bool('guideEnabled'), guideWriteEnabled: cfg.bool('guideWriteEnabled'), processPollMs: cfg.int('processPollMs') };
 }

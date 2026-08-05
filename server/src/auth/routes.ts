@@ -12,6 +12,7 @@ import { getProvider, setProvider, clearProvider } from './provider.js';
 import { syncPrimer } from '../claude/window-primer.js';
 import * as cs from '../codeserver/manager.js';
 import { cfg, publicConfig } from '../lib/config-registry.js';
+import { dockerStatus } from '../lib/docker-status.js';
 import { paths, ensureUserLayout } from '../lib/paths.js';
 import { EXT_MIME, IMAGE_EXTS, pickImage } from '../lib/images.js';
 
@@ -56,10 +57,13 @@ export async function authRoutes(app: FastifyInstance) {
     return { user: authUserWithToken(u) };
   });
 
-  // client-facing config subset (drives the model dropdown) — any authed user
+  // client-facing config subset (drives the model dropdown) — any authed user.
+  // Docker readiness rides along so the UI can disable the editor views with a reason instead of
+  // offering a button that fails on click; the daemon version/error stay in the admin overview.
   app.get('/api/config', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
-    return publicConfig();
+    const dk = dockerStatus();
+    return { ...publicConfig(), dockerReady: dk.ok && dk.configured, dockerReason: dk.reason };
   });
 
   // ── self-service preferences (My Page) ──

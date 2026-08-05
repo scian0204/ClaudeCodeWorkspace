@@ -189,7 +189,7 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   }
 
   // ---- client-facing config (model dropdown) ----
-  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenu: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true, guideEnabled: true, guideWriteEnabled: true, processPollMs: 5000 });
+  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenu: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true, guideEnabled: true, guideWriteEnabled: true, processPollMs: 5000, dockerReady: ADMIN.docker.ok && ADMIN.docker.configured, dockerReason: ADMIN.docker.reason });
 
   // ---- guide assistant (floating corner panel) ----
   // The turn itself is synthesized in ./socket (it has to emit the guide:* stream); this only
@@ -564,6 +564,7 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   if (P === '/api/admin/cleanup' && M === 'POST') return ok(ADMIN.runCleanup(b.action));
   if (P === '/api/admin/processes' && M === 'GET') return ok(ADMIN.processes);
   if (P === '/api/admin/processes' && M === 'POST') return ok(ADMIN.runProcess(b));
+  if (P === '/api/admin/docker/probe' && M === 'POST') return ok({ docker: { ...ADMIN.docker, checkedAt: Date.now() } });
   if (P === '/api/admin/update' && M === 'GET') return ok(ADMIN.update.status());
   if (P === '/api/admin/update/check' && M === 'POST') return ok(ADMIN.update.status());
   if (P === '/api/admin/update/apply' && M === 'POST') return ok(ADMIN.update.apply());
