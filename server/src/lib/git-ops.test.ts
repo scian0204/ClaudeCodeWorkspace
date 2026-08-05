@@ -3,7 +3,7 @@
 // `git remote add`, which has no `--` separator, so a leading '-' would become a flag) plus the
 // pull argv builder (ff-only vs rebase, and the explicit refspec when no upstream is configured).
 import assert from 'node:assert';
-import { validRemoteName, validRemoteUrl, pullArgs } from './git-ops.js';
+import { validRemoteName, validRemoteUrl, pullArgs, validSha, safeRepoPath } from './git-ops.js';
 
 // --- names ---
 for (const ok of ['origin', 'upstream', 'my-fork', 'a.b', 'team/fork', 'x_1']) {
@@ -55,5 +55,21 @@ for (const a of [pullArgs({ branch: 'main' }), pullArgs({ branch: 'main', rebase
 }
 assert.throws(() => pullArgs({ branch: 'HEAD', upstream: true }), /detached HEAD/);
 assert.throws(() => pullArgs({ branch: '' }), /detached HEAD/);
+
+// --- diff targets ---
+// A sha reaches `git show` as a bare argument and a path reaches the untracked reader as a real
+// filesystem path, so both are validated: anything flag-like, ref-like or escaping the repo is out.
+for (const ok of ['a1b2', 'DEADBEEF', 'e4f5a6b', 'a'.repeat(40)]) {
+  assert.equal(validSha(ok), true, `expected valid sha: ${ok}`);
+}
+for (const bad of ['', 'abc', 'HEAD', 'main', '--output=/tmp/x', 'a1b2..c3d4', 'a1b2 c3d4', 'z1b2', 'a'.repeat(41)]) {
+  assert.equal(validSha(bad), false, `expected invalid sha: ${JSON.stringify(bad)}`);
+}
+assert.equal(safeRepoPath('src/auth/token.ts'), 'src/auth/token.ts');
+assert.equal(safeRepoPath('src\\auth\\token.ts'), 'src/auth/token.ts'); // a Windows client still means one path
+assert.equal(safeRepoPath('a..b/x.ts'), 'a..b/x.ts');                   // '..' inside a name is not traversal
+for (const bad of ['', '   ', '/etc/passwd', 'C:/Windows/x', '../secrets', 'a/../../b', '-o', 'x\0y']) {
+  assert.equal(safeRepoPath(bad), null, `expected rejected path: ${JSON.stringify(bad)}`);
+}
 
 console.log('git-ops: all checks passed');

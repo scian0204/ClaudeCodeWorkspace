@@ -446,6 +446,72 @@ export const GIT = {
   // the Git panel's init / publish form is reachable in the demo. init or publish clears the flag.
   untracked: ['p_web'] as string[],
   remotes: [{ name: 'origin', url: 'https://github.com/acme/webapp.git' }] as { name: string; url: string }[],
+  // history for the graph. One merge (two parents) and a side branch, so the lane layout, the merge
+  // diagonal and the collapse back into one lane are all visible in the static demo.
+  commits: [
+    { hash: 'e4f5a6b', parents: ['9c1d2e3', '77aa11b'], subject: "Merge branch 'feat/auth-refactor'", author: 'Demo User', min: 20, refs: ['HEAD -> main', 'origin/main'] },
+    { hash: '9c1d2e3', parents: ['4b5c6d7'], subject: 'fix(web): guard an empty token before refresh', author: 'jamie', min: 90, refs: [] },
+    { hash: '77aa11b', parents: ['4b5c6d7'], subject: 'feat(auth): rotate refresh tokens', author: 'riley', min: 150, refs: ['origin/feat/auth-refactor', 'feat/auth-refactor'] },
+    { hash: '4b5c6d7', parents: ['1a2b3c4'], subject: 'feat(api): rate limit the login route', author: 'Demo User', min: 60 * 26, refs: [] },
+    { hash: '1a2b3c4', parents: [], subject: 'chore: initial commit', author: 'Demo User', min: 60 * 24 * 40, refs: [] },
+  ],
+  // patches the diff viewer renders — per changed file, plus one per commit (with the stat header
+  // `git show` prints). Anything not listed falls back to a small generated patch.
+  patches: {
+    'src/auth/middleware.ts': `diff --git a/src/auth/middleware.ts b/src/auth/middleware.ts
+--- a/src/auth/middleware.ts
++++ b/src/auth/middleware.ts
+@@ -12,8 +12,11 @@ export function requireAuth(req, reply) {
+   const token = readCookie(req, 'sid');
+-  if (!token) return reply.code(401).send({ error: 'unauthorized' });
+-  const session = sessions.get(token);
++  if (!token) return reply.code(401).send({ error: 'unauthorized' });
++  // expiry is inclusive: a token that expires this very second is already gone
++  const session = sessions.get(token);
++  if (session && session.expiresAt <= Date.now()) sessions.delete(token);
+   if (!session) return reply.code(401).send({ error: 'unauthorized' });
+   return session.user;
+ }`,
+    'src/auth/tokenService.ts': `diff --git a/src/auth/tokenService.ts b/src/auth/tokenService.ts
+--- a/src/auth/tokenService.ts
++++ b/src/auth/tokenService.ts
+@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
+ export const newToken = () => randomBytes(24).toString('base64url');
++export const TOKEN_TTL_MS = 30 * 60_000;`,
+    'src/routes/login.ts': `diff --git a/src/routes/login.ts b/src/routes/login.ts
+new file mode 100644
+--- /dev/null
++++ b/src/routes/login.ts
+@@ -0,0 +1,6 @@
++import { verify } from '../auth/password.js';
++
++export function loginRoutes(app) {
++  app.post('/api/login', async (req, reply) => reply.send({ ok: true }));
++}`,
+  } as Record<string, string>,
+  // Same shape as the server's /git/log. `all` adds a commit that lives only on another remote
+  // branch, so the "All branches" toggle visibly changes the graph (a third lane opens and closes).
+  log(all: boolean, limit: number) {
+    const extra = { hash: 'b0c1d2e', parents: ['4b5c6d7'], subject: 'chore(release): 2.3 changelog', author: 'jamie', min: 600, refs: ['origin/release/2.3'] };
+    const rows = all ? [this.commits[0], extra, ...this.commits.slice(1)] : this.commits;
+    return rows.slice(0, limit).map((c) => ({
+      hash: c.hash, short: c.hash, parents: c.parents, author: c.author,
+      email: `${c.author.split(' ')[0].toLowerCase()}@ccw.local`,
+      date: new Date(ago(c.min)).toISOString(), subject: c.subject, refs: c.refs,
+    }));
+  },
+  patch(opts: { commit?: string; path?: string }) {
+    if (opts.commit) {
+      const c = this.log(true, 99).find((x) => x.hash === opts.commit);
+      const body = this.patches['src/auth/middleware.ts'];
+      return [`commit ${opts.commit}`, `Author: ${c?.author} <${c?.email}>`, `Date:   ${c?.date}`, '',
+        `    ${c?.subject}`, '', ' src/auth/middleware.ts | 5 ++++-', ' 1 file changed, 4 insertions(+), 1 deletion(-)', '',
+        body].join('\n');
+    }
+    const p = String(opts.path || '');
+    return this.patches[p]
+      || `diff --git a/${p} b/${p}\n--- a/${p}\n+++ b/${p}\n@@ -1,2 +1,2 @@\n-// demo: no patch recorded for this file\n+// demo: no patch recorded for this file (changed)\n export {};`;
+  },
   status(projectId?: string) {
     if (projectId && this.untracked.includes(projectId)) {
       return { repo: false, branch: '', upstream: false, ahead: 0, behind: 0, files: [], clean: true,

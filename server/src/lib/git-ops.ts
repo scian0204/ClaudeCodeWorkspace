@@ -1,5 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import path from 'node:path';
+import fsp from 'node:fs/promises';
 import { cfg } from './config-registry.js';
 
 const execFileP = promisify(execFile);
@@ -285,6 +287,92 @@ export async function gitMerge(dir: string, ref: string, message: string, env?: 
 export async function gitDiffNames(dir: string, range: string, env?: Env): Promise<string[]> {
   const { stdout } = await git(dir, ['diff', '--name-only', '-z', range], env);
   return stdout.split('\0').map((s) => s.trim()).filter(Boolean);
+}
+
+// ── history (graph) + diffs ──
+
+export interface GitCommitRow {
+  hash: string; short: string; parents: string[];
+  author: string; email: string; date: string; subject: string; refs: string[];
+}
+
+// One record per commit, fields separated by US (0x1f) and records by NUL, so a subject containing
+// a newline (or a tab, or the separator itself in a ref name) cannot fake a field or a row.
+const LOG_FIELDS = ['%H', '%h', '%P', '%an', '%ae', '%aI', '%D', '%s'];
+const LOG_FMT = `${LOG_FIELDS.join('%x1f')}%x00`;
+
+// `--topo-order` (what `git log --graph` itself uses) keeps a branch's commits contiguous, so the
+// lane layout drawn from `parents` does not zig-zag. `all` walks every branch/remote/tag instead of
+// just HEAD — refs/ is NOT used wholesale, which would drag in refs/stash and our refs/ccw/pr-*.
+export async function gitLog(dir: string, opts: { limit?: number; all?: boolean } = {}): Promise<GitCommitRow[]> {
+  if (!(await isRepo(dir)) || !(await gitHasCommits(dir))) return [];
+  const limit = Math.max(1, Math.min(opts.limit || 50, cfg.int('gitLogMaxCount')));
+  const args = ['log', '--topo-order', `--max-count=${limit}`, `--format=${LOG_FMT}`,
+    ...(opts.all ? ['--branches', '--remotes', '--tags', 'HEAD'] : ['HEAD'])];
+  const { stdout } = await git(dir, args);
+  return stdout.split('\0').map((rec) => rec.replace(/^\n+/, '')).filter(Boolean).map((rec) => {
+    const [hash, short, parents, author, email, date, refs, subject] = rec.split('\x1f');
+    return {
+      hash, short, parents: (parents || '').split(' ').filter(Boolean),
+      author, email, date, subject: subject || '',
+      refs: (refs || '').split(', ').map((r) => r.trim()).filter(Boolean),
+    };
+  });
+}
+
+// Diff targets are validated, not escaped: execFile never involves a shell, so the hazard is an
+// argument that git reads as a flag or a ref of its own.
+export function validSha(s: string): boolean { return /^[0-9a-fA-F]{4,40}$/.test(String(s || '')); }
+
+// Repo-relative pathspec. Absolute paths, '..' segments and NUL are refused — git would reject a
+// pathspec leaving the repo, but the untracked branch below reads the file off disk directly.
+export function safeRepoPath(p: string): string | null {
+  const s = String(p || '').replace(/\\/g, '/').trim();
+  if (!s || s.length > 4000 || s.startsWith('/') || s.startsWith('-') || s.includes('\0')) return null;
+  if (/^[A-Za-z]:/.test(s) || s.split('/').includes('..')) return null;
+  return s;
+}
+
+// An untracked file has nothing in git to diff against, so the all-added patch is synthesised from
+// disk (`git diff --no-index /dev/null <f>` would be POSIX-only). Same shape as a real patch so the
+// viewer needs no second code path.
+async function untrackedPatch(dir: string, rel: string, maxChars: number): Promise<string> {
+  const abs = path.resolve(dir, rel);
+  if (abs !== path.resolve(dir) && !abs.startsWith(path.resolve(dir) + path.sep)) throw new Error('path outside project');
+  let buf: Buffer;
+  try { buf = await fsp.readFile(abs); } catch { throw new Error(`cannot read ${rel}`); }
+  const head = `diff --git a/${rel} b/${rel}\nnew file mode 100644\n--- /dev/null\n+++ b/${rel}\n`;
+  if (buf.includes(0)) return `${head}Binary file (untracked)`;
+  const text = buf.toString('utf8').slice(0, maxChars);
+  const lines = text.split('\n');
+  if (lines[lines.length - 1] === '') lines.pop(); // trailing newline is not a line
+  return `${head}@@ -0,0 +1,${lines.length} @@\n${lines.map((l) => `+${l}`).join('\n')}`;
+}
+
+// One of: a commit (`git show`, stat + patch), or a working-tree path (everything not yet committed,
+// staged or not — `HEAD` as the base, which is also what a reviewer wants to see).
+export async function gitDiff(dir: string, opts: { commit?: string; path?: string; untracked?: boolean }): Promise<{ diff: string; truncated: boolean }> {
+  const maxChars = cfg.int('gitDiffMaxKB') * 1024;
+  const rel = opts.path ? safeRepoPath(opts.path) : null;
+  if (opts.path && !rel) throw new Error('invalid path');
+  let out = '';
+  if (opts.commit) {
+    if (!validSha(opts.commit)) throw new Error('invalid commit');
+    // --first-parent so a merge commit shows the diff it introduced instead of nothing at all.
+    const args = ['show', '--no-color', '--stat', '--patch', '--first-parent', opts.commit,
+      ...(rel ? ['--', rel] : [])];
+    try { out = (await git(dir, args)).stdout; } catch (e: any) { throw new Error(gitErr(e)); }
+  } else if (rel) {
+    if (opts.untracked) return { diff: await untrackedPatch(dir, rel, maxChars), truncated: false };
+    try {
+      // Unborn HEAD (no commits yet) has nothing to compare against — fall back to index vs worktree.
+      const base = (await gitHasCommits(dir)) ? ['HEAD'] : [];
+      out = (await git(dir, ['diff', '--no-color', ...base, '--', rel])).stdout;
+    } catch (e: any) { throw new Error(gitErr(e)); }
+  } else {
+    throw new Error('commit or path required');
+  }
+  return { diff: out.slice(0, maxChars), truncated: out.length > maxChars };
 }
 
 // Switch branches. `git checkout <name>` DWIMs: an existing local branch is checked out;

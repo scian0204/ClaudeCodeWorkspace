@@ -43,6 +43,8 @@ export const API_ROUTES: ApiRoute[] = [
   r('GET', '/api/rooms/:id', 'one room: members + delegations + messages.'),
   r('GET', '/api/projects', 'projects: { common, mine }. A project is a working directory a chat can be pointed at.'),
   r('GET', '/api/projects/:id/git/status', 'git status of a project (branch, dirty files, origin host, resolved credential).'),
+  r('GET', '/api/projects/:id/git/log', 'commit history of a project for the history graph. Query: ?limit=<n>&all=1 (all = every branch/remote/tag, not just HEAD). Each commit carries hash, short, parents, author, date, subject, refs.'),
+  r('GET', '/api/projects/:id/git/diff', 'one patch from a project. Query: ?commit=<sha> (that commit, stat + patch) or ?path=<repo-relative file> (uncommitted changes vs HEAD; add &untracked=1 for a file git does not track yet).'),
   r('GET', '/api/wiki/topics', 'LLM Wiki topics with their compile status.'),
   r('GET', '/api/plugins', 'installed plugins: { common, mine, prefs }. Skills live inside plugins.'),
   r('GET', '/api/plugins/:id/detail', "one plugin's manifest + the skills it exposes (with usage counters)."),

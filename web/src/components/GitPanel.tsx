@@ -4,6 +4,7 @@ import { useStore } from '../lib/store';
 import { Modal } from './Modal';
 import { useT } from '../lib/i18n';
 import { IconGitBranch, IconChevronDown, IconChevronRight } from '../lib/icons';
+import { DiffView, GitHistory, type DiffTarget } from './GitDiff';
 
 interface GitFile { path: string; index: string; work: string; staged: boolean; }
 interface CredMeta { scope: 'user' | 'common'; provider: string; host: string; username: string; authorEmail: string | null; }
@@ -22,6 +23,8 @@ export function GitPanel({ projectId, open, onClose }: { projectId: string; open
   const [note, setNote] = useState('');
   const [branches, setBranches] = useState<{ current: string; local: string[]; remote: string[] } | null>(null);
   const [switching, setSwitching] = useState(false);
+  // Which patch the diff box shows: a changed file, or a commit picked out of the history graph.
+  const [diff, setDiff] = useState<DiffTarget | null>(null);
 
   const load = async () => {
     setBusy('load'); setErr('');
@@ -39,7 +42,7 @@ export function GitPanel({ projectId, open, onClose }: { projectId: string; open
 
   const checkout = async (name: string) => {
     if (!name || name === branches?.current) return;
-    setSwitching(true); setErr(''); setNote('');
+    setSwitching(true); setErr(''); setNote(''); setDiff(null);
     try {
       await api.post(`/api/projects/${projectId}/git/checkout`, { branch: name });
       setNote(t('git.switched', { branch: name }));
@@ -47,7 +50,7 @@ export function GitPanel({ projectId, open, onClose }: { projectId: string; open
     } catch (e: any) { setErr(e.message); }
     finally { setSwitching(false); }
   };
-  useEffect(() => { if (open) { setNote(''); load(); } /* eslint-disable-next-line */ }, [open, projectId]);
+  useEffect(() => { if (open) { setNote(''); setDiff(null); load(); } /* eslint-disable-next-line */ }, [open, projectId]);
 
   const toggle = (p: string) => { const n = new Set(sel); n.has(p) ? n.delete(p) : n.add(p); setSel(n); };
   const allSelected = !!st && st.files.length > 0 && sel.size === st.files.length;
@@ -55,7 +58,7 @@ export function GitPanel({ projectId, open, onClose }: { projectId: string; open
 
   const commit = async () => {
     if (!message.trim()) { setErr(t('git.needMessage')); return; }
-    setBusy('commit'); setErr(''); setNote('');
+    setBusy('commit'); setErr(''); setNote(''); setDiff(null);
     try {
       const r = await api.post(`/api/projects/${projectId}/git/commit`, { message: message.trim(), files: [...sel] });
       setMessage(''); setNote(t('git.commitDone', { commit: r.commit }));
@@ -67,7 +70,7 @@ export function GitPanel({ projectId, open, onClose }: { projectId: string; open
   // output says more than any label we could write — and with --all its "* [new branch] …" lines are
   // the point, so keep the tail rather than just the last line (the note box already preserves \n).
   const pull = async () => {
-    setBusy('pull'); setErr(''); setNote('');
+    setBusy('pull'); setErr(''); setNote(''); setDiff(null);
     try {
       const r = await api.post(`/api/projects/${projectId}/git/pull`, { rebase });
       const tail = String(r.output || '').split('\n').map((l: string) => l.trim()).filter(Boolean).slice(-6);
@@ -146,6 +149,9 @@ export function GitPanel({ projectId, open, onClose }: { projectId: string; open
             <RemotesSection projectId={projectId} onChanged={load} setErr={setErr} setNote={setNote} />
           )}
 
+          <GitHistory projectId={projectId} selected={diff?.kind === 'commit' ? diff.hash : undefined}
+            onPick={(c) => setDiff({ kind: 'commit', hash: c.hash, short: c.short, subject: c.subject })} />
+
           {st.files.length === 0
             ? <div className="text-sm text-txt3 mb-3">{t('git.clean')}</div>
             : (
@@ -154,15 +160,23 @@ export function GitPanel({ projectId, open, onClose }: { projectId: string; open
                   <input type="checkbox" checked={allSelected} onChange={toggleAll} />
                   {t('git.changes', { n: st.files.length })}
                 </label>
+                {/* The checkbox stages, the path opens the diff — so they are siblings, not a label
+                    wrapping both (a click on the path would otherwise also toggle the checkbox). */}
                 {st.files.map((f) => (
-                  <label key={f.path} className="flex items-center gap-2 px-2.5 py-1 text-sm cursor-pointer hover:bg-line">
-                    <input type="checkbox" checked={sel.has(f.path)} onChange={() => toggle(f.path)} />
+                  <div key={f.path} className="flex items-center gap-2 px-2.5 py-1 text-sm hover:bg-line">
+                    <input type="checkbox" className="cursor-pointer" checked={sel.has(f.path)} onChange={() => toggle(f.path)} />
                     <span className={`font-mono text-[10px] w-5 text-center rounded ${f.index === '?' ? 'text-warn' : f.staged ? 'text-ok' : 'text-txt3'}`}>{(f.index + f.work).trim() || '·'}</span>
-                    <span className="font-mono text-xs truncate">{f.path}</span>
-                  </label>
+                    <button type="button" title={t('git.diffOpen')}
+                      className={`font-mono text-xs truncate text-left min-w-0 flex-1 hover:text-clay ${diff?.kind === 'file' && diff.path === f.path ? 'text-clay' : ''}`}
+                      onClick={() => setDiff({ kind: 'file', path: f.path, untracked: f.index === '?' })}>
+                      {f.path}
+                    </button>
+                  </div>
                 ))}
               </div>
             )}
+
+          {diff && <DiffView projectId={projectId} target={diff} onClose={() => setDiff(null)} />}
 
           <textarea className="input w-full mb-2" rows={2} placeholder={t('git.messagePlaceholder')}
             value={message} onChange={(e) => setMessage(e.target.value)} />
