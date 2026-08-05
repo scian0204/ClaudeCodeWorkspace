@@ -33,6 +33,16 @@ export function clampMode(requested: PermMode, allowBypass: boolean): PermMode {
   return requested;
 }
 
+const RUNNING_AS_ROOT = typeof process.getuid === 'function' && process.getuid() === 0;
+
+// bypassPermissions maps to the CLI's --dangerously-skip-permissions, which the CLI refuses when the
+// process is root ("cannot be used with root/sudo privileges") → the subprocess exits 1 and the whole
+// turn fails. This container runs as root (Docker socket + /data), so hand the SDK acceptEdits
+// instead; makeCanUseTool auto-allows every tool in bypass mode, so the mode's behavior is unchanged.
+export function sdkMode(mode: PermMode, asRoot = RUNNING_AS_ROOT): PermMode {
+  return mode === 'bypassPermissions' && asRoot ? 'acceptEdits' : mode;
+}
+
 export function rootsFor(ctx: SessionContext): string[] {
   return allowedRootsFor(ctx.kind, ctx.ownerId, ctx.cwd);
 }
@@ -76,7 +86,7 @@ export function buildOptions(ctx: SessionContext, extra: {
     cwd: ctx.cwd,
     env,
     model: ctx.providerModel || ctx.model, // provider model id/ARN overrides the dropdown model
-    permissionMode: ctx.permissionMode,
+    permissionMode: sdkMode(ctx.permissionMode),
     effort: ctx.effort,
     settingSources: ['user', 'project', 'local'],
     additionalDirectories,

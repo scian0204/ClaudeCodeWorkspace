@@ -41,8 +41,12 @@ export function respondPermission(requestId: string, decision: Decision, answer?
 
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 function autoAllows(mode: PermMode, tool: string): boolean {
+  // bypass: the SDK normally never calls canUseTool, but under root it gets acceptEdits instead
+  // (see sdkMode) and then DOES ask us about non-edit tools — allow everything to keep bypass's
+  // "never prompt" semantics. The class-1 fence above still applies.
+  if (mode === 'bypassPermissions') return true;
   if (mode === 'acceptEdits') return EDIT_TOOLS.has(tool);
-  return false; // default/plan -> prompt; bypass -> SDK never calls canUseTool
+  return false; // default/plan -> prompt
 }
 
 // Unattended auto-allow: used by review sessions so the automatic pipeline (build/run/tests) never
