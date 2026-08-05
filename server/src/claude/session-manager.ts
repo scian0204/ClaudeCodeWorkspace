@@ -331,8 +331,19 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
   p.emit('message', { sessionId: s.id, message: publicMessage(userMsg) });
 
   // global shared-key throttle
+  const tEnqueued = Date.now();
   if (turnLimiter.inUse >= turnLimiter.max) p.emit('turn:congested', { sessionId: s.id });
   const release = await turnLimiter.acquire();
+  const tStarted = Date.now();
+  // One line per turn so "why was that slow?" is answerable from the log instead of guessed at:
+  // slot = time blocked on the global concurrency cap (maxConcurrentTurns), ttft = spawn + model time
+  // until the first visible output, total = everything. A big `slot` means another session's turn was
+  // holding the cap; a big `ttft` means the CLI/model itself was slow.
+  let tFirstOut = 0;
+  const emit: Emit = (event, payload) => {
+    if (!tFirstOut && (event === 'assistant:delta' || event === 'assistant:block' || event === 'tool:use')) tFirstOut = Date.now();
+    p.emit(event, payload);
+  };
 
   const abort = new AbortController();
   const blocks: Block[] = [];
@@ -355,7 +366,7 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
   // review sessions run the pipeline unattended → auto-allow tools (class-1 fence still applies)
   const canUseTool = s.kind === 'review'
     ? makeAutoAllow(roots)
-    : makeCanUseTool({ sessionId: s.id, roots, mode, emit: p.emit, signal: abort.signal });
+    : makeCanUseTool({ sessionId: s.id, roots, mode, emit, signal: abort.signal });
 
   // The CLI session id is what lets the NEXT turn resume this conversation, so persist it the moment
   // the CLI reports it instead of only after a clean finish. A turn that fails, gets interrupted, or
@@ -373,11 +384,11 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
 
   try {
     if (prov.source === 'none') {
-      await runMock({ ctx, prompt: p.text, canUseTool, emit: p.emit, sessionId: s.id, blocks, signal: abort.signal });
+      await runMock({ ctx, prompt: p.text, canUseTool, emit, sessionId: s.id, blocks, signal: abort.signal });
       inTok = 12; outTok = 40; cost = 0;
     } else {
       const runOnce = (resume: string | null) => withRateLimitRetry(
-        () => runReal({ ctx, prompt, canUseTool, emit: p.emit, sessionId: s.id, blocks, resume, abort,
+        () => runReal({ ctx, prompt, canUseTool, emit, sessionId: s.id, blocks, resume, abort,
           onQuery: (q) => { turn.query = q; }, onSessionId: rememberSessionId }),
         (ms) => p.emit('turn:congested', { sessionId: s.id, backoffMs: ms }),
         abort.signal, // a stop during rate-limit backoff must break the sleep, not wait it out
@@ -431,9 +442,12 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
   } finally {
     active.delete(s.id);
     release();
+    const done = Date.now();
+    console.log(`[turn] ${s.id} slot=${tStarted - tEnqueued}ms ttft=${tFirstOut ? tFirstOut - tStarted : -1}ms total=${done - tEnqueued}ms in=${inTok} out=${outTok} cap=${turnLimiter.inUse}/${turnLimiter.max}`);
     // The CLI subprocess dies with the turn, so anything it spawned is gone whether it reported or
-    // not — settle every still-running row instead of leaving the panel spinning.
-    endRunningTasks(s.id, p.emit);
+    // not — settle every still-running row instead of leaving the panel spinning. Guarded: a throw
+    // here would replace the turn's own outcome and skip the sandbox teardown below.
+    try { endRunningTasks(s.id, p.emit); } catch { /* panel bookkeeping is cosmetic */ }
     // Per-user skill counters. In `finally` on purpose: a skill that ran is a skill that ran, even
     // if the turn was later interrupted or failed. Never let a counter write break the turn result.
     if (cfg.bool('skillUsageEnabled')) {
