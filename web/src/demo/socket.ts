@@ -35,6 +35,32 @@ function reply(text: string, nAtt = 0) {
 
 function appendMsg(sessionId: string, msg: any) { (db.messages[sessionId] || (db.messages[sessionId] = [])).push(msg); }
 
+// ── background work (task panel) ──────────────────────────────────────────────
+// Mirror of server/src/claude/tasks.ts: the real thing folds the CLI's task_* / background_tasks
+// system messages into one list per session and re-broadcasts the WHOLE list on every change.
+const demoTasks = new Map<string, any[]>();
+function demoTasksFor(sessionId: string) { return (demoTasks.get(sessionId) || []).map((t) => ({ ...t })); }
+
+function taskUpsert(sessionId: string, id: string, patch: any) {
+  const list = demoTasks.get(sessionId) || [];
+  const i = list.findIndex((t) => t.id === id);
+  if (i < 0) list.push({ id, kind: 'task', label: '', status: 'running', background: false, startedAt: Date.now(), ...patch });
+  else list[i] = { ...list[i], ...patch };
+  demoTasks.set(sessionId, list);
+  deliver('tasks:update', { sessionId, tasks: demoTasksFor(sessionId) });
+}
+
+// One turn's worth of behind-the-scenes work: a Task-tool subagent that finishes, plus a backgrounded
+// shell that keeps running past it — enough to exercise every panel state.
+function runDemoTasks(sessionId: string) {
+  const sub = `task_${rid().slice(0, 6)}`, sh = `task_${rid().slice(0, 6)}`;
+  later(300, () => taskUpsert(sessionId, sub, { kind: 'subagent', agentType: 'code-reviewer', label: 'Review the changed files for hook-order bugs', status: 'running', startedAt: Date.now() }));
+  later(700, () => taskUpsert(sessionId, sh, { kind: 'shell', label: 'npm run build -w web', status: 'running', background: true, startedAt: Date.now() }));
+  later(1600, () => taskUpsert(sessionId, sub, { lastTool: 'Grep', tokens: 8400, toolUses: 5 }));
+  later(2900, () => taskUpsert(sessionId, sub, { status: 'completed', endedAt: Date.now(), tokens: 12800, toolUses: 9, summary: '2 findings: a stale dependency array in useGuideInset, and a missing IME guard on the retitle input.' }));
+  later(5200, () => taskUpsert(sessionId, sh, { status: 'completed', endedAt: Date.now(), background: false, summary: 'built in 4.1s — 1 chunk over 500 kB' }));
+}
+
 // Mirror of the server's auto-titling: a still-unnamed private chat gets named after its topic once
 // the first turn ends. The real thing asks a cheap model; the demo just takes the opening words.
 const DEMO_DEFAULT_TITLE = 'New chat';
@@ -55,6 +81,7 @@ function autoTitle(sessionId: string, text: string) {
 
 function runTurn(sessionId: string, text: string, nAtt = 0) {
   const firstText = text;
+  runDemoTasks(sessionId); // subagent + background shell alongside the answer (task panel)
   const r = reply(text, nAtt);
   const finalBlocks: any[] = [];
 
@@ -230,7 +257,7 @@ const sock = {
   emit(event: string, ...args: any[]) {
     if (event === 'session:join') {
       const [sessionId, ack] = args;
-      if (typeof ack === 'function') ack({ queue: { running: null, waiting: [] }, pending: [], resumes: [], control: { canApprove: true, canInterrupt: true, canSetMode: true, isOwner: true, delegable: [] } });
+      if (typeof ack === 'function') ack({ queue: { running: null, waiting: [] }, pending: [], resumes: [], tasks: demoTasksFor(sessionId), control: { canApprove: true, canInterrupt: true, canSetMode: true, isOwner: true, delegable: [] } });
       const room = db.rooms.find((r) => r.chatSessionId === sessionId);
       if (room) later(60, () => deliver('presence:update', { sessionId, users: room.members.map((m: any) => ({ id: m.userId, name: m.displayName, color: m.avatarColor })) }));
       return sock;
@@ -290,6 +317,10 @@ const sock = {
     if (event === 'chat:interrupt' || event === 'chat:cancel') {
       clearTimers(); waiting.clear();
       const sessionId = args[0]?.sessionId;
+      // same as the server's endRunningTasks: the turn's CLI is gone, so nothing it spawned survives
+      for (const t of demoTasks.get(sessionId) || []) {
+        if (t.status === 'running' || t.status === 'pending' || t.status === 'paused') taskUpsert(sessionId, t.id, { status: 'stopped', background: false, endedAt: Date.now() });
+      }
       deliver('turn:error', { sessionId, aborted: true });
       return sock;
     }

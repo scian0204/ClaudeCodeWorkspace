@@ -5,7 +5,16 @@ import { t, getLang, setLang, LANGS, type Lang } from './i18n';
 
 export type Block =
   | { type: 'text'; text: string }
-  | { type: 'tool_use'; id: string; name: string; input: any; output?: string; isError?: boolean };
+  // parentId set => the call came from a subagent, not the main thread (agentType = its subagent type)
+  | { type: 'tool_use'; id: string; name: string; input: any; output?: string; isError?: boolean; parentId?: string; agentType?: string };
+// One piece of agent-side work a turn spawned: a Task-tool subagent, a backgrounded shell, a local
+// workflow, an MCP monitor. Mirrors server/src/claude/tasks.ts (AgentTask).
+export interface AgentTask {
+  id: string; toolUseId?: string; kind: string; label: string; agentType?: string;
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'stopped' | 'killed' | 'paused';
+  background: boolean; ambient?: boolean; startedAt: number; endedAt?: number;
+  lastTool?: string; tokens?: number; toolUses?: number; durationMs?: number; summary?: string; error?: string;
+}
 export interface Attachment { name: string; isImage: boolean; url?: string } // url: local preview / demo data URL (real mode falls back to the GET endpoint)
 export interface Msg { id: string; role: string; authorId?: string | null; authorName?: string | null; content: any; chat?: boolean; createdAt: number; }
 export interface CmdInfo { name: string; description: string; argumentHint: string }
@@ -61,6 +70,9 @@ interface State {
   messages: Msg[];
   live: Live | null;
   turnActive: boolean;
+  tasks: AgentTask[];            // open session's subagents / background shells / workflows
+  taskPanelEnabled: boolean;     // admin feature flag (from /api/config) — off hides the panel entirely
+  tasksOpen: boolean;            // right-side task panel open (persisted)
   queue: QueueState;
   pending: PermReq[];
   control: Control;
@@ -162,6 +174,7 @@ interface State {
   cancel: (itemId: string) => void;
   interrupt: () => void;
   respond: (requestId: string, decision: 'allow' | 'deny' | 'always' | 'answer', answer?: string) => void;
+  setTasksOpen: (open: boolean) => void;
   setViewMode: (m: 'chat' | 'split' | 'editor') => void;
   openEditor: () => Promise<void>;
   setProject: (projectId: string | null) => Promise<void>;
@@ -195,6 +208,7 @@ export const useStore = create<State>((set, get) => ({
   theme: (localStorage.getItem('theme') as any) || null,
   sessions: [], rooms: [], wikiTopics: [], reviewRepos: [], reviewSessions: [], wikiProgress: {}, projects: { common: [], mine: [] },
   current: null, messages: [], live: null, turnActive: false,
+  tasks: [], taskPanelEnabled: true, tasksOpen: localStorage.getItem('tasksOpen') === '1',
   queue: { running: null, waiting: [] }, pending: [],
   control: { canApprove: true, canInterrupt: true, canSetMode: true, isOwner: true, delegable: [] },
   presence: [], congested: false, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenuEnabled: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true, dockerReady: true, dockerReason: 'ok',
@@ -260,6 +274,7 @@ export const useStore = create<State>((set, get) => ({
       reviewWebhookEnabled: cf.reviewWebhookEnabled !== false,
       guideEnabled: cf.guideEnabled !== false,
       guideWriteEnabled: cf.guideWriteEnabled !== false,
+      taskPanelEnabled: cf.taskPanelEnabled !== false,
       channels: dmc.channels || [],
       processPollMs: cf.processPollMs || 5000,
       dockerReady: cf.dockerReady !== false,
@@ -418,7 +433,7 @@ export const useStore = create<State>((set, get) => ({
     const prev = get().current;
     if (prev) getSocket().emit('session:leave', prev.chatSessionId);
     set({
-      current: null, messages: [], live: null, turnActive: false,
+      current: null, messages: [], live: null, turnActive: false, tasks: [],
       queue: { running: null, waiting: [] }, pending: [], presence: [], commands: [],
       activeChannelId: null, channelMessages: [], highlightMsgId: null,
       panel: null, viewMode: 'chat', editorUrl: null, sidebarOpen: false,
@@ -560,6 +575,8 @@ export const useStore = create<State>((set, get) => ({
     getSocket().emit('permission:respond', { sessionId: c.chatSessionId, requestId, decision, answer });
     set({ pending: get().pending.filter((p) => p.requestId !== requestId) });
   },
+
+  setTasksOpen: (open) => { localStorage.setItem('tasksOpen', open ? '1' : '0'); set({ tasksOpen: open, sidebarOpen: false }); },
 
   setViewMode: (m) => {
     set({ viewMode: m });
@@ -747,7 +764,7 @@ async function join(set: any, get: () => State, cur: Current, messages: Msg[]) {
   const prev = get().current;
   if (prev) sock.emit('session:leave', prev.chatSessionId);
   set({
-    current: cur, messages, live: null, turnActive: false,
+    current: cur, messages, live: null, turnActive: false, tasks: [],
     queue: { running: null, waiting: [] }, pending: [], presence: [],
     viewMode: 'chat', editorUrl: null, commands: [], sidebarOpen: false, // opening a thread closes the mobile drawer
     highlightMsgId: null, // a plain thread switch drops any search-hit highlight
@@ -781,6 +798,7 @@ function applyJoinState(set: any, get: () => State, sessionId: string, state: an
     turnActive: !!state.queue?.running || !!live,
     live, // always set (null when no in-flight turn) so a reconnect clears any stale live blocks
     resumes: state.resumes || [],
+    tasks: state.tasks || [], // subagents / background shells the session spawned (replaces on rejoin)
   });
 }
 
@@ -823,7 +841,7 @@ function wire(set: any, get: () => State) {
     if (!isCur(p.sessionId)) return;
     const live = get().live || emptyLive();
     const blocks = live.blocks.slice();
-    const idx = blocks.push({ type: 'tool_use', id: p.id, name: p.name, input: p.input }) - 1;
+    const idx = blocks.push({ type: 'tool_use', id: p.id, name: p.name, input: p.input, parentId: p.parentId, agentType: p.agentType }) - 1;
     set({ live: { ...live, blocks, toolMap: { ...live.toolMap, [p.id]: idx } } });
   });
 
@@ -837,6 +855,10 @@ function wire(set: any, get: () => State) {
     if (b && b.type === 'tool_use') blocks[idx] = { ...b, output: p.output, isError: p.isError };
     set({ live: { ...live, blocks } });
   });
+
+  // Whole-list snapshot of the turn's subagents / background shells / workflows. REPLACE semantics
+  // (the server re-sends everything on each change) so a missed event can't wedge a stale row.
+  sock.on('tasks:update', (p: any) => { if (isCur(p.sessionId)) set({ tasks: p.tasks || [] }); });
 
   sock.on('turn:end', (p: any) => {
     if (!isCur(p.sessionId)) return;
