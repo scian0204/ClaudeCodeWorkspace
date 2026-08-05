@@ -5,6 +5,7 @@ import { db, schema } from '../db/index.js';
 import { parseCookie, userForToken, COOKIE, type AuthUser } from '../auth/index.js';
 import { enqueueTurn, cancelQueued, queueState, setEmitFactory } from '../rooms/queue.js';
 import { interruptTurn, liveTurn, postChat } from '../claude/session-manager.js';
+import { tasksFor } from '../claude/tasks.js';
 import { pendingForSession as resumesForSession, cancelResume } from '../claude/auto-resume.js';
 import { respondPermission, pendingForSession, type Decision } from '../claude/permissions.js';
 import * as rooms from '../rooms/manager.js';
@@ -125,6 +126,7 @@ export function initRealtime(httpServer: HttpServer) {
         control: controlInfo(user, a),
         live: liveTurn(sessionId), // replay in-flight turn progress to a mid-turn joiner
         resumes: resumesForSession(sessionId), // turns parked until the claude.ai window resets
+        tasks: tasksFor(sessionId), // subagents / background shells / workflows this session spawned
       };
       ack?.(state);
       await presence(sessionId);

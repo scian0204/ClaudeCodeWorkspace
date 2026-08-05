@@ -19,12 +19,15 @@ import { sandboxAvailable, ensureSandbox, removeSandbox, sandboxMcpServer } from
 import { cfg } from '../lib/config-registry.js';
 import { maybeAutoTitle } from './auto-title.js';
 import { isUsageLimitError, eligible as autoResumeEligible, parkTurn } from './auto-resume.js';
+import { ingestTaskEvent, endRunningTasks } from './tasks.js';
 
 type Emit = (event: string, payload: any) => void;
 
 export type Block =
   | { type: 'text'; text: string }
-  | { type: 'tool_use'; id: string; name: string; input: any; output?: string; isError?: boolean };
+  // parentId/agentType are set when the call came from a subagent (Task tool) rather than the main
+  // thread, so the transcript can mark it instead of showing it as a plain top-level tool call.
+  | { type: 'tool_use'; id: string; name: string; input: any; output?: string; isError?: boolean; parentId?: string; agentType?: string };
 
 interface ActiveTurn {
   abort: AbortController; blocks: Block[]; author: { id: string; name: string };
@@ -428,6 +431,9 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
   } finally {
     active.delete(s.id);
     release();
+    // The CLI subprocess dies with the turn, so anything it spawned is gone whether it reported or
+    // not — settle every still-running row instead of leaving the panel spinning.
+    endRunningTasks(s.id, p.emit);
     // Per-user skill counters. In `finally` on purpose: a skill that ran is a skill that ran, even
     // if the turn was later interrupted or failed. Never let a counter write break the turn result.
     if (cfg.bool('skillUsageEnabled')) {
@@ -494,9 +500,14 @@ async function runReal(a: {
             a.blocks.push({ type: 'text', text: b.text });
             a.emit('assistant:block', { sessionId: a.sessionId, block: { type: 'text', text: b.text } });
           } else if (b.type === 'tool_use') {
-            const idx = a.blocks.push({ type: 'tool_use', id: b.id, name: b.name, input: b.input }) - 1;
+            // Subagent tool calls ride the same stream as the main thread's, told apart only by
+            // parent_tool_use_id — carry it through so the card can be marked as nested.
+            const nested = msg.parent_tool_use_id
+              ? { parentId: String(msg.parent_tool_use_id), ...(msg.subagent_type ? { agentType: String(msg.subagent_type) } : {}) }
+              : {};
+            const idx = a.blocks.push({ type: 'tool_use', id: b.id, name: b.name, input: b.input, ...nested }) - 1;
             toolIndex.set(b.id, idx);
-            a.emit('tool:use', { sessionId: a.sessionId, id: b.id, name: b.name, input: b.input });
+            a.emit('tool:use', { sessionId: a.sessionId, id: b.id, name: b.name, input: b.input, ...nested });
           }
         }
         break;
@@ -511,6 +522,12 @@ async function runReal(a: {
             a.emit('tool:result', { sessionId: a.sessionId, id: b.tool_use_id, output: out, isError: !!b.is_error });
           }
         }
+        break;
+      }
+      // Subagents / backgrounded shells / workflows report only on this channel — fold them into the
+      // session's task list (the right-side task panel) instead of dropping them on the floor.
+      case 'system': {
+        ingestTaskEvent(a.sessionId, msg, a.emit);
         break;
       }
       case 'result': {

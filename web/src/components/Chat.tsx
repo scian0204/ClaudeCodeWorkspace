@@ -12,6 +12,7 @@ import { FileExplorer } from './FileExplorer';
 import { GitPanel } from './GitPanel';
 import { SearchButton } from './SearchPalette';
 import { SourcesPanel, CiteHighlighter } from './SourcesPanel';
+import { TasksPanel, isTaskLive } from './TasksPanel';
 import { extractSources, markCitations, type WikiSource } from '../lib/wikiCite';
 import { md } from '../lib/md';
 import { useT } from '../lib/i18n';
@@ -21,7 +22,7 @@ import {
   IconGauge, IconEye, IconBook, IconArchive, IconSparkle, IconCopy, IconPencil, IconHelp,
   IconTerminal, IconX, IconPaperclip, IconSend, IconShield, IconBolt, IconCheckSquare, IconCrown,
   IconGitBranch, IconClock, IconCheckCircle, IconBan, IconWarning, IconLink, IconRotateCcw,
-  IconCheck, IconRefresh, IconSquare, IconMessage,
+  IconCheck, IconRefresh, IconSquare, IconMessage, IconActivity,
 } from '../lib/icons';
 
 const MODELS: Record<string, string> = {
@@ -36,16 +37,21 @@ const MODES: Record<string, { key: string; Icon: typeof IconCheck }> = {
 const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
 
 const clampPanelW = (w: number) => Math.max(300, Math.min(w, 1000));
+const storedW = (key: string, fallback: number) => {
+  const v = Number(localStorage.getItem(key));
+  return v ? clampPanelW(v) : fallback;
+};
 
 export function Chat() {
   const c = useStore((s) => s.current)!;
   const viewMode = useStore((s) => s.viewMode);
+  const taskPanelEnabled = useStore((s) => s.taskPanelEnabled);
+  const tasksOpen = useStore((s) => s.tasksOpen);
   const [sourcesOpen, setSourcesOpen] = useState(true);
-  const [panelW, setPanelW] = useState(() => {
-    const v = Number(localStorage.getItem('wikiSourcesW'));
-    return v ? clampPanelW(v) : 360;
-  });
+  const [panelW, setPanelW] = useState(() => storedW('wikiSourcesW', 360));
+  const [tasksW, setTasksW] = useState(() => storedW('tasksW', 340));
   const resize = (w: number) => { const c2 = clampPanelW(w); setPanelW(c2); localStorage.setItem('wikiSourcesW', String(c2)); };
+  const resizeTasks = (w: number) => { const c2 = clampPanelW(w); setTasksW(c2); localStorage.setItem('tasksW', String(c2)); };
   const isWiki = !!c.wikiTopicId;
   const isReview = c.kind === 'review';
   const isMobile = useIsMobile();
@@ -56,9 +62,13 @@ export function Chat() {
   const dockerReady = useStore((s) => s.dockerReady);
   const vm = isMobile || !dockerReady ? 'chat' : viewMode;
   const showSources = isWiki && !isMobile;
-  const cols = isMobile ? '1fr'
+  const showTasks = taskPanelEnabled && tasksOpen;
+  const base = isMobile ? '1fr'
     : isWiki ? (sourcesOpen ? `1fr ${panelW}px` : '1fr 44px')
     : (vm === 'split' && !isReview ? '1fr 1fr' : '1fr'); // review is chat-only (no project → no editor)
+  // the task panel is an extra right column on desktop; on a phone it renders as a full-screen
+  // overlay (see TasksPanel), so it must stay out of the grid template there
+  const cols = showTasks && !isMobile ? `${base} ${tasksW}px` : base;
   return (
     <div className="flex flex-col min-w-0 h-full">
       <Header />
@@ -67,9 +77,30 @@ export function Chat() {
         {showSources
           ? <SourcesPanel topicId={c.wikiTopicId!} open={sourcesOpen} onToggle={() => setSourcesOpen((v) => !v)} width={panelW} onResize={resize} />
           : (!isWiki && vm !== 'chat' && <EditorPane />)}
+        {showTasks && <TasksPanel width={tasksW} onResize={resizeTasks} />}
       </div>
       {isWiki && <CiteHighlighter />}
     </div>
+  );
+}
+
+// Header pill that opens the task panel. Counts what the turn spawned behind the main thread and
+// glints while any of it is still running, so background work is visible without opening the panel.
+function TasksButton() {
+  const enabled = useStore((s) => s.taskPanelEnabled);
+  const tasks = useStore((s) => s.tasks);
+  const tasksOpen = useStore((s) => s.tasksOpen);
+  const setTasksOpen = useStore((s) => s.setTasksOpen);
+  const t = useT();
+  if (!enabled) return null;
+  const live = tasks.filter(isTaskLive).length;
+  return (
+    <button className={`pill inline-flex items-center gap-1 ${tasksOpen ? 'text-clay' : ''}`}
+      title={t('tasks.toggle')} onClick={() => setTasksOpen(!tasksOpen)}>
+      <span className={live ? 'clay-shimmer inline-flex' : 'inline-flex'}><IconActivity size={13} /></span>
+      {t('tasks.pill')}
+      {tasks.length > 0 && <span className="text-[10px] font-mono">{live ? `${live}/${tasks.length}` : tasks.length}</span>}
+    </button>
   );
 }
 
@@ -152,6 +183,7 @@ function Header() {
         </Menu>
       </DM.Root>
 
+      <TasksButton />
       <UsagePill />
 
       {!c.wikiTopicId && !isReview && (
@@ -742,6 +774,11 @@ function ToolCard({ b }: { b: Extract<Block, { type: 'tool_use' }> }) {
       <div className="flex items-center gap-2 px-3 py-2 cursor-pointer text-xs" onClick={() => setOpen(!open)}>
         <span className="text-clay">{isAsk ? <IconHelp size={14} /> : <IconTerminal size={14} />}</span>
         <span className="font-semibold">{isAsk ? t('chat.question') : b.name}</span>
+        {/* a subagent ran this, not the main thread — otherwise it reads as a top-level tool call */}
+        {b.parentId && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'var(--claysoft)', color: 'var(--clay)' }}
+            title={t('tasks.nestedTip')}>{b.agentType || t('tasks.nested')}</span>
+        )}
         <code className="font-mono text-txt2 truncate flex-1">{String(cmd)}</code>
         <span className="text-[11px] flex items-center gap-1" style={{ color: status.color }}>{status.Icon && <status.Icon size={12} />}{status.text}</span>
       </div>

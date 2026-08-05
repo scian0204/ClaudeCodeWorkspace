@@ -189,6 +189,9 @@ export const IconSquare = (p: IconProps) => (
   <Svg {...p}><rect x="3" y="3" width="18" height="18" rx="2" /></Svg>
 );
 
+// running background work (task panel pill)
+export const IconActivity = (p: IconProps) => <Svg {...p}><path d="M3 12h3l3 8 4-16 3 8h5" /></Svg>;
+
 // ── status dots (● filled / ○ ring). currentColor drives the color via text-* classes. ──
 export const IconDot = ({ size = 12, className, title }: IconProps) => (
   <Svg size={size} className={className} title={title}><circle cx="12" cy="12" r="5" fill="currentColor" stroke="none" /></Svg>
