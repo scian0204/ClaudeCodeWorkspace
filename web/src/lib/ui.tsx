@@ -30,6 +30,35 @@ export function MobileMenuButton({ className }: { className?: string }) {
   );
 }
 
+// The guide launcher is a fixed circle over the viewport's bottom-right corner, so a composer row
+// anchored down there must keep its buttons out from under it. How much room that takes depends on
+// where the row actually ends — a centred 760px card on a wide screen already clears the launcher,
+// a full-width one on a phone does not — so measure it instead of reserving a blanket 56px, which
+// left the Send button visibly floating off the card's right edge. Returns [ref, paddingRight].
+export function useGuideInset(enabled: boolean) {
+  const [el, setEl] = useState<HTMLDivElement | null>(null); // callback ref: measure once mounted
+  const [pad, setPad] = useState(0);
+  const measure = React.useCallback(() => {
+    if (!enabled || !el) { setPad(0); return; }
+    // the launcher's square: right-3 + w-12 (<md) / right-5 + w-14 (≥md), plus breathing room
+    const box = (window.innerWidth < 768 ? 12 + 48 : 20 + 56) + 8;
+    const r = el.getBoundingClientRect(); // padding-right never moves this edge → no feedback loop
+    const clears = r.bottom < window.innerHeight - box || window.innerWidth - r.right >= box;
+    setPad(clears ? 0 : Math.ceil(box - (window.innerWidth - r.right)));
+  }, [enabled, el]);
+  // Every commit, because the row can *move* without resizing (drawer slide, pane swap) and a
+  // ResizeObserver only sees size. One getBoundingClientRect; setPad no-ops when nothing changed.
+  React.useLayoutEffect(measure);
+  useEffect(() => {
+    if (!el) return;
+    const ro = new ResizeObserver(measure); // pane resize (sidebar, split drag) with no re-render
+    ro.observe(el);
+    window.addEventListener('resize', measure);
+    return () => { ro.disconnect(); window.removeEventListener('resize', measure); };
+  }, [el, measure]);
+  return [setEl, pad] as const;
+}
+
 // ── waiting on the model ────────────────────────────────────────────────────────────────────
 // One signature mark for every "Claude is thinking" spot (an answer streaming in, a wiki compile,
 // a chat being named), so the wait always looks like this app and not like a stock spinner. The

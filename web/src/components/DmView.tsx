@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore, type DmChannel } from '../lib/store';
-import { Avatar, avatarUrl, MobileMenuButton } from '../lib/ui';
+import { Avatar, avatarUrl, MobileMenuButton, useGuideInset } from '../lib/ui';
 import { SearchButton } from './SearchPalette';
 import { useT } from '../lib/i18n';
 import { IconUsers } from '../lib/icons';
@@ -21,6 +21,7 @@ export function DmView() {
   const t = useT();
   const [text, setText] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [rowRef, guideInset] = useGuideInset(guideEnabled);
   const ch = channels.find((c) => c.id === activeChannelId);
 
   // Stick to the bottom as messages arrive / on open.
@@ -102,8 +103,9 @@ export function DmView() {
 
       {/* composer */}
       <div className="border-t border-line px-3 md:px-5 py-2.5 shrink-0">
-        {/* pr-14: the guide launcher floats over this corner — keep Send clickable */}
-        <div className={`flex items-end gap-2 ${guideEnabled ? 'pr-14' : ''}`}>
+        {/* the guide launcher floats over this corner — keep Send clickable, but only pad by as
+            much as the row actually runs under it (see useGuideInset) */}
+        <div ref={rowRef} style={{ paddingRight: guideInset || undefined }} className="flex items-end gap-2">
           <textarea
             className="input flex-1 resize-none max-h-40" rows={1} value={text} autoFocus
             placeholder={t('dm.composerPlaceholder', { name: label })}

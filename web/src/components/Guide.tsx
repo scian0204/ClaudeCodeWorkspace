@@ -114,7 +114,9 @@ function GuidePanel() {
           <textarea
             ref={taRef}
             rows={1}
-            className="flex-1 bg-transparent outline-none resize-none text-sm text-txt placeholder:text-txt3 max-h-28 scrolly"
+            // py-1.5 pads the one-line box out to the send button's h-8, so items-end centres the
+            // text against it instead of parking it on the row's bottom edge
+            className="flex-1 bg-transparent outline-none resize-none text-sm text-txt placeholder:text-txt3 py-1.5 max-h-28 scrolly"
             placeholder={t('guide.placeholder')}
             value={text}
             onChange={(e) => {
