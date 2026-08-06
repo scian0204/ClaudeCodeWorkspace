@@ -168,13 +168,22 @@ export async function probeCommands(chatSessionId: string, requesterId?: string 
 // upgrade to a long-lived query per session only if this ever gets hot.
 type Win = { utilization: number | null; resetsAt: string | null };
 type ModelWin = Win & { displayName: string };
+// Which credential ran the probe. Only needed to explain a MISSING plan window: the CLI computes
+// rate_limits_available as (user:inference scope && user:profile scope), and a token minted by
+// `claude setup-token` is inference-only — so an OAuth token reports no plan window just like an
+// API key does, for an entirely different reason. Without this the UI can only guess which.
+export type AuthKind = 'oauth' | 'apiKey' | 'other' | 'none';
 export interface UsageInfo {
   context: { totalTokens: number; maxTokens: number; percentage: number; model: string } | null;
   rateLimitsAvailable: boolean;
   subscriptionType: string | null;
   rateLimits: { fiveHour: Win | null; sevenDay: Win | null; modelScoped: ModelWin[] } | null;
+  authKind: AuthKind;
 }
-const EMPTY_USAGE: UsageInfo = { context: null, rateLimitsAvailable: false, subscriptionType: null, rateLimits: null };
+// Key names only — a secret value is never read here, so nothing sensitive can reach the client.
+const authKindOf = (env: Record<string, string>): AuthKind =>
+  env.CLAUDE_CODE_OAUTH_TOKEN ? 'oauth' : env.ANTHROPIC_API_KEY ? 'apiKey' : Object.keys(env).length ? 'other' : 'none';
+const EMPTY_USAGE: UsageInfo = { context: null, rateLimitsAvailable: false, subscriptionType: null, rateLimits: null, authKind: 'none' };
 const usageCache = new Map<string, { at: number; data: UsageInfo }>();
 const win = (w: any): Win | null => (w ? { utilization: w.utilization ?? null, resetsAt: w.resets_at ?? null } : null);
 
@@ -189,6 +198,7 @@ export async function probeUsage(chatSessionId: string, requesterId?: string | n
   const authId = requesterId ?? (kind === 'user' ? ownerId : null);
   const prov = resolveProvider(authId);
   if (prov.source === 'none') return EMPTY_USAGE; // mock / no auth → nothing to report
+  const authKind = authKindOf(prov.env);
 
   const cacheKey = `${chatSessionId}|${authId ?? 'shared'}`;
   const hit = usageCache.get(cacheKey);
@@ -225,10 +235,11 @@ export async function probeUsage(chatSessionId: string, requesterId?: string | n
         sevenDay: win(rl.seven_day),
         modelScoped: (rl.model_scoped || []).map((m: any) => ({ displayName: m.display_name, utilization: m.utilization ?? null, resetsAt: m.resets_at ?? null })),
       } : null,
+      authKind,
     };
     usageCache.set(cacheKey, { at: Date.now(), data });
     return data;
-  } catch { return EMPTY_USAGE; }
+  } catch { return { ...EMPTY_USAGE, authKind }; }
   finally { try { abort.abort(); } catch { /* noop */ } }
 }
 

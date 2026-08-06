@@ -331,6 +331,7 @@ interface Usage {
   subscriptionType: string | null;
   rateLimits: { fiveHour: UsageWin | null; sevenDay: UsageWin | null; modelScoped: ({ displayName: string } & UsageWin)[] } | null;
   spend: { session: Spend; fiveHour: Spend; sevenDay: Spend } | null;
+  authKind: 'oauth' | 'apiKey' | 'other' | 'none';
 }
 
 const fmtTokens = (n: number): string =>
@@ -455,7 +456,12 @@ function UsagePill() {
               ))}
             </>
           ) : (
-            <div className="text-[11px] text-txt3">{loading ? t('usage.loading') : t('usage.unavailable')}</div>
+            // An OAuth token that still reports no window is a *scope* problem, not a plan problem —
+            // `claude setup-token` mints an inference-only token, and the CLI needs user:profile.
+            <div className="text-[11px] text-txt3">
+              {loading ? t('usage.loading')
+                : t(data?.authKind === 'oauth' ? 'usage.unavailableScope' : 'usage.unavailable')}
+            </div>
           )}
 
           {/* our own ledger — the only usage figure an API-key/bedrock/custom session ever gets */}

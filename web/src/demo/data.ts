@@ -145,6 +145,7 @@ export const USAGE = {
   context: { totalTokens: 41900, maxTokens: 1_000_000, percentage: 4, model: 'claude-opus-4-8' },
   rateLimitsAvailable: true,
   subscriptionType: 'team',
+  authKind: 'oauth',
   rateLimits: {
     fiveHour: { utilization: 2, resetsAt: inMin(4 * 60 + 18) },
     sevenDay: { utilization: 59, resetsAt: inMin(18 * 60 + 28) },
