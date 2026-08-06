@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, gte, sql, type SQL } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { newId } from '../lib/ids.js';
 
@@ -31,6 +31,29 @@ export function usageByUser() {
     costUsd: sql<number>`coalesce(sum(${schema.usage.costUsd}),0)`,
     turns: sql<number>`count(*)`,
   }).from(schema.usage).groupBy(schema.usage.userId).all();
+}
+
+// ── local spend ledger ──
+// What an API-key (or bedrock/vertex/custom) session has INSTEAD of claude.ai plan limits: those
+// accounts have no plan window at all, so the CLI reports rate_limits_available=false and the usage
+// popover had nothing to show. These are our own recorded turns, not an Anthropic figure.
+// Session total is author-agnostic (a room's turns come from several members); the rolling 5h/7d
+// windows are per-user, mirroring the plan windows they stand in for.
+export interface Spend { inputTokens: number; outputTokens: number; costUsd: number; turns: number }
+export function spendSummary(userId: string, sessionId: string): { session: Spend; fiveHour: Spend; sevenDay: Spend } {
+  const sum = (where: SQL | undefined): Spend => db.select({
+    inputTokens: sql<number>`coalesce(sum(${schema.usage.inputTokens}),0)`,
+    outputTokens: sql<number>`coalesce(sum(${schema.usage.outputTokens}),0)`,
+    costUsd: sql<number>`coalesce(sum(${schema.usage.costUsd}),0)`,
+    turns: sql<number>`count(*)`,
+  }).from(schema.usage).where(where).get()!;
+  const mine = (windowMs: number) =>
+    and(eq(schema.usage.userId, userId), gte(schema.usage.createdAt, Date.now() - windowMs));
+  return {
+    session: sum(eq(schema.usage.sessionId, sessionId)),
+    fiveHour: sum(mine(5 * 60 * 60 * 1000)),
+    sevenDay: sum(mine(7 * 24 * 60 * 60 * 1000)),
+  };
 }
 
 // ── skill usage ──

@@ -322,13 +322,15 @@ function MenuItem({ children, onSelect }: { children: React.ReactNode; onSelect:
   return <DM.Item onSelect={onSelect} className="px-2 py-1.5 text-sm rounded cursor-pointer hover:bg-line outline-none data-[highlighted]:bg-line">{children}</DM.Item>;
 }
 
-// ── session usage popover (context window + claude.ai plan rate limits) ──
+// ── session usage popover (context window + claude.ai plan rate limits + our own spend ledger) ──
 type UsageWin = { utilization: number | null; resetsAt: string | null };
+type Spend = { inputTokens: number; outputTokens: number; costUsd: number; turns: number };
 interface Usage {
   context: { totalTokens: number; maxTokens: number; percentage: number; model: string } | null;
   rateLimitsAvailable: boolean;
   subscriptionType: string | null;
   rateLimits: { fiveHour: UsageWin | null; sevenDay: UsageWin | null; modelScoped: ({ displayName: string } & UsageWin)[] } | null;
+  spend: { session: Spend; fiveHour: Spend; sevenDay: Spend } | null;
 }
 
 const fmtTokens = (n: number): string =>
@@ -375,6 +377,24 @@ function LimitRow({ label, w }: { label: string; w: UsageWin | null }) {
   );
 }
 
+// Cost is our own per-turn total_cost_usd sum; sub-cent turns are common, so keep 4 decimals there.
+const fmtUsd = (n: number) => `$${n >= 1 ? n.toFixed(2) : n.toFixed(4)}`;
+
+function SpendRow({ label, s }: { label: string; s: Spend }) {
+  const t = useT();
+  return (
+    <div className="flex items-baseline justify-between text-xs gap-2 mt-2">
+      <span className="font-medium truncate">
+        {label}
+        <span className="text-txt3 text-[11px] ml-1.5">{t('usage.spendTurns', { n: s.turns })}</span>
+      </span>
+      <span className="text-txt3 font-mono tabular-nums shrink-0">
+        {fmtTokens(s.inputTokens)}↑ {fmtTokens(s.outputTokens)}↓ · {fmtUsd(s.costUsd)}
+      </span>
+    </div>
+  );
+}
+
 function UsagePill() {
   const c = useStore((s) => s.current)!;
   const [open, setOpen] = useState(false);
@@ -399,6 +419,7 @@ function UsagePill() {
 
   const ctx = data?.context;
   const rl = data?.rateLimits;
+  const sp = data?.spend;
   const pctLabel = ctx ? `${Math.round(ctx.percentage)}%` : '—';
 
   return (
@@ -408,7 +429,7 @@ function UsagePill() {
       </DM.Trigger>
       <DM.Portal>
         <DM.Content sideOffset={4} align="end"
-          className="bg-panel border border-line rounded-lg p-3.5 shadow-2xl z-50 w-[320px] text-txt">
+          className="bg-panel border border-line rounded-lg p-3.5 shadow-2xl z-50 w-[320px] max-w-[calc(100vw-1.5rem)] max-h-[70vh] overflow-y-auto text-txt">
           {/* context window */}
           <div className="flex items-baseline justify-between text-xs gap-2">
             <span className="font-semibold">{t('usage.contextWindow')}</span>
@@ -435,6 +456,19 @@ function UsagePill() {
             </>
           ) : (
             <div className="text-[11px] text-txt3">{loading ? t('usage.loading') : t('usage.unavailable')}</div>
+          )}
+
+          {/* our own ledger — the only usage figure an API-key/bedrock/custom session ever gets */}
+          <div className="border-t border-line my-3" />
+          <div className="text-[11px] uppercase tracking-wider text-txt3 mb-1">{t('usage.spend')}</div>
+          {sp ? (
+            <>
+              <SpendRow label={t('usage.spendSession')} s={sp.session} />
+              <SpendRow label={t('usage.spendFiveHour')} s={sp.fiveHour} />
+              <SpendRow label={t('usage.spendSevenDay')} s={sp.sevenDay} />
+            </>
+          ) : (
+            <div className="text-[11px] text-txt3">{loading ? t('usage.loading') : t('usage.noSpend')}</div>
           )}
         </DM.Content>
       </DM.Portal>

@@ -150,6 +150,12 @@ export const USAGE = {
     sevenDay: { utilization: 59, resetsAt: inMin(18 * 60 + 28) },
     modelScoped: [{ displayName: 'Fable', utilization: 0, resetsAt: inMin(18 * 60 + 28) }],
   },
+  // recorded spend — the section an API-key session sees instead of plan windows
+  spend: {
+    session: { inputTokens: 41900, outputTokens: 8200, costUsd: 0.4231, turns: 7 },
+    fiveHour: { inputTokens: 128400, outputTokens: 24100, costUsd: 1.28, turns: 19 },
+    sevenDay: { inputTokens: 1_942_000, outputTokens: 310_500, costUsd: 17.64, turns: 213 },
+  },
 };
 
 // ---- plugins / marketplaces ------------------------------------------------

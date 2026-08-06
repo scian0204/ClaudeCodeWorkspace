@@ -1088,7 +1088,13 @@ const ko: Dict = {
   'usage.resettingNow': '재설정 중',
   'usage.loading': '불러오는 중…',
   'usage.noContext': '아직 컨텍스트 데이터가 없어요 (대화를 시작하면 표시됩니다).',
-  'usage.unavailable': 'API 키 세션은 플랜 한도가 표시되지 않습니다.',
+  'usage.unavailable': 'API 키·Bedrock·커스텀 프로바이더에는 플랜 한도가 없습니다 (토큰 단위 과금). 아래 실사용량으로 확인하세요.',
+  'usage.spend': '실사용량 (워크스페이스 집계)',
+  'usage.spendSession': '이 세션',
+  'usage.spendFiveHour': '내 최근 5시간',
+  'usage.spendSevenDay': '내 최근 7일',
+  'usage.spendTurns': '{n}턴',
+  'usage.noSpend': '집계된 턴이 아직 없습니다.',
 
   // import — 로컬 세션 가져오기
   'import.button': '세션 가져오기',
@@ -2152,7 +2158,13 @@ const en: Dict = {
   'usage.resettingNow': 'resetting',
   'usage.loading': 'Loading…',
   'usage.noContext': 'No context data yet (starts once the conversation begins).',
-  'usage.unavailable': 'Plan limits are not shown for API-key sessions.',
+  'usage.unavailable': 'API key / Bedrock / custom providers have no plan window — they bill per token. See the recorded spend below.',
+  'usage.spend': 'Recorded spend (this workspace)',
+  'usage.spendSession': 'This session',
+  'usage.spendFiveHour': 'My last 5 hours',
+  'usage.spendSevenDay': 'My last 7 days',
+  'usage.spendTurns': '{n} turns',
+  'usage.noSpend': 'No turns recorded yet.',
 
   // import — local session import
   'import.button': 'Import session',
