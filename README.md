@@ -46,6 +46,7 @@ Per-session isolated Claude Code · shared team rooms · VS Code in the browser 
 - [🗂 Structure](#-structure)
 - [🔐 Security posture](#-security-posture)
 - [🛣 Roadmap](#-roadmap)
+- [📜 Update notes](CHANGELOG.md) — every release from the original design to today
 - [🤝 Contributing · License](#-contributing--license)
 
 ---
@@ -599,6 +600,8 @@ A **lightweight posture** that assumes a mutually trusted team/individual. App l
 - [ ] SSO / proxy-header auth adapter
 - [ ] Postgres · Redis promotion (multi-process scale)
 - [ ] CRDT real-time collaborative editing
+
+> Looking the other way — what already shipped? **[📜 Update notes](CHANGELOG.md)** covers every release from the original design spec to the current version.
 
 ---
 
