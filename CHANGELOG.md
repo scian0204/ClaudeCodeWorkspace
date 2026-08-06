@@ -15,6 +15,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ## Contents
 
 - [Timeline](#timeline)
+- [Unreleased](#unreleased) — commits not yet in a release
 - **1.x releases** — [v1.11.0](#v1110--2026-08-06) · [v1.10.0](#v1100--2026-08-05) · [v1.9.1](#v191--2026-08-05) · [v1.9.0](#v190--2026-08-05) · [v1.8.0](#v180--2026-08-04) · [v1.7.0](#v170--2026-08-04) · [v1.6.0](#v160--2026-08-04) · [v1.5.0](#v150--2026-08-04) · [v1.4.0](#v140--2026-08-03) · [v1.3.1](#v131--2026-08-03) · [v1.3.0](#v130--2026-07-31) · [v1.2.0](#v120--2026-07-31) · [v1.1.1](#v111--2026-07-31) · [v1.1.0](#v110--2026-07-31)
 - [Early development (2026-07-20 → 07-31)](#early-development--2026-07-20--07-31)
 - [Where it diverged from the original design](#where-it-diverged-from-the-original-design)
@@ -40,6 +41,20 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 | [v1.1.1](#v111--2026-07-31) | 2026-07-31 | 3 | Multi-arch build, Docker Hub overview |
 | [v1.1.0](#v110--2026-07-31) | 2026-07-31 | 4 | Release pipeline + Hub publishing |
 | [Early development](#early-development--2026-07-20--07-31) | 07-20 → 07-31 | 144 | P0–P5 skeleton · LLM Wiki · tokens · git · PR review · config · import · DM |
+
+---
+
+## Unreleased
+
+<details>
+<summary><b>docs: these update notes</b> — every commit since the original design · <code>2671942</code> <code>5011c73</code> <code>4a4e0b7</code></summary>
+
+- `2671942` added `CHANGELOG.md`/`CHANGELOG.ko.md` (from the DESIGN.md spec through v1.11.0) and linked them from both READMEs' contents + roadmap
+- `5011c73` expanded the grouped summaries into one entry per commit — all 236, each with its root cause, config keys and security reasoning
+- `4a4e0b7` collapsed the detail behind `<details>` toggles and grouped entries under `####` subheadings, so a folded row shows only its title and hash
+- CLAUDE.md rule 11 added: from now on every commit gets an entry in both files (format, placement and the verification command included)
+
+</details>
 
 ---
 
