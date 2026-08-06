@@ -41,7 +41,11 @@ export interface HitNav {
   messageId?: string; dir?: 'raw' | 'wiki'; filePath?: string;
 }
 export interface SearchHit { type: HitType; id: string; title: string; subtitle?: string; snippet?: string; ts?: number; nav: HitNav; }
-export interface Live { blocks: Block[]; toolMap: Record<string, number>; }
+// In-flight turn. `outTokens` is the last EXACT output-token total the server reported (turn:usage,
+// one per assistant message); `outChars` is the text/thinking streamed since then, which the UI turns
+// into an approximate delta so the meter keeps moving between exact updates. `thinking` = the model
+// is producing extended-thinking tokens right now (no visible text yet).
+export interface Live { blocks: Block[]; toolMap: Record<string, number>; outTokens: number; outChars: number; thinking: boolean; }
 // Guide assistant (the floating corner panel). Its own per-user thread, never a chat session.
 export interface GuideMsg { id: string; role: 'user' | 'assistant'; content: { text?: string; blocks?: Block[]; interrupted?: boolean }; createdAt: number; }
 export interface QueueState { running: { id: string; author: { id: string; name: string } } | null; waiting: { id: string; author: { id: string; name: string } }[]; }
@@ -198,7 +202,7 @@ interface State {
   clearAvatar: () => Promise<void>;
 }
 
-const emptyLive = (): Live => ({ blocks: [], toolMap: {} });
+const emptyLive = (): Live => ({ blocks: [], toolMap: {}, outTokens: 0, outChars: 0, thinking: false });
 
 let wired = false;
 
@@ -789,7 +793,7 @@ function applyJoinState(set: any, get: () => State, sessionId: string, state: an
   if (Array.isArray(lb) && lb.length) {
     const toolMap: Record<string, number> = {};
     lb.forEach((b: any, i: number) => { if (b?.type === 'tool_use') toolMap[b.id] = i; });
-    live = { blocks: lb, toolMap };
+    live = { ...emptyLive(), blocks: lb, toolMap };
   }
   set({
     queue: state.queue || { running: null, waiting: [] },
@@ -834,7 +838,23 @@ function wire(set: any, get: () => State) {
     const last = blocks[blocks.length - 1];
     if (last && last.type === 'text') blocks[blocks.length - 1] = { type: 'text', text: last.text + p.text };
     else blocks.push({ type: 'text', text: p.text });
-    set({ live: { ...live, blocks } });
+    // visible text means the thinking phase is over
+    set({ live: { ...live, blocks, thinking: false, outChars: live.outChars + String(p.text || '').length } });
+  });
+
+  // extended thinking is streaming: nothing to render, but the turn is demonstrably alive and the
+  // tokens count toward the output meter (server sends the length only, never the thinking text)
+  sock.on('assistant:thinking', (p: any) => {
+    if (!isCur(p.sessionId)) return;
+    const live = get().live || emptyLive();
+    set({ live: { ...live, thinking: true, outChars: live.outChars + (Number(p.len) || 0) } });
+  });
+
+  // exact output-token total from the SDK — replaces the estimate accumulated since the last one
+  sock.on('turn:usage', (p: any) => {
+    if (!isCur(p.sessionId)) return;
+    const live = get().live || emptyLive();
+    set({ live: { ...live, outTokens: Number(p.outputTokens) || live.outTokens, outChars: 0 } });
   });
 
   sock.on('tool:use', (p: any) => {
@@ -842,7 +862,7 @@ function wire(set: any, get: () => State) {
     const live = get().live || emptyLive();
     const blocks = live.blocks.slice();
     const idx = blocks.push({ type: 'tool_use', id: p.id, name: p.name, input: p.input, parentId: p.parentId, agentType: p.agentType }) - 1;
-    set({ live: { ...live, blocks, toolMap: { ...live.toolMap, [p.id]: idx } } });
+    set({ live: { ...live, blocks, thinking: false, toolMap: { ...live.toolMap, [p.id]: idx } } });
   });
 
   sock.on('tool:result', (p: any) => {

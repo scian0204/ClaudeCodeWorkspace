@@ -87,7 +87,10 @@ function runTurn(sessionId: string, text: string, nAtt = 0) {
 
   const streamOutro = () => {
     let d = 200;
+    // same thinking-then-text shape the real SDK streams (see runReal's stream_event handling)
+    for (let i = 0; i < 8; i++) later(d += 110, () => deliver('assistant:thinking', { sessionId, len: 38 }));
     chunks(r.outro).forEach((c) => later(d += 180, () => deliver('assistant:delta', { sessionId, text: c })));
+    later(d += 60, () => deliver('turn:usage', { sessionId, outputTokens: 420 }));
     finalBlocks.push({ type: 'text', text: r.outro });
     later(d += 300, () => {
       const msg = { id: `m_${rid()}`, role: 'assistant', authorId: null, authorName: 'Claude', content: { blocks: finalBlocks }, createdAt: Date.now() };
@@ -108,8 +111,9 @@ function runTurn(sessionId: string, text: string, nAtt = 0) {
     });
   };
 
-  // intro text
+  // a short thinking phase, then the intro text
   let d = 150;
+  for (let i = 0; i < 6; i++) later(d += 120, () => deliver('assistant:thinking', { sessionId, len: 34 }));
   chunks(r.intro).forEach((c) => later(d += 160, () => deliver('assistant:delta', { sessionId, text: c })));
   finalBlocks.push({ type: 'text', text: r.intro });
 

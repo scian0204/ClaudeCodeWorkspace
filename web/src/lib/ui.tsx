@@ -3,6 +3,7 @@ import { t, useT, useLang, setLang, LANGS, LANG_LABELS, type Lang } from './i18n
 import { useStore } from './store';
 import { withKeys } from './shortcuts';
 import { IconMenu, IconSparkle } from './icons';
+import { mdHighlight } from './md';
 
 // Tailwind `md` breakpoint (768px). React needs JS to branch on viewport (e.g. force chat-only
 // layout, skip the code-server iframe) since those decisions can't be pure CSS show/hide.
@@ -57,6 +58,48 @@ export function useGuideInset(enabled: boolean) {
     return () => { ro.disconnect(); window.removeEventListener('resize', measure); };
   }, [el, measure]);
   return [setEl, pad] as const;
+}
+
+// ── growing textareas + live markdown ───────────────────────────────────────────────────────
+// A prompt box should follow its content instead of sitting at a fixed `rows`, up to a ceiling —
+// past that it scrolls, so a pasted wall of text can never push the conversation off screen.
+// (CSS `field-sizing: content` would do this without JS, but it is still missing in Firefox.)
+const GROW_MAX_PX = 220;
+export function useAutoGrow(ref: React.RefObject<HTMLTextAreaElement | null>, value: string) {
+  React.useLayoutEffect(() => {
+    const ta = ref.current; if (!ta) return;
+    // keep the ceiling under half the viewport so the box stays usable on a phone in landscape
+    const max = Math.min(GROW_MAX_PX, Math.max(96, Math.round(window.innerHeight * 0.4)));
+    ta.style.height = 'auto';
+    const need = ta.scrollHeight;
+    ta.style.height = Math.min(need, max) + 'px';
+    ta.style.overflowY = need > max ? 'auto' : 'hidden';
+  }, [ref, value]);
+}
+
+// Live-markdown mirror for a textarea: same box, same metrics, painted behind transparent text so
+// the textarea keeps the caret, the selection, IME composition and every menu wired to it. Styling
+// is width-preserving by construction (see mdHighlight / the .mdh-* rules).
+export function MdMirror({ text, taRef, className = '' }: {
+  text: string; taRef: React.RefObject<HTMLTextAreaElement | null>; className?: string;
+}) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  // follow the textarea once it hits its ceiling and starts scrolling
+  React.useLayoutEffect(() => {
+    const ta = taRef.current, el = ref.current; if (!ta || !el) return;
+    el.scrollTop = ta.scrollTop;
+  }, [text, taRef]);
+  useEffect(() => {
+    const ta = taRef.current, el = ref.current; if (!ta || !el) return;
+    const sync = () => { el.scrollTop = ta.scrollTop; };
+    ta.addEventListener('scroll', sync);
+    return () => ta.removeEventListener('scroll', sync);
+  }, [taRef]);
+  return (
+    <div ref={ref} aria-hidden
+      className={`absolute inset-0 overflow-hidden whitespace-pre-wrap break-words pointer-events-none select-none ${className}`}
+      dangerouslySetInnerHTML={{ __html: mdHighlight(text) }} />
+  );
 }
 
 // ── waiting on the model ────────────────────────────────────────────────────────────────────

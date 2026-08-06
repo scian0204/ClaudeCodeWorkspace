@@ -1,3 +1,6 @@
+import { copyToClipboard } from './clipboard';
+import { t } from './i18n';
+
 const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 // One delegated listener for every rendered code-block copy button (content is injected via
@@ -8,9 +11,9 @@ if (typeof document !== 'undefined' && !(window as any).__mdCopyBound) {
     const btn = (e.target as HTMLElement).closest('[data-copy]') as HTMLElement | null;
     if (!btn) return;
     const code = btn.parentElement?.querySelector('pre code')?.textContent ?? '';
-    navigator.clipboard.writeText(code).then(() => {
+    void copyToClipboard(code).then((ok) => {
       const prev = btn.textContent;
-      btn.textContent = '✓ 복사됨';
+      btn.textContent = ok ? `✓ ${t('md.copied')}` : t('md.copyFailed');
       setTimeout(() => { btn.textContent = prev; }, 1500);
     });
   });
@@ -54,7 +57,7 @@ export function md(src: string, opts?: { img?: (src: string) => string | null })
   // 1) pull fenced code blocks out first (before escaping/splitting)
   const cb: string[] = [];
   let s = src.replace(/```(\w*)\n?([\s\S]*?)```/g, (_m, _lang, code) => {
-    cb.push(`<div class="relative group/code"><button type="button" data-copy class="absolute top-1.5 right-1.5 z-10 text-[11px] px-1.5 py-0.5 rounded border border-line bg-card text-txt3 opacity-70 hover:opacity-100 hover:text-clay transition" title="복사">복사</button><pre class="bg-bg border border-line rounded-lg p-3 my-2 overflow-x-auto scrolly"><code class="font-mono text-[13px]">${esc(code.replace(/\n$/, ''))}</code></pre></div>`);
+    cb.push(`<div class="relative group/code"><button type="button" data-copy class="absolute top-1.5 right-1.5 z-10 text-[11px] px-1.5 py-0.5 rounded border border-line bg-card text-txt3 opacity-70 hover:opacity-100 hover:text-clay transition" title="${esc(t('md.copy'))}">${esc(t('md.copy'))}</button><pre class="bg-bg border border-line rounded-lg p-3 my-2 overflow-x-auto scrolly"><code class="font-mono text-[13px]">${esc(code.replace(/\n$/, ''))}</code></pre></div>`);
     return fenceTok(cb.length - 1);
   });
   s = s.replace(/<\/?aside[^>]*>/gi, ''); // Notion callout wrapper — unwrap so inner markdown renders
@@ -126,4 +129,43 @@ export function md(src: string, opts?: { img?: (src: string) => string | null })
 
   // restore any fenced-code placeholder that ended up inside another block
   return out.join('').replace(/\x00f(\d+)\x00/g, (_m, i) => cb[+i]);
+}
+
+// ── live markdown for what the user is TYPING (see MdMirror in lib/ui.tsx) ──────────────────────
+// This renders a mirror that sits *behind* a transparent-text textarea; the caret and the line
+// wrapping still come from the textarea's own layout. So every character of the input must survive
+// (markers included) and every style used here must preserve glyph advance widths — colour,
+// background and the faux-bold text-stroke do; font-weight / font-family / font-size / padding do
+// not, and would drift the visible glyphs away from the caret. Hence no real bold and no italics.
+const dim = (s: string) => `<span class="mdh-mark">${s}</span>`;
+
+function hlInline(s: string): string {
+  const codes: string[] = [];
+  // code spans first, so ** / ~~ inside them are left alone
+  s = s.replace(/`([^`\n]*)`/g, (_m, c) => {
+    codes.push(`${dim('`')}<span class="mdh-code">${c}</span>${dim('`')}`);
+    return codeTok(codes.length - 1);
+  });
+  s = s
+    .replace(/\*\*([^*\n]+)\*\*/g, (_m, c) => `${dim('**')}<span class="mdh-b">${c}</span>${dim('**')}`)
+    .replace(/~~([^~\n]+)~~/g, (_m, c) => `${dim('~~')}<span class="line-through">${c}</span>${dim('~~')}`)
+    .replace(/(^|\s)(@[^\s@]+)/g, (_m, p, r) => `${p}<span class="mdh-ref">${r}</span>`);
+  return s.replace(/\x00c(\d+)\x00/g, (_m, i) => codes[+i]);
+}
+
+export function mdHighlight(src: string): string {
+  return src.split('\n').map((raw) => {
+    const line = esc(raw);
+    let m = /^(\s*)(```\w*)(.*)$/.exec(line);          // fence open/close
+    if (m) return m[1] + dim(m[2]) + hlInline(m[3]);
+    m = /^(\s*)(#{1,6}\s)(.*)$/.exec(line);            // heading
+    if (m) return m[1] + dim(m[2]) + `<span class="mdh-b">${hlInline(m[3])}</span>`;
+    m = /^(\s*)(&gt;\s?)(.*)$/.exec(line);             // blockquote ('>' is escaped by now)
+    if (m) return m[1] + dim(m[2]) + `<span class="text-txt2">${hlInline(m[3])}</span>`;
+    m = /^(\s*)([-*+]\s|\d+\.\s)(.*)$/.exec(line);     // ul / ol item
+    if (m) return m[1] + `<span class="mdh-li">${m[2]}</span>` + hlInline(m[3]);
+    m = /^(\s*)(\/[a-zA-Z][\w:-]*)(.*)$/.exec(line);   // slash command (this app's own syntax)
+    if (m) return m[1] + `<span class="mdh-li">${m[2]}</span>` + hlInline(m[3]);
+    return hlInline(line);
+  }).join('\n');
 }

@@ -12,6 +12,7 @@
 // menu comes through untouched — same convention Firefox and VS Code use.
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { create } from 'zustand';
+import { copyToClipboard } from './clipboard';
 import { useStore } from './store';
 import { t } from './i18n';
 import { fmtKeys, toggleSidebar } from './shortcuts';
@@ -111,10 +112,10 @@ function dataRows(el: Element | null): CtxRows {
   const canPaste = !!navigator.clipboard?.readText;
 
   return [
-    copyText && { label: t('ctx.copy'), icon: <IconCopy size={14} />, keys: 'Mod+C', onSelect: () => void navigator.clipboard?.writeText(copyText) },
+    copyText && { label: t('ctx.copy'), icon: <IconCopy size={14} />, keys: 'Mod+C', onSelect: () => void copyToClipboard(copyText) },
     field && copyText && {
       label: t('ctx.cut'), keys: 'Mod+X',
-      onSelect: async () => { await navigator.clipboard?.writeText(copyText).catch(() => {}); restore(); document.execCommand('insertText', false, ''); },
+      onSelect: async () => { await copyToClipboard(copyText); restore(); document.execCommand('insertText', false, ''); },
     },
     field && canPaste && {
       label: t('ctx.paste'), keys: 'Mod+V',
@@ -127,11 +128,11 @@ function dataRows(el: Element | null): CtxRows {
       },
     },
     field && { label: t('ctx.selectAll'), keys: 'Mod+A', onSelect: () => { field.focus(); field.select(); } },
-    !copyText && !field && own && { label: t('ctx.copyText'), icon: <IconCopy size={14} />, onSelect: () => void navigator.clipboard?.writeText(own) },
-    pre && { label: t('ctx.copyCode'), icon: <IconTerminal size={14} />, onSelect: () => void navigator.clipboard?.writeText(pre.textContent || '') },
-    link && { label: t('ctx.copyLink'), icon: <IconLink size={14} />, onSelect: () => void navigator.clipboard?.writeText(link.href) },
+    !copyText && !field && own && { label: t('ctx.copyText'), icon: <IconCopy size={14} />, onSelect: () => void copyToClipboard(own) },
+    pre && { label: t('ctx.copyCode'), icon: <IconTerminal size={14} />, onSelect: () => void copyToClipboard(pre.textContent || '') },
+    link && { label: t('ctx.copyLink'), icon: <IconLink size={14} />, onSelect: () => void copyToClipboard(link.href) },
     link && { label: t('ctx.openNewTab'), icon: <IconGlobe size={14} />, onSelect: () => void window.open(link.href, '_blank', 'noopener,noreferrer') },
-    img && { label: t('ctx.copyImage'), icon: <IconImage size={14} />, onSelect: () => void navigator.clipboard?.writeText(img.src) },
+    img && { label: t('ctx.copyImage'), icon: <IconImage size={14} />, onSelect: () => void copyToClipboard(img.src) },
     img && { label: t('ctx.openImage'), icon: <IconGlobe size={14} />, onSelect: () => void window.open(img.src, '_blank', 'noopener,noreferrer') },
   ];
 }

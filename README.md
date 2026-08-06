@@ -97,6 +97,8 @@ The Claude Code CLI is powerful, but it's tied to **one terminal — yours**. Cl
 
 Every user gets their **own isolated Claude Code session** (a separate CLI subprocess). Answers stream token-by-token in a serif transcript, each tool call is a **collapsible card** (command + output), and every `/clear` or `/compact` **folds the history above it** into a stacked, timestamped toggle so the thread never scrolls forever.
 
+While a turn runs you also see **what it is doing right now**: a *Thinking…* mark during extended thinking (before any text appears) and a **live output-token meter** that climbs as tokens stream and snaps to the SDK's exact count as each message completes. The composer itself **grows with your prompt** up to a ceiling (then scrolls) and **highlights markdown as you type** — code spans, bold, strikethrough, headings, quotes, `-`/`1.` lists, `@` references and `/` commands.
+
 ### 🛡 Web permission prompts — approve tools live in the browser
 
 <img src="docs/screenshots/03-permission.png" alt="Tool approval request card with Allow / Deny / Always allow" width="100%" />

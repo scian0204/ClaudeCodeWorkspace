@@ -5,7 +5,8 @@ import { useStore, type Block, type Msg, type Attachment, type Project } from '.
 import { ProjectCreateForm } from './ProjectCreateForm';
 import { api, type UploadState } from '../lib/api';
 import { UploadProgress } from './UploadProgress';
-import { Avatar, timeAgo, useIsMobile, MobileMenuButton, ClayDots, ClaySpark, ClayWait, useGuideInset } from '../lib/ui';
+import { Avatar, timeAgo, useIsMobile, MobileMenuButton, ClayDots, ClaySpark, ClayWait, useGuideInset, useAutoGrow, MdMirror } from '../lib/ui';
+import { copyToClipboard } from '../lib/clipboard';
 import { MembersDialog } from './MembersDialog';
 import { WikiExplorer } from './WikiExplorer';
 import { FileExplorer } from './FileExplorer';
@@ -656,6 +657,8 @@ function MessageView({ m }: { m: Msg }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(m.content.text || '');
   const [copied, setCopied] = useState(false);
+  const editRef = useRef<HTMLTextAreaElement>(null);
+  useAutoGrow(editRef, editing ? draft : '');
   const t = useT();
   const canEdit = !isClaude && !m.chat; // instruct messages regenerate from that point; casual chat is delete-only
 
@@ -663,16 +666,19 @@ function MessageView({ m }: { m: Msg }) {
     ? blocks.filter((b): b is Extract<Block, { type: 'text' }> => b.type === 'text').map((b) => b.text).join('\n\n')
     : (m.content.text || '');
   const copy = () => {
-    navigator.clipboard.writeText(copyText).then(() => {
+    void copyToClipboard(copyText).then((ok) => {
+      if (!ok) return useStore.getState().setError(t('chat.copyFailed'));
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     });
   };
 
+  // Re-asking the same thing verbatim is a legitimate edit: it truncates from here and regenerates.
+  // (An unchanged-text guard used to swallow it, so "같은 내용 다시 질의" did nothing.)
   const saveEdit = () => {
     const edited = draft.trim();
     setEditing(false);
-    if (edited && edited !== m.content.text) editMessage(m.id, edited);
+    if (edited) editMessage(m.id, edited);
   };
 
   const startEdit = () => { setDraft(m.content.text || ''); setEditing(true); };
@@ -696,9 +702,12 @@ function MessageView({ m }: { m: Msg }) {
         </div>
         {editing ? (
           <div className="border border-line2 rounded-lg bg-card p-2">
-            <textarea className="w-full bg-transparent outline-none resize-none text-sm text-txt" rows={3}
-              value={draft} autoFocus onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); saveEdit(); } if (e.key === 'Escape') setEditing(false); }} />
+            <div className="relative">
+              <MdMirror text={draft} taRef={editRef} className="text-sm" />
+              <textarea ref={editRef} className="relative z-10 block w-full bg-transparent outline-none resize-none text-sm text-transparent caret-clay noscrollbar min-h-[42px]" rows={2}
+                value={draft} autoFocus onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); saveEdit(); } if (e.key === 'Escape') setEditing(false); }} />
+            </div>
             <div className="flex gap-2 justify-end mt-1">
               <button className="btn-ghost !py-1 !text-xs" onClick={() => setEditing(false)}>{t('common.cancel')}</button>
               <button className="rounded-md px-3 py-1 text-xs font-semibold text-white bg-clay" onClick={saveEdit}>{t('chat.saveRegenerate')}</button>
@@ -719,16 +728,29 @@ function MessageView({ m }: { m: Msg }) {
   );
 }
 
+// Rough chars-per-output-token, used only to keep the meter moving between the SDK's exact
+// per-message totals. Mixed Korean/English/code lands near 3; the next turn:usage corrects it.
+const CHARS_PER_TOKEN = 3;
+
 function LiveView() {
   const live = useStore((s) => s.live)!;
   const t = useT();
+  const out = live.outTokens + Math.round(live.outChars / CHARS_PER_TOKEN);
+  const approx = live.outChars > 0;
   return (
     <div className="flex gap-3 mb-5">
       <Avatar claude />
       <div className="flex-1 min-w-0">
         <div className="text-xs text-txt2 font-semibold mb-1">Claude</div>
         <BlockList blocks={live.blocks} />
-        <ClayWait label={t('chat.working')} className="text-[13px] italic mt-1" />
+        <div className="flex items-center gap-2.5 mt-1 flex-wrap">
+          <ClayWait label={t(live.thinking ? 'chat.thinkingLive' : 'chat.working')} className="text-[13px] italic" />
+          {out > 0 && (
+            <span className="text-[11px] text-txt3 font-mono tabular-nums shrink-0" title={t('chat.outTokensTip')}>
+              {t('chat.outTokens', { n: (approx ? '~' : '') + fmtTokens(out) })}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -956,6 +978,7 @@ function Composer() {
   const [refs, setRefs] = useState<Ref[] | null>(null);
   const [atClosed, setAtClosed] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  useAutoGrow(taRef, text);
   const [toolbarRef, guideInset] = useGuideInset(store.guideEnabled);
   const t = useT();
   const roomId = c?.kind === 'room' ? (c.roomId ?? null) : null;
@@ -1146,8 +1169,13 @@ function Composer() {
                 <span className="invisible">{text}</span><span className="text-txt3">{active!.hint}</span>
               </div>
             )}
+            {/* live markdown: painted behind the textarea, which keeps the caret/IME/menus */}
+            {/* `block` on the textarea matters: as an inline box it leaves a baseline gap under itself,
+                which would make the wrapper (and the inset-0 mirror) a few px taller and scroll out of step */}
+            <div className="relative">
+            <MdMirror text={text} taRef={taRef} className="text-sm" />
             <textarea ref={taRef} disabled={wikiCompiling || readOnly}
-              className="relative z-10 w-full bg-transparent outline-none resize-none text-sm text-txt placeholder:text-txt3 disabled:opacity-50"
+              className="relative z-10 block w-full bg-transparent outline-none resize-none text-sm text-transparent caret-clay placeholder:text-txt3 disabled:opacity-50 noscrollbar min-h-[42px]"
               rows={2} placeholder={readOnly ? t('review.readOnlyPlaceholder') : wikiCompiling ? t('chat.topicCompiling') : isRoom ? (mode === 'chat' ? t('chat.roomChatPlaceholder', { title: c.title }) : t('chat.roomMessagePlaceholder', { title: c.title, name: user?.displayName ?? '' })) : t('chat.messagePlaceholder')}
               value={text}
               onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
@@ -1172,6 +1200,7 @@ function Composer() {
                 }
                 if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); }
               }} />
+            </div>
             {uploading && <div className="mt-2"><UploadProgress s={uploading} /></div>}
             <AttachmentList atts={atts} sessionId={c.chatSessionId} onRemove={removeAtt} />
             {/* guideInset keeps send/attach clear of the guide launcher, which floats in this exact

@@ -490,6 +490,7 @@ async function runReal(a: {
 
   let claudeSessionId: string | null = a.resume ?? null;
   let inputTokens = 0, outputTokens = 0, costUsd = 0;
+  let streamOut = 0; // running output-token total broadcast mid-turn (turn:usage)
   const toolIndex = new Map<string, number>();
 
   for await (const msg of q as any) {
@@ -503,8 +504,19 @@ async function runReal(a: {
     switch (msg?.type) {
       case 'stream_event': {
         const ev = msg.event;
-        if (ev?.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
-          a.emit('assistant:delta', { sessionId: a.sessionId, text: ev.delta.text });
+        if (ev?.type === 'content_block_delta') {
+          const d = ev.delta;
+          if (d?.type === 'text_delta') {
+            a.emit('assistant:delta', { sessionId: a.sessionId, text: d.text });
+          } else if (d?.type === 'thinking_delta') {
+            // extended thinking: the client only needs "still thinking" + how much, never the text
+            a.emit('assistant:thinking', { sessionId: a.sessionId, len: String(d.thinking || '').length });
+          }
+        } else if (ev?.type === 'message_delta' && ev.usage?.output_tokens != null) {
+          // exact output tokens, cumulative per assistant message — a turn has one per agent-loop
+          // iteration, so sum them. The client interpolates between these with a char estimate.
+          streamOut += Number(ev.usage.output_tokens) || 0;
+          a.emit('turn:usage', { sessionId: a.sessionId, outputTokens: streamOut });
         }
         break;
       }
@@ -576,7 +588,16 @@ async function runMock(a: {
     a.blocks.push({ type: 'text', text: acc });
   };
 
+  // a short thinking phase before the first token, so the "thinking" mark and the live token
+  // meter are exercisable without an API key
+  for (let i = 0; i < 10; i++) {
+    if (a.signal.aborted) throw new Error('aborted');
+    a.emit('assistant:thinking', { sessionId: a.sessionId, len: 36 });
+    await sleep(90);
+  }
+
   await stream(`(mock 모드 — API 키 없이 동작 중) 요청 "${a.prompt.slice(0, 80)}" 확인했습니다. 작업 디렉터리를 살펴보겠습니다.`);
+  a.emit('turn:usage', { sessionId: a.sessionId, outputTokens: 120 });
 
   // exercise the permission bridge with a real canUseTool call
   const toolId = 'mock_' + newId();

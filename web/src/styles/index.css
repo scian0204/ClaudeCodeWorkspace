@@ -73,6 +73,24 @@ body{margin:0;background:var(--bg);color:var(--txt);font-family:var(--sans);font
 }
 .wiki-cite:hover, .wiki-cite.on{ background:var(--clay); color:#fff; text-decoration:none; }
 
+/* ── live markdown in the composer (see mdHighlight in lib/md.ts, MdMirror in lib/ui.tsx) ──
+   The mirror is painted behind a transparent-text textarea, which still owns the caret and the line
+   wrapping — so nothing here may change a glyph's advance width. text-stroke thickens strokes in
+   place (real bold would not), and the code span fakes its padding with a box-shadow ring. */
+/* a visible scrollbar would narrow the textarea's text column and desync it from the mirror behind
+   it, so the growing prompt boxes scroll without one (wheel / arrow keys still work) */
+.noscrollbar{ scrollbar-width:none; -ms-overflow-style:none }
+.noscrollbar::-webkit-scrollbar{ width:0; height:0 }
+
+.mdh-mark{ opacity:.42 }
+.mdh-b{ -webkit-text-stroke:.4px currentColor; paint-order:stroke fill }
+.mdh-li{ color:var(--clay) }
+.mdh-ref{ color:var(--clay); text-decoration:underline; text-decoration-style:dotted; text-underline-offset:2px }
+.mdh-code{
+  color:var(--clay); background:var(--clay-soft); border-radius:3px;
+  box-shadow:0 0 0 2px var(--clay-soft);
+}
+
 /* ── signature waiting marks (see ClayDots / ClaySpark / ClayWait in lib/ui.tsx) ──
    Not a generic spinner: the three dots off the brand mark (favicon.svg) travel as a wave down its
    own tint ladder, and the sparkle that names a chat breathes inside a turning clay ring. */

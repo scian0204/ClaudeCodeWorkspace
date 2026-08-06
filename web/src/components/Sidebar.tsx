@@ -4,6 +4,7 @@ import { api, type UploadState } from '../lib/api';
 import { Avatar, avatarUrl, timeAgo, LangSelect, ClaySpark } from '../lib/ui';
 import { fmtKeys, withKeys } from '../lib/shortcuts';
 import { openContextMenu, type CtxRows } from '../lib/contextmenu';
+import { copyToClipboard } from '../lib/clipboard';
 import { collectDrop, collectPick, type Collected } from '../lib/dropfiles';
 import { Modal } from './Modal';
 import { ImportSessionModal } from './ImportSessionModal';
@@ -669,7 +670,7 @@ function CopyField({ label, value }: { label: string; value: string }) {
       <div className="flex items-center gap-1">
         <input className="input flex-1 min-w-0 text-[11px] font-mono" readOnly value={value} onFocus={(e) => e.currentTarget.select()} />
         <button className="btn-ghost px-2 shrink-0" title={t('ctx.copy')} aria-label={t('ctx.copy')}
-          onClick={() => void navigator.clipboard?.writeText(value)}><IconCopy size={13} /></button>
+          onClick={() => void copyToClipboard(value)}><IconCopy size={13} /></button>
       </div>
     </div>
   );
