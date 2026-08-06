@@ -47,6 +47,17 @@
 ## Unreleased
 
 <details>
+<summary><b>feat(usage): 플랜 한도가 없는 세션에는 실사용량 집계 표시</b> — API 키에서 사용량 팝오버가 막다른 길이었음 · <code>eada33a</code></summary>
+
+API 키(또는 Bedrock·Vertex·커스텀) 계정은 claude.ai 플랜 창 자체가 없어서 CLI가 `rate_limits_available=false`를 돌려주고, 팝오버는 "API 키 세션은 플랜 한도가 표시되지 않습니다" 한 줄만 남았음. API 키로 돌리는 워크스페이스에서는 미터 전체가 무용지물.
+
+이제 그런 세션은 워크스페이스 자체 집계를 대신 본다 — **이 세션** · **내 최근 5시간** · **내 최근 7일**, 각각 턴 수 · 입출력 토큰 · 비용. `spendSummary()`(`server/src/usage/tracker.ts`)는 기존 `usage` 테이블을 합산할 뿐이라(`recordUsage`가 이미 턴마다 행을 남김) CLI 프로브가 필요 없고, 프로브가 타임아웃해도 그대로 나온다. 세션 합계는 작성자 무관(대화방 턴은 여러 멤버가 만듦), 롤링 창은 대체 대상인 플랜 창과 맞춰 유저별. 한도 없음 안내도 실패처럼 읽히지 않게 *이유*(플랜 창 없음, 토큰 단위 과금)를 설명하도록 교체.
+
+`GET /api/sessions/:id/usage`에 `spend` 필드 추가(기존 필드 불변). 팝오버는 내용이 길어진 만큼 최대 높이·너비를 걸어 폰 화면을 넘지 않게 했다. 실행 가능한 검증: `server/src/usage/spend.test.ts` (better-sqlite3 바인딩 필요 — 앱 컨테이너에서 실행).
+
+</details>
+
+<details>
 <summary><b>docs: 업데이트 노트 도입</b> — 최초 설계부터 전 커밋 기록 · <code>2671942</code> <code>5011c73</code> <code>4a4e0b7</code></summary>
 
 - `2671942` `CHANGELOG.md`/`CHANGELOG.ko.md` 신설(DESIGN.md 스펙 확정 ~ v1.11.0) + 두 README의 목차 · 로드맵에서 링크

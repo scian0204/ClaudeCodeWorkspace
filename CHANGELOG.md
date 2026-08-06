@@ -47,6 +47,17 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ## Unreleased
 
 <details>
+<summary><b>feat(usage): recorded spend when a session has no plan window</b> — the usage popover was a dead end on API keys · <code>eada33a</code></summary>
+
+An API-key (or Bedrock/Vertex/custom) account has no claude.ai plan window at all, so the CLI reports `rate_limits_available=false` — and the popover printed "plan limits are not shown for API-key sessions" and nothing else. For a workspace running on an API key that made the whole meter useless.
+
+Those sessions now get our own ledger instead: **this session**, **my last 5 hours**, **my last 7 days**, each with turns, in/out tokens and cost. `spendSummary()` (`server/src/usage/tracker.ts`) just sums the existing `usage` table — `recordUsage` already writes a row per turn — so it needs no CLI probe and still reports when the probe times out. The session total is author-agnostic (a room's turns come from several members); the rolling windows are per-user, mirroring the plan windows they replace. The unavailable note now explains *why* (no plan window, billed per token) instead of reading like a failure.
+
+`GET /api/sessions/:id/usage` gains an additive `spend` field; the popover also gained a max height/width so the taller content cannot overflow a phone viewport. Runnable check: `server/src/usage/spend.test.ts` (needs a built better-sqlite3 — run it in the app container).
+
+</details>
+
+<details>
 <summary><b>docs: these update notes</b> — every commit since the original design · <code>2671942</code> <code>5011c73</code> <code>4a4e0b7</code></summary>
 
 - `2671942` added `CHANGELOG.md`/`CHANGELOG.ko.md` (from the DESIGN.md spec through v1.11.0) and linked them from both READMEs' contents + roadmap
