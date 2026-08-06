@@ -47,6 +47,17 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ## Unreleased
 
 <details>
+<summary><b>fix(usage): explain a missing plan window on OAuth tokens</b> — it's a scope problem, not a plan problem · <code>ab1fd6f</code></summary>
+
+The popover printed "API key / Bedrock / custom providers have no plan window" for *every* `rate_limits_available: false`, which misdiagnoses the most common real case: a `claude setup-token` OAuth token, where the user does have a subscription.
+
+**Root cause is scope, not billing.** The bundled CLI computes `rate_limits_available` as `xi() && fR()`, where `fR()` requires the `user:profile` scope and `xi()` requires `user:inference` — and the setup-token flow calls `startOAuthFlow(..., { inferenceOnly: true })`, so the minted `sk-ant-oat…` token carries `user:inference` only. The SDK's own type comment says it: "False when plan rate limits do not apply (API key, Bedrock, Vertex, **or missing profile scope**)". No workspace bug; that token structurally cannot read plan windows.
+
+`probeUsage` now reports `authKind` (`oauth` | `apiKey` | `other` | `none`), derived from the resolved provider env's **key names only** — no secret value is read, so nothing sensitive reaches the client — and the popover picks the matching explanation (new i18n key `usage.unavailableScope`). Recorded spend already covers what those sessions can actually report.
+
+</details>
+
+<details>
 <summary><b>feat(usage): recorded spend when a session has no plan window</b> — the usage popover was a dead end on API keys · <code>eada33a</code></summary>
 
 An API-key (or Bedrock/Vertex/custom) account has no claude.ai plan window at all, so the CLI reports `rate_limits_available=false` — and the popover printed "plan limits are not shown for API-key sessions" and nothing else. For a workspace running on an API key that made the whole meter useless.

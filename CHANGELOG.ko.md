@@ -47,6 +47,17 @@
 ## Unreleased
 
 <details>
+<summary><b>fix(usage): OAuth 토큰에서 플랜 한도가 안 보이는 이유를 정확히 안내</b> — 플랜 문제가 아니라 스코프 문제 · <code>ab1fd6f</code></summary>
+
+`rate_limits_available: false`면 무조건 "API 키·Bedrock·커스텀 프로바이더에는 플랜 한도가 없습니다"를 띄웠는데, 실제로 가장 흔한 경우인 `claude setup-token` OAuth 토큰(= 구독은 있는 유저)에 대해 오진이었음.
+
+**근본 원인은 과금 방식이 아니라 스코프.** 번들된 CLI는 `rate_limits_available`을 `xi() && fR()`로 계산하는데 `fR()`이 `user:profile` 스코프를, `xi()`가 `user:inference`를 요구한다. 그리고 setup-token 흐름은 `startOAuthFlow(..., { inferenceOnly: true })`로 호출되므로 발급된 `sk-ant-oat…`는 `user:inference`만 가진다. SDK 타입 주석도 명시한다 — "False when plan rate limits do not apply (API key, Bedrock, Vertex, **or missing profile scope**)". 워크스페이스 버그가 아니라 그 토큰으로는 구조적으로 플랜 창을 읽을 수 없음.
+
+`probeUsage`가 `authKind`(`oauth`·`apiKey`·`other`·`none`)를 함께 반환한다 — 해석된 provider env의 **키 이름만** 보고 판별하므로 시크릿 값은 읽지 않고 클라이언트로도 나가지 않는다. 팝오버는 이에 맞는 설명을 고른다(새 i18n 키 `usage.unavailableScope`). 그런 세션이 실제로 보여줄 수 있는 수치는 이미 실사용량 집계가 담당.
+
+</details>
+
+<details>
 <summary><b>feat(usage): 플랜 한도가 없는 세션에는 실사용량 집계 표시</b> — API 키에서 사용량 팝오버가 막다른 길이었음 · <code>eada33a</code></summary>
 
 API 키(또는 Bedrock·Vertex·커스텀) 계정은 claude.ai 플랜 창 자체가 없어서 CLI가 `rate_limits_available=false`를 돌려주고, 팝오버는 "API 키 세션은 플랜 한도가 표시되지 않습니다" 한 줄만 남았음. API 키로 돌리는 워크스페이스에서는 미터 전체가 무용지물.
