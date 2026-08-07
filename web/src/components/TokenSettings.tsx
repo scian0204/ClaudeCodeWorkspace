@@ -18,6 +18,7 @@ type LoginMeta = { loggedIn: boolean; scopes: string[]; planLimits: boolean; sub
 // runs turns fine but can never report the plan window. Two steps: open the link, paste the code back.
 export function ClaudeLoginBlock({ boxed = true }: { boxed?: boolean }) {
   const t = useT();
+  const refreshMe = useStore((s) => s.refreshMe); // signing in/out flips hasClaudeAuth → the nag
   const [meta, setMeta] = useState<LoginMeta | null>(null);
   const [url, setUrl] = useState('');
   const [code, setCode] = useState('');
@@ -45,7 +46,7 @@ export function ClaudeLoginBlock({ boxed = true }: { boxed?: boolean }) {
   const finish = async () => {
     if (!code.trim()) { setErr(t('login.enterCode')); return; }
     setBusy(true); setErr('');
-    try { const r = await api.post('/api/auth/me/claude-login/code', { code: code.trim() }); setMeta(r.login); setUrl(''); setCode(''); }
+    try { const r = await api.post('/api/auth/me/claude-login/code', { code: code.trim() }); setMeta(r.login); setUrl(''); setCode(''); await refreshMe(); }
     catch (e: any) { setErr(e.message || t('login.failed')); }
     finally { setBusy(false); }
   };
@@ -56,7 +57,7 @@ export function ClaudeLoginBlock({ boxed = true }: { boxed?: boolean }) {
   const signOut = async () => {
     if (!confirm(t('login.signOutConfirm'))) return;
     setBusy(true); setErr('');
-    try { const r = await api.del('/api/auth/me/claude-login'); setMeta(r.login); }
+    try { const r = await api.del('/api/auth/me/claude-login'); setMeta(r.login); await refreshMe(); }
     catch (e: any) { setErr(e.message || t('login.signOutFailed')); }
     finally { setBusy(false); }
   };

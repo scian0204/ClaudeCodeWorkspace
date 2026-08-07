@@ -7,6 +7,8 @@ import { cfg } from '../lib/config-registry.js';
 import { newId, newToken, colorFor } from '../lib/ids.js';
 import { ensureUserLayout } from '../lib/paths.js';
 import { setUserToken, userTokenMeta } from './claude-token.js';
+import { hasLogin } from './claude-login.js';
+import { getProvider } from './provider.js';
 
 // auth session lifetime is configurable (sessionTtlDays); resolved live at login()
 
@@ -60,10 +62,29 @@ export function toAuthUser(u: NonNullable<ReturnType<typeof getUserById>>): Auth
   return { id: u.id, username: u.username, role: u.role as Role, displayName: u.displayName, avatarColor: u.avatarColor, avatar: u.avatar ?? null, autoTitle: u.autoTitle !== 0, autoResume: u.autoResume === 1, primeWindow: u.primeWindow === 1, primedAt: u.primedAt ?? null };
 }
 
-// AuthUser + Claude-token status (for /me and /login so the client can drive the nag popup).
+// Does this user's own provider profile actually carry auth? An `anthropic` profile with no token
+// is the "just use my Claude token" case — resolveProvider falls straight through it, so it must
+// not count as auth here either, or the nag would go quiet for someone who still has none.
+function hasOwnProvider(userId: string): boolean {
+  const p = getProvider('user', userId);
+  if (!p) return false;
+  return p.type !== 'anthropic' || p.fields.hasAuthToken || p.fields.hasApiKey;
+}
+
+// AuthUser + Claude-auth status (for /me and /login so the client can drive the nag popup).
+// hasClaudeToken is specifically "a token is pasted" (what the token form itself reports), while
+// hasClaudeAuth answers the only question the nag actually cares about: can this user's turns run?
+// A browser sign-in or an LLM provider profile (bedrock/vertex/local via a custom base URL) is
+// perfectly good auth, so nagging those users for a token is wrong — same three sources
+// resolveProvider walks for the user scope.
 export function authUserWithToken(u: AuthUser) {
   const m = userTokenMeta(u.id);
-  return { ...u, hasClaudeToken: m.hasToken, claudeTokenSetAt: m.setAt };
+  return {
+    ...u,
+    hasClaudeToken: m.hasToken,
+    claudeTokenSetAt: m.setAt,
+    hasClaudeAuth: m.hasToken || hasLogin(u.id) || hasOwnProvider(u.id),
+  };
 }
 
 export function login(username: string, password: string): { token: string; user: AuthUser } | null {

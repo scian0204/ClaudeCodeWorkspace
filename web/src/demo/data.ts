@@ -10,7 +10,7 @@ export const COLORS = { clay: '#c8613a', blue: '#5b6b8c', green: '#5b8c6b', purp
 // ---- users -----------------------------------------------------------------
 export const ME = {
   id: 'u_admin', username: 'admin', role: 'admin', displayName: 'Demo Admin',
-  avatarColor: COLORS.clay, avatar: null as string | null, hasClaudeToken: true, claudeTokenSetAt: ago(60 * 24 * 3) as number | null,
+  avatarColor: COLORS.clay, avatar: null as string | null, hasClaudeToken: true, hasClaudeAuth: true, claudeTokenSetAt: ago(60 * 24 * 3) as number | null,
   autoTitle: true, autoResume: true, // demo: on so the limit-reset banner is reachable
   primeWindow: true, primedAt: ago(37) as number | null,
 };

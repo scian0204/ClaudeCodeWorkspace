@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { useStore } from '../lib/store';
 import { useT } from '../lib/i18n';
 import { IconDot, IconDotOutline } from '../lib/icons';
 
@@ -32,6 +33,7 @@ const endpoint = (scope: 'user' | 'common') => (scope === 'common' ? '/api/admin
 
 export function LlmProviderForm({ scope }: { scope: 'user' | 'common' }) {
   const t = useT();
+  const refreshMe = useStore((s) => s.refreshMe);
   const [status, setStatus] = useState<ProviderStatus | null>(null);
   const [type, setType] = useState<ProviderType>('custom');
   const [f, setF] = useState<FormState>(emptyForm);
@@ -61,13 +63,15 @@ export function LlmProviderForm({ scope }: { scope: 'user' | 'common' }) {
       const r = await api.put(endpoint(scope), { type, config });
       setStatus(r.provider || null);
       setF((p) => ({ ...emptyForm, baseUrl: p.baseUrl, region: p.region, projectId: p.projectId, model: p.model })); // drop secrets from state
+      // a user-scope profile IS auth (local LLM, bedrock…) → refresh hasClaudeAuth so the nag stops
+      if (scope === 'user') await refreshMe();
     } catch (e: any) { setErr(e.message || t('provider.saveFailed')); }
     finally { setBusy(false); }
   };
   const clear = async () => {
     if (!confirm(t('provider.clearConfirm'))) return;
     setBusy(true); setErr('');
-    try { await api.del(endpoint(scope)); setStatus(null); setType('custom'); setF(emptyForm); }
+    try { await api.del(endpoint(scope)); setStatus(null); setType('custom'); setF(emptyForm); if (scope === 'user') await refreshMe(); }
     catch (e: any) { setErr(e.message); }
     finally { setBusy(false); }
   };

@@ -193,7 +193,8 @@ export function Sidebar() {
         <button className={`flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full text-left ${panel === 'me' ? 'bg-claysoft' : 'hover:bg-line'}`} onClick={() => setPanel('me')}>
           <Avatar name={user?.displayName} color={user?.avatarColor} src={avatarUrl(user)} />
           <div className="flex-1 text-[13px] min-w-0 truncate">{user?.displayName}</div>
-          {!user?.hasClaudeToken && <span className="text-[10px] bg-warnsoft text-warn px-1.5 py-0.5 rounded-full whitespace-nowrap">{t('sidebar.tokenUnregistered')}</span>}
+          {/* same gate as the nag: a sign-in or provider profile is auth, so no warning badge */}
+          {!user?.hasClaudeAuth && <span className="text-[10px] bg-warnsoft text-warn px-1.5 py-0.5 rounded-full whitespace-nowrap">{t('sidebar.tokenUnregistered')}</span>}
           <span className="text-[10px] bg-claysoft text-clay px-1.5 py-0.5 rounded-full font-semibold">{user?.role}</span>
         </button>
         <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full hover:bg-line text-left text-[13px] text-txt2" onClick={() => setPanel('plugins')}>

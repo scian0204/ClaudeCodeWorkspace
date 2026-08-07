@@ -63,10 +63,12 @@ export function Shell() {
   const collapsed = useStore((s) => s.sidebarCollapsed);
   const user = useStore((s) => s.user);
 
-  // Nag users without a personal token to register one — every login, until registered or dismissed.
+  // Nag users with no auth of their own — every login, until they have some or dismiss it. Keyed on
+  // hasClaudeAuth, not hasClaudeToken: a browser sign-in or an LLM provider profile runs turns just
+  // fine, and asking those users for a token they deliberately do not have is noise.
   const [nagDismissed, setNagDismissed] = useState(false);
   useEffect(() => { setNagDismissed(false); }, [user?.id]);
-  const showNag = !!user && !user.hasClaudeToken && !nagDismissed;
+  const showNag = !!user && !user.hasClaudeAuth && !nagDismissed;
 
   useShortcuts(); // global keyboard shortcuts (search, new chat, sidebar, home, theme, ? help)
 
