@@ -6,6 +6,7 @@ import { MobileMenuButton, timeAgo } from '../lib/ui';
 import { GitCredList } from './GitCredentials';
 import { LlmProviderForm } from './LlmProvider';
 import { RequestInfo } from './MyPage';
+import { ClaudeLoginBlock } from './TokenSettings';
 import {
   IconArrowLeft, IconDot, IconDotOutline, IconRefresh, IconChevronRight, IconChevronDown,
   IconRotateCcw, IconX, IconPlus, IconSliders,
@@ -114,7 +115,8 @@ export function AdminPanel() {
               <DockerWarning docker={ov.docker} onProbed={(d: any) => setOv({ ...ov, docker: d })} />
             )}
             {ov?.forceMock && <div className="text-xs text-warn bg-warnsoft border border-warn rounded-lg px-3 py-2">{t('admin.mockForcedWarning')}</div>}
-            {!ov?.forceMock && ov?.commonToken && !ov.commonToken.hasToken && <div className="text-xs text-warn bg-warnsoft border border-warn rounded-lg px-3 py-2">{t('admin.commonTokenUnsetWarning')}</div>}
+            {/* a shared sign-in is a shared fallback too — only warn when there is neither */}
+            {!ov?.forceMock && ov?.commonToken && !ov.commonToken.hasToken && !ov?.commonLogin?.loggedIn && <div className="text-xs text-warn bg-warnsoft border border-warn rounded-lg px-3 py-2">{t('admin.commonTokenUnsetWarning')}</div>}
           </>
         )}
 
@@ -123,6 +125,9 @@ export function AdminPanel() {
         {tab === 'providers' && (
           <>
             <Section title={t('admin.commonTokenTitle')}>
+              {/* sign-in first: it is the only shared credential that can report plan limits */}
+              <ClaudeLoginBlock scope="common" />
+              <div className="text-sm font-semibold mb-1">{t('token.pasteTitle')}</div>
               <div className="text-sm mb-2 flex items-center gap-2">
                 {ov?.commonToken?.hasToken
                   ? <><IconDot className="text-ok" /><span>{t('admin.registered')}{ov.commonToken.setAt ? ` · ${new Date(ov.commonToken.setAt).toLocaleDateString()}` : ' (env)'}</span>

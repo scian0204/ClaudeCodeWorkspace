@@ -171,6 +171,11 @@ export const db = {
     meta: { loggedIn: false, scopes: [] as string[], planLimits: false, subscriptionType: null as string | null, expiresAt: null as number | null },
     pendingUrl: '',
   },
+  // shared-account sign-in (admin scope) — the alternative to a pasted common token
+  commonLogin: {
+    meta: { loggedIn: false, scopes: [] as string[], planLimits: false, subscriptionType: null as string | null, expiresAt: null as number | null },
+    pendingUrl: '',
+  },
   // guide assistant thread (mirrors the server's guide_messages rows: {id, role, content, createdAt})
   guideMessages: [] as any[],
   // custom branding (GET /api/brand). Seeded empty so the demo opens with the product's own name/mark;
@@ -270,6 +275,8 @@ export const ADMIN = {
     throttle: { inUse: 1, max: 3, waiting: 0 },
     forceMock: true,
     commonToken: { hasToken: true, setAt: ago(60 * 24 * 20) },
+    // the other shared fallback: an admin's signed-in account — mutable, so it lives on db
+    commonLogin: db.commonLogin.meta,
     version: ADMIN.update.status().current,
     updateAvailable: ADMIN.update.status().updateAvailable,
     docker: ADMIN.docker,

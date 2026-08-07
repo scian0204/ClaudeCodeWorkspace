@@ -779,6 +779,8 @@ const ko: Dict = {
   // login — Claude 계정 브라우저 로그인 (CLI OAuth 플로우를 서버가 대신 구동)
   'login.title': 'Claude 계정 로그인',
   'login.why': '구독 계정으로 로그인하면 플랜 한도(5시간·주간)까지 보이고 만료돼도 자동 갱신됩니다. 아래에 붙여넣는 setup-token은 추론 전용이라 한도를 못 읽습니다.',
+  'login.commonTitle': '공용 계정 로그인',
+  'login.commonWhy': '개인 인증이 없는 멤버의 턴이 이 계정으로 실행됩니다. 공용 토큰을 붙여넣는 대신 쓸 수 있고 플랜 한도까지 조회됩니다. 공용 토큰이 설정돼 있으면 그쪽이 우선합니다.',
   'login.signIn': 'Claude 계정으로 로그인',
   'login.step1': '1. 아래 링크를 열어 승인하세요 (새 탭이 안 열렸으면 클릭)',
   'login.step2': '2. 승인 후 화면에 나온 코드를 붙여넣으세요',
@@ -1873,6 +1875,8 @@ const en: Dict = {
   // login — Claude account sign-in in the browser (the server drives the CLI's OAuth flow)
   'login.title': 'Sign in to Claude',
   'login.why': 'Signing in with your subscription also shows your plan limits (5-hour, weekly) and refreshes itself when the token expires. A pasted setup-token is inference-only and cannot read those limits.',
+  'login.commonTitle': 'Shared account sign-in',
+  'login.commonWhy': 'Turns from members with no auth of their own run on this account. Use it instead of pasting a shared token — plan limits are reported too. A pasted common token still takes precedence.',
   'login.signIn': 'Sign in with your Claude account',
   'login.step1': '1. Open the link and approve (click it if no tab opened)',
   'login.step2': '2. Paste the code shown after you approve',

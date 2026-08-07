@@ -623,6 +623,22 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   if (P === '/api/admin/update/apply' && M === 'POST') return ok(ADMIN.update.apply());
   if (P === '/api/admin/restart' && M === 'POST') return ok({ ok: true });
   if (P === '/api/admin/claude-token') return ok({});
+  // shared-account sign-in — same fake two-step flow as the per-user one, on the admin overview seed
+  if (P === '/api/admin/claude-login/start') {
+    if (M === 'DELETE') { db.commonLogin.pendingUrl = ''; return ok({ ok: true }); }
+    db.commonLogin.pendingUrl = 'https://claude.com/cai/oauth/authorize?code=true&client_id=demo&scope=user%3Aprofile+user%3Ainference&state=demo-common';
+    return slow(ok({ url: db.commonLogin.pendingUrl }), 700);
+  }
+  if (P === '/api/admin/claude-login/code') {
+    if (!String(b.code || '').trim()) return { status: 400, data: { error: 'code required' } };
+    db.commonLogin.pendingUrl = '';
+    db.commonLogin.meta = { loggedIn: true, scopes: ['user:inference', 'user:profile'], planLimits: true, subscriptionType: 'max', expiresAt: Date.now() + 30 * 86400000 };
+    return slow(ok({ login: db.commonLogin.meta }), 900);
+  }
+  if (P === '/api/admin/claude-login') {
+    if (M === 'DELETE') { db.commonLogin.meta = { loggedIn: false, scopes: [], planLimits: false, subscriptionType: null, expiresAt: null }; db.commonLogin.pendingUrl = ''; }
+    return ok({ login: db.commonLogin.meta, pendingUrl: db.commonLogin.pendingUrl });
+  }
 
   return ok({}); // unknown → harmless empty object
 }

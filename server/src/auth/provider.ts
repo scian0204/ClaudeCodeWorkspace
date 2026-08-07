@@ -4,7 +4,7 @@ import { cfg } from '../lib/config-registry.js';
 import { encrypt, decrypt, validTokenFormat } from '../lib/secret-box.js';
 import { newId } from '../lib/ids.js';
 import { getUserToken, getCommonToken } from './claude-token.js';
-import { hasLogin } from './claude-login.js';
+import { hasLogin, credentialEnv, COMMON as COMMON_LOGIN } from './claude-login.js';
 
 // LLM provider override. The Claude Agent SDK spawns the Claude CLI, which speaks the Anthropic wire
 // format and natively supports these back-ends via env vars. A provider profile (per-user or common)
@@ -81,8 +81,12 @@ export function providerEnv(type: ProviderType, c: ProviderConfig): { env: Recor
 // Every env var any provider type can set — buildOptions clears ALL of these from the cloned host
 // env before applying the resolved provider env, so a stray host-global var (e.g. an exported
 // ANTHROPIC_BASE_URL or AWS creds) can never bleed into a default-token or mock turn.
+// CLAUDE_SECURESTORAGE_CONFIG_DIR belongs here for the same reason as the tokens: it selects WHICH
+// credential store the CLI reads, so a leftover value would silently run a turn on the shared
+// account. Only the common-login branch of resolveProvider ever sets it.
 export const PROVIDER_ENV_KEYS = [
-  'ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX',
+  'ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_SECURESTORAGE_CONFIG_DIR',
+  'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX',
   'ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_MODEL', 'AWS_REGION', 'AWS_ACCESS_KEY_ID',
   'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN', 'AWS_BEARER_TOKEN_BEDROCK', 'CLOUD_ML_REGION',
   'ANTHROPIC_VERTEX_PROJECT_ID',
@@ -128,6 +132,10 @@ export function resolveProvider(userId: string | null): { env: Record<string, st
   }
   const cp = fromRow('common', COMMON_OWNER, 'common'); if (cp) return cp;
   const shared = getCommonToken(); if (shared) return { env: tokenEnv(shared), source: 'token' };
+  // Shared account by sign-in instead of a pasted shared token. The credential stays in the common
+  // home; CLAUDE_SECURESTORAGE_CONFIG_DIR points the CLI at it while HOME — and therefore the
+  // borrowing user's settings, transcripts and resume ids — stays their own.
+  if (hasLogin(COMMON_LOGIN)) return { env: credentialEnv(COMMON_LOGIN), source: 'login' };
   return { env: {}, source: 'none' };
 }
 

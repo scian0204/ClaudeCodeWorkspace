@@ -16,8 +16,9 @@ type LoginMeta = { loggedIn: boolean; scopes: string[]; planLimits: boolean; sub
 // Sign in to a Claude account through the CLI's own OAuth flow. This is the only path to a
 // user:profile scope — a token pasted below (`claude setup-token`) is minted inference-only, so it
 // runs turns fine but can never report the plan window. Two steps: open the link, paste the code back.
-export function ClaudeLoginBlock({ boxed = true }: { boxed?: boolean }) {
+export function ClaudeLoginBlock({ boxed = true, scope = 'user' }: { boxed?: boolean; scope?: 'user' | 'common' }) {
   const t = useT();
+  const base = scope === 'common' ? '/api/admin/claude-login' : '/api/auth/me/claude-login';
   const refreshMe = useStore((s) => s.refreshMe); // signing in/out flips hasClaudeAuth → the nag
   const [meta, setMeta] = useState<LoginMeta | null>(null);
   const [url, setUrl] = useState('');
@@ -28,16 +29,16 @@ export function ClaudeLoginBlock({ boxed = true }: { boxed?: boolean }) {
 
   useEffect(() => {
     let alive = true;
-    api.get('/api/auth/me/claude-login')
+    api.get(base)
       .then((r) => { if (alive) { setMeta(r.login); setUrl(r.pendingUrl || ''); } })
       .catch(() => { if (alive) setOff(true); });
     return () => { alive = false; };
-  }, []);
+  }, [base]);
 
   const start = async () => {
     setBusy(true); setErr('');
     try {
-      const r = await api.post('/api/auth/me/claude-login/start');
+      const r = await api.post(`${base}/start`);
       setUrl(r.url);
       window.open(r.url, '_blank', 'noopener');
     } catch (e: any) { setErr(e.message || t('login.startFailed')); }
@@ -46,18 +47,18 @@ export function ClaudeLoginBlock({ boxed = true }: { boxed?: boolean }) {
   const finish = async () => {
     if (!code.trim()) { setErr(t('login.enterCode')); return; }
     setBusy(true); setErr('');
-    try { const r = await api.post('/api/auth/me/claude-login/code', { code: code.trim() }); setMeta(r.login); setUrl(''); setCode(''); await refreshMe(); }
+    try { const r = await api.post(`${base}/code`, { code: code.trim() }); setMeta(r.login); setUrl(''); setCode(''); await refreshMe(); }
     catch (e: any) { setErr(e.message || t('login.failed')); }
     finally { setBusy(false); }
   };
   const cancel = async () => {
     setUrl(''); setCode(''); setErr('');
-    try { await api.del('/api/auth/me/claude-login/start'); } catch { /* already gone */ }
+    try { await api.del(`${base}/start`); } catch { /* already gone */ }
   };
   const signOut = async () => {
     if (!confirm(t('login.signOutConfirm'))) return;
     setBusy(true); setErr('');
-    try { const r = await api.del('/api/auth/me/claude-login'); setMeta(r.login); await refreshMe(); }
+    try { const r = await api.del(base); setMeta(r.login); await refreshMe(); }
     catch (e: any) { setErr(e.message || t('login.signOutFailed')); }
     finally { setBusy(false); }
   };
@@ -66,8 +67,8 @@ export function ClaudeLoginBlock({ boxed = true }: { boxed?: boolean }) {
 
   return (
     <div className={boxed ? 'border border-line rounded-lg p-3 mb-4' : 'mb-4'}>
-      <div className="text-sm font-semibold mb-1">{t('login.title')}</div>
-      <div className="text-[11px] text-txt3 mb-2">{t('login.why')}</div>
+      <div className="text-sm font-semibold mb-1">{t(scope === 'common' ? 'login.commonTitle' : 'login.title')}</div>
+      <div className="text-[11px] text-txt3 mb-2">{t(scope === 'common' ? 'login.commonWhy' : 'login.why')}</div>
 
       {meta?.loggedIn ? (
         <div className="text-sm flex flex-wrap items-center gap-2">

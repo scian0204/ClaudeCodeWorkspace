@@ -150,7 +150,9 @@ export const DEFS: ConfigDef[] = [
   // Claude account sign-in (drives `claude auth login` per user). The only path to a user:profile
   // scope, i.e. to plan-limit reporting — a pasted setup-token can never carry it.
   { key: 'claudeLoginEnabled', group: 'auth', type: 'bool', default: '1' },
-  { key: 'claudeLoginStartMs', group: 'auth', type: 'int', default: '20000', min: 5000, max: 120000, unit: 'ms' },
+  // Generous: the FIRST `claude` spawn in a fresh container extracts its native binary and can take
+  // well over 20s, which would fail the very first sign-in after a deploy.
+  { key: 'claudeLoginStartMs', group: 'auth', type: 'int', default: '60000', min: 5000, max: 300000, unit: 'ms' },
   { key: 'claudeLoginTimeoutMs', group: 'auth', type: 'int', default: '600000', min: 60000, max: 3600000, unit: 'ms' },
   { key: 'claudeLoginFinishMs', group: 'auth', type: 'int', default: '60000', min: 5000, max: 300000, unit: 'ms' },
 

@@ -25,6 +25,14 @@ import { applyPrivacyEnv, privacyPlan } from '../claude/privacy.js';
 // (accessToken + refreshToken + scopes) into that HOME — the same HOME buildOptions gives every
 // turn — so turns pick it up with no token env at all, and token refresh keeps working by itself.
 
+// Scope key: a user id, or COMMON for the admin-managed shared account. The shared credential lives
+// in the common home and is handed to a borrowing turn through CLAUDE_SECURESTORAGE_CONFIG_DIR —
+// that env var relocates ONLY the credential store, so the user keeps their own HOME, settings,
+// transcripts and resume ids, and the CLI still refreshes the shared token in place.
+export const COMMON = '#common';
+const claudeDirOf = (key: string) => (key === COMMON ? paths.commonClaude : paths.userClaude(key));
+const homeOf = (key: string) => (key === COMMON ? paths.common : paths.userHome(key));
+
 export interface LoginMeta {
   loggedIn: boolean;
   scopes: string[];
@@ -35,16 +43,22 @@ export interface LoginMeta {
 export const NO_LOGIN: LoginMeta = { loggedIn: false, scopes: [], planLimits: false, subscriptionType: null, expiresAt: null };
 
 const PROFILE_SCOPE = 'user:profile';
-const credentialsPath = (userId: string) => path.join(paths.userClaude(userId), '.credentials.json');
+const credentialsPath = (key: string) => path.join(claudeDirOf(key), '.credentials.json');
+
+// Env that points the CLI at a scope's credential store without touching its HOME. Empty for a
+// user's own login — that credential already sits in the HOME the turn runs with.
+export function credentialEnv(key: string): Record<string, string> {
+  return key === COMMON ? { CLAUDE_SECURESTORAGE_CONFIG_DIR: paths.commonClaude } : {};
+}
 
 // The CLI's own credential record. Read for status only — no token value ever leaves this module.
-function readCredentials(userId: string): any | null {
-  try { return JSON.parse(fs.readFileSync(credentialsPath(userId), 'utf8'))?.claudeAiOauth ?? null; }
+function readCredentials(key: string): any | null {
+  try { return JSON.parse(fs.readFileSync(credentialsPath(key), 'utf8'))?.claudeAiOauth ?? null; }
   catch { return null; } // missing / unreadable / malformed → not logged in
 }
 
-export function loginMeta(userId: string): LoginMeta {
-  const c = readCredentials(userId);
+export function loginMeta(key: string): LoginMeta {
+  const c = readCredentials(key);
   if (!c?.accessToken) return NO_LOGIN;
   const scopes: string[] = Array.isArray(c.scopes) ? c.scopes.filter((s: any) => typeof s === 'string') : [];
   return {
@@ -58,8 +72,8 @@ export function loginMeta(userId: string): LoginMeta {
 
 // Hot path: resolveProvider calls this on every turn and every usage probe. An expired accessToken is
 // still a login — the CLI refreshes it with the stored refreshToken, so do NOT gate on expiresAt.
-export function hasLogin(userId: string): boolean {
-  return !!readCredentials(userId)?.accessToken;
+export function hasLogin(key: string): boolean {
+  return !!readCredentials(key)?.accessToken;
 }
 
 // ── the login process ──
@@ -79,9 +93,9 @@ const cliPath = () => cfg.str('claudeCodePath') || 'claude';
 // HOME is the user's workspace home so the credential lands where turns read it. Every
 // provider-controlled var is stripped: with ANTHROPIC_API_KEY inherited from the host env the CLI
 // treats that key as the active auth and would describe the wrong credential.
-function childEnv(userId: string): NodeJS.ProcessEnv {
-  ensure(paths.userClaude(userId));
-  const env: NodeJS.ProcessEnv = { ...process.env, HOME: paths.userHome(userId) };
+function childEnv(key: string): NodeJS.ProcessEnv {
+  ensure(claudeDirOf(key));
+  const env: NodeJS.ProcessEnv = { ...process.env, HOME: homeOf(key) };
   for (const k of PROVIDER_ENV_KEYS) delete env[k];
   applyPrivacyEnv(env as Record<string, string>, privacyPlan((k) => cfg.bool(k)));
   return env;
