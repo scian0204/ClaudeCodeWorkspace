@@ -47,6 +47,17 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ## Unreleased
 
 <details>
+<summary><b>fix: plan limits never loaded, and the shared token looked undeletable</b> — two reports, two unrelated causes · <code>8d1e7de</code></summary>
+
+**Plan limits missing on a subscription session.** The probe drove its session with a one-shot `'ping'` prompt. That starts a real model turn *and* closes the query the moment the turn ends — while the plan-limit lookup is a live claude.ai call that outlives it, so the SDK rejected with `Query closed before response received`. Streaming input that never yields keeps the session open until we abort it, and takes no turn at all (`probeCommands` had the same bug, quietly spending a turn per palette open).
+
+Even then the lookup lost: it shared a query with the context-window probe, which resumes the transcript and loads the session's plugins. Measured on a team subscription, the account lookup answers in **~3s on a bare session** but was waiting tens of seconds behind that startup — and running the two concurrently just made two CLI startups fight for the CPU. It now runs first on its own bare session (no resume, no plugins), then the context probe runs. `usageProbeTimeoutMs` 8s → 45s (the old value could not have fit either call) and `usageProbeTtlMs` 15s → 120s, so the cost is paid once per window rather than on every popover open. Verified against the real CLI in the container: `rate_limits_available: true`, 5-hour 65%, weekly 46%.
+
+**Deleting the admin-set shared token appeared to do nothing.** It did delete — `commonTokenMeta` then reported the token still configured because `ANTHROPIC_API_KEY` is set in the server environment and counts as a fallback. The meta now carries `fromEnv`, and the admin panel says the value comes from the deployment (hiding the delete button) instead of offering an action that cannot apply to it.
+
+</details>
+
+<details>
 <summary><b>feat(auth): back the shared account with an admin sign-in</b> — a common token is no longer the only shared fallback · <code>e9e1140</code></summary>
 
 The shared credential could only be a **pasted token**, so the workspace-wide fallback inherited every setup-token limitation: no plan window, no refresh. An admin can now sign in from the admin panel instead, and members with no auth of their own run on that account.
