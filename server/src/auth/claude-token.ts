@@ -6,7 +6,10 @@ import { getSetting, setSetting } from '../lib/settings.js';
 import { encrypt, decrypt, validTokenFormat } from '../lib/secret-box.js';
 
 export type TokenSource = 'user' | 'shared' | 'none';
-export interface TokenMeta { hasToken: boolean; setAt: number | null }
+// fromEnv: no admin-set token exists, but ANTHROPIC_API_KEY is set in the server's environment.
+// That token cannot be deleted from the UI (it is not ours to delete — it comes from the deploy),
+// so the admin panel has to say so instead of showing a delete button that appears to do nothing.
+export interface TokenMeta { hasToken: boolean; setAt: number | null; fromEnv: boolean }
 
 const COMMON_ENC = 'claude_common_token_enc';
 const COMMON_AT = 'claude_common_token_set_at';
@@ -26,7 +29,7 @@ export function clearUserToken(userId: string): void {
 }
 export function userTokenMeta(userId: string): TokenMeta {
   const u = db.select().from(schema.users).where(eq(schema.users.id, userId)).get();
-  return { hasToken: !!u?.claudeTokenEnc, setAt: u?.claudeTokenSetAt ?? null };
+  return { hasToken: !!u?.claudeTokenEnc, setAt: u?.claudeTokenSetAt ?? null, fromEnv: false };
 }
 
 // ── admin-managed common token (shared fallback) ──
@@ -43,9 +46,10 @@ export function clearCommonToken(): void {
 export function commonTokenMeta(): TokenMeta {
   const enc = getSetting(COMMON_ENC, '');
   const at = Number(getSetting(COMMON_AT, '') || 0);
-  // env fallback counts as "configured" but has no set-at timestamp
+  // env fallback counts as "configured" but has no set-at timestamp — and deleting the admin-set
+  // token cannot remove it, so flag it rather than leaving the UI looking like the delete failed.
   const has = !!enc || !!config.anthropicApiKey;
-  return { hasToken: has, setAt: enc && at ? at : null };
+  return { hasToken: has, setAt: enc && at ? at : null, fromEnv: !enc && !!config.anthropicApiKey };
 }
 
 // Decrypted per-user token, '' if unset/corrupt. Mirrors getCommonToken (used by the provider resolver).

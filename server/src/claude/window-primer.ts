@@ -43,7 +43,9 @@ async function withQuery<T>(
   run: (q: any) => Promise<T>,
 ): Promise<T | null> {
   const prov = resolveProvider(userId);
-  if (!prov.env.CLAUDE_CODE_OAUTH_TOKEN) return null; // claude.ai subscription auth only
+  // claude.ai subscription auth only. A browser sign-in qualifies too even though it sets no token
+  // env — its credential lives in the user's HOME and the CLI picks it up from there.
+  if (!prov.env.CLAUDE_CODE_OAUTH_TOKEN && prov.source !== 'login') return null;
   const cwd = paths.userProjects(userId);
   ensure(cwd);
   const ctx: SessionContext = {

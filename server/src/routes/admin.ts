@@ -11,6 +11,7 @@ import { appVersion, cachedStatus, checkForUpdate, updateStatus, applyUpdate } f
 import { dockerStatus, probeDocker } from '../lib/docker-status.js';
 import { turnLimiter } from '../claude/throttle.js';
 import { setCommonToken, clearCommonToken, commonTokenMeta } from '../auth/claude-token.js';
+import { startLogin, submitCode, cancelLogin, logoutLogin, loginMeta, loginInFlight, COMMON as COMMON_LOGIN } from '../auth/claude-login.js';
 import { getProvider, setProvider, clearProvider } from '../auth/provider.js';
 import { refreshModels } from '../claude/models.js';
 
@@ -24,6 +25,7 @@ export async function adminRoutes(app: FastifyInstance) {
       throttle: { max: turnLimiter.max, inUse: turnLimiter.inUse, waiting: turnLimiter.waiting },
       forceMock: cfg.bool('forceMock'),
       commonToken: commonTokenMeta(), // shared fallback status (admin-set DB token or env)
+      commonLogin: loginMeta(COMMON_LOGIN), // the other shared fallback: an admin's signed-in account
       // version + "newer image published" badge, from the LAST check only (never a fetch here)
       version: appVersion(),
       updateAvailable: !!cachedStatus()?.updateAvailable,
@@ -191,6 +193,46 @@ export async function adminRoutes(app: FastifyInstance) {
     if (!requireAdmin(req, reply)) return;
     clearCommonToken();
     return { commonToken: commonTokenMeta() };
+  });
+
+  // ── shared account by sign-in, the alternative to pasting a common token ──
+  // Same two-step flow as the per-user one, but the credential lands in the common home. A turn
+  // that falls back to it gets CLAUDE_SECURESTORAGE_CONFIG_DIR (see resolveProvider), so the
+  // borrowing user keeps their own HOME. A pasted common token still wins if one is set.
+  const loginGate = (reply: any) => {
+    if (cfg.bool('claudeLoginEnabled')) return true;
+    reply.code(404).send({ error: 'claude login disabled' });
+    return false;
+  };
+
+  app.get('/api/admin/claude-login', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    if (!loginGate(reply)) return;
+    return { login: loginMeta(COMMON_LOGIN), pendingUrl: loginInFlight(COMMON_LOGIN) };
+  });
+  app.post('/api/admin/claude-login/start', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    if (!loginGate(reply)) return;
+    try { return { ...(await startLogin(COMMON_LOGIN)) }; }
+    catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
+  });
+  app.post('/api/admin/claude-login/code', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    if (!loginGate(reply)) return;
+    const { code } = (req.body || {}) as any;
+    if (!code || typeof code !== 'string') return reply.code(400).send({ error: 'code required' });
+    try { return { login: await submitCode(COMMON_LOGIN, code) }; }
+    catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
+  });
+  app.delete('/api/admin/claude-login/start', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    cancelLogin(COMMON_LOGIN);
+    return { ok: true };
+  });
+  app.delete('/api/admin/claude-login', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    await logoutLogin(COMMON_LOGIN);
+    return { login: loginMeta(COMMON_LOGIN) };
   });
 
   // ── admin-managed common LLM provider override (shared fallback) — never returns secrets ──

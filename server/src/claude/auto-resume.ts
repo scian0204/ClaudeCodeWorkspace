@@ -107,10 +107,14 @@ function takeAttempts(sessionId: string, authorId: string): number {
 // ── eligibility ──
 // Claude subscription auth only, feature on globally, user opted in, and never for the unattended
 // review pipeline (it owns its own retry/watchdog and runs under an admin's auth).
-export function eligible(userId: string, providerEnv: Record<string, string>, sessionKind: string): boolean {
+// `subscriptionLogin` is the browser sign-in path: that credential lives in the user's HOME as the
+// CLI's own .credentials.json, so the turn env carries no CLAUDE_CODE_OAUTH_TOKEN even though the
+// auth IS a claude.ai subscription — gating on the env var alone would silently disable auto-resume
+// for exactly the accounts that have a plan window.
+export function eligible(userId: string, providerEnv: Record<string, string>, sessionKind: string, subscriptionLogin = false): boolean {
   if (!cfg.bool('autoResumeEnabled')) return false;
   if (sessionKind === 'review') return false;
-  if (!providerEnv.CLAUDE_CODE_OAUTH_TOKEN) return false;
+  if (!providerEnv.CLAUDE_CODE_OAUTH_TOKEN && !subscriptionLogin) return false;
   const u = db.select().from(schema.users).where(eq(schema.users.id, userId)).get();
   return u?.autoResume === 1;
 }

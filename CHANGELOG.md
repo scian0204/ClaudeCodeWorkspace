@@ -47,6 +47,61 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ## Unreleased
 
 <details>
+<summary><b>fix: plan limits never loaded, and the shared token looked undeletable</b> — two reports, two unrelated causes · <code>8d1e7de</code></summary>
+
+**Plan limits missing on a subscription session.** The probe drove its session with a one-shot `'ping'` prompt. That starts a real model turn *and* closes the query the moment the turn ends — while the plan-limit lookup is a live claude.ai call that outlives it, so the SDK rejected with `Query closed before response received`. Streaming input that never yields keeps the session open until we abort it, and takes no turn at all (`probeCommands` had the same bug, quietly spending a turn per palette open).
+
+Even then the lookup lost: it shared a query with the context-window probe, which resumes the transcript and loads the session's plugins. Measured on a team subscription, the account lookup answers in **~3s on a bare session** but was waiting tens of seconds behind that startup — and running the two concurrently just made two CLI startups fight for the CPU. It now runs first on its own bare session (no resume, no plugins), then the context probe runs. `usageProbeTimeoutMs` 8s → 45s (the old value could not have fit either call) and `usageProbeTtlMs` 15s → 120s, so the cost is paid once per window rather than on every popover open. Verified against the real CLI in the container: `rate_limits_available: true`, 5-hour 65%, weekly 46%.
+
+**Deleting the admin-set shared token appeared to do nothing.** It did delete — `commonTokenMeta` then reported the token still configured because `ANTHROPIC_API_KEY` is set in the server environment and counts as a fallback. The meta now carries `fromEnv`, and the admin panel says the value comes from the deployment (hiding the delete button) instead of offering an action that cannot apply to it.
+
+</details>
+
+<details>
+<summary><b>feat(auth): back the shared account with an admin sign-in</b> — a common token is no longer the only shared fallback · <code>e9e1140</code></summary>
+
+The shared credential could only be a **pasted token**, so the workspace-wide fallback inherited every setup-token limitation: no plan window, no refresh. An admin can now sign in from the admin panel instead, and members with no auth of their own run on that account.
+
+The hard part: a shared credential has to reach a turn **without taking over the borrowing user's HOME** — that is where their settings, transcripts and resume ids live. `CLAUDE_SECURESTORAGE_CONFIG_DIR` relocates *only* the credential store (the CLI resolves it before falling back to the config dir), so the common-login branch of `resolveProvider` sets exactly that one var: HOME stays the user's, the CLI reads and refreshes the shared credential in place, and no token value is ever copied around. It joins `PROVIDER_ENV_KEYS` so a stale value can never silently route a turn at the shared account.
+
+`claude-login.ts` now takes a **scope key** — a user id, or `COMMON` for the shared home — and the admin routes (`/api/admin/claude-login*`) mirror the per-user ones behind `requireAdmin`. Precedence stays explicit: user provider → user token → user sign-in → common provider → common token → common sign-in → mock. The admin panel's "no shared token" warning now counts a shared sign-in as configured.
+
+Also raises `claudeLoginStartMs` to 60s: the **first** `claude` spawn in a fresh container extracts its native binary and can take well over 20s, which failed the very first sign-in after a deploy (found by smoke-testing the new path against the real CLI).
+
+</details>
+
+<details>
+<summary><b>fix(auth): stop nagging for a token when the user already has auth</b> — sign-in and provider profiles count too · <code>6e68e91</code></summary>
+
+The "register a Claude token" popup and the sidebar's "token unregistered" badge both keyed on `hasClaudeToken`, which only means *a token is pasted*. Someone who signed in through the browser, or who runs their turns on their own LLM provider profile (local LLM, Bedrock, Vertex), has perfectly good auth and was still nagged on every login.
+
+`authUserWithToken` now also reports **`hasClaudeAuth`** — token OR browser sign-in OR a user-scope provider profile, the same three sources `resolveProvider` walks. An `anthropic` profile with **no** token deliberately does not count: `resolveProvider` falls straight through it, so counting it would silence the nag for someone who genuinely has none. The nag and the badge key on the new field; the token form keeps reporting `hasClaudeToken`, which is what it is actually about.
+
+Sign-in/out and a user-scope provider save/clear return no user DTO, so they now call a small `refreshMe()` store action — otherwise the nag lingered until a reload.
+
+</details>
+
+<details>
+<summary><b>feat(auth): sign in to a Claude account from the browser</b> — the only path to a full-scope credential · <code>acb274b</code></summary>
+
+A pasted `claude setup-token` token is minted **inference-only**, so it runs turns but can never report the plan window — the CLI gates that on `user:profile`. The workspace had no way to obtain a full-scope credential at all.
+
+`claude auth login --claudeai` requests the whole scope set (`org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload`) and, with no browser in the container, degrades to a **line-oriented flow**: it prints the authorize URL (`redirect_uri=…/oauth/code/callback&code=true`) and reads the code from stdin. No PTY, no TUI scraping. So the server drives the official CLI rather than implementing — or impersonating — an OAuth client of its own:
+
+```
+POST   /api/auth/me/claude-login/start  → spawn with HOME=<user home>, return the authorize URL
+POST   /api/auth/me/claude-login/code   → write the pasted code to the child's stdin
+GET    /api/auth/me/claude-login        → status (loggedIn, scopes, planLimits, subscriptionType)
+DELETE /api/auth/me/claude-login        → sign out (and remove the credential file)
+```
+
+The CLI writes `.credentials.json` into the user's own HOME — the same HOME `buildOptions` gives every turn — so turns pick it up with **no token env at all** and refresh keeps working by itself. `resolveProvider` gains a `'login'` source, ranked under an explicitly pasted token (deliberate configuration beats ambient) and over the shared one (it is the user's own account). Both subscription-only features had to learn about it: auto-resume and the 5h window primer gated on `CLAUDE_CODE_OAUTH_TOKEN`, which this path deliberately omits, so they would have silently switched off for exactly the accounts that have a plan window.
+
+**Security**: every endpoint is scoped to the caller's own id — no `userId` is ever read from a request — and responses carry only booleans, scope names, subscription type and expiry. No token value is ever returned; the one-time OAuth code goes straight to the child's stdin, unlogged and unstored. Admin keys `claudeLoginEnabled` (enforced server-side, not just a hidden button) and `claudeLoginStartMs` / `claudeLoginTimeoutMs` / `claudeLoginFinishMs`. The demo fakes both steps so the flow stays clickable on GitHub Pages.
+
+</details>
+
+<details>
 <summary><b>fix(usage): explain a missing plan window on OAuth tokens</b> — it's a scope problem, not a plan problem · <code>ab1fd6f</code></summary>
 
 The popover printed "API key / Bedrock / custom providers have no plan window" for *every* `rate_limits_available: false`, which misdiagnoses the most common real case: a `claude setup-token` OAuth token, where the user does have a subscription.

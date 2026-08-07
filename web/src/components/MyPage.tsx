@@ -6,6 +6,7 @@ import { MobileMenuButton, Avatar, avatarUrl } from '../lib/ui';
 import { GitCredList } from './GitCredentials';
 import { LlmProviderForm } from './LlmProvider';
 import { ProjectCreateForm } from './ProjectCreateForm';
+import { ClaudeLoginBlock } from './TokenSettings';
 import { GitPanel } from './GitPanel';
 import { IconArrowLeft, IconDot, IconFolder, IconGitBranch, IconUser } from '../lib/icons';
 
@@ -262,6 +263,8 @@ function TokenSection() {
 
   return (
     <>
+      <ClaudeLoginBlock />
+      <div className="text-sm font-semibold mb-1">{t('token.pasteTitle')}</div>
       {has ? (
         <div className="text-sm mb-3 flex items-center gap-2">
           <IconDot className="text-ok" />
@@ -273,7 +276,8 @@ function TokenSection() {
       )}
       <label className="text-xs text-txt2">{has ? t('token.replaceToken') : t('token.token')} {t('token.tokenPrefixHint')}</label>
       <input className="input mt-1 mb-2" type="password" placeholder="sk-ant-oat-…" value={token}
-        onChange={(e) => setToken(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && save()} />
+        onChange={(e) => setToken(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && save()} />
       <div className="text-[11px] text-txt3 mb-3">{t('token.setupHint', { code: 'claude setup-token' })}</div>
       {err && <div className="text-xs text-danger mb-2">{err}</div>}
       <div className="flex justify-end">

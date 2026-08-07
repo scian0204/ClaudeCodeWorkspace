@@ -33,6 +33,14 @@ function providerError(type: string, c: any): string | null {
   return null;
 }
 
+// Mirrors the server's authUserWithToken: any auth of the user's own (pasted token, browser
+// sign-in, or their own provider profile) clears the "register a token" nag + sidebar badge.
+function syncAuth() {
+  const p = PROVIDERS.user as any;
+  const providerIsAuth = !!p && (p.type !== 'anthropic' || p.fields.hasAuthToken || p.fields.hasApiKey);
+  db.me.hasClaudeAuth = !!db.me.hasClaudeToken || db.claudeLogin.meta.loggedIn || providerIsAuth;
+}
+
 function sessionFor(id: string) {
   const s = db.sessions.find((x) => x.id === id);
   if (s) return { id: s.id, title: s.title, projectId: s.projectId, model: s.model, effort: s.effort || 'high', permissionMode: s.permissionMode };
@@ -168,7 +176,26 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   if (P === '/api/auth/me') return ok({ user: db.me });
   if (P === '/api/auth/login') return ok({ user: db.me });
   if (P === '/api/auth/logout') return ok({});
-  if (P === '/api/auth/me/claude-token') { db.me.hasClaudeToken = M !== 'DELETE'; db.me.claudeTokenSetAt = M !== 'DELETE' ? Date.now() : null; return ok({ user: db.me }); }
+  if (P === '/api/auth/me/claude-token') { db.me.hasClaudeToken = M !== 'DELETE'; db.me.claudeTokenSetAt = M !== 'DELETE' ? Date.now() : null; syncAuth(); return ok({ user: db.me }); }
+  // Claude account sign-in: the real flow spawns `claude auth login` and feeds the pasted code back
+  // on the CLI's stdin. The demo fakes both steps — start hands out a look-alike authorize URL, and
+  // any non-empty code "succeeds" with the full scope set so the connected state is clickable.
+  if (P === '/api/auth/me/claude-login/start') {
+    if (M === 'DELETE') { db.claudeLogin.pendingUrl = ''; return ok({ ok: true }); }
+    db.claudeLogin.pendingUrl = 'https://claude.com/cai/oauth/authorize?code=true&client_id=demo&scope=user%3Aprofile+user%3Ainference&state=demo';
+    return slow(ok({ url: db.claudeLogin.pendingUrl }), 700);
+  }
+  if (P === '/api/auth/me/claude-login/code') {
+    if (!String(b.code || '').trim()) return { status: 400, data: { error: 'code required' } };
+    db.claudeLogin.pendingUrl = '';
+    db.claudeLogin.meta = { loggedIn: true, scopes: ['user:inference', 'user:profile'], planLimits: true, subscriptionType: 'max', expiresAt: Date.now() + 30 * 86400000 };
+    syncAuth();
+    return slow(ok({ login: db.claudeLogin.meta }), 900);
+  }
+  if (P === '/api/auth/me/claude-login') {
+    if (M === 'DELETE') { db.claudeLogin.meta = { loggedIn: false, scopes: [], planLimits: false, subscriptionType: null, expiresAt: null }; db.claudeLogin.pendingUrl = ''; syncAuth(); }
+    return ok({ login: db.claudeLogin.meta, pendingUrl: db.claudeLogin.pendingUrl });
+  }
   // avatar: store the picked image inline as a data URL (install.ts reads the File → b.avatarDataUrl);
   // avatarUrl() renders a data: URL directly, so no GET stream is needed in the demo.
   if (P === '/api/auth/me/avatar') { db.me.avatar = M === 'DELETE' ? null : (b.avatarDataUrl || db.me.avatar); return ok({ user: db.me }); }
@@ -235,12 +262,13 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   // ---- llm provider override (user self-service + admin common) ----
   if (P === '/api/auth/me/provider' || P === '/api/admin/provider') {
     const scope: 'user' | 'common' = P.includes('/admin/') ? 'common' : 'user';
-    if (M === 'DELETE') { PROVIDERS[scope] = null; return ok({ provider: null }); }
+    if (M === 'DELETE') { PROVIDERS[scope] = null; syncAuth(); return ok({ provider: null }); }
     if (M === 'PUT') {
       const type = String(b.type || ''); const c = b.config || {};
       const err = providerError(type, c);
       if (err) return { status: 400, data: { error: err } };
       PROVIDERS[scope] = providerStatus(type, c);
+      syncAuth();
       return ok({ provider: PROVIDERS[scope] });
     }
     return ok({ provider: PROVIDERS[scope] }); // GET
@@ -595,6 +623,22 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   if (P === '/api/admin/update/apply' && M === 'POST') return ok(ADMIN.update.apply());
   if (P === '/api/admin/restart' && M === 'POST') return ok({ ok: true });
   if (P === '/api/admin/claude-token') return ok({});
+  // shared-account sign-in — same fake two-step flow as the per-user one, on the admin overview seed
+  if (P === '/api/admin/claude-login/start') {
+    if (M === 'DELETE') { db.commonLogin.pendingUrl = ''; return ok({ ok: true }); }
+    db.commonLogin.pendingUrl = 'https://claude.com/cai/oauth/authorize?code=true&client_id=demo&scope=user%3Aprofile+user%3Ainference&state=demo-common';
+    return slow(ok({ url: db.commonLogin.pendingUrl }), 700);
+  }
+  if (P === '/api/admin/claude-login/code') {
+    if (!String(b.code || '').trim()) return { status: 400, data: { error: 'code required' } };
+    db.commonLogin.pendingUrl = '';
+    db.commonLogin.meta = { loggedIn: true, scopes: ['user:inference', 'user:profile'], planLimits: true, subscriptionType: 'max', expiresAt: Date.now() + 30 * 86400000 };
+    return slow(ok({ login: db.commonLogin.meta }), 900);
+  }
+  if (P === '/api/admin/claude-login') {
+    if (M === 'DELETE') { db.commonLogin.meta = { loggedIn: false, scopes: [], planLimits: false, subscriptionType: null, expiresAt: null }; db.commonLogin.pendingUrl = ''; }
+    return ok({ login: db.commonLogin.meta, pendingUrl: db.commonLogin.pendingUrl });
+  }
 
   return ok({}); // unknown → harmless empty object
 }

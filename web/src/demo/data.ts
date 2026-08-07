@@ -10,7 +10,7 @@ export const COLORS = { clay: '#c8613a', blue: '#5b6b8c', green: '#5b8c6b', purp
 // ---- users -----------------------------------------------------------------
 export const ME = {
   id: 'u_admin', username: 'admin', role: 'admin', displayName: 'Demo Admin',
-  avatarColor: COLORS.clay, avatar: null as string | null, hasClaudeToken: true, claudeTokenSetAt: ago(60 * 24 * 3) as number | null,
+  avatarColor: COLORS.clay, avatar: null as string | null, hasClaudeToken: true, hasClaudeAuth: true, claudeTokenSetAt: ago(60 * 24 * 3) as number | null,
   autoTitle: true, autoResume: true, // demo: on so the limit-reset banner is reachable
   primeWindow: true, primedAt: ago(37) as number | null,
 };
@@ -165,6 +165,17 @@ const plugin = (id: string, name: string, source: string, enabled: number, force
 // ---- the mutable "db" ------------------------------------------------------
 export const db = {
   me: { ...ME },
+  // Claude account sign-in state (GET/POST /api/auth/me/claude-login*). Starts disconnected so the
+  // demo shows the sign-in button first; completing the fake flow flips it to the connected state.
+  claudeLogin: {
+    meta: { loggedIn: false, scopes: [] as string[], planLimits: false, subscriptionType: null as string | null, expiresAt: null as number | null },
+    pendingUrl: '',
+  },
+  // shared-account sign-in (admin scope) — the alternative to a pasted common token
+  commonLogin: {
+    meta: { loggedIn: false, scopes: [] as string[], planLimits: false, subscriptionType: null as string | null, expiresAt: null as number | null },
+    pendingUrl: '',
+  },
   // guide assistant thread (mirrors the server's guide_messages rows: {id, role, content, createdAt})
   guideMessages: [] as any[],
   // custom branding (GET /api/brand). Seeded empty so the demo opens with the product's own name/mark;
@@ -263,7 +274,9 @@ export const ADMIN = {
     users: db.users.length, rooms: db.rooms.length, sessions: db.sessions.length,
     throttle: { inUse: 1, max: 3, waiting: 0 },
     forceMock: true,
-    commonToken: { hasToken: true, setAt: ago(60 * 24 * 20) },
+    commonToken: { hasToken: true, setAt: ago(60 * 24 * 20), fromEnv: false },
+    // the other shared fallback: an admin's signed-in account — mutable, so it lives on db
+    commonLogin: db.commonLogin.meta,
     version: ADMIN.update.status().current,
     updateAvailable: ADMIN.update.status().updateAvailable,
     docker: ADMIN.docker,

@@ -47,6 +47,61 @@
 ## Unreleased
 
 <details>
+<summary><b>fix: 플랜 한도가 아예 안 불러와지던 문제 + 공용 토큰이 안 지워지는 것처럼 보이던 문제</b> — 제보 2건, 원인은 서로 무관 · <code>8d1e7de</code></summary>
+
+**구독 세션인데 플랜 한도가 안 보임.** 프로브가 세션을 `'ping'` 단발 프롬프트로 굴리고 있었다. 이건 실제 모델 턴을 시작하고, *게다가* 그 턴이 끝나는 순간 쿼리가 닫힌다 — 플랜 한도 조회는 그보다 오래 걸리는 claude.ai 실시간 호출이라 SDK가 `Query closed before response received`로 거절했다. 아무것도 yield 하지 않는 스트리밍 입력으로 바꾸면 abort 할 때까지 세션이 살아있고 턴도 전혀 소비하지 않는다(`probeCommands`도 같은 버그였다 — 명령 팔레트 열 때마다 조용히 턴 하나씩).
+
+그걸 고쳐도 여전히 졌다: 컨텍스트 윈도우 프로브와 쿼리를 공유했는데, 그쪽은 대화기록을 resume 하고 그 세션의 플러그인을 전부 로드한다. team 구독 기준 측정값 — 계정 조회는 **빈 세션에서 약 3초**면 끝나는데 그 무거운 기동 뒤에서 수십 초를 기다리고 있었고, 둘을 동시에 띄우면 CLI 기동 두 개가 CPU를 두고 싸울 뿐이었다. 이제 한도 조회를 **빈 세션(resume·플러그인 없음)에서 먼저** 끝내고, 그다음 컨텍스트 프로브를 돌린다. `usageProbeTimeoutMs` 8초 → 45초(예전 값으론 어느 쪽도 못 담았다), `usageProbeTtlMs` 15초 → 120초로 올려 팝오버 열 때마다가 아니라 창당 한 번만 지불한다. 컨테이너에서 실제 CLI로 검증: `rate_limits_available: true`, 5시간 65%, 주간 46%.
+
+**관리자가 직접 넣은 공용 토큰 삭제가 안 먹는 것처럼 보임.** 삭제는 됐다 — 다만 `commonTokenMeta`가 여전히 "설정됨"으로 보고했는데, 서버 환경변수 `ANTHROPIC_API_KEY`가 설정돼 있고 그게 폴백으로 카운트되기 때문. 이제 메타에 `fromEnv`를 실어, 관리자 패널이 "배포 환경변수에서 온 값"이라고 알려주고 삭제 버튼을 감춘다 — 적용될 수 없는 동작을 계속 제시하지 않도록.
+
+</details>
+
+<details>
+<summary><b>feat(auth): 공용 계정을 관리자 로그인으로 대체 가능</b> — 공용 토큰만이 유일한 공용 폴백이 아니게 됨 · <code>e9e1140</code></summary>
+
+공용 자격증명은 **붙여넣은 토큰**만 가능했고, 그래서 워크스페이스 전체 폴백이 setup-token의 한계를 그대로 물려받았다 — 플랜 창 없음, 갱신 없음. 이제 관리자가 관리자 패널에서 로그인할 수 있고, 개인 인증이 없는 멤버의 턴이 그 계정으로 실행된다.
+
+어려운 지점: 공용 자격증명이 **빌려 쓰는 유저의 HOME을 뺏지 않고** 턴에 도달해야 한다 — 거기에 그 유저의 설정·대화기록·resume id가 있으므로. `CLAUDE_SECURESTORAGE_CONFIG_DIR`는 *자격증명 저장소만* 옮긴다(CLI가 config 디렉터리 폴백보다 먼저 이 값을 본다). 그래서 `resolveProvider`의 공용 로그인 분기는 딱 이 변수 하나만 설정한다 — HOME은 유저 것 그대로, CLI가 공용 자격증명을 제자리에서 읽고 갱신하며, 토큰 값을 복사해 나르는 일이 없다. `PROVIDER_ENV_KEYS`에도 넣어서 남은 값이 턴을 몰래 공용 계정으로 태우지 못하게 했다.
+
+`claude-login.ts`가 이제 **스코프 키**(유저 id 또는 공용 홈을 뜻하는 `COMMON`)를 받고, 관리자 라우트(`/api/admin/claude-login*`)가 `requireAdmin` 뒤에서 개인용과 같은 흐름을 제공한다. 우선순위는 그대로 명시적: 유저 프로바이더 → 유저 토큰 → 유저 로그인 → 공용 프로바이더 → 공용 토큰 → 공용 로그인 → mock. 관리자 패널의 "공용 토큰 없음" 경고도 공용 로그인을 설정된 것으로 인정한다.
+
+`claudeLoginStartMs`도 60초로 상향: 새 컨테이너에서 **첫** `claude` 실행은 네이티브 바이너리를 추출하느라 20초를 훌쩍 넘길 수 있어, 배포 직후 첫 로그인이 실패했다(새 경로를 실제 CLI로 스모크하다 발견).
+
+</details>
+
+<details>
+<summary><b>fix(auth): 이미 인증이 있는 유저에게 토큰 등록 팝업 그만 띄우기</b> — 로그인·프로바이더도 인증으로 인정 · <code>6e68e91</code></summary>
+
+"Claude 토큰 등록" 팝업과 사이드바의 "토큰 미등록" 배지가 둘 다 `hasClaudeToken`으로 판단했는데, 이건 *토큰이 붙여넣어져 있다*는 뜻일 뿐이다. 브라우저로 로그인했거나 자기 LLM 프로바이더 프로필(로컬 LLM·Bedrock·Vertex)로 턴을 돌리는 유저는 멀쩡한 인증을 갖고도 매 로그인마다 잔소리를 들었다.
+
+이제 `authUserWithToken`이 **`hasClaudeAuth`**도 함께 반환한다 — 토큰 OR 브라우저 로그인 OR 유저 스코프 프로바이더 프로필, `resolveProvider`가 훑는 바로 그 세 소스. 토큰 없는 `anthropic` 프로필은 **일부러 제외**했다: `resolveProvider`가 그 경우 그냥 통과시키므로, 인정해버리면 인증이 진짜 없는 사람에게서 경고가 사라진다. 팝업과 배지는 새 필드로 판단하고, 토큰 폼 자체는 그대로 `hasClaudeToken`을 본다(그게 그 폼의 주제니까).
+
+로그인/해제와 유저 스코프 프로바이더 저장/삭제는 user DTO를 반환하지 않으므로 작은 `refreshMe()` 스토어 액션을 호출하게 했다 — 안 그러면 새로고침 전까지 팝업이 계속 남는다.
+
+</details>
+
+<details>
+<summary><b>feat(auth): 브라우저로 Claude 계정 로그인</b> — 전체 스코프 자격증명을 얻는 유일한 경로 · <code>acb274b</code></summary>
+
+붙여넣는 `claude setup-token` 토큰은 **추론 전용**으로 발급된다. 턴은 돌지만 플랜 창은 절대 못 읽는다 — CLI가 그 조회를 `user:profile` 스코프로 막기 때문. 워크스페이스에는 전체 스코프 자격증명을 얻을 방법 자체가 없었다.
+
+`claude auth login --claudeai`는 전체 스코프(`org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload`)를 요청하고, 컨테이너처럼 브라우저가 없는 환경에서는 **라인 기반 흐름**으로 떨어진다 — 승인 URL(`redirect_uri=…/oauth/code/callback&code=true`)을 출력하고 코드를 stdin으로 받는다. PTY도 TUI 스크래핑도 필요 없음. 그래서 서버는 자체 OAuth 클라이언트를 구현(하거나 사칭)하지 않고 **공식 CLI를 대신 구동**한다:
+
+```
+POST   /api/auth/me/claude-login/start  → HOME=<유저 홈>으로 spawn, 승인 URL 반환
+POST   /api/auth/me/claude-login/code   → 붙여넣은 코드를 자식 프로세스 stdin으로 전달
+GET    /api/auth/me/claude-login        → 상태(loggedIn·scopes·planLimits·subscriptionType)
+DELETE /api/auth/me/claude-login        → 로그아웃(자격증명 파일 제거)
+```
+
+CLI가 `.credentials.json`을 유저 홈에 쓰는데, 이는 `buildOptions`가 모든 턴에 넘기는 바로 그 HOME이다. 따라서 턴은 **토큰 env 없이** 그 자격증명을 집어가고 갱신도 알아서 된다. `resolveProvider`에 `'login'` 소스 추가 — 명시적으로 붙여넣은 토큰보다는 아래(의도적 설정이 우선), 공용 토큰보다는 위(본인 계정이므로). 구독 전용 기능 두 개도 같이 손봐야 했다: 자동 재개와 5시간 창 프라이머가 `CLAUDE_CODE_OAUTH_TOKEN` 유무로 판단했는데 이 경로는 그 env를 일부러 안 넣으므로, 그대로 뒀으면 **플랜 창을 가진 계정에서만 조용히 꺼지는** 꼴이 됐다.
+
+**보안**: 모든 엔드포인트는 호출자 본인 id로만 동작한다 — 요청 본문에서 `userId`를 읽는 곳이 없음. 응답에는 불리언·스코프 이름·구독 타입·만료 시각만 담기고 토큰 값은 절대 나가지 않는다. 일회용 OAuth 코드는 자식 프로세스 stdin으로 직행하며 로깅·저장하지 않는다. 관리자 키: `claudeLoginEnabled`(UI 숨김이 아니라 서버에서 차단) + `claudeLoginStartMs`·`claudeLoginTimeoutMs`·`claudeLoginFinishMs`. 데모는 두 단계를 모두 흉내 내 GitHub Pages에서도 눌러볼 수 있다.
+
+</details>
+
+<details>
 <summary><b>fix(usage): OAuth 토큰에서 플랜 한도가 안 보이는 이유를 정확히 안내</b> — 플랜 문제가 아니라 스코프 문제 · <code>ab1fd6f</code></summary>
 
 `rate_limits_available: false`면 무조건 "API 키·Bedrock·커스텀 프로바이더에는 플랜 한도가 없습니다"를 띄웠는데, 실제로 가장 흔한 경우인 `claude setup-token` OAuth 토큰(= 구독은 있는 유저)에 대해 오진이었음.
