@@ -47,6 +47,26 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ## Unreleased
 
 <details>
+<summary><b>feat(auth): sign in to a Claude account from the browser</b> — the only path to a full-scope credential · <code>acb274b</code></summary>
+
+A pasted `claude setup-token` token is minted **inference-only**, so it runs turns but can never report the plan window — the CLI gates that on `user:profile`. The workspace had no way to obtain a full-scope credential at all.
+
+`claude auth login --claudeai` requests the whole scope set (`org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload`) and, with no browser in the container, degrades to a **line-oriented flow**: it prints the authorize URL (`redirect_uri=…/oauth/code/callback&code=true`) and reads the code from stdin. No PTY, no TUI scraping. So the server drives the official CLI rather than implementing — or impersonating — an OAuth client of its own:
+
+```
+POST   /api/auth/me/claude-login/start  → spawn with HOME=<user home>, return the authorize URL
+POST   /api/auth/me/claude-login/code   → write the pasted code to the child's stdin
+GET    /api/auth/me/claude-login        → status (loggedIn, scopes, planLimits, subscriptionType)
+DELETE /api/auth/me/claude-login        → sign out (and remove the credential file)
+```
+
+The CLI writes `.credentials.json` into the user's own HOME — the same HOME `buildOptions` gives every turn — so turns pick it up with **no token env at all** and refresh keeps working by itself. `resolveProvider` gains a `'login'` source, ranked under an explicitly pasted token (deliberate configuration beats ambient) and over the shared one (it is the user's own account). Both subscription-only features had to learn about it: auto-resume and the 5h window primer gated on `CLAUDE_CODE_OAUTH_TOKEN`, which this path deliberately omits, so they would have silently switched off for exactly the accounts that have a plan window.
+
+**Security**: every endpoint is scoped to the caller's own id — no `userId` is ever read from a request — and responses carry only booleans, scope names, subscription type and expiry. No token value is ever returned; the one-time OAuth code goes straight to the child's stdin, unlogged and unstored. Admin keys `claudeLoginEnabled` (enforced server-side, not just a hidden button) and `claudeLoginStartMs` / `claudeLoginTimeoutMs` / `claudeLoginFinishMs`. The demo fakes both steps so the flow stays clickable on GitHub Pages.
+
+</details>
+
+<details>
 <summary><b>fix(usage): explain a missing plan window on OAuth tokens</b> — it's a scope problem, not a plan problem · <code>ab1fd6f</code></summary>
 
 The popover printed "API key / Bedrock / custom providers have no plan window" for *every* `rate_limits_available: false`, which misdiagnoses the most common real case: a `claude setup-token` OAuth token, where the user does have a subscription.

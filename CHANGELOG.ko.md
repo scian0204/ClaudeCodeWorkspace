@@ -47,6 +47,26 @@
 ## Unreleased
 
 <details>
+<summary><b>feat(auth): 브라우저로 Claude 계정 로그인</b> — 전체 스코프 자격증명을 얻는 유일한 경로 · <code>acb274b</code></summary>
+
+붙여넣는 `claude setup-token` 토큰은 **추론 전용**으로 발급된다. 턴은 돌지만 플랜 창은 절대 못 읽는다 — CLI가 그 조회를 `user:profile` 스코프로 막기 때문. 워크스페이스에는 전체 스코프 자격증명을 얻을 방법 자체가 없었다.
+
+`claude auth login --claudeai`는 전체 스코프(`org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload`)를 요청하고, 컨테이너처럼 브라우저가 없는 환경에서는 **라인 기반 흐름**으로 떨어진다 — 승인 URL(`redirect_uri=…/oauth/code/callback&code=true`)을 출력하고 코드를 stdin으로 받는다. PTY도 TUI 스크래핑도 필요 없음. 그래서 서버는 자체 OAuth 클라이언트를 구현(하거나 사칭)하지 않고 **공식 CLI를 대신 구동**한다:
+
+```
+POST   /api/auth/me/claude-login/start  → HOME=<유저 홈>으로 spawn, 승인 URL 반환
+POST   /api/auth/me/claude-login/code   → 붙여넣은 코드를 자식 프로세스 stdin으로 전달
+GET    /api/auth/me/claude-login        → 상태(loggedIn·scopes·planLimits·subscriptionType)
+DELETE /api/auth/me/claude-login        → 로그아웃(자격증명 파일 제거)
+```
+
+CLI가 `.credentials.json`을 유저 홈에 쓰는데, 이는 `buildOptions`가 모든 턴에 넘기는 바로 그 HOME이다. 따라서 턴은 **토큰 env 없이** 그 자격증명을 집어가고 갱신도 알아서 된다. `resolveProvider`에 `'login'` 소스 추가 — 명시적으로 붙여넣은 토큰보다는 아래(의도적 설정이 우선), 공용 토큰보다는 위(본인 계정이므로). 구독 전용 기능 두 개도 같이 손봐야 했다: 자동 재개와 5시간 창 프라이머가 `CLAUDE_CODE_OAUTH_TOKEN` 유무로 판단했는데 이 경로는 그 env를 일부러 안 넣으므로, 그대로 뒀으면 **플랜 창을 가진 계정에서만 조용히 꺼지는** 꼴이 됐다.
+
+**보안**: 모든 엔드포인트는 호출자 본인 id로만 동작한다 — 요청 본문에서 `userId`를 읽는 곳이 없음. 응답에는 불리언·스코프 이름·구독 타입·만료 시각만 담기고 토큰 값은 절대 나가지 않는다. 일회용 OAuth 코드는 자식 프로세스 stdin으로 직행하며 로깅·저장하지 않는다. 관리자 키: `claudeLoginEnabled`(UI 숨김이 아니라 서버에서 차단) + `claudeLoginStartMs`·`claudeLoginTimeoutMs`·`claudeLoginFinishMs`. 데모는 두 단계를 모두 흉내 내 GitHub Pages에서도 눌러볼 수 있다.
+
+</details>
+
+<details>
 <summary><b>fix(usage): OAuth 토큰에서 플랜 한도가 안 보이는 이유를 정확히 안내</b> — 플랜 문제가 아니라 스코프 문제 · <code>ab1fd6f</code></summary>
 
 `rate_limits_available: false`면 무조건 "API 키·Bedrock·커스텀 프로바이더에는 플랜 한도가 없습니다"를 띄웠는데, 실제로 가장 흔한 경우인 `claude setup-token` OAuth 토큰(= 구독은 있는 유저)에 대해 오진이었음.
