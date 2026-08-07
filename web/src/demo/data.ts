@@ -274,7 +274,7 @@ export const ADMIN = {
     users: db.users.length, rooms: db.rooms.length, sessions: db.sessions.length,
     throttle: { inUse: 1, max: 3, waiting: 0 },
     forceMock: true,
-    commonToken: { hasToken: true, setAt: ago(60 * 24 * 20) },
+    commonToken: { hasToken: true, setAt: ago(60 * 24 * 20), fromEnv: false },
     // the other shared fallback: an admin's signed-in account — mutable, so it lives on db
     commonLogin: db.commonLogin.meta,
     version: ADMIN.update.status().current,

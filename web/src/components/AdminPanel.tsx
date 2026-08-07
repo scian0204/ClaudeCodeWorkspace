@@ -129,9 +129,12 @@ export function AdminPanel() {
               <ClaudeLoginBlock scope="common" />
               <div className="text-sm font-semibold mb-1">{t('token.pasteTitle')}</div>
               <div className="text-sm mb-2 flex items-center gap-2">
+                {/* an env-provided key is not ours to delete — show why instead of a dead button */}
                 {ov?.commonToken?.hasToken
-                  ? <><IconDot className="text-ok" /><span>{t('admin.registered')}{ov.commonToken.setAt ? ` · ${new Date(ov.commonToken.setAt).toLocaleDateString()}` : ' (env)'}</span>
-                      <button className="ml-auto text-xs text-txt3 hover:text-danger" onClick={clearCommon}>{t('common.delete')}</button></>
+                  ? <><IconDot className="text-ok" /><span>{t('admin.registered')}{ov.commonToken.setAt ? ` · ${new Date(ov.commonToken.setAt).toLocaleDateString()}` : ''}</span>
+                      {ov.commonToken.fromEnv
+                        ? <span className="text-[11px] text-txt3">{t('admin.commonTokenFromEnv', { key: 'ANTHROPIC_API_KEY' })}</span>
+                        : <button className="ml-auto text-xs text-txt3 hover:text-danger" onClick={clearCommon}>{t('common.delete')}</button>}</>
                   : <><IconDot className="text-warn" /><span className="text-txt2">{t('admin.notSet')}</span></>}
               </div>
               <div className="flex gap-2">

@@ -57,8 +57,11 @@ export const DEFS: ConfigDef[] = [
   // separately switchable — a 50-session import means 50 calls)
   { key: 'importAutoTitleEnabled', group: 'claude', type: 'bool', default: '1' },
   { key: 'importAutoTitleMessages', group: 'claude', type: 'int', default: '6', min: 1, max: 30 },
-  { key: 'usageProbeTtlMs', group: 'claude', type: 'int', default: '15000', min: 1000, max: 600000, unit: 'ms' },
-  { key: 'usageProbeTimeoutMs', group: 'claude', type: 'int', default: '8000', min: 1000, max: 120000, unit: 'ms' },
+  // The plan-limit half of the probe is a live claude.ai lookup behind a CLI cold start — measured
+  // around 30s on a subscription session, so 8s silently reported "no rate limits". The TTL is long
+  // enough that the cost is paid once, not on every popover open.
+  { key: 'usageProbeTtlMs', group: 'claude', type: 'int', default: '120000', min: 1000, max: 600000, unit: 'ms' },
+  { key: 'usageProbeTimeoutMs', group: 'claude', type: 'int', default: '45000', min: 1000, max: 120000, unit: 'ms' },
   // auto-resume a turn that hit the claude.ai plan window (5h / weekly), once the window resets
   { key: 'autoResumeEnabled', group: 'claude', type: 'bool', default: '1' },
   { key: 'autoResumeGraceMs', group: 'claude', type: 'int', default: '60000', min: 0, max: 3600000, unit: 'ms' },

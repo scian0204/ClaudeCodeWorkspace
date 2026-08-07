@@ -147,7 +147,7 @@ export async function probeCommands(chatSessionId: string, requesterId?: string 
   try {
     const { query } = await import('@anthropic-ai/claude-agent-sdk');
     const options = buildOptions(ctx, { canUseTool: async () => ({ behavior: 'deny', message: 'probe' }), abortController: abort });
-    const q = query({ prompt: 'ping', options });
+    const q = query({ prompt: idleInput() as any, options });
     const cmds = await (q as any).supportedCommands();
     const res: CmdInfo[] = (cmds || []).map((c: any) => ({
       name: String(c.name || '').replace(/^\//, ''),
@@ -166,6 +166,13 @@ export async function probeCommands(chatSessionId: string, requesterId?: string 
 // real transcript, ask the CLI's control channel for both figures, then abort (no model tokens spent).
 // ponytail: spawns a CLI subprocess per probe — the TTL cache below keeps popover reopens free;
 // upgrade to a long-lived query per session only if this ever gets hot.
+// Both control-channel probes run against a session that must NOT take a model turn. A one-shot
+// string prompt does exactly that — and worse, the query CLOSES as soon as that turn ends, while the
+// plan-limit lookup is a live claude.ai call that routinely outlives it (the SDK then rejects with
+// "Query closed before response received", which is why an OAuth session reported no rate limits at
+// all). Streaming input that never yields keeps the session open until we abort it, and costs nothing.
+async function* idleInput(): AsyncGenerator<never> { await new Promise(() => { /* until abort */ }); }
+
 type Win = { utilization: number | null; resetsAt: string | null };
 type ModelWin = Win & { displayName: string };
 // Which credential ran the probe. Only needed to explain a MISSING plan window: the CLI computes
@@ -213,20 +220,30 @@ export async function probeUsage(chatSessionId: string, requesterId?: string | n
     plugins: resolvePluginPaths(kind, ownerId), authToken: '', providerEnv: prov.env, providerModel: prov.model,
   };
   const abort = new AbortController();
+  const abortLimits = new AbortController();
+  const deny = async () => ({ behavior: 'deny' as const, message: 'probe' });
   const withTimeout = <T,>(p: Promise<T>): Promise<T | null> =>
     Promise.race([p.catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), cfg.int('usageProbeTimeoutMs')))]);
   try {
     const { query } = await import('@anthropic-ai/claude-agent-sdk');
-    const options = buildOptions(ctx, {
-      canUseTool: async () => ({ behavior: 'deny', message: 'probe' }),
-      resume: s.claudeSessionId, abortController: abort,
+    // Two sessions, run one after the other. The context breakdown must be session-faithful (resumed
+    // transcript + this session's plugins) and that startup costs tens of seconds; the plan-limit
+    // lookup is an account-level claude.ai call that needs none of it and answers in ~3s on a bare
+    // session. Sharing one query made the account lookup wait behind the heavy startup, and running
+    // both at once made two CLI startups fight for the CPU — either way it blew the timeout and the
+    // popover reported "no plan limits" for an account that has them.
+    // ponytail: two CLI subprocesses per probe, serialized; the TTL cache keeps reopens free.
+    const qLimits: any = query({
+      prompt: idleInput() as any,
+      options: buildOptions({ ...ctx, plugins: [] }, { canUseTool: deny, abortController: abortLimits }),
     });
-    const q: any = query({ prompt: 'ping', options });
-    const [cu, us] = await Promise.all([
-      typeof q.getContextUsage === 'function' ? withTimeout(q.getContextUsage()) : Promise.resolve(null),
-      typeof q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET === 'function'
-        ? withTimeout(q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET()) : Promise.resolve(null),
-    ]);
+    const us = typeof qLimits.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET === 'function'
+      ? await withTimeout(qLimits.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET()) : null;
+    try { abortLimits.abort(); } catch { /* noop */ }
+
+    const options = buildOptions(ctx, { canUseTool: deny, resume: s.claudeSessionId, abortController: abort });
+    const q: any = query({ prompt: idleInput() as any, options });
+    const cu = typeof q.getContextUsage === 'function' ? await withTimeout(q.getContextUsage()) : null;
     const rl = (us as any)?.rate_limits;
     const data: UsageInfo = {
       context: cu ? { totalTokens: (cu as any).totalTokens, maxTokens: (cu as any).maxTokens, percentage: (cu as any).percentage, model: (cu as any).model } : null,
@@ -242,7 +259,10 @@ export async function probeUsage(chatSessionId: string, requesterId?: string | n
     usageCache.set(cacheKey, { at: Date.now(), data });
     return data;
   } catch { return { ...EMPTY_USAGE, authKind }; }
-  finally { try { abort.abort(); } catch { /* noop */ } }
+  finally {
+    try { abort.abort(); } catch { /* noop */ }
+    try { abortLimits.abort(); } catch { /* noop */ }
+  }
 }
 
 // When does the exhausted plan window reopen? Asks the CLI for the live figures and takes the LATEST
