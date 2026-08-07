@@ -169,6 +169,24 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   if (P === '/api/auth/login') return ok({ user: db.me });
   if (P === '/api/auth/logout') return ok({});
   if (P === '/api/auth/me/claude-token') { db.me.hasClaudeToken = M !== 'DELETE'; db.me.claudeTokenSetAt = M !== 'DELETE' ? Date.now() : null; return ok({ user: db.me }); }
+  // Claude account sign-in: the real flow spawns `claude auth login` and feeds the pasted code back
+  // on the CLI's stdin. The demo fakes both steps — start hands out a look-alike authorize URL, and
+  // any non-empty code "succeeds" with the full scope set so the connected state is clickable.
+  if (P === '/api/auth/me/claude-login/start') {
+    if (M === 'DELETE') { db.claudeLogin.pendingUrl = ''; return ok({ ok: true }); }
+    db.claudeLogin.pendingUrl = 'https://claude.com/cai/oauth/authorize?code=true&client_id=demo&scope=user%3Aprofile+user%3Ainference&state=demo';
+    return slow(ok({ url: db.claudeLogin.pendingUrl }), 700);
+  }
+  if (P === '/api/auth/me/claude-login/code') {
+    if (!String(b.code || '').trim()) return { status: 400, data: { error: 'code required' } };
+    db.claudeLogin.pendingUrl = '';
+    db.claudeLogin.meta = { loggedIn: true, scopes: ['user:inference', 'user:profile'], planLimits: true, subscriptionType: 'max', expiresAt: Date.now() + 30 * 86400000 };
+    return slow(ok({ login: db.claudeLogin.meta }), 900);
+  }
+  if (P === '/api/auth/me/claude-login') {
+    if (M === 'DELETE') { db.claudeLogin.meta = { loggedIn: false, scopes: [], planLimits: false, subscriptionType: null, expiresAt: null }; db.claudeLogin.pendingUrl = ''; }
+    return ok({ login: db.claudeLogin.meta, pendingUrl: db.claudeLogin.pendingUrl });
+  }
   // avatar: store the picked image inline as a data URL (install.ts reads the File → b.avatarDataUrl);
   // avatarUrl() renders a data: URL directly, so no GET stream is needed in the demo.
   if (P === '/api/auth/me/avatar') { db.me.avatar = M === 'DELETE' ? null : (b.avatarDataUrl || db.me.avatar); return ok({ user: db.me }); }

@@ -4,6 +4,7 @@ import { cfg } from '../lib/config-registry.js';
 import { encrypt, decrypt, validTokenFormat } from '../lib/secret-box.js';
 import { newId } from '../lib/ids.js';
 import { getUserToken, getCommonToken } from './claude-token.js';
+import { hasLogin } from './claude-login.js';
 
 // LLM provider override. The Claude Agent SDK spawns the Claude CLI, which speaks the Anthropic wire
 // format and natively supports these back-ends via env vars. A provider profile (per-user or common)
@@ -12,7 +13,7 @@ import { getUserToken, getCommonToken } from './claude-token.js';
 // through a translating proxy exposed at an Anthropic-compatible base URL (the 'custom' type).
 export type ProviderType = 'anthropic' | 'bedrock' | 'vertex' | 'custom';
 export type ProviderScope = 'user' | 'common';
-export type ProviderSource = 'user' | 'common' | 'token' | 'none';
+export type ProviderSource = 'user' | 'common' | 'token' | 'login' | 'none';
 
 const COMMON_OWNER = ''; // common profile uses '' so the (scope, owner_id) unique index holds
 const TYPES: ProviderType[] = ['anthropic', 'bedrock', 'vertex', 'custom'];
@@ -118,6 +119,12 @@ export function resolveProvider(userId: string | null): { env: Record<string, st
   if (userId) {
     const p = fromRow('user', userId, 'user'); if (p) return p;
     const tok = getUserToken(userId); if (tok) return { env: tokenEnv(tok), source: 'token' };
+    // Browser sign-in: the credential lives in the user's HOME as the CLI's own .credentials.json,
+    // so the right env is NO token env at all — buildOptions clears every provider key and the CLI
+    // reads the file (and refreshes it) by itself. An explicitly pasted token above still wins:
+    // that is deliberate configuration, this is ambient. Ranked over the shared token because it is
+    // the user's own account.
+    if (hasLogin(userId)) return { env: {}, source: 'login' };
   }
   const cp = fromRow('common', COMMON_OWNER, 'common'); if (cp) return cp;
   const shared = getCommonToken(); if (shared) return { env: tokenEnv(shared), source: 'token' };

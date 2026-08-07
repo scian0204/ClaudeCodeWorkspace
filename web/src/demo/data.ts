@@ -165,6 +165,12 @@ const plugin = (id: string, name: string, source: string, enabled: number, force
 // ---- the mutable "db" ------------------------------------------------------
 export const db = {
   me: { ...ME },
+  // Claude account sign-in state (GET/POST /api/auth/me/claude-login*). Starts disconnected so the
+  // demo shows the sign-in button first; completing the fake flow flips it to the connected state.
+  claudeLogin: {
+    meta: { loggedIn: false, scopes: [] as string[], planLimits: false, subscriptionType: null as string | null, expiresAt: null as number | null },
+    pendingUrl: '',
+  },
   // guide assistant thread (mirrors the server's guide_messages rows: {id, role, content, createdAt})
   guideMessages: [] as any[],
   // custom branding (GET /api/brand). Seeded empty so the demo opens with the product's own name/mark;

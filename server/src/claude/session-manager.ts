@@ -198,7 +198,9 @@ export async function probeUsage(chatSessionId: string, requesterId?: string | n
   const authId = requesterId ?? (kind === 'user' ? ownerId : null);
   const prov = resolveProvider(authId);
   if (prov.source === 'none') return EMPTY_USAGE; // mock / no auth → nothing to report
-  const authKind = authKindOf(prov.env);
+  // A browser sign-in carries no token env (the CLI reads its own credential file), but it is still
+  // an OAuth subscription — and the only kind that can actually report plan windows.
+  const authKind: AuthKind = prov.source === 'login' ? 'oauth' : authKindOf(prov.env);
 
   const cacheKey = `${chatSessionId}|${authId ?? 'shared'}`;
   const hit = usageCache.get(cacheKey);
@@ -440,7 +442,7 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
     // already handled those). If they opted in, park the prompt and re-run it when the window
     // resets instead of losing it. Never blocks the failure path: a park error still reports.
     let resumeAt: number | null = null;
-    if (!aborted && isUsageLimitError(errMsg) && autoResumeEligible(p.author.id, prov.env, s.kind)) {
+    if (!aborted && isUsageLimitError(errMsg) && autoResumeEligible(p.author.id, prov.env, s.kind, prov.source === 'login')) {
       resumeAt = await parkTurn({
         sessionId: s.id, author: p.author, text: p.text,
         attachments: attachments.map((a) => ({ name: a.name, isImage: a.isImage })),

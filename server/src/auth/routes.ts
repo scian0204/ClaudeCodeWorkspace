@@ -8,6 +8,7 @@ import {
   toAuthUser, hashPassword, authUserWithToken, getUserById,
 } from './index.js';
 import { setUserToken, clearUserToken } from './claude-token.js';
+import { startLogin, submitCode, cancelLogin, logoutLogin, loginMeta, loginInFlight } from './claude-login.js';
 import { getProvider, setProvider, clearProvider } from './provider.js';
 import { syncPrimer } from '../claude/window-primer.js';
 import * as cs from '../codeserver/manager.js';
@@ -94,6 +95,53 @@ export async function authRoutes(app: FastifyInstance) {
     const u = requireAuth(req, reply); if (!u) return;
     clearUserToken(u.id);
     return { user: authUserWithToken(u) };
+  });
+
+  // ── self-service Claude account sign-in (browser OAuth, driven through the CLI) ──
+  // Always scoped to the caller's own id — no userId ever comes from the request body, so one user
+  // can neither start a sign-in for another nor read another's credential status.
+  const loginGate = (reply: any) => {
+    if (cfg.bool('claudeLoginEnabled')) return true;
+    reply.code(404).send({ error: 'claude login disabled' });
+    return false;
+  };
+
+  app.get('/api/auth/me/claude-login', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    if (!loginGate(reply)) return;
+    return { login: loginMeta(u.id), pendingUrl: loginInFlight(u.id) };
+  });
+
+  // Step 1 — spawn `claude auth login --claudeai` and hand back the authorize URL to open.
+  app.post('/api/auth/me/claude-login/start', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    if (!loginGate(reply)) return;
+    try { return { ...(await startLogin(u.id)) }; }
+    catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
+  });
+
+  // Step 2 — deliver the code shown on the callback page to the waiting CLI process.
+  app.post('/api/auth/me/claude-login/code', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    if (!loginGate(reply)) return;
+    const { code } = (req.body || {}) as any;
+    if (!code || typeof code !== 'string') return reply.code(400).send({ error: 'code required' });
+    try { return { login: await submitCode(u.id, code) }; }
+    catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
+  });
+
+  // Abandon an in-flight sign-in (closing the dialog) — kills the waiting CLI process.
+  app.delete('/api/auth/me/claude-login/start', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    cancelLogin(u.id);
+    return { ok: true };
+  });
+
+  // Sign out: clears the stored credential so turns fall back to a token / the shared account.
+  app.delete('/api/auth/me/claude-login', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    await logoutLogin(u.id);
+    return { login: loginMeta(u.id) };
   });
 
   // ── self-service LLM provider override (get status / set / clear) — never returns secrets ──
