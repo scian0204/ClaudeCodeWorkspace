@@ -4,7 +4,7 @@
 
 # Update notes
 
-Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and **v1.11.0** (2026-08-06) — all **236 commits**.
+Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and **v1.12.0** (2026-08-07) — all **253 commits**.
 
 Each row shows only its **title and commit hash**; click the triangle for the detail (root cause, implementation, config keys).
 
@@ -16,7 +16,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 - [Timeline](#timeline)
 - [Unreleased](#unreleased) — commits not yet in a release
-- **1.x releases** — [v1.11.0](#v1110--2026-08-06) · [v1.10.0](#v1100--2026-08-05) · [v1.9.1](#v191--2026-08-05) · [v1.9.0](#v190--2026-08-05) · [v1.8.0](#v180--2026-08-04) · [v1.7.0](#v170--2026-08-04) · [v1.6.0](#v160--2026-08-04) · [v1.5.0](#v150--2026-08-04) · [v1.4.0](#v140--2026-08-03) · [v1.3.1](#v131--2026-08-03) · [v1.3.0](#v130--2026-07-31) · [v1.2.0](#v120--2026-07-31) · [v1.1.1](#v111--2026-07-31) · [v1.1.0](#v110--2026-07-31)
+- **1.x releases** — [v1.12.0](#v1120--2026-08-07) · [v1.11.0](#v1110--2026-08-06) · [v1.10.0](#v1100--2026-08-05) · [v1.9.1](#v191--2026-08-05) · [v1.9.0](#v190--2026-08-05) · [v1.8.0](#v180--2026-08-04) · [v1.7.0](#v170--2026-08-04) · [v1.6.0](#v160--2026-08-04) · [v1.5.0](#v150--2026-08-04) · [v1.4.0](#v140--2026-08-03) · [v1.3.1](#v131--2026-08-03) · [v1.3.0](#v130--2026-07-31) · [v1.2.0](#v120--2026-07-31) · [v1.1.1](#v111--2026-07-31) · [v1.1.0](#v110--2026-07-31)
 - [Early development (2026-07-20 → 07-31)](#early-development--2026-07-20--07-31)
 - [Where it diverged from the original design](#where-it-diverged-from-the-original-design)
 
@@ -26,6 +26,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 | Version | Date | Commits | Headline |
 |---|---|---|---|
+| [v1.12.0](#v1120--2026-08-07) | 2026-08-07 | 18 | Claude account sign-in from the browser, recorded spend, plan limits actually load |
 | [v1.11.0](#v1110--2026-08-06) | 2026-08-06 | 3 | Live thinking/token meter, growing composer with markdown |
 | [v1.10.0](#v1100--2026-08-05) | 2026-08-05 | 3 | Tasks panel |
 | [v1.9.1](#v191--2026-08-05) | 2026-08-05 | 3 | Bypass mode under root, resume id lost mid-stream |
@@ -44,7 +45,11 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
-## Unreleased
+## v1.12.0 — 2026-08-07
+
+<sub>release commit `1760a80`</sub>
+
+- merge: `feat/claude-browser-login` — `e059bf6`
 
 <details>
 <summary><b>fix: plan limits never loaded, and the shared token looked undeletable</b> — two reports, two unrelated causes · <code>8d1e7de</code></summary>
