@@ -47,6 +47,17 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ## Unreleased
 
 <details>
+<summary><b>fix(auth): stop nagging for a token when the user already has auth</b> — sign-in and provider profiles count too · <code>6e68e91</code></summary>
+
+The "register a Claude token" popup and the sidebar's "token unregistered" badge both keyed on `hasClaudeToken`, which only means *a token is pasted*. Someone who signed in through the browser, or who runs their turns on their own LLM provider profile (local LLM, Bedrock, Vertex), has perfectly good auth and was still nagged on every login.
+
+`authUserWithToken` now also reports **`hasClaudeAuth`** — token OR browser sign-in OR a user-scope provider profile, the same three sources `resolveProvider` walks. An `anthropic` profile with **no** token deliberately does not count: `resolveProvider` falls straight through it, so counting it would silence the nag for someone who genuinely has none. The nag and the badge key on the new field; the token form keeps reporting `hasClaudeToken`, which is what it is actually about.
+
+Sign-in/out and a user-scope provider save/clear return no user DTO, so they now call a small `refreshMe()` store action — otherwise the nag lingered until a reload.
+
+</details>
+
+<details>
 <summary><b>feat(auth): sign in to a Claude account from the browser</b> — the only path to a full-scope credential · <code>acb274b</code></summary>
 
 A pasted `claude setup-token` token is minted **inference-only**, so it runs turns but can never report the plan window — the CLI gates that on `user:profile`. The workspace had no way to obtain a full-scope credential at all.

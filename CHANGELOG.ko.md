@@ -47,6 +47,17 @@
 ## Unreleased
 
 <details>
+<summary><b>fix(auth): 이미 인증이 있는 유저에게 토큰 등록 팝업 그만 띄우기</b> — 로그인·프로바이더도 인증으로 인정 · <code>6e68e91</code></summary>
+
+"Claude 토큰 등록" 팝업과 사이드바의 "토큰 미등록" 배지가 둘 다 `hasClaudeToken`으로 판단했는데, 이건 *토큰이 붙여넣어져 있다*는 뜻일 뿐이다. 브라우저로 로그인했거나 자기 LLM 프로바이더 프로필(로컬 LLM·Bedrock·Vertex)로 턴을 돌리는 유저는 멀쩡한 인증을 갖고도 매 로그인마다 잔소리를 들었다.
+
+이제 `authUserWithToken`이 **`hasClaudeAuth`**도 함께 반환한다 — 토큰 OR 브라우저 로그인 OR 유저 스코프 프로바이더 프로필, `resolveProvider`가 훑는 바로 그 세 소스. 토큰 없는 `anthropic` 프로필은 **일부러 제외**했다: `resolveProvider`가 그 경우 그냥 통과시키므로, 인정해버리면 인증이 진짜 없는 사람에게서 경고가 사라진다. 팝업과 배지는 새 필드로 판단하고, 토큰 폼 자체는 그대로 `hasClaudeToken`을 본다(그게 그 폼의 주제니까).
+
+로그인/해제와 유저 스코프 프로바이더 저장/삭제는 user DTO를 반환하지 않으므로 작은 `refreshMe()` 스토어 액션을 호출하게 했다 — 안 그러면 새로고침 전까지 팝업이 계속 남는다.
+
+</details>
+
+<details>
 <summary><b>feat(auth): 브라우저로 Claude 계정 로그인</b> — 전체 스코프 자격증명을 얻는 유일한 경로 · <code>acb274b</code></summary>
 
 붙여넣는 `claude setup-token` 토큰은 **추론 전용**으로 발급된다. 턴은 돌지만 플랜 창은 절대 못 읽는다 — CLI가 그 조회를 `user:profile` 스코프로 막기 때문. 워크스페이스에는 전체 스코프 자격증명을 얻을 방법 자체가 없었다.
