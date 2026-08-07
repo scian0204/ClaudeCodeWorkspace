@@ -47,6 +47,19 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ## Unreleased
 
 <details>
+<summary><b>feat(auth): back the shared account with an admin sign-in</b> — a common token is no longer the only shared fallback · <code>e9e1140</code></summary>
+
+The shared credential could only be a **pasted token**, so the workspace-wide fallback inherited every setup-token limitation: no plan window, no refresh. An admin can now sign in from the admin panel instead, and members with no auth of their own run on that account.
+
+The hard part: a shared credential has to reach a turn **without taking over the borrowing user's HOME** — that is where their settings, transcripts and resume ids live. `CLAUDE_SECURESTORAGE_CONFIG_DIR` relocates *only* the credential store (the CLI resolves it before falling back to the config dir), so the common-login branch of `resolveProvider` sets exactly that one var: HOME stays the user's, the CLI reads and refreshes the shared credential in place, and no token value is ever copied around. It joins `PROVIDER_ENV_KEYS` so a stale value can never silently route a turn at the shared account.
+
+`claude-login.ts` now takes a **scope key** — a user id, or `COMMON` for the shared home — and the admin routes (`/api/admin/claude-login*`) mirror the per-user ones behind `requireAdmin`. Precedence stays explicit: user provider → user token → user sign-in → common provider → common token → common sign-in → mock. The admin panel's "no shared token" warning now counts a shared sign-in as configured.
+
+Also raises `claudeLoginStartMs` to 60s: the **first** `claude` spawn in a fresh container extracts its native binary and can take well over 20s, which failed the very first sign-in after a deploy (found by smoke-testing the new path against the real CLI).
+
+</details>
+
+<details>
 <summary><b>fix(auth): stop nagging for a token when the user already has auth</b> — sign-in and provider profiles count too · <code>6e68e91</code></summary>
 
 The "register a Claude token" popup and the sidebar's "token unregistered" badge both keyed on `hasClaudeToken`, which only means *a token is pasted*. Someone who signed in through the browser, or who runs their turns on their own LLM provider profile (local LLM, Bedrock, Vertex), has perfectly good auth and was still nagged on every login.
