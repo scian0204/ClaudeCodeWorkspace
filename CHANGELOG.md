@@ -47,6 +47,17 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
+## Unreleased
+
+<details>
+<summary><b>fix(usage): plan limits show with a pasted setup-token; spend ledger removed</b> — probe with the full-scope sign-in · <code>f77ffad</code></summary>
+
+The popover claimed "no user:profile scope" even for users who had signed in via the browser: a pasted token deliberately wins the provider resolution for turns, so the plan-limit lookup also ran on it — and `claude setup-token` is inference-only. The account-level lookup now prefers the requester's full-scope **browser sign-in** whenever one exists (`CLAUDE_SECURESTORAGE_CONFIG_DIR` relocates just the credential store; turns keep pasted-token precedence), and when no sign-in exists the message says the actionable fix (My Page → sign in). With real windows showing, the homegrown "실사용량 (워크스페이스 집계)" spend section is removed end to end — popover UI, the endpoint's `spend` field, `spendSummary` + test, demo seed, `usage.spend*` i18n keys. `recordUsage` keeps writing (cheap rows, cleanup manages them).
+
+</details>
+
+---
+
 ## v1.14.0 — 2026-08-13
 
 <sub>release commit `e4d1300`</sub>
