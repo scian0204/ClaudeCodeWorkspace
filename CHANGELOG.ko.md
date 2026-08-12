@@ -48,6 +48,13 @@
 ## Unreleased
 
 <details>
+<summary><b>feat(web): URL 라우팅 — 새로고침해도 보던 화면 복원</b> — /chat/:id · /room/:id · /admin … · <code>8ceceb4</code></summary>
+
+의존성 없는 history-API 라우터([web/src/lib/router.ts](web/src/lib/router.ts))가 모든 뷰를 경로(`/chat/:id`, `/room/:id`, `/wiki/:id`, `/review/:id`, `/dm/:id`, `/admin`, `/plugins`, `/me`)로 직렬화하고 되돌린다. 경로 도출은 Shell의 뷰 우선순위(패널 > DM > 스레드 > 홈)를 그대로 따르고, 위키는 private보다 먼저 판별(위키 스레드는 토픽 엔드포인트로 복원해야 함). 스레드 라우트는 열려 있는 패널을 먼저 닫는다 — `join()`은 `panel`을 건드리지 않는데 패널이 스레드보다 우선이라, 안 닫으면 `/admin`에서 뒤로가기 시 URL이 도로 튕겼다. 로그아웃 상태에선 store→URL 동기화를 하지 않아 로그인 화면이 딥링크를 지우지 못하고, 실패/남의 id는 홈으로 떨어지며 주소창을 자가 교정. 권한 검사는 전부 서버 몫 그대로. 데모 `autoOpenFirst`는 딥링크에 양보하고, Pages 배포에 `404.html` 복사를 추가해 GitHub Pages 딥링크 새로고침도 동작. 서버 SPA 폴백은 이미 있었음.
+
+</details>
+
+<details>
 <summary><b>feat(chat): Edit/Write 툴 호출을 diff 카드로 렌더</b> — "File updated"가 아니라 변경 내용을 그대로 · <code>3b526f0</code></summary>
 
 파일 수정 툴 카드는 CLI의 성공 문자열만 보여줬다. 이제 진짜 diff를 렌더한다: 접힌 헤더에 `+N −N` 배지, 펼치면 추가/삭제 줄 색상 표시(공통 앞/뒤 줄은 컨텍스트 2줄로 접힘; `Write`는 *전체 쓰기* 라벨), 500줄 상한. 같은 diff가 Edit/Write **승인 프롬프트** 안에도 떠서 허용 전에 무엇이 바뀌는지 보인다. 서버 변경 없음 — 툴 입력은 이미 무손실로 스트림·저장되므로 과거 대화에도 소급 적용. diff 텍스트는 JSX 텍스트 노드로만 렌더(`md()` 미경유), 본문은 자체 컨테이너에서 스크롤(375px 검증). 데모 시드·라이브 턴에도 실제 Edit 추가.

@@ -48,6 +48,13 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ## Unreleased
 
 <details>
+<summary><b>feat(web): URL routing — refresh restores the open view</b> — /chat/:id · /room/:id · /admin … · <code>8ceceb4</code></summary>
+
+A dependency-free history-API router ([web/src/lib/router.ts](web/src/lib/router.ts)) serializes every view to a path (`/chat/:id`, `/room/:id`, `/wiki/:id`, `/review/:id`, `/dm/:id`, `/admin`, `/plugins`, `/me`) and back. Derivation mirrors Shell's view priority (panel > DM > thread > home; wiki before the private kind — a wiki thread restores through its topic endpoint). Thread routes clear an open panel first (`join()` doesn't touch `panel`, which outranks the thread — without this, back from `/admin` snapped the URL right back). Store→URL sync never runs while logged out so the login screen can't rewrite a deep link; failed/foreign ids fall home and self-correct the bar; authorization stays server-side. Demo `autoOpenFirst` yields to deep links, and the Pages deploy copies `index.html` to `404.html` so refreshes on deep links work on GitHub Pages. The server's SPA fallback already existed.
+
+</details>
+
+<details>
 <summary><b>feat(chat): Edit/Write tool calls render as diff cards</b> — see the change, not "File updated" · <code>3b526f0</code></summary>
 
 File-edit tool calls used to show only the CLI's success string. They now render a real diff: a `+N −N` badge on the collapsed header, colored added/removed lines when expanded (shared prefix/suffix lines collapse to two context rows; `Write` is labeled *full write*), capped at 500 rows. The same diff appears inside the Edit/Write **approval prompt**, so what you're allowing is visible before it runs. No server change — tool inputs already stream and persist untruncated, so old transcripts get diffs retroactively. Diff text renders as JSX text nodes only (never through `md()`), and the body scrolls in its own container (mobile-safe, verified at 375px). Demo seeds and the live demo turn now include a real Edit.
