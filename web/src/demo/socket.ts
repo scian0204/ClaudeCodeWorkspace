@@ -28,8 +28,12 @@ function reply(text: string, nAtt = 0) {
   const attNote = nAtt ? `Thanks — I can see ${nAtt} attachment${nAtt > 1 ? 's' : ''}. ` : '';
   return {
     intro: attNote + (isCmd ? `Running \`${text.trim()}\`. Let me pull the current state first.` : `Sure — let me take a look at "${short || 'the attachment'}".`),
-    tool: { name: 'Bash', input: { command: 'grep -rn "TODO" src/ | head' }, output: 'src/index.ts:42:  // TODO: wire up metrics\nsrc/db.ts:88:  // TODO: add retry' },
-    outro: 'Found a couple of spots. Here is what I would change:\n\n```ts\n// wrap the flaky call in a small retry\nawait withRetry(() => db.query(sql), { tries: 3 });\n```\n\nWant me to apply it and run the tests?',
+    tools: [
+      { name: 'Bash', input: { command: 'grep -rn "TODO" src/ | head' }, output: 'src/index.ts:42:  // TODO: wire up metrics\nsrc/db.ts:88:  // TODO: add retry' },
+      // a real Edit input so the chat's diff card (+N −N badge, colored body) is demoable
+      { name: 'Edit', input: { file_path: 'src/db.ts', old_string: 'export async function run(sql: string) {\n  await db.query(sql);\n}', new_string: 'export async function run(sql: string) {\n  await withRetry(() => db.query(sql), { tries: 3 });\n}' }, output: 'Applied 1 edit.' },
+    ],
+    outro: 'Applied the retry wrapper. The flaky call now retries up to 3 times before failing — want me to run the tests?',
   };
 }
 
@@ -100,14 +104,17 @@ function runTurn(sessionId: string, text: string, nAtt = 0) {
     });
   };
 
-  const runTool = () => {
+  // run the turn's tools one after another (use → 700ms → result), then stream the outro
+  const runTools = (i = 0) => {
+    if (i >= r.tools.length) { streamOutro(); return; }
+    const tl = r.tools[i];
     const id = `t_${rid()}`;
-    deliver('tool:use', { sessionId, id, name: r.tool.name, input: r.tool.input });
-    finalBlocks.push({ type: 'tool_use', id, name: r.tool.name, input: r.tool.input });
+    deliver('tool:use', { sessionId, id, name: tl.name, input: tl.input });
+    finalBlocks.push({ type: 'tool_use', id, name: tl.name, input: tl.input });
     later(700, () => {
-      deliver('tool:result', { sessionId, id, output: r.tool.output, isError: false });
-      finalBlocks[finalBlocks.length - 1].output = r.tool.output;
-      streamOutro();
+      deliver('tool:result', { sessionId, id, output: tl.output, isError: false });
+      finalBlocks[finalBlocks.length - 1].output = tl.output;
+      later(250, () => runTools(i + 1));
     });
   };
 
@@ -118,15 +125,15 @@ function runTurn(sessionId: string, text: string, nAtt = 0) {
   finalBlocks.push({ type: 'text', text: r.intro });
 
   if (!gated.has(sessionId)) {
-    // first turn in this chat → ask for permission before the tool runs
+    // first turn in this chat → ask for permission before the tools run
     gated.add(sessionId);
     later(d += 400, () => {
       const requestId = `perm_${rid()}`;
-      waiting.set(requestId, runTool);
-      deliver('permission:request', { sessionId, requestId, tool: r.tool.name, input: r.tool.input });
+      waiting.set(requestId, () => runTools()); // wrapped: the cont's answer arg must not become the index
+      deliver('permission:request', { sessionId, requestId, tool: r.tools[0].name, input: r.tools[0].input });
     });
   } else {
-    later(d += 400, runTool);
+    later(d += 400, () => runTools());
   }
 }
 

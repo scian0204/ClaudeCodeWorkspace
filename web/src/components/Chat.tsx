@@ -9,6 +9,7 @@ import { Avatar, timeAgo, useIsMobile, MobileMenuButton, ClayDots, ClaySpark, Cl
 import { copyToClipboard } from '../lib/clipboard';
 import { MembersDialog } from './MembersDialog';
 import { ExportSessionModal } from './ExportSessionModal';
+import { ToolDiff, fileEditOf, diffCounts } from './ToolDiff';
 import { WikiExplorer } from './WikiExplorer';
 import { FileExplorer } from './FileExplorer';
 import { GitPanel } from './GitPanel';
@@ -835,6 +836,9 @@ function ToolCard({ b }: { b: Extract<Block, { type: 'tool_use' }> }) {
   // is_error even though nothing failed. Render it as a normal choice, not "오류".
   const isAsk = b.name === 'AskUserQuestion';
   const cancelled = isAsk && b.output === 'Denied.';
+  // file edits (Edit/Write/MultiEdit) get a diff body + a collapsed +N −N badge instead of raw output
+  const hunks = isAsk ? null : fileEditOf(b.name, b.input);
+  const counts = hunks ? diffCounts(hunks) : null;
   const cmd = isAsk
     ? (b.input?.questions?.[0]?.question || t('chat.question'))
     : (b.input?.command || b.input?.file_path || b.input?.path || JSON.stringify(b.input || {}).slice(0, 80));
@@ -846,7 +850,7 @@ function ToolCard({ b }: { b: Extract<Block, { type: 'tool_use' }> }) {
   return (
     <div className="border border-line rounded-lg my-2 overflow-hidden bg-card">
       <div className="flex items-center gap-2 px-3 py-2 cursor-pointer text-xs" onClick={() => setOpen(!open)}>
-        <span className="text-clay">{isAsk ? <IconHelp size={14} /> : <IconTerminal size={14} />}</span>
+        <span className="text-clay">{isAsk ? <IconHelp size={14} /> : hunks ? <IconPencil size={14} /> : <IconTerminal size={14} />}</span>
         <span className="font-semibold">{isAsk ? t('chat.question') : b.name}</span>
         {/* a subagent ran this, not the main thread — otherwise it reads as a top-level tool call */}
         {b.parentId && (
@@ -854,11 +858,20 @@ function ToolCard({ b }: { b: Extract<Block, { type: 'tool_use' }> }) {
             title={t('tasks.nestedTip')}>{b.agentType || t('tasks.nested')}</span>
         )}
         <code className="font-mono text-txt2 truncate flex-1">{String(cmd)}</code>
+        {counts && (
+          <span className="font-mono text-[11px] shrink-0 inline-flex items-center gap-1">
+            {b.name === 'Write' && <span className="text-txt3">{t('chat.diffFullWrite')}</span>}
+            <span className="text-ok">+{counts.add}</span>
+            {counts.del > 0 && <span className="text-danger">-{counts.del}</span>}
+          </span>
+        )}
         <span className="text-[11px] flex items-center gap-1" style={{ color: status.color }}>{status.Icon && <status.Icon size={12} />}{status.text}</span>
       </div>
-      {open && b.output != null && (
-        <div className="border-t border-line px-3 py-2 font-mono text-xs text-txt2 whitespace-pre-wrap bg-bg max-h-64 overflow-auto scrolly">{b.output}</div>
-      )}
+      {open && (hunks && !b.isError
+        ? <div className="border-t border-line"><ToolDiff hunks={hunks} /></div>
+        : b.output != null && (
+          <div className="border-t border-line px-3 py-2 font-mono text-xs text-txt2 whitespace-pre-wrap bg-bg max-h-64 overflow-auto scrolly">{b.output}</div>
+        ))}
     </div>
   );
 }
@@ -881,10 +894,12 @@ function PermissionArea() {
 
 function ToolApproval({ p, canApprove, respond }: { p: any; canApprove: boolean; respond: any }) {
   const t = useT();
+  const hunks = fileEditOf(p.tool, p.input); // an Edit/Write approval shows exactly what it would change
   return (
     <>
       <div className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: 'var(--warn)' }}><IconWarning size={14} />{t('chat.toolApprovalRequest', { tool: p.tool })}</div>
       <code className="font-mono text-xs bg-card px-1.5 py-1 rounded border border-line block truncate">{p.input?.command || p.input?.file_path || JSON.stringify(p.input)}</code>
+      {hunks && <div className="mt-2 border border-line rounded-md overflow-hidden bg-card"><ToolDiff hunks={hunks} /></div>}
       {canApprove ? (
         <div className="flex gap-2 mt-2.5">
           <button className="rounded-md px-3.5 py-1.5 text-xs font-semibold text-white" style={{ background: 'var(--ok)' }} onClick={() => respond(p.requestId, 'allow')}>{t('chat.allow')}</button>

@@ -58,7 +58,11 @@ const ROOM_MSGS = [
   userMsg(U_JAMIE, 'Can we get the nightly export job idempotent? It double-wrote yesterday.', ago(55)),
   claudeMsg([
     tx('Yes — the safe fix is a unique key on `(export_date, target)` plus an upsert. That way a re-run is a no-op instead of a duplicate.'),
-    tool('Edit', { file_path: 'jobs/nightly_export.py' }, 'Applied: switched INSERT to INSERT ... ON CONFLICT DO NOTHING'),
+    tool('Edit', {
+      file_path: 'jobs/nightly_export.py',
+      old_string: 'def write_rows(rows):\n    db.execute(\n        "INSERT INTO exports (export_date, target, payload) VALUES (%s, %s, %s)",\n        rows,\n    )',
+      new_string: 'def write_rows(rows):\n    db.execute(\n        "INSERT INTO exports (export_date, target, payload) VALUES (%s, %s, %s)"\n        " ON CONFLICT (export_date, target) DO NOTHING",\n        rows,\n    )\n    log.info("nightly export: %d rows (duplicates skipped)", len(rows))',
+    }, 'Applied 1 edit.'),
     tx('Done. I also added a guard that logs when a re-run is skipped, so we can watch it working tonight.'),
   ], ago(53)),
   userMsg(U_RILEY, 'Nice. I\'ll watch the logs at the next run.', ago(50)),
