@@ -47,6 +47,8 @@
 
 ## Unreleased
 
+- **fix(shortcuts): Alt+↑/↓가 열린 패널을 먼저 닫음** — 패널이 Shell 우선순위에서 스레드보다 위이고 `join()`은 패널을 건드리지 않아, 패널이 열린 채 스레드를 이동하면 대화가 패널 뒤에 보이지 않게 열렸음 · `31bbeee`
+
 <details>
 <summary><b>feat(chat): Edit/Write 툴 호출을 diff 카드로 렌더</b> — "File updated"가 아니라 변경 내용을 그대로 · <code>3b526f0</code></summary>
 

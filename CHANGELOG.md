@@ -47,6 +47,8 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ## Unreleased
 
+- **fix(shortcuts): Alt+↑/↓ closes an open panel first** — a panel outranks the thread in Shell's priority and `join()` doesn't touch it, so thread-hopping while a panel was open opened the chat invisibly behind it · `31bbeee`
+
 <details>
 <summary><b>feat(chat): Edit/Write tool calls render as diff cards</b> — see the change, not "File updated" · <code>3b526f0</code></summary>
 
