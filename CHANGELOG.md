@@ -48,6 +48,13 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ## Unreleased
 
 <details>
+<summary><b>feat(admin): whole-workspace backup &amp; restore</b> — one .tgz migrates the server · <code>532711d</code></summary>
+
+Backup = a consistent SQLite snapshot (`VACUUM INTO`, WAL-safe) + a streamed system-tar of the data dirs (user/room homes incl. CLI credential files, wiki, brand, review clones — WAL sidecars deliberately excluded, a stale WAL corrupts a restored DB). `backup-meta.json` records version, DATA_DIR and an encryption-key **fingerprint** (never the key). Restore: streamed upload (`restoreMaxMB`) → staging extract → validation summary (version · users · size · key match · DATA_DIR match) → typed-keyword apply, which kills editors, refuses while turns run, parks the current state in `.pre-restore` (one-shot manual rollback), swaps the staged data in and exits — docker's restart policy revives on the restored data, and boot-time DDL/ALTERs migrate an older DB forward. Key mismatch isn't fatal but is loudly warned: decrypt sites degrade to "no token", so stored tokens/credentials drop. The archive is a credential dump — admin-only, server-gated by the new **`backupEnabled`** flag (+ `backupIncludeReviews`, `restoreMaxMB`). Admin panel gains a Backup tab (download card, upload→summary→RESTORE-keyword apply with health-poll reload); demo mocks + i18n + README included.
+
+</details>
+
+<details>
 <summary><b>feat(chat): Edit/Write tool calls render as diff cards</b> — see the change, not "File updated" · <code>3b526f0</code></summary>
 
 File-edit tool calls used to show only the CLI's success string. They now render a real diff: a `+N −N` badge on the collapsed header, colored added/removed lines when expanded (shared prefix/suffix lines collapse to two context rows; `Write` is labeled *full write*), capped at 500 rows. The same diff appears inside the Edit/Write **approval prompt**, so what you're allowing is visible before it runs. No server change — tool inputs already stream and persist untruncated, so old transcripts get diffs retroactively. Diff text renders as JSX text nodes only (never through `md()`), and the body scrolls in its own container (mobile-safe, verified at 375px). Demo seeds and the live demo turn now include a real Edit.

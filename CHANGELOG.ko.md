@@ -48,6 +48,13 @@
 ## Unreleased
 
 <details>
+<summary><b>feat(admin): 워크스페이스 전체 백업 &amp; 복원</b> — .tgz 하나로 서버 마이그레이션 · <code>532711d</code></summary>
+
+백업 = 일관된 SQLite 스냅샷(`VACUUM INTO`, WAL 안전) + 데이터 디렉토리의 시스템 tar 스트림(유저/방 홈 — CLI 자격증명 파일 포함 — 위키·브랜딩·리뷰 클론; WAL 사이드카는 의도적으로 제외 — 오래된 WAL이 복원된 DB를 손상시킴). `backup-meta.json`에 버전·DATA_DIR·암호화 키 **지문**(키 자체는 절대 아님)을 기록. 복원: 스트림 업로드(`restoreMaxMB`) → 스테이징 추출 → 검증 요약(버전·사용자·크기·키 일치·DATA_DIR 일치) → 키워드 입력 적용 — 에디터 컨테이너 제거, 턴 실행 중이면 거부, 현재 상태를 `.pre-restore`에 보관(1회분 수동 롤백), 스테이징 데이터로 교체 후 종료 — docker restart 정책이 복원된 데이터로 되살리고, 부팅 시 DDL/ALTER가 구버전 DB를 전진 마이그레이션. 키 불일치는 치명적이진 않지만 크게 경고(복호화 실패는 "토큰 없음"으로 강등 — 저장된 토큰·자격증명 전부 소실). 아카이브 자체가 자격증명 덤프이므로 관리자 전용 + 신규 **`backupEnabled`** 플래그로 서버 측 게이트(+ `backupIncludeReviews`, `restoreMaxMB`). 관리자 패널에 백업 탭(다운로드 카드, 업로드→요약→RESTORE 키워드 적용, health 폴링 후 자동 새로고침) 추가; 데모 목·i18n·README 반영.
+
+</details>
+
+<details>
 <summary><b>feat(chat): Edit/Write 툴 호출을 diff 카드로 렌더</b> — "File updated"가 아니라 변경 내용을 그대로 · <code>3b526f0</code></summary>
 
 파일 수정 툴 카드는 CLI의 성공 문자열만 보여줬다. 이제 진짜 diff를 렌더한다: 접힌 헤더에 `+N −N` 배지, 펼치면 추가/삭제 줄 색상 표시(공통 앞/뒤 줄은 컨텍스트 2줄로 접힘; `Write`는 *전체 쓰기* 라벨), 500줄 상한. 같은 diff가 Edit/Write **승인 프롬프트** 안에도 떠서 허용 전에 무엇이 바뀌는지 보인다. 서버 변경 없음 — 툴 입력은 이미 무손실로 스트림·저장되므로 과거 대화에도 소급 적용. diff 텍스트는 JSX 텍스트 노드로만 렌더(`md()` 미경유), 본문은 자체 컨테이너에서 스크롤(375px 검증). 데모 시드·라이브 턴에도 실제 Edit 추가.
