@@ -46,11 +46,9 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
-## v1.13.0 — 2026-08-13
+## Unreleased
 
-<sub>release commit `31e4a88`</sub>
-
-- **fix(shortcuts): Alt+↑/↓ closes an open panel first** — a panel outranks the thread in Shell's priority and `join()` doesn't touch it, so thread-hopping while a panel was open opened the chat invisibly behind it · `31bbeee`
+- merge: `feat/url-routing` — `db3d0bf` · `feat/team-agents` · `feat/backup-restore`
 
 <details>
 <summary><b>feat(web): URL routing — refresh restores the open view</b> — /chat/:id · /room/:id · /admin … · <code>8ceceb4</code></summary>
@@ -65,6 +63,21 @@ A dependency-free history-API router ([web/src/lib/router.ts](web/src/lib/router
 "Team agent env vars" resolved to the SDK's real mechanism — there is no env var: the Agent SDK takes `options.agents` (programmatic subagent definitions, invocable via the Task tool) and `options.agent` (a named agent driving the main thread). Definitions live in a new `team_agents` table (two scopes like plugins: admin-managed common — its prompt injects into every member's turns, so admin-only — and personal, which wins name collisions). `resolveAgents()` feeds every spawn; a session's main-thread agent (`chat_sessions.agent`, header pill, "next turn onward") is validated at PATCH time **and** guarded at spawn time — an unresolved `options.agent` errors the whole CLI turn, and a deleted agent must degrade to default. Description/prompt are length-capped (model-facing input); per-agent `permissionMode` is deliberately not definable (would bypass the workspace clamp). New `teamAgentsEnabled` flag gates the API server-side. Web: AgentsPanel (create/edit/enable/delete), sidebar entry, chat-header picker, demo mocks with 3 seeded agents. Also fixes an item-7 gap this surfaced: `Alt+↑/↓` now closes an open panel before opening the thread, otherwise the thread opened invisibly behind it.
 
 </details>
+
+<details>
+<summary><b>feat(admin): whole-workspace backup &amp; restore</b> — one .tgz migrates the server · <code>532711d</code></summary>
+
+Backup = a consistent SQLite snapshot (`VACUUM INTO`, WAL-safe) + a streamed system-tar of the data dirs (user/room homes incl. CLI credential files, wiki, brand, review clones — WAL sidecars deliberately excluded, a stale WAL corrupts a restored DB). `backup-meta.json` records version, DATA_DIR and an encryption-key **fingerprint** (never the key). Restore: streamed upload (`restoreMaxMB`) → staging extract → validation summary (version · users · size · key match · DATA_DIR match) → typed-keyword apply, which kills editors, refuses while turns run, parks the current state in `.pre-restore` (one-shot manual rollback), swaps the staged data in and exits — docker's restart policy revives on the restored data, and boot-time DDL/ALTERs migrate an older DB forward. Key mismatch isn't fatal but is loudly warned: decrypt sites degrade to "no token", so stored tokens/credentials drop. The archive is a credential dump — admin-only, server-gated by the new **`backupEnabled`** flag (+ `backupIncludeReviews`, `restoreMaxMB`). Admin panel gains a Backup tab (download card, upload→summary→RESTORE-keyword apply with health-poll reload); demo mocks + i18n + README included.
+
+</details>
+
+---
+
+## v1.13.0 — 2026-08-13
+
+<sub>release commit `31e4a88`</sub>
+
+- **fix(shortcuts): Alt+↑/↓ closes an open panel first** — a panel outranks the thread in Shell's priority and `join()` doesn't touch it, so thread-hopping while a panel was open opened the chat invisibly behind it · `31bbeee`
 
 <details>
 <summary><b>feat(chat): Edit/Write tool calls render as diff cards</b> — see the change, not "File updated" · <code>3b526f0</code></summary>

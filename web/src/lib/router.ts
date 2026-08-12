@@ -46,6 +46,7 @@ export async function applyPath(path: string): Promise<void> {
       case 'dm': if (id && s.dmEnabled) await s.openChannel(id); break; // openChannel clears the panel itself
       case 'admin': if (s.user.role === 'admin') s.setPanel('admin'); else s.goHome(); break;
       case 'plugins': s.setPanel('plugins'); break;
+      case 'agents': if (s.teamAgentsEnabled) s.setPanel('agents'); else s.goHome(); break;
       case 'me': s.setPanel('me'); break;
       case '': case undefined: s.goHome(); break;
       default: s.goHome();

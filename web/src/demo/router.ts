@@ -240,6 +240,17 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
     return ok({});
   }
 
+  // ---- backup & restore (admin) ----
+  // the download path (fetch→blob) gets a tiny JSON body named like a real archive — demo-acceptable
+  if (P === '/api/admin/backup' && M === 'GET') return ok({ demo: true, note: 'static demo — no real archive' });
+  if (P === '/api/admin/restore/upload' && M === 'POST') {
+    ADMIN.restoreStaged = { version: '1.12.0', createdAt: Date.now() - 3600_000, users: 4, sizeBytes: 123_456_789, keyMatch: true, dataDirMatch: true, hasReviews: true };
+    return slow(ok({ summary: ADMIN.restoreStaged }));
+  }
+  if (P === '/api/admin/restore' && M === 'GET') return ok({ summary: ADMIN.restoreStaged || null });
+  if (P === '/api/admin/restore' && M === 'DELETE') { ADMIN.restoreStaged = null; return ok({}); }
+  if (P === '/api/admin/restore/apply' && M === 'POST') { ADMIN.restoreStaged = null; return ok({ ok: true }); }
+
   // ---- client-facing config (model dropdown) ----
   if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, sessionExportEnabled: true, teamAgentsEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenu: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true, guideEnabled: true, guideWriteEnabled: true, taskPanelEnabled: true, processPollMs: 5000, dockerReady: ADMIN.docker.ok && ADMIN.docker.configured, dockerReason: ADMIN.docker.reason });
 

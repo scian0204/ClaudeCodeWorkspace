@@ -46,11 +46,9 @@
 
 ---
 
-## v1.13.0 — 2026-08-13
+## Unreleased
 
-<sub>릴리스 커밋 `31e4a88`</sub>
-
-- **fix(shortcuts): Alt+↑/↓가 열린 패널을 먼저 닫음** — 패널이 Shell 우선순위에서 스레드보다 위이고 `join()`은 패널을 건드리지 않아, 패널이 열린 채 스레드를 이동하면 대화가 패널 뒤에 보이지 않게 열렸음 · `31bbeee`
+- merge: `feat/url-routing` — `db3d0bf` · `feat/team-agents` · `feat/backup-restore`
 
 <details>
 <summary><b>feat(web): URL 라우팅 — 새로고침해도 보던 화면 복원</b> — /chat/:id · /room/:id · /admin … · <code>8ceceb4</code></summary>
@@ -65,6 +63,21 @@
 "팀 에이전트 환경변수"의 실제 SDK 메커니즘 — 에이전트 정의용 env var는 존재하지 않는다: Agent SDK는 `options.agents`(Task 툴로 호출되는 프로그램적 서브에이전트 정의)와 `options.agent`(메인 스레드를 맡는 이름)를 받는다. 정의는 신규 `team_agents` 테이블에 저장(플러그인과 같은 2-스코프: 관리자 공통 — 프롬프트가 모든 멤버 턴에 주입되므로 관리자 전용 — 과 개인, 이름 충돌 시 개인 우선). `resolveAgents()`가 모든 스폰에 공급되고, 세션의 메인 스레드 에이전트(`chat_sessions.agent`, 헤더 pill, "다음 턴부터")는 PATCH 시 검증 **및** 스폰 시 가드 — 맵에 없는 `options.agent`는 CLI 턴 전체를 실패시키므로, 삭제된 에이전트는 기본으로 강등돼야 한다. 설명/프롬프트는 길이 제한(모델에 주입되는 입력), 에이전트별 `permissionMode`는 의도적으로 미지원(워크스페이스 클램프 우회 가능). 신규 `teamAgentsEnabled` 플래그가 API를 서버 측에서 게이트. 웹: AgentsPanel(생성·수정·토글·삭제), 사이드바 항목, 채팅 헤더 피커, 시드 에이전트 3종 데모 목. 부수 수정: 이 작업으로 드러난 항목 7의 빈틈 — `Alt+↑/↓`가 열린 패널을 먼저 닫도록(안 닫으면 스레드가 패널 뒤에 보이지 않게 열림).
 
 </details>
+
+<details>
+<summary><b>feat(admin): 워크스페이스 전체 백업 &amp; 복원</b> — .tgz 하나로 서버 마이그레이션 · <code>532711d</code></summary>
+
+백업 = 일관된 SQLite 스냅샷(`VACUUM INTO`, WAL 안전) + 데이터 디렉토리의 시스템 tar 스트림(유저/방 홈 — CLI 자격증명 파일 포함 — 위키·브랜딩·리뷰 클론; WAL 사이드카는 의도적으로 제외 — 오래된 WAL이 복원된 DB를 손상시킴). `backup-meta.json`에 버전·DATA_DIR·암호화 키 **지문**(키 자체는 절대 아님)을 기록. 복원: 스트림 업로드(`restoreMaxMB`) → 스테이징 추출 → 검증 요약(버전·사용자·크기·키 일치·DATA_DIR 일치) → 키워드 입력 적용 — 에디터 컨테이너 제거, 턴 실행 중이면 거부, 현재 상태를 `.pre-restore`에 보관(1회분 수동 롤백), 스테이징 데이터로 교체 후 종료 — docker restart 정책이 복원된 데이터로 되살리고, 부팅 시 DDL/ALTER가 구버전 DB를 전진 마이그레이션. 키 불일치는 치명적이진 않지만 크게 경고(복호화 실패는 "토큰 없음"으로 강등 — 저장된 토큰·자격증명 전부 소실). 아카이브 자체가 자격증명 덤프이므로 관리자 전용 + 신규 **`backupEnabled`** 플래그로 서버 측 게이트(+ `backupIncludeReviews`, `restoreMaxMB`). 관리자 패널에 백업 탭(다운로드 카드, 업로드→요약→RESTORE 키워드 적용, health 폴링 후 자동 새로고침) 추가; 데모 목·i18n·README 반영.
+
+</details>
+
+---
+
+## v1.13.0 — 2026-08-13
+
+<sub>릴리스 커밋 `31e4a88`</sub>
+
+- **fix(shortcuts): Alt+↑/↓가 열린 패널을 먼저 닫음** — 패널이 Shell 우선순위에서 스레드보다 위이고 `join()`은 패널을 건드리지 않아, 패널이 열린 채 스레드를 이동하면 대화가 패널 뒤에 보이지 않게 열렸음 · `31bbeee`
 
 <details>
 <summary><b>feat(chat): Edit/Write 툴 호출을 diff 카드로 렌더</b> — "File updated"가 아니라 변경 내용을 그대로 · <code>3b526f0</code></summary>

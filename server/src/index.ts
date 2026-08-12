@@ -18,6 +18,7 @@ import { importRoutes, reapImportStaging } from './routes/import.js';
 import { pluginRoutes } from './routes/plugins.js';
 import { agentRoutes } from './routes/agents.js';
 import { adminRoutes } from './routes/admin.js';
+import { reapBackupStaging } from './admin/backup.js';
 import { gitCredentialRoutes } from './routes/git-credentials.js';
 import { reviewRoutes } from './routes/review.js';
 import { requestRoutes } from './routes/requests.js';
@@ -45,6 +46,7 @@ async function main() {
   reapImportStaging(); // clear any orphaned session-import staging from a prior run
   reapWikiOrphans(); // remove wiki topic dirs on disk that no longer have a DB row
   reapReviewOrphans(); // remove review clone/worktree dirs on disk that no longer have a DB row
+  reapBackupStaging(); // clear backup/restore staging left by a crash (.pre-restore is kept — it's the rollback)
 
   // Serve HTTPS when a cert is supplied so PWA install works off-localhost (secure
   // context). socket.io and the /cs proxy both ride app.server, so this covers them.

@@ -7,6 +7,7 @@ import { inspectImage, pullImage } from '../lib/docker-images.js';
 import { scanResources, runCleanup } from '../admin/cleanup.js';
 import { listProcesses, controlProcess } from '../admin/processes.js';
 import { appVersion, cachedStatus, checkForUpdate, updateStatus, applyUpdate } from '../admin/self-update.js';
+import { createBackupStream, backupFilename, stageRestore, restoreStatus, discardRestore, applyRestore } from '../admin/backup.js';
 import { dockerStatus, probeDocker } from '../lib/docker-status.js';
 import { turnLimiter } from '../claude/throttle.js';
 import { setCommonToken, clearCommonToken, commonTokenMeta } from '../auth/claude-token.js';
@@ -167,6 +168,45 @@ export async function adminRoutes(app: FastifyInstance) {
     if (!requireAdmin(req, reply)) return;
     setTimeout(() => { console.log('[ccw] admin-triggered restart'); process.exit(0); }, 300);
     return { ok: true };
+  });
+
+  // ── whole-workspace backup & restore (server migration) ──
+  // The archive is a credential dump (CLI credential files, password hashes) — admin only, and
+  // gated server-side by backupEnabled per rule 10.
+  const backupOff = (reply: any) =>
+    cfg.bool('backupEnabled') ? false : (reply.code(403).send({ error: 'backup/restore is disabled' }), true);
+  app.get('/api/admin/backup', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    if (backupOff(reply)) return;
+    try {
+      const stream = createBackupStream();
+      reply.header('Content-Type', 'application/gzip');
+      reply.header('Content-Disposition', `attachment; filename="${backupFilename()}"`);
+      return reply.send(stream);
+    } catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
+  });
+  app.post('/api/admin/restore/upload', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    if (backupOff(reply)) return;
+    try { return { summary: await stageRestore(req) }; }
+    catch (e: any) { return reply.code(400).send({ error: String(e?.message || e).slice(0, 300) }); }
+  });
+  app.get('/api/admin/restore', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    if (backupOff(reply)) return;
+    return { summary: restoreStatus() };
+  });
+  app.delete('/api/admin/restore', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    if (backupOff(reply)) return;
+    discardRestore();
+    return { ok: true };
+  });
+  app.post('/api/admin/restore/apply', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    if (backupOff(reply)) return;
+    try { return applyRestore(); }
+    catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
   });
 
   // ── admin-managed common (shared) Claude token ──

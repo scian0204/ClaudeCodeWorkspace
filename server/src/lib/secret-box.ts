@@ -24,6 +24,13 @@ export function decrypt(blob: string): string {
   return Buffer.concat([d.update(Buffer.from(dataH, 'hex')), d.final()]).toString('utf8');
 }
 
+// Non-reversible identifier of the encryption key for backup metadata: a restore made under a
+// DIFFERENT secret silently drops every stored token (decrypt sites degrade to "no token"), so the
+// backup records this fingerprint and the restore UI warns on mismatch. Never the key itself.
+export function keyFingerprint(): string {
+  return crypto.createHash('sha256').update(KEY).digest('hex').slice(0, 8);
+}
+
 // Claude Code tokens: OAuth token (sk-ant-oat*, `claude setup-token`) or plain API key (sk-ant-api*).
 export function validTokenFormat(t: string): boolean {
   const s = (t || '').trim();
