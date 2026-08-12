@@ -4,7 +4,7 @@
 
 # Update notes
 
-Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and **v1.12.0** (2026-08-07) — all **253 commits**.
+Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and **v1.13.0** (2026-08-13) — all **266 commits**.
 
 Each row shows only its **title and commit hash**; click the triangle for the detail (root cause, implementation, config keys).
 
@@ -16,7 +16,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 - [Timeline](#timeline)
 - [Unreleased](#unreleased) — commits not yet in a release
-- **1.x releases** — [v1.12.0](#v1120--2026-08-07) · [v1.11.0](#v1110--2026-08-06) · [v1.10.0](#v1100--2026-08-05) · [v1.9.1](#v191--2026-08-05) · [v1.9.0](#v190--2026-08-05) · [v1.8.0](#v180--2026-08-04) · [v1.7.0](#v170--2026-08-04) · [v1.6.0](#v160--2026-08-04) · [v1.5.0](#v150--2026-08-04) · [v1.4.0](#v140--2026-08-03) · [v1.3.1](#v131--2026-08-03) · [v1.3.0](#v130--2026-07-31) · [v1.2.0](#v120--2026-07-31) · [v1.1.1](#v111--2026-07-31) · [v1.1.0](#v110--2026-07-31)
+- **1.x releases** — [v1.13.0](#v1130--2026-08-13) · [v1.12.0](#v1120--2026-08-07) · [v1.11.0](#v1110--2026-08-06) · [v1.10.0](#v1100--2026-08-05) · [v1.9.1](#v191--2026-08-05) · [v1.9.0](#v190--2026-08-05) · [v1.8.0](#v180--2026-08-04) · [v1.7.0](#v170--2026-08-04) · [v1.6.0](#v160--2026-08-04) · [v1.5.0](#v150--2026-08-04) · [v1.4.0](#v140--2026-08-03) · [v1.3.1](#v131--2026-08-03) · [v1.3.0](#v130--2026-07-31) · [v1.2.0](#v120--2026-07-31) · [v1.1.1](#v111--2026-07-31) · [v1.1.0](#v110--2026-07-31)
 - [Early development (2026-07-20 → 07-31)](#early-development--2026-07-20--07-31)
 - [Where it diverged from the original design](#where-it-diverged-from-the-original-design)
 
@@ -26,6 +26,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 | Version | Date | Commits | Headline |
 |---|---|---|---|
+| [v1.13.0](#v1130--2026-08-13) | 2026-08-13 | 13 | Session export, chat diff cards, free-text answers, 7 new shortcuts, aggregate usage removed |
 | [v1.12.0](#v1120--2026-08-07) | 2026-08-07 | 18 | Claude account sign-in from the browser, recorded spend, plan limits actually load |
 | [v1.11.0](#v1110--2026-08-06) | 2026-08-06 | 3 | Live thinking/token meter, growing composer with markdown |
 | [v1.10.0](#v1100--2026-08-05) | 2026-08-05 | 3 | Tasks panel |
@@ -45,7 +46,9 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
-## Unreleased
+## v1.13.0 — 2026-08-13
+
+<sub>release commit `31e4a88`</sub>
 
 - **fix(shortcuts): Alt+↑/↓ closes an open panel first** — a panel outranks the thread in Shell's priority and `join()` doesn't touch it, so thread-hopping while a panel was open opened the chat invisibly behind it · `31bbeee`
 
