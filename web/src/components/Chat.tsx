@@ -909,10 +909,33 @@ function AskQuestion({ p, canApprove, respond }: { p: any; canApprove: boolean; 
                 {o.description && <div className="text-[11px] text-txt2 mt-0.5">{o.description}</div>}
               </button>
             ))}
+            <CustomAnswer question={q.question} onSubmit={(text) => respond(p.requestId, 'answer', t('chat.userChoiceAnswer', { question: q.question, label: text }))} />
           </div>
         </div>
       ))}
       <button className="btn-ghost !py-1.5 !text-xs self-start" onClick={() => respond(p.requestId, 'deny')}>{t('common.cancel')}</button>
+    </div>
+  );
+}
+
+// The "Other" row of an AskUserQuestion: free text instead of one of the offered options. The typed
+// answer travels the same respond(..., 'answer', …) path a button pick does.
+function CustomAnswer({ question, onSubmit }: { question: string; onSubmit: (text: string) => void }) {
+  const t = useT();
+  const [text, setText] = useState('');
+  const send = () => { const v = text.trim(); if (v) onSubmit(v); };
+  return (
+    <div className="flex items-center gap-1.5 border border-line rounded-md px-3 py-1.5 bg-card focus-within:border-clay transition">
+      <span className="font-semibold text-xs shrink-0 text-txt2">{t('chat.customAnswer')}</span>
+      <input
+        className="flex-1 min-w-0 bg-transparent text-xs outline-none placeholder:text-txt3"
+        value={text}
+        placeholder={t('chat.customAnswerPlaceholder')}
+        aria-label={t('chat.customAnswer') + ' — ' + question}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); send(); } }}
+      />
+      <button className="btn-ghost !py-1 !px-2 !text-xs shrink-0 disabled:opacity-40" disabled={!text.trim()} onClick={send}>{t('chat.send')}</button>
     </div>
   );
 }

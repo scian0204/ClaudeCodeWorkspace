@@ -10,7 +10,7 @@ const rid = () => (crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`);
 const handlers = new Map<string, Fn[]>();
 const timers: any[] = [];
 const gated = new Set<string>();
-const waiting = new Map<string, () => void>(); // requestId → continue-the-turn
+const waiting = new Map<string, (answer?: string) => void>(); // requestId → continue-the-turn (answer: AskUserQuestion pick/free text)
 
 function deliver(event: string, payload?: any) { (handlers.get(event) || []).forEach((fn) => fn(payload)); }
 function later(ms: number, fn: Fn) { timers.push(setTimeout(fn, ms)); }
@@ -130,6 +130,49 @@ function runTurn(sessionId: string, text: string, nAtt = 0) {
   }
 }
 
+
+// `!ask` demo: exercises the AskUserQuestion card — option buttons plus the free-text "직접 입력" row.
+// Mirrors the real flow: tool:use(AskUserQuestion) → permission:request → respond('answer', text)
+// feeds the pick back as the tool result and the turn continues with it.
+function runAskQuestion(sessionId: string) {
+  const finalBlocks: any[] = [];
+  let d = 150;
+  for (let i = 0; i < 4; i++) later(d += 110, () => deliver('assistant:thinking', { sessionId, len: 30 }));
+  const intro = 'Before I scaffold this, one quick question.';
+  chunks(intro).forEach((c) => later(d += 150, () => deliver('assistant:delta', { sessionId, text: c })));
+  finalBlocks.push({ type: 'text', text: intro });
+  const input = { questions: [{
+    question: 'Which bundler should the new package use?',
+    options: [
+      { label: 'Vite', description: 'fast dev server, Rollup production build' },
+      { label: 'esbuild', description: 'fastest builds, fewer plugins' },
+      { label: 'Keep current setup', description: 'inherit the workspace default' },
+    ],
+  }] };
+  later(d += 400, () => {
+    const requestId = `perm_${rid()}`;
+    const toolId = `t_${rid()}`;
+    deliver('tool:use', { sessionId, id: toolId, name: 'AskUserQuestion', input });
+    finalBlocks.push({ type: 'tool_use', id: toolId, name: 'AskUserQuestion', input });
+    waiting.set(requestId, (answer?: string) => {
+      const output = answer || 'Denied.';
+      finalBlocks[finalBlocks.length - 1].output = output;
+      deliver('tool:result', { sessionId, id: toolId, output, isError: false });
+      // the picked label (or the free text) sits after the arrow in chat.userChoiceAnswer
+      const chosen = /→ "([\s\S]*)"$/.exec(String(answer || ''))?.[1] || answer || '';
+      const outro = chosen ? `Got it — going with **${chosen}**. I'll wire the scripts accordingly.` : 'Understood, leaving it as is.';
+      let e = 150;
+      chunks(outro).forEach((c) => later(e += 160, () => deliver('assistant:delta', { sessionId, text: c })));
+      finalBlocks.push({ type: 'text', text: outro });
+      later(e + 300, () => {
+        const msg = { id: `m_${rid()}`, role: 'assistant', authorId: null, authorName: 'Claude', content: { blocks: finalBlocks }, createdAt: Date.now() };
+        appendMsg(sessionId, msg);
+        deliver('turn:end', { sessionId, message: msg });
+      });
+    });
+    deliver('permission:request', { sessionId, requestId, tool: 'AskUserQuestion', input });
+  });
+}
 
 // Mirror of server/src/claude/auto-resume.ts for the static demo: sending a message that starts with
 // `!limit` pretends the claude.ai 5h window is spent, so the "parked until reset" banner (and its
@@ -279,7 +322,8 @@ const sock = {
       if (chat) return sock; // room team chat: broadcast only, no Claude turn
       if (db.me.autoResume && String(text || '').trim().toLowerCase().startsWith('!limit')) { parkTurn(sessionId, String(text)); return sock; }
       deliver('turn:start', { sessionId });
-      runTurn(sessionId, text, atts.length);
+      if (String(text || '').trim().toLowerCase().startsWith('!ask')) runAskQuestion(sessionId);
+      else runTurn(sessionId, text, atts.length);
       return sock;
     }
     if (event === 'permission:respond') {
@@ -289,7 +333,7 @@ const sock = {
         const msg = { id: `m_${rid()}`, role: 'assistant', authorId: null, authorName: 'Claude', content: { blocks: [{ type: 'text', text: "Understood — I won't run that. Let me know how you'd like to proceed." }] }, createdAt: Date.now() };
         appendMsg(sessionId, msg);
         later(150, () => deliver('turn:end', { sessionId, message: msg }));
-      } else if (cont) later(150, cont);
+      } else if (cont) { const a = args[0]?.answer; later(150, () => cont(a)); }
       return sock;
     }
     if (event === 'dm:send') {
