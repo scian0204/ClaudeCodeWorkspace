@@ -13,6 +13,7 @@ import { resolvePluginPaths } from '../plugins/manager.js';
 import { resolveAgents } from './team-agents.js';
 import { recordUsage, recordSkillUse, turnSkillKeys } from '../usage/tracker.js';
 import { resolveProvider } from '../auth/provider.js';
+import { hasLogin } from '../auth/claude-login.js';
 import { originHost } from '../lib/git-ops.js';
 import { resolveGitCred, gitIdentity, identityEnv, askpassEnv } from '../auth/git-cred.js';
 import { getReviewByChat, ensureWorktree } from '../review/manager.js';
@@ -207,9 +208,16 @@ export async function probeUsage(chatSessionId: string, requesterId?: string | n
   const authId = requesterId ?? (kind === 'user' ? ownerId : null);
   const prov = resolveProvider(authId);
   if (prov.source === 'none') return EMPTY_USAGE; // mock / no auth → nothing to report
+  // Plan windows need the user:profile scope. A pasted token wins the provider resolution for TURNS
+  // (deliberate configuration), but a `claude setup-token` is inference-only, so probing limits with
+  // it always reports "unavailable" — even when the same user also has a full-scope browser sign-in.
+  // For the account-level LOOKUP only, prefer that sign-in credential: same account, full scopes.
+  // CLAUDE_SECURESTORAGE_CONFIG_DIR relocates just the credential store (HOME may be a room's).
+  const loginProbe = !!authId && prov.source === 'token' && hasLogin(authId);
+  const limitsEnv = loginProbe ? { CLAUDE_SECURESTORAGE_CONFIG_DIR: paths.userClaude(authId!) } : prov.env;
   // A browser sign-in carries no token env (the CLI reads its own credential file), but it is still
   // an OAuth subscription — and the only kind that can actually report plan windows.
-  const authKind: AuthKind = prov.source === 'login' ? 'oauth' : authKindOf(prov.env);
+  const authKind: AuthKind = prov.source === 'login' || loginProbe ? 'oauth' : authKindOf(prov.env);
 
   const cacheKey = `${chatSessionId}|${authId ?? 'shared'}`;
   const hit = usageCache.get(cacheKey);
@@ -237,7 +245,7 @@ export async function probeUsage(chatSessionId: string, requesterId?: string | n
     // ponytail: two CLI subprocesses per probe, serialized; the TTL cache keeps reopens free.
     const qLimits: any = query({
       prompt: idleInput() as any,
-      options: buildOptions({ ...ctx, plugins: [] }, { canUseTool: deny, abortController: abortLimits }),
+      options: buildOptions({ ...ctx, plugins: [], providerEnv: limitsEnv }, { canUseTool: deny, abortController: abortLimits }),
     });
     const us = typeof qLimits.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET === 'function'
       ? await withTimeout(qLimits.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET()) : null;

@@ -8,7 +8,6 @@ import { newId } from '../lib/ids.js';
 import { probeCommands, probeUsage, cwdFor } from '../claude/session-manager.js';
 import { resolveAgents } from '../claude/team-agents.js';
 import { encodeSlug, rewriteCwd } from '../lib/session-import.js';
-import { spendSummary } from '../usage/tracker.js';
 import { DEFAULT_TITLE, retitleSession } from '../claude/auto-title.js';
 import { emitToUser } from '../realtime/io.js';
 import { reviewRoleForChat } from '../review/manager.js';
@@ -142,9 +141,7 @@ export async function sessionRoutes(app: FastifyInstance) {
     const s = db.select().from(schema.chatSessions).where(eq(schema.chatSessions.id, id)).get();
     if (!s) return reply.code(404).send({ error: 'not found' });
     if (!canViewChat(u, s)) return reply.code(403).send({ error: 'forbidden' });
-    // spend comes from our own ledger, so it stays useful when the CLI reports no plan windows
-    // (API key / bedrock / vertex / custom) or when the probe times out entirely.
-    return { usage: { ...(await probeUsage(id, u.id)), spend: spendSummary(u.id, id) } };
+    return { usage: await probeUsage(id, u.id) };
   });
 
   // ── session export: the reverse of /api/import/sessions ──

@@ -1,4 +1,4 @@
-import { and, eq, gte, sql, type SQL } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { newId } from '../lib/ids.js';
 
@@ -13,32 +13,10 @@ export function recordUsage(o: {
   }).run();
 }
 
-// Workspace-wide aggregates (usageTotals/usageByUser) were removed along with the admin usage tab:
-// subscription sign-ins report no billing cost, so a workspace total mixed measured API spend with
-// zeros and read as "usage tracking is broken". The per-session/per-user ledger below stays.
-
-// ── local spend ledger ──
-// What an API-key (or bedrock/vertex/custom) session has INSTEAD of claude.ai plan limits: those
-// accounts have no plan window at all, so the CLI reports rate_limits_available=false and the usage
-// popover had nothing to show. These are our own recorded turns, not an Anthropic figure.
-// Session total is author-agnostic (a room's turns come from several members); the rolling 5h/7d
-// windows are per-user, mirroring the plan windows they stand in for.
-export interface Spend { inputTokens: number; outputTokens: number; costUsd: number; turns: number }
-export function spendSummary(userId: string, sessionId: string): { session: Spend; fiveHour: Spend; sevenDay: Spend } {
-  const sum = (where: SQL | undefined): Spend => db.select({
-    inputTokens: sql<number>`coalesce(sum(${schema.usage.inputTokens}),0)`,
-    outputTokens: sql<number>`coalesce(sum(${schema.usage.outputTokens}),0)`,
-    costUsd: sql<number>`coalesce(sum(${schema.usage.costUsd}),0)`,
-    turns: sql<number>`count(*)`,
-  }).from(schema.usage).where(where).get()!;
-  const mine = (windowMs: number) =>
-    and(eq(schema.usage.userId, userId), gte(schema.usage.createdAt, Date.now() - windowMs));
-  return {
-    session: sum(eq(schema.usage.sessionId, sessionId)),
-    fiveHour: sum(mine(5 * 60 * 60 * 1000)),
-    sevenDay: sum(mine(7 * 24 * 60 * 60 * 1000)),
-  };
-}
+// The workspace-aggregate displays are gone (admin usage tab, then the popover's spend ledger —
+// subscription turns report no billing cost, so the homegrown figures read as broken next to real
+// plan windows). recordUsage keeps writing: the rows cost nothing, the admin resource cleanup
+// manages them, and a future ops view can read them without a migration.
 
 // ── skill usage ──
 // Bump one (user, skill) counter. The key is stored raw; matching to a plugin's skills happens at

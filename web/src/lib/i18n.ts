@@ -1176,14 +1176,8 @@ const ko: Dict = {
   'usage.resettingNow': '재설정 중',
   'usage.loading': '불러오는 중…',
   'usage.noContext': '아직 컨텍스트 데이터가 없어요 (대화를 시작하면 표시됩니다).',
-  'usage.unavailable': 'API 키·Bedrock·커스텀 프로바이더에는 플랜 한도가 없습니다 (토큰 단위 과금). 아래 실사용량으로 확인하세요.',
-  'usage.unavailableScope': 'OAuth 토큰에 user:profile 스코프가 없어 플랜 한도를 읽을 수 없습니다 (claude setup-token은 추론 전용 토큰). 아래 실사용량으로 확인하세요.',
-  'usage.spend': '실사용량 (워크스페이스 집계)',
-  'usage.spendSession': '이 세션',
-  'usage.spendFiveHour': '내 최근 5시간',
-  'usage.spendSevenDay': '내 최근 7일',
-  'usage.spendTurns': '{n}턴',
-  'usage.noSpend': '집계된 턴이 아직 없습니다.',
+  'usage.unavailable': 'API 키·Bedrock·커스텀 프로바이더에는 플랜 한도가 없습니다 (토큰 단위 과금).',
+  'usage.unavailableScope': '등록된 OAuth 토큰에 user:profile 스코프가 없어 플랜 한도를 읽을 수 없습니다 (claude setup-token은 추론 전용). 마이페이지에서 Claude 계정 브라우저 로그인을 하면 표시됩니다.',
 
   // import — 로컬 세션 가져오기
   'import.button': '세션 가져오기',
@@ -2335,14 +2329,8 @@ const en: Dict = {
   'usage.resettingNow': 'resetting',
   'usage.loading': 'Loading…',
   'usage.noContext': 'No context data yet (starts once the conversation begins).',
-  'usage.unavailable': 'API key / Bedrock / custom providers have no plan window — they bill per token. See the recorded spend below.',
-  'usage.unavailableScope': 'This OAuth token has no user:profile scope, so plan limits cannot be read (claude setup-token mints an inference-only token). See the recorded spend below.',
-  'usage.spend': 'Recorded spend (this workspace)',
-  'usage.spendSession': 'This session',
-  'usage.spendFiveHour': 'My last 5 hours',
-  'usage.spendSevenDay': 'My last 7 days',
-  'usage.spendTurns': '{n} turns',
-  'usage.noSpend': 'No turns recorded yet.',
+  'usage.unavailable': 'API key / Bedrock / custom providers have no plan window — they bill per token.',
+  'usage.unavailableScope': 'The registered OAuth token has no user:profile scope, so plan limits cannot be read (claude setup-token is inference-only). Sign in to your Claude account from My Page and they will appear.',
 
   // import — local session import
   'import.button': 'Import session',
