@@ -105,6 +105,13 @@ const ko: Dict = {
   'sc.sidebar': '사이드바 접기/펼치기',
   'sc.home': '처음 화면으로',
   'sc.theme': '테마 전환 (라이트/다크)',
+  'sc.threadMove': '이전 · 다음 대화로 이동',
+  'sc.tasksToggle': '태스크 패널 열기/닫기',
+  'sc.gitPanel': 'Git 패널 열기/닫기',
+  'sc.fileExplorer': '프로젝트 파일 탐색기 열기/닫기',
+  'sc.viewCycle': '보기 전환 (대화 → 분할 → 에디터)',
+  'sc.focusComposer': '입력창으로 포커스',
+  'sc.interruptGlobal': '드로어 닫기 · 실행 중인 턴 중단',
   'sc.help': '단축키 목록 열기',
 
   // 가이드 어시스턴트
@@ -1204,6 +1211,13 @@ const en: Dict = {
   'sc.sidebar': 'Collapse / expand the sidebar',
   'sc.home': 'Back to home',
   'sc.theme': 'Switch theme (light/dark)',
+  'sc.threadMove': 'Previous · next conversation',
+  'sc.tasksToggle': 'Toggle the task panel',
+  'sc.gitPanel': 'Toggle the Git panel',
+  'sc.fileExplorer': 'Toggle the project file explorer',
+  'sc.viewCycle': 'Cycle view (chat → split → editor)',
+  'sc.focusComposer': 'Focus the composer',
+  'sc.interruptGlobal': 'Close the drawer · interrupt the running turn',
   'sc.help': 'Open this shortcut list',
 
   // guide assistant

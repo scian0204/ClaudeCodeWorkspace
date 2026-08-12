@@ -120,6 +120,8 @@ interface State {
   pendingRequestCount: number;   // admins only — drives the sidebar admin-panel badge
   viewMode: 'chat' | 'split' | 'editor';
   editorUrl: string | null;
+  gitPanelOpen: boolean;   // header Git panel (store-lifted so the Mod+Shift+G shortcut can drive it)
+  explorerOpen: boolean;   // header project file explorer (same, Mod+Shift+F)
   panel: null | 'admin' | 'plugins' | 'me';
   sidebarOpen: boolean; // mobile off-canvas drawer (ignored ≥md, sidebar is a static column there)
   sidebarCollapsed: boolean; // ≥md only: hide the sidebar column (persisted; <md the drawer rules instead)
@@ -181,6 +183,8 @@ interface State {
   interrupt: () => void;
   respond: (requestId: string, decision: 'allow' | 'deny' | 'always' | 'answer', answer?: string) => void;
   setTasksOpen: (open: boolean) => void;
+  setGitPanelOpen: (open: boolean) => void;
+  setExplorerOpen: (open: boolean) => void;
   setViewMode: (m: 'chat' | 'split' | 'editor') => void;
   openEditor: () => Promise<void>;
   setProject: (projectId: string | null) => Promise<void>;
@@ -220,7 +224,7 @@ export const useStore = create<State>((set, get) => ({
   control: { canApprove: true, canInterrupt: true, canSetMode: true, isOwner: true, delegable: [] },
   presence: [], congested: false, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenuEnabled: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true, dockerReady: true, dockerReason: 'ok',
   guideEnabled: true, guideWriteEnabled: true, guideOpen: false, guideLoaded: false, guideMessages: [], guideLive: null, guideBusy: false, guideUnread: false,
-  resumes: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
+  resumes: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, gitPanelOpen: false, explorerOpen: false, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
   channels: [], activeChannelId: null, channelMessages: [], titling: [],
   commands: [],
 
@@ -443,7 +447,7 @@ export const useStore = create<State>((set, get) => ({
       current: null, messages: [], live: null, turnActive: false, tasks: [],
       queue: { running: null, waiting: [] }, pending: [], presence: [], commands: [],
       activeChannelId: null, channelMessages: [], highlightMsgId: null,
-      panel: null, viewMode: 'chat', editorUrl: null, sidebarOpen: false,
+      panel: null, viewMode: 'chat', editorUrl: null, gitPanelOpen: false, explorerOpen: false, sidebarOpen: false,
     });
   },
 
@@ -584,6 +588,8 @@ export const useStore = create<State>((set, get) => ({
   },
 
   setTasksOpen: (open) => { localStorage.setItem('tasksOpen', open ? '1' : '0'); set({ tasksOpen: open, sidebarOpen: false }); },
+  setGitPanelOpen: (open) => set({ gitPanelOpen: open }),
+  setExplorerOpen: (open) => set({ explorerOpen: open }),
 
   setViewMode: (m) => {
     set({ viewMode: m });
@@ -779,7 +785,8 @@ async function join(set: any, get: () => State, cur: Current, messages: Msg[]) {
   set({
     current: cur, messages, live: null, turnActive: false, tasks: [],
     queue: { running: null, waiting: [] }, pending: [], presence: [],
-    viewMode: 'chat', editorUrl: null, commands: [], sidebarOpen: false, // opening a thread closes the mobile drawer
+    viewMode: 'chat', editorUrl: null, gitPanelOpen: false, explorerOpen: false, // a switched thread must not inherit a panel aimed at the previous project
+    commands: [], sidebarOpen: false, // opening a thread closes the mobile drawer
     highlightMsgId: null, // a plain thread switch drops any search-hit highlight
     activeChannelId: null, channelMessages: [], // opening a Claude thread hides any open DM view
   });

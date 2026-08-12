@@ -97,7 +97,7 @@ function TasksButton() {
   const live = tasks.filter(isTaskLive).length;
   return (
     <button className={`pill inline-flex items-center gap-1 ${tasksOpen ? 'text-clay' : ''}`}
-      title={t('tasks.toggle')} onClick={() => setTasksOpen(!tasksOpen)}>
+      title={withKeys(t('tasks.toggle'), 'Mod+Shift+E')} onClick={() => setTasksOpen(!tasksOpen)}>
       <span className={live ? 'clay-shimmer inline-flex' : 'inline-flex'}><IconActivity size={13} /></span>
       {t('tasks.pill')}
       {tasks.length > 0 && <span className="text-[10px] font-mono">{live ? `${live}/${tasks.length}` : tasks.length}</span>}
@@ -109,8 +109,11 @@ function Header() {
   const { current: c, presence, control, toggleTheme, setViewMode, viewMode, setModel, setEffort, setMode, dockerReady, dockerReason } = useStore();
   const naming = useStore((s) => (s.current ? s.titling.includes(s.current.chatSessionId) : false));
   const [showMembers, setShowMembers] = useState(false);
-  const [explorer, setExplorer] = useState(false);
-  const [gitOpen, setGitOpen] = useState(false);
+  // store-lifted (not useState) so the global shortcuts can toggle them (Mod+Shift+F / Mod+Shift+G)
+  const explorer = useStore((s) => s.explorerOpen);
+  const setExplorer = useStore((s) => s.setExplorerOpen);
+  const gitOpen = useStore((s) => s.gitPanelOpen);
+  const setGitOpen = useStore((s) => s.setGitPanelOpen);
   // model list is admin-configurable (server registry); fetch it, fall back to the built-in defaults
   const [models, setModels] = useState<Record<string, string>>(MODELS);
   useEffect(() => { api.get('/api/config').then((cf) => { if (cf?.models) setModels(cf.models); }).catch(() => {}); }, []);
@@ -153,8 +156,8 @@ function Header() {
       {isReview && c.review && <ReviewControls />}
 
       {!c.wikiTopicId && !isReview && <ProjectMenu />}
-      {!c.wikiTopicId && c.projectId && <button className="pill inline-flex items-center gap-1" title={t('chat.projectFileExplorer')} onClick={() => setExplorer(true)}><IconFolder size={13} />{t('chat.filesBtn')}</button>}
-      {!c.wikiTopicId && c.projectId && <button className="pill inline-flex items-center gap-1" title={t('git.title')} onClick={() => setGitOpen(true)}><IconGitBranch size={13} />{t('git.pill')}</button>}
+      {!c.wikiTopicId && c.projectId && <button className="pill inline-flex items-center gap-1" title={withKeys(t('chat.projectFileExplorer'), 'Mod+Shift+F')} onClick={() => setExplorer(true)}><IconFolder size={13} />{t('chat.filesBtn')}</button>}
+      {!c.wikiTopicId && c.projectId && <button className="pill inline-flex items-center gap-1" title={withKeys(t('git.title'), 'Mod+Shift+G')} onClick={() => setGitOpen(true)}><IconGitBranch size={13} />{t('git.pill')}</button>}
 
       <DM.Root>
         <DM.Trigger asChild><button className="pill" disabled={!!c.readOnly}>{models[c.model] || c.model}<IconChevronDown size={14} /></button></DM.Trigger>
@@ -1237,7 +1240,7 @@ function Composer() {
                 which would make the wrapper (and the inset-0 mirror) a few px taller and scroll out of step */}
             <div className="relative">
             <MdMirror text={text} taRef={taRef} className="text-sm" />
-            <textarea ref={taRef} disabled={wikiCompiling || readOnly}
+            <textarea ref={taRef} disabled={wikiCompiling || readOnly} data-composer=""
               className="relative z-10 block w-full bg-transparent outline-none resize-none text-sm text-transparent caret-clay placeholder:text-txt3 disabled:opacity-50 noscrollbar min-h-[42px]"
               rows={2} placeholder={readOnly ? t('review.readOnlyPlaceholder') : wikiCompiling ? t('chat.topicCompiling') : isRoom ? (mode === 'chat' ? t('chat.roomChatPlaceholder', { title: c.title }) : t('chat.roomMessagePlaceholder', { title: c.title, name: user?.displayName ?? '' })) : t('chat.messagePlaceholder')}
               value={text}
