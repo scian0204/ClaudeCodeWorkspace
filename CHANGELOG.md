@@ -47,6 +47,13 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ## Unreleased
 
+<details>
+<summary><b>feat(shortcuts): 7 new core-feature bindings</b> — thread hopping, panels, view cycle, composer focus · <code>400a5e1</code></summary>
+
+`Alt+↑/↓` moves to the previous/next thread in sidebar order (project-grouped chats → rooms → DMs → wiki → reviews, wrap-around; guarded so Option+arrows still edits text on mac). `Mod+Shift+E/G/F` toggle the task panel, Git panel and project file explorer — the latter two's open state moved from Header `useState` into the store so a global key can drive it, and `join()`/`goHome()` reset both so a switched thread never inherits a panel aimed at the previous project. `Mod+Shift+\` cycles chat→split→editor under the same gates as the seg buttons (desktop, docker ready, not wiki/review). `Shift+Esc` focuses the composer from anywhere; bare `Esc` outside a text field closes the mobile drawer first, then interrupts the running turn. Header pills advertise their keys via `withKeys()`, and the help sheet picks the rows up from the same `SHORTCUT_GROUPS` table (listed == working). README en/ko updated.
+
+</details>
+
 - **feat(chat): free-text "Other" answer on AskUserQuestion cards** — when none of the offered options fit, a "직접 입력" row under each question takes typed text and feeds it back through the same `respond(..., 'answer', …)` path a button pick uses; the static demo gains an `!ask` trigger to exercise the card · `14c2386`
 
 ---
