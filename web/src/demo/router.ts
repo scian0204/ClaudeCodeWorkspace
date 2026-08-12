@@ -215,8 +215,33 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
     return ok(db.brand);
   }
 
+  // ---- team agents ----
+  if (P === '/api/agents' && M === 'GET') return ok({ common: db.agents.common, mine: db.agents.mine });
+  if (P === '/api/agents' && M === 'POST') {
+    const scope = b.scope === 'common' ? 'common' : 'user';
+    const row = { id: genId('ag'), scope, ownerId: scope === 'common' ? '' : db.me.id, name: String(b.name || ''), description: String(b.description || ''), prompt: String(b.prompt || ''), tools: JSON.stringify(b.tools || []), model: b.model || null, enabled: 1 };
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(row.name)) return { status: 400, data: { error: 'name must match ^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$' } };
+    (scope === 'common' ? db.agents.common : db.agents.mine).push(row);
+    return ok({ agent: row });
+  }
+  if (seg[1] === 'agents' && seg[2] && seg[3] === 'enabled' && M === 'POST') {
+    const a = [...db.agents.common, ...db.agents.mine].find((x: any) => x.id === idAt(2));
+    if (a) a.enabled = b.enabled ? 1 : 0;
+    return ok({});
+  }
+  if (seg[1] === 'agents' && seg[2] && M === 'PATCH') {
+    const a = [...db.agents.common, ...db.agents.mine].find((x: any) => x.id === idAt(2));
+    if (a) Object.assign(a, { description: b.description ?? a.description, prompt: b.prompt ?? a.prompt, tools: JSON.stringify(b.tools || []), model: b.model ?? a.model });
+    return ok({ agent: a });
+  }
+  if (seg[1] === 'agents' && seg[2] && M === 'DELETE') {
+    db.agents.common = db.agents.common.filter((x: any) => x.id !== idAt(2));
+    db.agents.mine = db.agents.mine.filter((x: any) => x.id !== idAt(2));
+    return ok({});
+  }
+
   // ---- client-facing config (model dropdown) ----
-  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenu: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true, guideEnabled: true, guideWriteEnabled: true, taskPanelEnabled: true, processPollMs: 5000, dockerReady: ADMIN.docker.ok && ADMIN.docker.configured, dockerReason: ADMIN.docker.reason });
+  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, sessionExportEnabled: true, teamAgentsEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenu: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true, guideEnabled: true, guideWriteEnabled: true, taskPanelEnabled: true, processPollMs: 5000, dockerReady: ADMIN.docker.ok && ADMIN.docker.configured, dockerReason: ADMIN.docker.reason });
 
   // ---- guide assistant (floating corner panel) ----
   // The turn itself is synthesized in ./socket (it has to emit the guide:* stream); this only

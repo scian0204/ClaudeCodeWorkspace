@@ -20,7 +20,7 @@ import {
 } from '../lib/icons';
 
 export function Sidebar() {
-  const { user, sessions, rooms, projects, wikiTopics, current, openPrivate, openRoom, openWiki, newSession, newRoom, logout, setPanel, panel, deleteSession, deleteRoom, deleteWikiTopic, renameSession, retitleSession, autoTitleEnabled, setError, sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed, sessionImportEnabled, pendingRequestCount, channels, activeChannelId, openChannel, dmEnabled, goHome, setShortcutsOpen, titling } = useStore();
+  const { user, sessions, rooms, projects, wikiTopics, current, openPrivate, openRoom, openWiki, newSession, newRoom, logout, setPanel, panel, deleteSession, deleteRoom, deleteWikiTopic, renameSession, retitleSession, autoTitleEnabled, setError, sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed, sessionImportEnabled, teamAgentsEnabled, pendingRequestCount, channels, activeChannelId, openChannel, dmEnabled, goHome, setShortcutsOpen, titling } = useStore();
   const [showRoom, setShowRoom] = useState(false);
   const [roomName, setRoomName] = useState('');
   const [showWiki, setShowWiki] = useState(false);
@@ -200,6 +200,11 @@ export function Sidebar() {
         <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full hover:bg-line text-left text-[13px] text-txt2" onClick={() => setPanel('plugins')}>
           <span className="w-7 grid place-items-center"><IconPuzzle size={17} /></span> {t('sidebar.plugins')}
         </button>
+        {teamAgentsEnabled && (
+          <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full hover:bg-line text-left text-[13px] text-txt2" onClick={() => setPanel('agents')}>
+            <span className="w-7 grid place-items-center"><IconUsers size={17} /></span> {t('sidebar.agents')}
+          </button>
+        )}
         {user?.role === 'admin' && (
           <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full hover:bg-line text-left text-[13px] text-txt2" onClick={() => setPanel('admin')}>
             <span className="w-7 grid place-items-center"><IconSliders size={17} /></span> {t('sidebar.adminPanel')}

@@ -21,6 +21,8 @@ export interface SessionContext {
   gitEnv?: Record<string, string>; // git author identity + askpass creds so Claude can commit/push
   mcpServers?: Record<string, any>; // review sandbox exposes its `run` tool here
   disallowedTools?: string[];       // review turns deny host 'Bash' → exec only via the sandbox tool
+  agents?: Record<string, { description: string; prompt: string; tools?: string[]; model?: string }>; // team agents (SDK options.agents)
+  agentName?: string;               // main-thread agent (SDK options.agent) — must be a key of `agents`
 }
 
 export function homeFor(ctx: SessionContext): string {
@@ -101,6 +103,13 @@ export function buildOptions(ctx: SessionContext, extra: {
   if (extra.resume) options.resume = extra.resume;
   if (ctx.mcpServers) options.mcpServers = ctx.mcpServers;
   if (ctx.disallowedTools?.length) options.disallowedTools = ctx.disallowedTools;
+  // team agents: subagent definitions + (guarded) the main-thread persona. The guard is load-bearing:
+  // options.agent naming an agent absent from the map makes the CLI error the whole turn, and an
+  // agent deleted after being selected on a session must degrade to default instead.
+  if (ctx.agents && Object.keys(ctx.agents).length) {
+    options.agents = ctx.agents;
+    if (ctx.agentName && ctx.agents[ctx.agentName]) options.agent = ctx.agentName;
+  }
   const ccPath = cfg.str('claudeCodePath');
   if (ccPath) options.pathToClaudeCodeExecutable = ccPath;
   return options;

@@ -55,7 +55,7 @@ export interface QueueState { running: { id: string; author: { id: string; name:
 export interface PendingResume { id: string; sessionId: string; author: { id: string; name: string }; text: string; attempts: number; resumeAt: number; }
 export interface Control { canApprove: boolean; canInterrupt: boolean; canSetMode: boolean; isOwner: boolean; delegable: string[]; }
 export interface PermReq { requestId: string; tool: string; input: any; }
-export interface Current { chatSessionId: string; kind: 'private' | 'room' | 'review'; roomId?: string; wikiTopicId?: string; reviewId?: string; review?: ReviewMeta; readOnly?: boolean; title: string; projectId: string | null; model: string; effort: string; permissionMode: string; room?: RoomSummary; }
+export interface Current { chatSessionId: string; kind: 'private' | 'room' | 'review'; roomId?: string; wikiTopicId?: string; reviewId?: string; review?: ReviewMeta; readOnly?: boolean; title: string; projectId: string | null; model: string; effort: string; permissionMode: string; agent?: string | null; room?: RoomSummary; }
 
 // Workspace branding (GET /api/brand): an admin-set title + logo, both optional. `logo` is a
 // cache-bust version token (the logo file's mtime) — or a data: URL in the static demo.
@@ -86,6 +86,7 @@ interface State {
   congested: boolean;
   sessionImportEnabled: boolean; // admin feature flag (from /api/config)
   sessionExportEnabled: boolean; // admin feature flag (from /api/config) — gates the session-download UI
+  teamAgentsEnabled: boolean;    // admin feature flag (from /api/config) — gates the team-agents UI
   llmProvidersEnabled: boolean;  // admin feature flag (from /api/config) — gates the LLM provider UI
   approvalsEnabled: boolean;     // admin feature flag (from /api/config) — gates the member-request UI
   dmEnabled: boolean;            // admin feature flag (from /api/config) — gates the DM/group chat UI
@@ -123,7 +124,7 @@ interface State {
   editorUrl: string | null;
   gitPanelOpen: boolean;   // header Git panel (store-lifted so the Mod+Shift+G shortcut can drive it)
   explorerOpen: boolean;   // header project file explorer (same, Mod+Shift+F)
-  panel: null | 'admin' | 'plugins' | 'me';
+  panel: null | 'admin' | 'plugins' | 'agents' | 'me';
   sidebarOpen: boolean; // mobile off-canvas drawer (ignored ≥md, sidebar is a static column there)
   sidebarCollapsed: boolean; // ≥md only: hide the sidebar column (persisted; <md the drawer rules instead)
   error: string | null;
@@ -195,7 +196,8 @@ interface State {
   setEffort: (effort: string) => Promise<void>;
   setMode: (mode: string) => Promise<void>;
   reloadRoom: () => Promise<void>;
-  setPanel: (p: null | 'admin' | 'plugins' | 'me') => void;
+  setPanel: (p: null | 'admin' | 'plugins' | 'agents' | 'me') => void;
+  setAgent: (name: string | null) => Promise<void>;
   setSidebarOpen: (open: boolean) => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   setError: (e: string | null) => void;
@@ -223,7 +225,7 @@ export const useStore = create<State>((set, get) => ({
   tasks: [], taskPanelEnabled: true, tasksOpen: localStorage.getItem('tasksOpen') === '1',
   queue: { running: null, waiting: [] }, pending: [],
   control: { canApprove: true, canInterrupt: true, canSetMode: true, isOwner: true, delegable: [] },
-  presence: [], congested: false, sessionImportEnabled: true, sessionExportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenuEnabled: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true, dockerReady: true, dockerReason: 'ok',
+  presence: [], congested: false, sessionImportEnabled: true, sessionExportEnabled: true, teamAgentsEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenuEnabled: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true, dockerReady: true, dockerReason: 'ok',
   guideEnabled: true, guideWriteEnabled: true, guideOpen: false, guideLoaded: false, guideMessages: [], guideLive: null, guideBusy: false, guideUnread: false,
   resumes: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, gitPanelOpen: false, explorerOpen: false, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
   channels: [], activeChannelId: null, channelMessages: [], titling: [],
@@ -274,6 +276,7 @@ export const useStore = create<State>((set, get) => ({
       reviewSessions: rv.sessions || [], reviewRepos: rr.repos || [],
       sessionImportEnabled: cf.sessionImportEnabled !== false,
       sessionExportEnabled: cf.sessionExportEnabled !== false,
+      teamAgentsEnabled: cf.teamAgentsEnabled !== false,
       llmProvidersEnabled: cf.llmProvidersEnabled !== false,
       approvalsEnabled: cf.approvalsEnabled !== false,
       dmEnabled: cf.dmEnabled !== false,
@@ -319,6 +322,7 @@ export const useStore = create<State>((set, get) => ({
     await join(set, get, {
       chatSessionId: session.id, kind: 'private', title: session.title,
       projectId: session.projectId, model: session.model, effort: session.effort || 'high', permissionMode: session.permissionMode,
+      agent: session.agent ?? null,
     }, messages);
   },
 
@@ -328,7 +332,7 @@ export const useStore = create<State>((set, get) => ({
     await join(set, get, {
       chatSessionId: room.chatSessionId, kind: 'room', roomId: room.id, title: room.name,
       projectId: chat?.session?.projectId ?? null, model: chat?.session?.model || 'claude-opus-4-8',
-      effort: chat?.session?.effort || 'high', permissionMode: room.permissionMode, room,
+      effort: chat?.session?.effort || 'high', permissionMode: room.permissionMode, agent: chat?.session?.agent ?? null, room,
     }, messages);
   },
 
@@ -628,6 +632,13 @@ export const useStore = create<State>((set, get) => ({
     const c = get().current; if (!c) return;
     if (c.kind === 'private' || c.kind === 'review') await api.patch(`/api/sessions/${c.chatSessionId}`, { model });
     set({ current: { ...c, model } });
+  },
+  // main-thread team agent for this session ("next turn onward"). Rooms PATCH too — unlike setModel,
+  // the room's shared chat_sessions row is what runTurn reads, and the server allows member edits.
+  setAgent: async (name) => {
+    const c = get().current; if (!c) return;
+    await api.patch(`/api/sessions/${c.chatSessionId}`, { agent: name || null });
+    set({ current: { ...c, agent: name || null } });
   },
   setEffort: async (effort) => {
     const c = get().current; if (!c) return;

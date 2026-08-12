@@ -10,6 +10,7 @@ import { turnLimiter, withRateLimitRetry } from './throttle.js';
 import { buildOptions, clampMode, rootsFor, type SessionContext, type PermMode } from './config-layering.js';
 import { makeCanUseTool, makeAutoAllow } from './permissions.js';
 import { resolvePluginPaths } from '../plugins/manager.js';
+import { resolveAgents } from './team-agents.js';
 import { recordUsage, recordSkillUse, turnSkillKeys } from '../usage/tracker.js';
 import { resolveProvider } from '../auth/provider.js';
 import { originHost } from '../lib/git-ops.js';
@@ -329,6 +330,7 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
     effort: (s.effort || cfg.str('defaultEffort')) as SessionContext['effort'],
     permissionMode: mode, plugins: resolvePluginPaths(kind, ownerId),
     authToken: '', providerEnv: prov.env, providerModel: prov.model, gitEnv, mcpServers, disallowedTools,
+    agents: resolveAgents(kind, ownerId), agentName: s.agent || undefined,
   };
 
   // room + "include chat": collect team-chat accrued since Claude last saw a message,

@@ -16,6 +16,7 @@ import { projectRoutes } from './routes/projects.js';
 import { wikiRoutes, reapWikiStaging, reapWikiOrphans } from './routes/wiki.js';
 import { importRoutes, reapImportStaging } from './routes/import.js';
 import { pluginRoutes } from './routes/plugins.js';
+import { agentRoutes } from './routes/agents.js';
 import { adminRoutes } from './routes/admin.js';
 import { gitCredentialRoutes } from './routes/git-credentials.js';
 import { reviewRoutes } from './routes/review.js';
@@ -75,6 +76,7 @@ async function main() {
   await app.register(wikiRoutes);
   await app.register(importRoutes);
   await app.register(pluginRoutes);
+  await app.register(agentRoutes);
   await app.register(adminRoutes);
   await app.register(gitCredentialRoutes);
   await app.register(reviewRoutes);

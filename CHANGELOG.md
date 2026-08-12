@@ -60,6 +60,13 @@ A dependency-free history-API router ([web/src/lib/router.ts](web/src/lib/router
 </details>
 
 <details>
+<summary><b>feat(agents): team/personal custom agents on every session</b> — Task-tool subagents + a main-thread persona picker · <code>fce75e7</code></summary>
+
+"Team agent env vars" resolved to the SDK's real mechanism — there is no env var: the Agent SDK takes `options.agents` (programmatic subagent definitions, invocable via the Task tool) and `options.agent` (a named agent driving the main thread). Definitions live in a new `team_agents` table (two scopes like plugins: admin-managed common — its prompt injects into every member's turns, so admin-only — and personal, which wins name collisions). `resolveAgents()` feeds every spawn; a session's main-thread agent (`chat_sessions.agent`, header pill, "next turn onward") is validated at PATCH time **and** guarded at spawn time — an unresolved `options.agent` errors the whole CLI turn, and a deleted agent must degrade to default. Description/prompt are length-capped (model-facing input); per-agent `permissionMode` is deliberately not definable (would bypass the workspace clamp). New `teamAgentsEnabled` flag gates the API server-side. Web: AgentsPanel (create/edit/enable/delete), sidebar entry, chat-header picker, demo mocks with 3 seeded agents. Also fixes an item-7 gap this surfaced: `Alt+↑/↓` now closes an open panel before opening the thread, otherwise the thread opened invisibly behind it.
+
+</details>
+
+<details>
 <summary><b>feat(chat): Edit/Write tool calls render as diff cards</b> — see the change, not "File updated" · <code>3b526f0</code></summary>
 
 File-edit tool calls used to show only the CLI's success string. They now render a real diff: a `+N −N` badge on the collapsed header, colored added/removed lines when expanded (shared prefix/suffix lines collapse to two context rows; `Write` is labeled *full write*), capped at 500 rows. The same diff appears inside the Edit/Write **approval prompt**, so what you're allowing is visible before it runs. No server change — tool inputs already stream and persist untruncated, so old transcripts get diffs retroactively. Diff text renders as JSX text nodes only (never through `md()`), and the body scrolls in its own container (mobile-safe, verified at 375px). Demo seeds and the live demo turn now include a real Edit.

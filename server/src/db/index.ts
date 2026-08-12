@@ -122,6 +122,12 @@ CREATE TABLE IF NOT EXISTS dm_messages (
   id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, user_id TEXT NOT NULL, text TEXT NOT NULL, created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_dm_messages_channel ON dm_messages(channel_id, created_at);
+CREATE TABLE IF NOT EXISTS team_agents (
+  id TEXT PRIMARY KEY, scope TEXT NOT NULL, owner_id TEXT NOT NULL, name TEXT NOT NULL,
+  description TEXT NOT NULL, prompt TEXT NOT NULL, tools TEXT NOT NULL DEFAULT '[]', model TEXT,
+  enabled INTEGER NOT NULL DEFAULT 1, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_team_agents_scope_owner_name ON team_agents(scope, owner_id, name);
 CREATE TABLE IF NOT EXISTS pending_resumes (
   id TEXT PRIMARY KEY, session_id TEXT NOT NULL, author_id TEXT NOT NULL, author_name TEXT NOT NULL,
   text TEXT NOT NULL, attachments TEXT NOT NULL DEFAULT '[]', include_chat INTEGER NOT NULL DEFAULT 0,
@@ -168,6 +174,8 @@ export function initDb() {
   try { sqlite.exec("ALTER TABLE review_repos ADD COLUMN poll_enabled INTEGER NOT NULL DEFAULT 1"); } catch { /* already present */ }
   // per-session SDK effort level (unsupported models silently downgrade)
   try { sqlite.exec("ALTER TABLE chat_sessions ADD COLUMN effort TEXT NOT NULL DEFAULT 'high'"); } catch { /* already present */ }
+  // per-session main-thread team agent (SDK options.agent); null = default Claude
+  try { sqlite.exec("ALTER TABLE chat_sessions ADD COLUMN agent TEXT"); } catch { /* already present */ }
   db = drizzle(sqlite, { schema });
   return db;
 }

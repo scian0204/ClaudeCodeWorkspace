@@ -107,6 +107,37 @@ function TasksButton() {
   );
 }
 
+// Header pill: which team agent drives the MAIN thread (SDK options.agent), "next turn onward".
+// Hidden when the feature is off or no agent exists to pick.
+function AgentPicker() {
+  const teamAgentsEnabled = useStore((s) => s.teamAgentsEnabled);
+  const c = useStore((s) => s.current);
+  const setAgent = useStore((s) => s.setAgent);
+  const t = useT();
+  const [names, setNames] = useState<string[]>([]);
+  useEffect(() => {
+    if (!teamAgentsEnabled) return;
+    api.get('/api/agents').then((r) => {
+      const enabled = [...(r.common || []), ...(r.mine || [])].filter((a: any) => a.enabled).map((a: any) => a.name);
+      setNames([...new Set(enabled)]);
+    }).catch(() => {});
+  }, [teamAgentsEnabled]);
+  if (!teamAgentsEnabled || !c || (names.length === 0 && !c.agent)) return null;
+  return (
+    <DM.Root>
+      <DM.Trigger asChild>
+        <button className="pill inline-flex items-center gap-1" disabled={!!c.readOnly} title={t('chat.agentPickerTip')}>
+          <IconSparkle size={13} />{c.agent || t('chat.agentDefault')}<IconChevronDown size={14} />
+        </button>
+      </DM.Trigger>
+      <Menu>
+        <MenuItem onSelect={() => void setAgent(null)}>{t('chat.agentDefault')}</MenuItem>
+        {names.map((n) => <MenuItem key={n} onSelect={() => void setAgent(n)}>{n}</MenuItem>)}
+      </Menu>
+    </DM.Root>
+  );
+}
+
 function Header() {
   const { current: c, presence, control, toggleTheme, setViewMode, viewMode, setModel, setEffort, setMode, dockerReady, dockerReason } = useStore();
   const naming = useStore((s) => (s.current ? s.titling.includes(s.current.chatSessionId) : false));
@@ -185,6 +216,8 @@ function Header() {
           ))}
         </Menu>
       </DM.Root>
+
+      {!c.wikiTopicId && !isReview && <AgentPicker />}
 
       <DM.Root>
         <DM.Trigger asChild><button className="pill" disabled={(isRoom || isReview) && !control.canSetMode}>{modeUi ? <span className="inline-flex items-center gap-1"><modeUi.Icon size={13} />{t(modeUi.key)}</span> : c.permissionMode}<IconChevronDown size={14} /></button></DM.Trigger>
