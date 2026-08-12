@@ -6,6 +6,7 @@ import { db, schema } from '../db/index.js';
 import { requireAuth } from '../auth/index.js';
 import { newId } from '../lib/ids.js';
 import { probeCommands, probeUsage, cwdFor } from '../claude/session-manager.js';
+import { resolveAgents } from '../claude/team-agents.js';
 import { encodeSlug, rewriteCwd } from '../lib/session-import.js';
 import { spendSummary } from '../usage/tracker.js';
 import { DEFAULT_TITLE, retitleSession } from '../claude/auto-title.js';
@@ -255,6 +256,17 @@ export async function sessionRoutes(app: FastifyInstance) {
     if ('effort' in b) {
       if (!EFFORT_LEVELS.includes(b.effort)) return reply.code(400).send({ error: 'invalid effort' });
       patch.effort = b.effort;
+    }
+    // main-thread team agent: null/'' clears; otherwise the name must resolve for this session's
+    // kind/owner right now (the spawn-time guard still covers an agent deleted later)
+    if ('agent' in b) {
+      const name = String(b.agent || '').trim();
+      if (name) {
+        const kind = s.kind === 'room' ? 'room' as const : 'user' as const;
+        const owner = kind === 'room' ? s.roomId! : s.ownerId;
+        if (!resolveAgents(kind, owner)[name]) return reply.code(400).send({ error: `unknown agent '${name}'` });
+      }
+      patch.agent = name || null;
     }
     // Changing the project changes the turn's cwd. The CLI stores each conversation's
     // transcript under the cwd it was created in, so the old resume id can't be found

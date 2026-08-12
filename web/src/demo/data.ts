@@ -213,6 +213,16 @@ export const db = {
     mine: [plugin('pl_caveman', 'caveman', 'local', 1, 0)],
     prefs: [] as any[],
   },
+  // team agents (GET/POST/PATCH/DELETE /api/agents) — common (admin) + personal, mirroring the server rows
+  agents: {
+    common: [
+      { id: 'ag_reviewer', scope: 'common', ownerId: '', name: 'code-reviewer', description: 'Reviews diffs for correctness, security and style. Use after any code change.', prompt: 'You are a strict code reviewer. Report findings as file:line bullets, most severe first.', tools: '["Read","Grep","Glob"]', model: null, enabled: 1 },
+      { id: 'ag_docs', scope: 'common', ownerId: '', name: 'doc-writer', description: 'Writes and updates project documentation in the repo voice.', prompt: 'You write concise, accurate documentation. Match the existing tone and structure.', tools: '[]', model: 'claude-sonnet-5', enabled: 1 },
+    ] as any[],
+    mine: [
+      { id: 'ag_tests', scope: 'user', ownerId: 'u_admin', name: 'test-runner', description: 'Writes failing tests first, then fixes to green.', prompt: 'You practice strict TDD: red, green, refactor. Never touch production code before a failing test exists.', tools: '["Read","Edit","Write","Bash"]', model: null, enabled: 1 },
+    ] as any[],
+  },
   marketplaces: { common: [{ name: 'anthropic' }, { name: 'community' }], mine: [] as any[] },
   reviewRepos: [
     { id: 'rr_web', name: 'acme/webapp', provider: 'github', host: 'github.com', slug: 'acme/webapp', gitUrl: 'https://github.com/acme/webapp.git', baseBranch: 'main', sandboxImage: null, webhookSecret: null, pollEnabled: true, polledAt: ago(2), pollError: null, openCount: 2, createdAt: ago(600) },

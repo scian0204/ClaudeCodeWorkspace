@@ -5,6 +5,7 @@ import { Chat } from './Chat';
 import { DmView } from './DmView';
 import { AdminPanel } from './AdminPanel';
 import { PluginsPanel } from './PluginsPanel';
+import { AgentsPanel } from './AgentsPanel';
 import { MyPage } from './MyPage';
 import { MyTokenModal } from './TokenSettings';
 import { SearchPalette, SearchButton } from './SearchPalette';
@@ -79,7 +80,7 @@ export function Shell() {
       {sidebarOpen && <div className="fixed inset-0 bg-black/40 z-40 md:hidden" onClick={() => setSidebarOpen(false)} />}
       <Sidebar />
       <main className="min-w-0 min-h-0 h-full bg-panel flex flex-col">
-        {panel === 'admin' ? <AdminPanel /> : panel === 'plugins' ? <PluginsPanel /> : panel === 'me' ? <MyPage /> : activeChannelId ? <DmView /> : current ? <Chat /> : <Empty />}
+        {panel === 'admin' ? <AdminPanel /> : panel === 'plugins' ? <PluginsPanel /> : panel === 'agents' ? <AgentsPanel /> : panel === 'me' ? <MyPage /> : activeChannelId ? <DmView /> : current ? <Chat /> : <Empty />}
       </main>
       {error && <Toast msg={error} onClose={() => setError(null)} />}
       <SearchPalette />

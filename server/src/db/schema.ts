@@ -52,6 +52,7 @@ export const chatSessions = sqliteTable('chat_sessions', {
   model: text('model').notNull().default('claude-opus-4-8'),
   effort: text('effort').notNull().default('high'), // SDK effort level: low|medium|high|xhigh|max
   permissionMode: text('permission_mode').notNull().default('default'),
+  agent: text('agent'), // team-agent name driving the MAIN thread (SDK options.agent); null = default Claude
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
 });
@@ -144,6 +145,24 @@ export const plugins = sqliteTable('plugins', {
   enabled: integer('enabled').notNull().default(1),
   forced: integer('forced').notNull().default(0), // admin mandatory (class-1)
   createdAt: integer('created_at').notNull(),
+});
+
+// Team/personal agent definitions, applied to every spawned session via the SDK's programmatic
+// `agents` option (subagents invocable via the Task tool; optionally driving the main thread via
+// chat_sessions.agent). Mirrors the plugins two-scope model: admin-managed common + per-user personal.
+// permissionMode is deliberately NOT stored — a per-agent mode could bypass the workspace clamp.
+export const teamAgents = sqliteTable('team_agents', {
+  id: text('id').primaryKey(),
+  scope: text('scope').notNull(),      // 'common' | 'user'
+  ownerId: text('owner_id').notNull(), // uid for 'user'; '' for 'common'
+  name: text('name').notNull(),        // SDK agent key: ^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$
+  description: text('description').notNull(),
+  prompt: text('prompt').notNull(),
+  tools: text('tools').notNull().default('[]'), // JSON string[]; [] = inherit all tools
+  model: text('model'),                // null = inherit the session model
+  enabled: integer('enabled').notNull().default(1),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
 });
 
 // per-user on/off for common (class-2) plugins
