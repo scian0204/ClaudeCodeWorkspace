@@ -8,6 +8,7 @@ import { UploadProgress } from './UploadProgress';
 import { Avatar, timeAgo, useIsMobile, MobileMenuButton, ClayDots, ClaySpark, ClayWait, useGuideInset, useAutoGrow, MdMirror } from '../lib/ui';
 import { copyToClipboard } from '../lib/clipboard';
 import { MembersDialog } from './MembersDialog';
+import { ExportSessionModal } from './ExportSessionModal';
 import { WikiExplorer } from './WikiExplorer';
 import { FileExplorer } from './FileExplorer';
 import { GitPanel } from './GitPanel';
@@ -23,7 +24,7 @@ import {
   IconGauge, IconEye, IconBook, IconArchive, IconSparkle, IconCopy, IconPencil, IconHelp,
   IconTerminal, IconX, IconPaperclip, IconSend, IconShield, IconBolt, IconCheckSquare, IconCrown,
   IconGitBranch, IconClock, IconCheckCircle, IconBan, IconWarning, IconLink, IconRotateCcw,
-  IconCheck, IconRefresh, IconSquare, IconMessage, IconActivity,
+  IconCheck, IconRefresh, IconSquare, IconMessage, IconActivity, IconDownload,
 } from '../lib/icons';
 
 const MODELS: Record<string, string> = {
@@ -109,6 +110,8 @@ function Header() {
   const { current: c, presence, control, toggleTheme, setViewMode, viewMode, setModel, setEffort, setMode, dockerReady, dockerReason } = useStore();
   const naming = useStore((s) => (s.current ? s.titling.includes(s.current.chatSessionId) : false));
   const [showMembers, setShowMembers] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const sessionExportEnabled = useStore((s) => s.sessionExportEnabled);
   // store-lifted (not useState) so the global shortcuts can toggle them (Mod+Shift+F / Mod+Shift+G)
   const explorer = useStore((s) => s.explorerOpen);
   const setExplorer = useStore((s) => s.setExplorerOpen);
@@ -135,6 +138,11 @@ function Header() {
         <span className={`truncate ${naming ? 'clay-shimmer' : ''}`}>{c.title}</span>
         {/* Reachable on a phone, unlike the sidebar row actions (hover / right-click only). */}
         {!c.roomId && !c.wikiTopicId && <RetitleButton sessionId={c.chatSessionId} />}
+        {!c.roomId && !c.wikiTopicId && !isReview && sessionExportEnabled && (
+          <button className="toolbtn !p-1 shrink-0" title={t('export.button')} aria-label={t('export.button')} onClick={() => setExporting(true)}>
+            <IconDownload size={13} />
+          </button>
+        )}
         <span className="text-txt3 text-xs font-mono truncate hidden md:inline-flex items-center gap-1">{c.wikiTopicId ? <><IconBook size={12} />{t('chat.knowledgeQuery')}</> : (c.projectId ? '' : t('chat.noProject'))}</span>
       </div>
       <div className="flex-1" />
@@ -208,6 +216,7 @@ function Header() {
       )}
       <button className="toolbtn" title={withKeys(t('chat.toggleTheme'), 'Mod+Shift+L')} aria-label={t('chat.toggleTheme')} onClick={toggleTheme}><IconTheme /></button>
 
+      {exporting && <ExportSessionModal sessionId={c.chatSessionId} onClose={() => setExporting(false)} />}
       {gitOpen && c.projectId && <GitPanel projectId={c.projectId} open={gitOpen} onClose={() => setGitOpen(false)} />}
       {showMembers && c.room && <MembersDialog open={showMembers} onClose={() => setShowMembers(false)} />}
       {explorer && c.projectId && (

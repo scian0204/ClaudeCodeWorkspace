@@ -307,6 +307,19 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
     if (s) s.title = title;
     return slow(ok({ ok: true, title })); // one model round-trip on the real server → keep the wait
   }
+  // must sit ABOVE the generic GET /api/sessions/:id catch-all or the export modal gets a session object
+  if (seg[1] === 'sessions' && seg[3] === 'export' && M === 'GET') {
+    const s = sessionFor(idAt(2));
+    const localCwd = (query.get('cwd') || '').trim();
+    const uuid = 'a1b2c3d4-demo-4efg-8hij-klmnopqrstuv';
+    const cwd = localCwd || '/data/users/u_demo/projects';
+    const jsonl = [
+      JSON.stringify({ type: 'custom-title', customTitle: s.title, sessionId: uuid }),
+      JSON.stringify({ type: 'user', cwd, sessionId: uuid, message: { role: 'user', content: 'Refactor the auth middleware to use the new TokenService.' } }),
+      JSON.stringify({ type: 'assistant', cwd, sessionId: uuid, message: { role: 'assistant', content: [{ type: 'text', text: 'On it — routing both call sites through TokenService.verify().' }] } }),
+    ].join('\n');
+    return ok({ uuid, title: s.title, jsonl, slug: (localCwd || cwd).replace(/[^a-zA-Z0-9]/g, '-'), lineCount: 3 });
+  }
   if (seg[1] === 'sessions' && seg[2] && M === 'GET') return ok({ session: sessionFor(idAt(2)), messages: msgs(idAt(2)) });
   if (seg[1] === 'sessions' && seg[2] && M === 'PATCH') {
     const s = db.sessions.find((x) => x.id === idAt(2)); if (s) Object.assign(s, b); return ok({});

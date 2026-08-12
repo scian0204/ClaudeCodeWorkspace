@@ -85,6 +85,7 @@ interface State {
   presence: { id: string; name: string; color: string }[];
   congested: boolean;
   sessionImportEnabled: boolean; // admin feature flag (from /api/config)
+  sessionExportEnabled: boolean; // admin feature flag (from /api/config) — gates the session-download UI
   llmProvidersEnabled: boolean;  // admin feature flag (from /api/config) — gates the LLM provider UI
   approvalsEnabled: boolean;     // admin feature flag (from /api/config) — gates the member-request UI
   dmEnabled: boolean;            // admin feature flag (from /api/config) — gates the DM/group chat UI
@@ -222,7 +223,7 @@ export const useStore = create<State>((set, get) => ({
   tasks: [], taskPanelEnabled: true, tasksOpen: localStorage.getItem('tasksOpen') === '1',
   queue: { running: null, waiting: [] }, pending: [],
   control: { canApprove: true, canInterrupt: true, canSetMode: true, isOwner: true, delegable: [] },
-  presence: [], congested: false, sessionImportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenuEnabled: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true, dockerReady: true, dockerReason: 'ok',
+  presence: [], congested: false, sessionImportEnabled: true, sessionExportEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenuEnabled: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true, dockerReady: true, dockerReason: 'ok',
   guideEnabled: true, guideWriteEnabled: true, guideOpen: false, guideLoaded: false, guideMessages: [], guideLive: null, guideBusy: false, guideUnread: false,
   resumes: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, gitPanelOpen: false, explorerOpen: false, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
   channels: [], activeChannelId: null, channelMessages: [], titling: [],
@@ -272,6 +273,7 @@ export const useStore = create<State>((set, get) => ({
       sessions: s.sessions, rooms: r.rooms, projects: { common: p.common, mine: p.mine }, wikiTopics: w.topics,
       reviewSessions: rv.sessions || [], reviewRepos: rr.repos || [],
       sessionImportEnabled: cf.sessionImportEnabled !== false,
+      sessionExportEnabled: cf.sessionExportEnabled !== false,
       llmProvidersEnabled: cf.llmProvidersEnabled !== false,
       approvalsEnabled: cf.approvalsEnabled !== false,
       dmEnabled: cf.dmEnabled !== false,

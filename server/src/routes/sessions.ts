@@ -5,7 +5,8 @@ import { and, desc, eq, isNull } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { requireAuth } from '../auth/index.js';
 import { newId } from '../lib/ids.js';
-import { probeCommands, probeUsage } from '../claude/session-manager.js';
+import { probeCommands, probeUsage, cwdFor } from '../claude/session-manager.js';
+import { encodeSlug, rewriteCwd } from '../lib/session-import.js';
 import { spendSummary } from '../usage/tracker.js';
 import { DEFAULT_TITLE, retitleSession } from '../claude/auto-title.js';
 import { emitToUser } from '../realtime/io.js';
@@ -143,6 +144,39 @@ export async function sessionRoutes(app: FastifyInstance) {
     // spend comes from our own ledger, so it stays useful when the CLI reports no plan windows
     // (API key / bedrock / vertex / custom) or when the probe times out entirely.
     return { usage: { ...(await probeUsage(id, u.id)), spend: spendSummary(u.id, id) } };
+  });
+
+  // ── session export: the reverse of /api/import/sessions ──
+  // Hands back the CLI's own transcript so the user can resume the session in a local Claude Code.
+  // ?cwd=<localAbsPath> rewrites each line's `cwd` to the user's local project path (the CLI matches
+  // transcripts against the runtime cwd, so without it resume won't list the session). The value is
+  // used ONLY as a string for rewriteCwd/encodeSlug — it never touches this server's filesystem.
+  app.get('/api/sessions/:id/export', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    if (!cfg.bool('sessionExportEnabled')) return reply.code(403).send({ error: 'session export is disabled' });
+    const { id } = req.params as any;
+    const s = getChat(id);
+    if (!s) return reply.code(404).send({ error: 'not found' });
+    // private-only, owner/admin: transcripts carry full tool output (terminal echoes and all), so the
+    // gate is deliberately tighter than canViewChat's room case.
+    if (s.kind !== 'private' || !(s.ownerId === u.id || u.role === 'admin')) return reply.code(403).send({ error: 'forbidden' });
+    if (!s.claudeSessionId) return reply.code(400).send({ error: 'nothing to export — the session has no CLI transcript yet' });
+    const serverCwd = path.resolve(await cwdFor(s));
+    const file = path.join(paths.userClaude(s.ownerId), 'projects', encodeSlug(serverCwd), `${s.claudeSessionId}.jsonl`);
+    if (!fs.existsSync(file)) return reply.code(404).send({ error: 'transcript file not found (cleaned up or never written)' });
+    const localCwd = String((req.query as any)?.cwd || '').trim();
+    let lines = fs.readFileSync(file, 'utf8').split('\n');
+    if (localCwd) lines = lines.map((l) => rewriteCwd(l, localCwd));
+    // carry the workspace title into the CLI's resume picker (same line shape the importer accepts)
+    if (s.title && s.title !== DEFAULT_TITLE && !lines.some((l) => l.includes('"custom-title"'))) {
+      lines.unshift(JSON.stringify({ type: 'custom-title', customTitle: s.title, sessionId: s.claudeSessionId }));
+    }
+    const jsonl = lines.join('\n');
+    return {
+      uuid: s.claudeSessionId, title: s.title, jsonl,
+      slug: encodeSlug(localCwd || serverCwd),
+      lineCount: lines.filter((l) => l.trim()).length,
+    };
   });
 
   // ── prompt attachments (uploaded files / pasted screenshots) ──

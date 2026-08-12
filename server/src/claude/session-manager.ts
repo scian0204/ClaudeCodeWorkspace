@@ -67,7 +67,8 @@ function getWikiTopic(id: string) {
   return db.select().from(schema.wikiTopics).where(eq(schema.wikiTopics.id, id)).get();
 }
 
-async function cwdFor(s: NonNullable<ReturnType<typeof getSession>>): Promise<string> {
+// Exported: the session-export route resolves the transcript slug from the same cwd a turn runs with.
+export async function cwdFor(s: NonNullable<ReturnType<typeof getSession>>): Promise<string> {
   // review session runs inside its PR's git worktree (created lazily); local merge happens there
   if (s.kind === 'review') {
     const rv = getReviewByChat(s.id);
