@@ -117,6 +117,9 @@ function moveThread(dir: 1 | -1): void {
   const rows = threadOrder(s);
   if (!rows.length) return;
   const i = rows.findIndex((r) => r.key === currentThreadKey(s));
+  // a panel outranks the thread in Shell's priority — close it or the thread opens behind it
+  // (same setPanel(null)+open pairing every Sidebar row uses)
+  if (s.panel) s.setPanel(null);
   // nothing open: ↓ starts at the top, ↑ at the bottom; otherwise wrap around
   rows[i < 0 ? (dir === 1 ? 0 : rows.length - 1) : (i + dir + rows.length) % rows.length].open();
 }
