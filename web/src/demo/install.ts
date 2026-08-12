@@ -94,6 +94,8 @@ function badge() {
 }
 
 function autoOpenFirst() {
+  // a deep link (/room/…, /chat/…) owns the landing view — don't stomp it with the first session
+  if ((location.pathname.slice(import.meta.env.BASE_URL.length - 1) || '/') !== '/') return;
   const unsub = useStore.subscribe((s) => {
     if (s.user && s.sessions.length && !s.current) { unsub(); useStore.getState().openPrivate(s.sessions[0].id); }
   });
