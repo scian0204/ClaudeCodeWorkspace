@@ -433,15 +433,22 @@ function UsagePill() {
   // data when the session changes — otherwise the pill badge shows the previous session's %.
   useEffect(() => { setData(null); }, [c.chatSessionId]);
 
+  // Every open refetches; the server answers from its short probe cache unless fresh=1 (the
+  // refresh button), which re-asks the CLI directly.
+  const aliveRef = useRef(true);
+  const load = (fresh = false) => {
+    aliveRef.current = true;
+    setLoading(true);
+    api.get(`/api/sessions/${c.chatSessionId}/usage${fresh ? '?fresh=1' : ''}`)
+      .then((r) => { if (aliveRef.current) setData(r.usage); })
+      .catch(() => { if (aliveRef.current) setData(null); })
+      .finally(() => { if (aliveRef.current) setLoading(false); });
+  };
   useEffect(() => {
     if (!open) return;
-    let alive = true;
-    setLoading(true);
-    api.get(`/api/sessions/${c.chatSessionId}/usage`)
-      .then((r) => { if (alive) setData(r.usage); })
-      .catch(() => { if (alive) setData(null); })
-      .finally(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
+    load();
+    return () => { aliveRef.current = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, c.chatSessionId]);
 
   const ctx = data?.context;
@@ -471,7 +478,13 @@ function UsagePill() {
           <div className="border-t border-line my-3" />
 
           {/* plan rate limits */}
-          <div className="text-[11px] uppercase tracking-wider text-txt3 mb-1">{t('usage.limits')}</div>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[11px] uppercase tracking-wider text-txt3">{t('usage.limits')}</span>
+            <button className="text-txt3 hover:text-clay disabled:opacity-40" title={t('usage.refresh')}
+              aria-label={t('usage.refresh')} disabled={loading} onClick={() => load(true)}>
+              <IconRefresh size={12} className={loading ? 'animate-spin' : undefined} />
+            </button>
+          </div>
           {data?.rateLimitsAvailable && rl ? (
             <>
               <LimitRow label={t('usage.fiveHour')} w={rl.fiveHour} />

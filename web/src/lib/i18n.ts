@@ -1176,6 +1176,7 @@ const ko: Dict = {
   'usage.resettingNow': '재설정 중',
   'usage.loading': '불러오는 중…',
   'usage.noContext': '아직 컨텍스트 데이터가 없어요 (대화를 시작하면 표시됩니다).',
+  'usage.refresh': '캐시 없이 새로 조회',
   'usage.unavailable': 'API 키·Bedrock·커스텀 프로바이더에는 플랜 한도가 없습니다 (토큰 단위 과금).',
   'usage.unavailableScope': '등록된 OAuth 토큰에 user:profile 스코프가 없어 플랜 한도를 읽을 수 없습니다 (claude setup-token은 추론 전용). 마이페이지에서 Claude 계정 브라우저 로그인을 하면 표시됩니다.',
 
@@ -2329,6 +2330,7 @@ const en: Dict = {
   'usage.resettingNow': 'resetting',
   'usage.loading': 'Loading…',
   'usage.noContext': 'No context data yet (starts once the conversation begins).',
+  'usage.refresh': 'Re-probe (skip cache)',
   'usage.unavailable': 'API key / Bedrock / custom providers have no plan window — they bill per token.',
   'usage.unavailableScope': 'The registered OAuth token has no user:profile scope, so plan limits cannot be read (claude setup-token is inference-only). Sign in to your Claude account from My Page and they will appear.',
 

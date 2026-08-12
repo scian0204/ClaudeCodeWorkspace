@@ -141,7 +141,8 @@ export async function sessionRoutes(app: FastifyInstance) {
     const s = db.select().from(schema.chatSessions).where(eq(schema.chatSessions.id, id)).get();
     if (!s) return reply.code(404).send({ error: 'not found' });
     if (!canViewChat(u, s)) return reply.code(403).send({ error: 'forbidden' });
-    return { usage: await probeUsage(id, u.id) };
+    // ?fresh=1 (the popover's refresh button) bypasses the probe cache and re-asks the CLI
+    return { usage: await probeUsage(id, u.id, { fresh: (req.query as any)?.fresh === '1' }) };
   });
 
   // ── session export: the reverse of /api/import/sessions ──

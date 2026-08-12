@@ -197,7 +197,7 @@ const EMPTY_USAGE: UsageInfo = { context: null, rateLimitsAvailable: false, subs
 const usageCache = new Map<string, { at: number; data: UsageInfo }>();
 const win = (w: any): Win | null => (w ? { utilization: w.utilization ?? null, resetsAt: w.resets_at ?? null } : null);
 
-export async function probeUsage(chatSessionId: string, requesterId?: string | null): Promise<UsageInfo> {
+export async function probeUsage(chatSessionId: string, requesterId?: string | null, opts?: { fresh?: boolean }): Promise<UsageInfo> {
   const s = getSession(chatSessionId);
   if (!s) return EMPTY_USAGE;
   const kind: 'user' | 'room' = s.kind === 'room' ? 'room' : 'user';
@@ -221,7 +221,7 @@ export async function probeUsage(chatSessionId: string, requesterId?: string | n
 
   const cacheKey = `${chatSessionId}|${authId ?? 'shared'}`;
   const hit = usageCache.get(cacheKey);
-  if (hit && Date.now() - hit.at < cfg.int('usageProbeTtlMs')) return hit.data;
+  if (!opts?.fresh && hit && Date.now() - hit.at < cfg.int('usageProbeTtlMs')) return hit.data;
 
   const ctx: SessionContext = {
     kind, ownerId, cwd: await cwdFor(s), model: s.model || cfg.str('defaultModel'),
@@ -266,7 +266,11 @@ export async function probeUsage(chatSessionId: string, requesterId?: string | n
       } : null,
       authKind,
     };
-    usageCache.set(cacheKey, { at: Date.now(), data });
+    // Cache only a probe whose account lookup actually ANSWERED. A timed-out/errored lookup (`us`
+    // null — e.g. CLI startup starved under heavy host load) must not pin "no plan limits" for the
+    // whole TTL: reopening the popover should retry, not re-serve the failure.
+    if (us) usageCache.set(cacheKey, { at: Date.now(), data });
+    else usageCache.delete(cacheKey);
     return data;
   } catch { return { ...EMPTY_USAGE, authKind }; }
   finally {
