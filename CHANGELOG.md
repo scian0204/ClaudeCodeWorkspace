@@ -48,6 +48,13 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ## Unreleased
 
 <details>
+<summary><b>feat(sessions): export a session for local resume</b> — the reverse of local-session import · <code>72a0793</code></summary>
+
+`GET /api/sessions/:id/export` returns the CLI's own transcript jsonl; `?cwd=<localAbsPath>` rewrites each line's `cwd` to the local project path (the CLI matches transcripts against the runtime cwd — without it resume won't list the session; the value never touches the server fs). A `custom-title` line carries the workspace name into the local resume picker. Gated owner/admin + private-only (transcripts carry full tool output) plus a new **`sessionExportEnabled`** admin flag (server-side 403, UI hidden via `publicConfig`). The chat header gains a download button opening a modal: local-path input with a live `~/.claude/projects/<slug>/` preview, an explicit warning when left empty, then the exact file target and the `claude --resume <uuid>` command. Demo mock, i18n (ko/en) and README bullets included.
+
+</details>
+
+<details>
 <summary><b>fix(usage): drop the workspace aggregate usage view</b> — mixed auth kinds made the total meaningless · <code>c8966f5</code></summary>
 
 Root cause of the "usage doesn't measure on a no-API-key deployment" report: subscription sign-ins report **no billing cost**, so the admin usage tab summed zeros next to any old API-key spend and read as broken. A workspace-wide aggregate cannot be measured meaningfully across mixed auth kinds, so the view is removed end to end — admin tab + `/api/admin/usage` + `usageTotals`/`usageByUser`, the guide API-map row (the guide would otherwise call a 404), demo mocks and the i18n keys. Per-session measurement stays: the usage pill still shows the context window, claude.ai plan windows and the per-user recorded spend (session / 5h / 7d).

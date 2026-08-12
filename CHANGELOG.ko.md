@@ -48,6 +48,13 @@
 ## Unreleased
 
 <details>
+<summary><b>feat(sessions): 세션 내보내기 — 로컬 resume</b> — 로컬 세션 가져오기의 반대 방향 · <code>72a0793</code></summary>
+
+`GET /api/sessions/:id/export`가 CLI 트랜스크립트 JSONL을 반환한다. `?cwd=<로컬절대경로>`를 주면 각 줄의 `cwd`를 로컬 프로젝트 경로로 재작성(CLI는 런타임 cwd로 트랜스크립트를 매칭하므로 없으면 resume 목록에 안 뜸; 이 값은 문자열 치환에만 쓰이고 서버 파일시스템에 닿지 않음). `custom-title` 줄을 앞에 붙여 로컬 resume 피커에 워크스페이스 제목이 보인다. 게이트: 오너/관리자 + 개인 세션 전용(트랜스크립트에 툴 출력 전체가 담김) + 신규 관리자 플래그 **`sessionExportEnabled`**(서버 403 + `publicConfig`로 UI 숨김). 채팅 헤더의 다운로드 버튼이 모달을 열고 — 로컬 경로 입력과 실시간 `~/.claude/projects/<slug>/` 미리보기, 경로 비움 경고, 다운로드 후 파일 위치·`claude --resume <uuid>` 명령 안내까지. 데모 목·i18n(ko/en)·README 반영.
+
+</details>
+
+<details>
 <summary><b>fix(usage): 워크스페이스 집계 사용량 뷰 제거</b> — 혼합 인증에서는 총합이 무의미 · <code>c8966f5</code></summary>
 
 "API 키 없이 배포하면 사용량이 측정 안 된다"는 리포트의 근본 원인: 구독 로그인 세션은 **과금 비용을 보고하지 않으므로**, 관리자 사용량 탭이 예전 API 키 지출 옆에 0만 합산해 고장난 것처럼 보였다. 인증 방식이 섞인 워크스페이스 전체 집계는 의미 있게 측정할 수 없어 뷰를 통째로 제거 — 관리자 탭 + `/api/admin/usage` + `usageTotals`/`usageByUser`, 가이드 API 맵 행(남겨두면 가이드가 404를 호출), 데모 목, i18n 키까지. 세션별 측정은 그대로: 사용량 필은 컨텍스트 윈도우·claude.ai 플랜 한도·유저별 실사용 집계(세션/5h/7d)를 계속 보여준다.
