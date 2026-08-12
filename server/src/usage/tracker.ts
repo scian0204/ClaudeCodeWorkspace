@@ -13,25 +13,9 @@ export function recordUsage(o: {
   }).run();
 }
 
-export function usageTotals() {
-  const r = db.select({
-    inputTokens: sql<number>`coalesce(sum(${schema.usage.inputTokens}),0)`,
-    outputTokens: sql<number>`coalesce(sum(${schema.usage.outputTokens}),0)`,
-    costUsd: sql<number>`coalesce(sum(${schema.usage.costUsd}),0)`,
-    turns: sql<number>`count(*)`,
-  }).from(schema.usage).get();
-  return r;
-}
-
-export function usageByUser() {
-  return db.select({
-    userId: schema.usage.userId,
-    inputTokens: sql<number>`coalesce(sum(${schema.usage.inputTokens}),0)`,
-    outputTokens: sql<number>`coalesce(sum(${schema.usage.outputTokens}),0)`,
-    costUsd: sql<number>`coalesce(sum(${schema.usage.costUsd}),0)`,
-    turns: sql<number>`count(*)`,
-  }).from(schema.usage).groupBy(schema.usage.userId).all();
-}
+// Workspace-wide aggregates (usageTotals/usageByUser) were removed along with the admin usage tab:
+// subscription sign-ins report no billing cost, so a workspace total mixed measured API spend with
+// zeros and read as "usage tracking is broken". The per-session/per-user ledger below stays.
 
 // ── local spend ledger ──
 // What an API-key (or bedrock/vertex/custom) session has INSTEAD of claude.ai plan limits: those

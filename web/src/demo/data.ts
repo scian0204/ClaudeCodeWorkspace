@@ -311,14 +311,6 @@ export const ADMIN = {
       return { started: true, target: 'cian0204/claudecode-workspace:latest', changed: true };
     },
   },
-  usage: {
-    totals: { turns: 128, inputTokens: 842_000, outputTokens: 210_500, costUsd: 12.8342 },
-    byUser: [
-      { userId: ME.id, name: 'Demo Admin', turns: 64, inputTokens: 421_000, outputTokens: 108_200, costUsd: 6.51 },
-      { userId: U_JAMIE.id, name: 'Jamie Park', turns: 38, inputTokens: 252_600, outputTokens: 61_800, costUsd: 3.94 },
-      { userId: U_RILEY.id, name: 'Riley Kim', turns: 26, inputTokens: 168_400, outputTokens: 40_500, costUsd: 2.38 },
-    ],
-  },
   settings: { allowBypass: false },
   // resource cleanup: a plausible inventory + an in-place mutator so the demo actions actually clear
   // the counts they target (matches the server's scan → action → rescan shape).

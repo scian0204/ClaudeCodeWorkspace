@@ -585,7 +585,6 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
 
   // ---- admin ----
   if (P === '/api/admin/overview') return ok(ADMIN.overview());
-  if (P === '/api/admin/usage') return ok(ADMIN.usage);
   if (P === '/api/admin/settings' && M === 'GET') return ok(ADMIN.settings);
   if (P === '/api/admin/settings' && M === 'POST') { Object.assign(ADMIN.settings, b); return ok({}); }
   if (P === '/api/admin/config' && M === 'GET') return ok({ items: ADMIN.config });

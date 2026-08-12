@@ -19,7 +19,6 @@ const TABS = [
   { key: 'requests', label: 'admin.tab.requests' },
   { key: 'users', label: 'admin.tab.users' },
   { key: 'providers', label: 'admin.tab.providers' },
-  { key: 'usage', label: 'admin.tab.usage' },
   { key: 'processes', label: 'admin.tab.processes' },
   { key: 'config', label: 'admin.tab.config' },
   { key: 'update', label: 'admin.tab.update' },
@@ -30,7 +29,6 @@ type AdminTab = (typeof TABS)[number]['key'];
 export function AdminPanel() {
   const setPanel = useStore((s) => s.setPanel);
   const [ov, setOv] = useState<any>(null);
-  const [usage, setUsage] = useState<any>(null);
   const [settings, setSettings] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
   const [nu, setNu] = useState({ username: '', password: '', role: 'member', displayName: '', claudeToken: '' });
@@ -43,10 +41,10 @@ export function AdminPanel() {
   const tabs = TABS.filter((tb) => tb.key !== 'requests' || approvalsEnabled);
 
   const load = async () => {
-    const [o, u, s, us] = await Promise.all([
-      api.get('/api/admin/overview'), api.get('/api/admin/usage'), api.get('/api/admin/settings'), api.get('/api/users'),
+    const [o, s, us] = await Promise.all([
+      api.get('/api/admin/overview'), api.get('/api/admin/settings'), api.get('/api/users'),
     ]);
-    setOv(o); setUsage(u); setSettings(s); setUsers(us.users);
+    setOv(o); setSettings(s); setUsers(us.users);
     void useStore.getState().refreshRequests(); // keep the requests tab + badge fresh on open
   };
   useEffect(() => { load().catch((e) => useStore.getState().setError(e.message)); }, []);
@@ -157,27 +155,6 @@ export function AdminPanel() {
               <GitCredList scope="common" />
             </Section>
           </>
-        )}
-
-        {tab === 'usage' && (
-          <Section title={t('admin.usageTitle')}>
-            {usage && (
-              <>
-                <div className="text-sm text-txt2 mb-2">{t('admin.usageTotals', { turns: usage.totals.turns, input: usage.totals.inputTokens.toLocaleString(), output: usage.totals.outputTokens.toLocaleString(), cost: usage.totals.costUsd.toFixed(4) })}</div>
-                <div className="overflow-x-auto scrolly">
-                <table className="w-full text-sm min-w-[420px]">
-                  <thead><tr className="text-txt3 text-xs text-left"><th className="py-1">{t('admin.colUser')}</th><th>{t('admin.colTurns')}</th><th>in</th><th>out</th><th>$</th></tr></thead>
-                  <tbody>
-                    {usage.byUser.map((r: any) => (
-                      <tr key={r.userId} className="border-t border-line"><td className="py-1.5">{r.name}</td><td>{r.turns}</td><td>{r.inputTokens.toLocaleString()}</td><td>{r.outputTokens.toLocaleString()}</td><td>${r.costUsd.toFixed(4)}</td></tr>
-                    ))}
-                    {usage.byUser.length === 0 && <tr><td colSpan={5} className="text-txt3 py-2">{t('common.none')}</td></tr>}
-                  </tbody>
-                </table>
-                </div>
-              </>
-            )}
-          </Section>
         )}
 
         {tab === 'config' && (

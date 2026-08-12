@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import { requireAdmin, getUserById } from '../auth/index.js';
+import { requireAdmin } from '../auth/index.js';
 import { db, schema } from '../db/index.js';
-import { usageTotals, usageByUser } from '../usage/tracker.js';
 import { getSetting, setSetting } from '../lib/settings.js';
 import { cfg, listConfigForApi, setConfigValue, resetConfigValue, imageConfigValues } from '../lib/config-registry.js';
 import { inspectImage, pullImage } from '../lib/docker-images.js';
@@ -39,12 +38,6 @@ export async function adminRoutes(app: FastifyInstance) {
   app.post('/api/admin/docker/probe', async (req, reply) => {
     if (!requireAdmin(req, reply)) return;
     return { docker: await probeDocker() };
-  });
-
-  app.get('/api/admin/usage', async (req, reply) => {
-    if (!requireAdmin(req, reply)) return;
-    const byUser = usageByUser().map((r) => ({ ...r, name: getUserById(r.userId)?.displayName || r.userId }));
-    return { totals: usageTotals(), byUser };
   });
 
   app.get('/api/admin/settings', async (req, reply) => {

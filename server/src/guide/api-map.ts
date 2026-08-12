@@ -58,8 +58,7 @@ export const API_ROUTES: ApiRoute[] = [
   r('GET', '/api/search', 'workspace-wide search. Query string: ?q=<text>. Scoped to what the user may see.'),
   r('GET', '/api/brand', 'workspace title + logo.'),
   r('GET', '/api/admin/config', 'every admin setting: value, default, type, min/max, whether a restart is needed.', true),
-  r('GET', '/api/admin/overview', 'admin dashboard totals (users, sessions, rooms, token/cost usage).', true),
-  r('GET', '/api/admin/usage', 'per-user token + cost usage.', true),
+  r('GET', '/api/admin/overview', 'admin dashboard totals (users, sessions, rooms).', true),
 
   // ── write: the user's own things ──
   r('POST', '/api/sessions', 'create a private chat. Body: { title?, projectId? }. Returns { session }. Follow it with a ui action openSession so the user lands in it.'),
