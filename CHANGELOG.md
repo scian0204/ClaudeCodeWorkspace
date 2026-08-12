@@ -45,6 +45,12 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
+## Unreleased
+
+- **feat(chat): free-text "Other" answer on AskUserQuestion cards** — when none of the offered options fit, a "직접 입력" row under each question takes typed text and feeds it back through the same `respond(..., 'answer', …)` path a button pick uses; the static demo gains an `!ask` trigger to exercise the card · `14c2386`
+
+---
+
 ## v1.12.0 — 2026-08-07
 
 <sub>release commit `1760a80`</sub>
