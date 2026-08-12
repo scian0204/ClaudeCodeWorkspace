@@ -9,7 +9,7 @@ import { RequestInfo } from './MyPage';
 import { ClaudeLoginBlock } from './TokenSettings';
 import {
   IconArrowLeft, IconDot, IconDotOutline, IconRefresh, IconChevronRight, IconChevronDown,
-  IconRotateCcw, IconX, IconPlus, IconSliders,
+  IconRotateCcw, IconX, IconPlus, IconSliders, IconDownload,
 } from '../lib/icons';
 
 // Tab bar model — append here to add a tab (e.g. resource cleanup, approvals, processes, LLM providers).
@@ -22,6 +22,7 @@ const TABS = [
   { key: 'processes', label: 'admin.tab.processes' },
   { key: 'config', label: 'admin.tab.config' },
   { key: 'update', label: 'admin.tab.update' },
+  { key: 'backup', label: 'admin.tab.backup' },
   { key: 'resources', label: 'admin.tab.resources' },
 ] as const;
 type AdminTab = (typeof TABS)[number]['key'];
@@ -177,6 +178,8 @@ export function AdminPanel() {
         )}
 
         {tab === 'update' && <UpdateManager />}
+
+        {tab === 'backup' && <BackupManager />}
 
         {tab === 'processes' && <ProcessesManager />}
 
@@ -577,6 +580,112 @@ function DockerWarning({ docker, onProbed }: { docker: any; onProbed: (d: any) =
 // Self-update: version check against the published image + the container swap. Applying kills this
 // very server, so the button hands off to a poll loop that waits for the NEW version to answer (or
 // for the automatic rollback to land) instead of assuming success.
+// Whole-workspace backup (download tgz) & restore (upload → staged summary → typed-keyword apply).
+// The apply kills the server on purpose; we poll /api/health until it answers again, then reload —
+// the same server-dies-mid-request pattern UpdateManager uses.
+function BackupManager() {
+  const t = useT();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [downloading, setDownloading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [summary, setSummary] = useState<any>(null);
+  const err = (e: any) => useStore.getState().setError(e.message || String(e));
+
+  useEffect(() => { api.get('/api/admin/restore').then((r) => setSummary(r.summary)).catch(() => {}); }, []);
+
+  const download = async () => {
+    setDownloading(true);
+    try {
+      // ponytail: the whole archive buffers in browser RAM; switch to a plain <a href> download if
+      // workspaces outgrow that (streams to disk, but bypasses the demo mock)
+      const res = await fetch('/api/admin/backup', { credentials: 'same-origin' });
+      if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as any).error || `HTTP ${res.status}`);
+      const name = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') || '')?.[1] || 'ccw-backup.tgz';
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement('a'); a.href = url; a.download = name; a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) { err(e); } finally { setDownloading(false); }
+  };
+
+  const upload = async () => {
+    const f = fileRef.current?.files?.[0]; if (!f) return;
+    setUploading(true);
+    try {
+      const form = new FormData(); form.append('file', f, f.name);
+      const r = await api.upload('/api/admin/restore/upload', form);
+      setSummary(r.summary);
+    } catch (e) { err(e); }
+    finally { setUploading(false); if (fileRef.current) fileRef.current.value = ''; }
+  };
+
+  const discard = async () => { try { await api.del('/api/admin/restore'); } catch (e) { err(e); } setSummary(null); };
+
+  const apply = async () => {
+    if (!confirm(t('admin.backup.applyConfirm'))) return;
+    if (prompt(t('admin.backup.applyKeyword')) !== 'RESTORE') return;
+    setApplying(true);
+    try {
+      await api.post('/api/admin/restore/apply', {});
+      const deadline = Date.now() + 180_000;
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 2500));
+        try { const h = await fetch('/api/health', { credentials: 'same-origin' }); if (h.ok) { location.reload(); return; } }
+        catch { /* server still restarting */ }
+      }
+      setApplying(false);
+    } catch (e) { err(e); setApplying(false); }
+  };
+
+  const fmtSize = (b: number) => (b > 1024 * 1024 * 1024 ? `${(b / 1024 / 1024 / 1024).toFixed(2)} GB` : `${Math.max(1, Math.round(b / 1024 / 1024))} MB`);
+
+  return (
+    <div className="space-y-4">
+      <p className="text-[11px] text-txt3 leading-snug">{t('admin.backup.intro')}</p>
+      <Section title={t('admin.backup.downloadTitle')}>
+        <div className="text-xs text-warn bg-warnsoft border border-warn rounded-lg px-3 py-2 mb-3">{t('admin.backup.secretsWarning')}</div>
+        <button className="btn-primary !text-xs inline-flex items-center gap-1.5" disabled={downloading} onClick={() => void download()}>
+          <IconDownload size={13} />{downloading ? t('admin.backup.downloading') : t('admin.backup.download')}
+        </button>
+      </Section>
+      <Section title={t('admin.backup.restoreTitle')}>
+        {applying ? (
+          <div className="text-xs bg-claysoft text-clay border border-clay rounded-lg px-3 py-2">
+            <div className="font-semibold">{t('admin.backup.applying')}</div>
+            <div className="mt-0.5 leading-snug">{t('admin.backup.applyingNote')}</div>
+          </div>
+        ) : summary ? (
+          <div className="space-y-2 text-sm">
+            <div className="text-xs text-txt2">
+              {t('admin.backup.summaryLine', {
+                version: summary.version || '?',
+                date: summary.createdAt ? new Date(summary.createdAt).toLocaleString() : '?',
+                users: String(summary.users), size: fmtSize(summary.sizeBytes || 0),
+              })}
+            </div>
+            {summary.keyMatch === false && <div className="text-xs text-danger bg-card border border-danger rounded-lg px-3 py-2">{t('admin.backup.keyMismatch')}</div>}
+            {summary.dataDirMatch === false && <div className="text-xs text-warn bg-warnsoft border border-warn rounded-lg px-3 py-2">{t('admin.backup.dataDirMismatch')}</div>}
+            <div className="flex gap-2 flex-wrap">
+              <button className="rounded-md px-3.5 py-1.5 text-xs font-semibold text-white" style={{ background: 'var(--danger)' }} onClick={() => void apply()}>{t('admin.backup.apply')}</button>
+              <button className="btn-ghost !py-1.5 !text-xs" onClick={() => void discard()}>{t('admin.backup.discard')}</button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="text-xs text-txt3">{t('admin.backup.restoreHint')}</div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <input ref={fileRef} type="file" accept=".tgz,.tar.gz,application/gzip" className="text-xs" />
+              <button className="btn-ghost !py-1.5 !text-xs" disabled={uploading} onClick={() => void upload()}>
+                {uploading ? t('admin.backup.uploading') : t('admin.backup.upload')}
+              </button>
+            </div>
+          </div>
+        )}
+      </Section>
+    </div>
+  );
+}
+
 function UpdateManager() {
   const t = useT();
   const [st, setSt] = useState<any>(null);

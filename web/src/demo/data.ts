@@ -315,6 +315,7 @@ export const ADMIN = {
       return { started: true, target: 'cian0204/claudecode-workspace:latest', changed: true };
     },
   },
+  restoreStaged: null as any, // backup/restore demo: the staged-upload summary (null = nothing staged)
   settings: { allowBypass: false },
   // resource cleanup: a plausible inventory + an in-place mutator so the demo actions actually clear
   // the counts they target (matches the server's scan → action → rescan shape).

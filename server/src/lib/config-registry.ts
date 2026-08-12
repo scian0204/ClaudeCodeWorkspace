@@ -162,6 +162,11 @@ export const DEFS: ConfigDef[] = [
   // feature flags (live — toggle without restart)
   { key: 'sessionImportEnabled', group: 'features', type: 'bool', default: '1' },
   { key: 'sessionExportEnabled', group: 'features', type: 'bool', default: '1' },
+
+  // whole-workspace backup & restore (admin migration tool)
+  { key: 'backupEnabled', group: 'backup', type: 'bool', default: '1' },
+  { key: 'backupIncludeReviews', group: 'backup', type: 'bool', default: '1' },
+  { key: 'restoreMaxMB', group: 'backup', type: 'int', default: '2048', min: 16, max: 16384, unit: 'MB' },
   { key: 'resourceCleanupEnabled', group: 'features', type: 'bool', default: '1' },
   { key: 'llmProvidersEnabled', group: 'features', type: 'bool', default: '1' },
   { key: 'approvalsEnabled', group: 'features', type: 'bool', default: '1' },
