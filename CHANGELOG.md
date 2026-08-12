@@ -48,6 +48,13 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ## Unreleased
 
 <details>
+<summary><b>fix(usage): drop the workspace aggregate usage view</b> — mixed auth kinds made the total meaningless · <code>c8966f5</code></summary>
+
+Root cause of the "usage doesn't measure on a no-API-key deployment" report: subscription sign-ins report **no billing cost**, so the admin usage tab summed zeros next to any old API-key spend and read as broken. A workspace-wide aggregate cannot be measured meaningfully across mixed auth kinds, so the view is removed end to end — admin tab + `/api/admin/usage` + `usageTotals`/`usageByUser`, the guide API-map row (the guide would otherwise call a 404), demo mocks and the i18n keys. Per-session measurement stays: the usage pill still shows the context window, claude.ai plan windows and the per-user recorded spend (session / 5h / 7d).
+
+</details>
+
+<details>
 <summary><b>feat(shortcuts): 7 new core-feature bindings</b> — thread hopping, panels, view cycle, composer focus · <code>400a5e1</code></summary>
 
 `Alt+↑/↓` moves to the previous/next thread in sidebar order (project-grouped chats → rooms → DMs → wiki → reviews, wrap-around; guarded so Option+arrows still edits text on mac). `Mod+Shift+E/G/F` toggle the task panel, Git panel and project file explorer — the latter two's open state moved from Header `useState` into the store so a global key can drive it, and `join()`/`goHome()` reset both so a switched thread never inherits a panel aimed at the previous project. `Mod+Shift+\` cycles chat→split→editor under the same gates as the seg buttons (desktop, docker ready, not wiki/review). `Shift+Esc` focuses the composer from anywhere; bare `Esc` outside a text field closes the mobile drawer first, then interrupts the running turn. Header pills advertise their keys via `withKeys()`, and the help sheet picks the rows up from the same `SHORTCUT_GROUPS` table (listed == working). README en/ko updated.
