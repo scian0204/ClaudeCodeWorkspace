@@ -48,6 +48,17 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
+## Unreleased
+
+<details>
+<summary><b>fix(usage): never cache a failed plan-limit probe; cache-skipping refresh</b> — the "shows nothing, then suddenly works" mystery · <code>2426cdb</code></summary>
+
+`probeUsage` cached its result unconditionally — including probes whose account lookup returned `null` (timeout/error). The 45s lookup window is easy to blow when the host is busy (e.g. image builds on the same machine), and each failure was then pinned for the whole `usageProbeTtlMs`, so reopening the popover re-served the failure instead of retrying. Now only an answered lookup is cached; a null lookup clears the entry so the next open retries. The popover (which already refetches on every open) gains a refresh button sending `?fresh=1` to bypass the server cache entirely. The underlying probe was verified inside the live container (plain-login path and the credential-store redirect both return real windows).
+
+</details>
+
+---
+
 ## v1.14.1 — 2026-08-13
 
 <sub>release commit `bd5a532`</sub>
