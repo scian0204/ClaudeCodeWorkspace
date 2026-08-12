@@ -48,6 +48,13 @@
 ## Unreleased
 
 <details>
+<summary><b>feat(chat): Edit/Write 툴 호출을 diff 카드로 렌더</b> — "File updated"가 아니라 변경 내용을 그대로 · <code>3b526f0</code></summary>
+
+파일 수정 툴 카드는 CLI의 성공 문자열만 보여줬다. 이제 진짜 diff를 렌더한다: 접힌 헤더에 `+N −N` 배지, 펼치면 추가/삭제 줄 색상 표시(공통 앞/뒤 줄은 컨텍스트 2줄로 접힘; `Write`는 *전체 쓰기* 라벨), 500줄 상한. 같은 diff가 Edit/Write **승인 프롬프트** 안에도 떠서 허용 전에 무엇이 바뀌는지 보인다. 서버 변경 없음 — 툴 입력은 이미 무손실로 스트림·저장되므로 과거 대화에도 소급 적용. diff 텍스트는 JSX 텍스트 노드로만 렌더(`md()` 미경유), 본문은 자체 컨테이너에서 스크롤(375px 검증). 데모 시드·라이브 턴에도 실제 Edit 추가.
+
+</details>
+
+<details>
 <summary><b>feat(sessions): 세션 내보내기 — 로컬 resume</b> — 로컬 세션 가져오기의 반대 방향 · <code>72a0793</code></summary>
 
 `GET /api/sessions/:id/export`가 CLI 트랜스크립트 JSONL을 반환한다. `?cwd=<로컬절대경로>`를 주면 각 줄의 `cwd`를 로컬 프로젝트 경로로 재작성(CLI는 런타임 cwd로 트랜스크립트를 매칭하므로 없으면 resume 목록에 안 뜸; 이 값은 문자열 치환에만 쓰이고 서버 파일시스템에 닿지 않음). `custom-title` 줄을 앞에 붙여 로컬 resume 피커에 워크스페이스 제목이 보인다. 게이트: 오너/관리자 + 개인 세션 전용(트랜스크립트에 툴 출력 전체가 담김) + 신규 관리자 플래그 **`sessionExportEnabled`**(서버 403 + `publicConfig`로 UI 숨김). 채팅 헤더의 다운로드 버튼이 모달을 열고 — 로컬 경로 입력과 실시간 `~/.claude/projects/<slug>/` 미리보기, 경로 비움 경고, 다운로드 후 파일 위치·`claude --resume <uuid>` 명령 안내까지. 데모 목·i18n(ko/en)·README 반영.

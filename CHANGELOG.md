@@ -48,6 +48,13 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ## Unreleased
 
 <details>
+<summary><b>feat(chat): Edit/Write tool calls render as diff cards</b> — see the change, not "File updated" · <code>3b526f0</code></summary>
+
+File-edit tool calls used to show only the CLI's success string. They now render a real diff: a `+N −N` badge on the collapsed header, colored added/removed lines when expanded (shared prefix/suffix lines collapse to two context rows; `Write` is labeled *full write*), capped at 500 rows. The same diff appears inside the Edit/Write **approval prompt**, so what you're allowing is visible before it runs. No server change — tool inputs already stream and persist untruncated, so old transcripts get diffs retroactively. Diff text renders as JSX text nodes only (never through `md()`), and the body scrolls in its own container (mobile-safe, verified at 375px). Demo seeds and the live demo turn now include a real Edit.
+
+</details>
+
+<details>
 <summary><b>feat(sessions): export a session for local resume</b> — the reverse of local-session import · <code>72a0793</code></summary>
 
 `GET /api/sessions/:id/export` returns the CLI's own transcript jsonl; `?cwd=<localAbsPath>` rewrites each line's `cwd` to the local project path (the CLI matches transcripts against the runtime cwd — without it resume won't list the session; the value never touches the server fs). A `custom-title` line carries the workspace name into the local resume picker. Gated owner/admin + private-only (transcripts carry full tool output) plus a new **`sessionExportEnabled`** admin flag (server-side 403, UI hidden via `publicConfig`). The chat header gains a download button opening a modal: local-path input with a live `~/.claude/projects/<slug>/` preview, an explicit warning when left empty, then the exact file target and the `claude --resume <uuid>` command. Demo mock, i18n (ko/en) and README bullets included.
