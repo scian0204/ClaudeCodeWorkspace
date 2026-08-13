@@ -55,9 +55,24 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ## Unreleased
 
 <details>
-<summary><b>fix(usage): serve last-known-good plan limits when the probe gets no answer</b> — popover no longer blanks under load · <code>d0ff87d</code></summary>
+<summary><b>docs: clear out the jargon that had built up, and a rule to stop it returning</b> — recent entries and the README rewritten in plain language</summary>
 
-Under heavy load (e.g. a team-agent turn spawning several CLI subprocesses) the usage probe's own CLI cold start can starve past `usageProbeTimeoutMs`; the popover then reported "unavailable" even for a signed-in account whose limits were shown minutes earlier. The probe now keeps an **account-level last-known-good** limits slice and serves it whenever a lookup gets NO answer (timeout/error) — a real "no limits" answer (API key) is a genuine answer and is never masked. New config: `usageLastGoodTtlMs` (default 30 min, 0 disables). No-answer probes now log one `[usage]` warn line so the next report is diagnosable.
+Wording that made sense while writing the code (probe, cold start, starve, plumbing, corrupted stream, foreground/background, last-known-good, headless, spawn, clamp, gating, replay, persona…) kept getting copied straight into the docs, leaving sentences that only their author could read. A sweep over six documents turned up 90 such passages; they were rewritten against one shared list of plain replacements.
+
+- **CHANGELOG (en/ko)**: entries from v1.14.1 onward restructured as **symptom → cause → fix**; the worst passages in older sections cleaned up too.
+- **README (en/ko)**: the task panel, usage meter, 5-hour window, self-update and security sections now describe what happens instead of borrowing internal metaphors.
+- **Prevention**: [CLAUDE.md](CLAUDE.md) rule 11 gains a "write it plainly" clause, so the same standard applies to whatever is written next.
+
+</details>
+
+<details>
+<summary><b>fix(usage): show the last successful plan limits when the lookup fails</b> — the usage popover no longer blanks out while the server is busy · <code>d0ff87d</code></summary>
+
+**Symptom.** For a signed-in account, "plan limits" in the usage popover occasionally read as unavailable — even though it had shown real numbers minutes earlier, and would show them again a little later.
+
+**Cause.** To read the limits, the server briefly starts one more Claude CLI and asks it. When the server is busy (a team-agent turn running several CLIs, say), that CLI can take longer to start than the 45-second budget (`usageProbeTimeoutMs`), so no answer arrives — and the screen presented "no answer" as "no limits".
+
+**Fix.** The server now remembers the last limits it successfully read for each account and shows those whenever a lookup comes back with nothing at all. A real "this account has no plan limits" answer (an API key) is a genuine answer and is still shown as-is. How long the remembered value stays usable is set by `usageLastGoodTtlMs` (30 minutes by default, 0 turns it off). A lookup that gets no answer also writes one `[usage]` warning to the server log, so the next report of this can be checked immediately.
 
 </details>
 
@@ -66,9 +81,15 @@ Under heavy load (e.g. a team-agent turn spawning several CLI subprocesses) the 
 <sub>release commit `f15fb3c`</sub>
 
 <details>
-<summary><b>feat(agents): agent teams enabled per session + tmux-style split view</b> — the task panel becomes the teammate panel · <code>43c4f12</code></summary>
+<summary><b>feat(agents): turn on agent teams per session + watch every teammate at once</b> — the task panel is the teammate screen · <code>43c4f12</code></summary>
 
-Sessions now run with `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` (admin flag `agentTeamsEnabled`, default on). A live SDK spike showed that in headless mode teammates surface as **named background agents on the same stream** (`task_*` events + `parent_tool_use_id`-tagged messages) — the very plumbing the task panel's live view renders, so the panel is the workspace's equivalent of the CLI's teammate panel. New split-view toggle (IconGrid) opens every agent's live pane at once, tmux-style. Caveat: teammates are background tasks, so prompting-mode sessions keep them sequential under the #27203 workaround — concurrent teams need a bypass-mode session until the upstream fix.
+**Background.** Claude Code has an experimental mode where several agents work as a team; it is turned on with the environment variable `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`.
+
+**What we checked.** We turned it on inside the container and ran a small team for real. When Claude Code runs on a server with no terminal (the way this workspace runs it), each teammate runs as a **named agent behind the conversation**, and its progress arrives in exactly the shape the workspace already receives — task start/progress events, and messages labelled with which teammate sent them. The teammate window you see in the CLI is part of the CLI's own screen, so on a server there is none: here the **task panel plays that role**.
+
+**Change.** Every session now runs with that environment variable (admin switch `agentTeamsEnabled`, on by default), and the task panel header gains a **split view** button. Until now you opened one teammate's live window at a time; this opens all of them at once, so you can watch the whole team on one screen.
+
+**Caveat.** Teammates run behind the conversation, so in sessions that ask you for approval they work one at a time because of the workaround in v1.15.1 below. To have several teammates working simultaneously, use a bypass-mode session for now.
 
 </details>
 
@@ -79,9 +100,13 @@ Sessions now run with `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` (admin flag `agen
 <sub>release commit `006e4de`</sub>
 
 <details>
-<summary><b>fix(agents): keep subagents foreground in prompting modes</b> — SDK #27203 workaround for "Stream closed" write failures · <code>9323c43</code></summary>
+<summary><b>fix(agents): run subagents one at a time when a session can ask for approval</b> — works around the "Stream closed" failure that killed every file edit · <code>9323c43</code></summary>
 
-A team-agent test turn lost ALL write ability mid-flight: every Edit/Write/Bash-write failed with `Tool permission request failed: AbortError: Stream closed` while read-only tools kept working. Upstream bug ([anthropics/claude-code#27203](https://github.com/anthropics/claude-code/issues/27203)): a **background** subagent's tool call that needs permission never reaches `canUseTool` — the CLI denies it internally and that denial corrupts the control stream, killing every later permission round-trip in the turn, main thread included. Reproduced on 2.1.229. Workaround: sessions that can prompt a human now spawn the CLI with `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` (subagents run foreground, prompts flow normally); bypass and unattended review turns keep background tasks. New admin flag `bgTasksWithPrompts` (default off) restores background tasks once the upstream fix lands.
+**Symptom.** Halfway through a team-agent test turn, nothing could be written any more: every tool that creates or edits a file failed with `Tool permission request failed: AbortError: Stream closed`, while read-only tools kept working.
+
+**Cause.** A bug in Claude Code itself ([anthropics/claude-code#27203](https://github.com/anthropics/claude-code/issues/27203)). When a subagent running behind the conversation uses a tool that needs approval, the approval request never reaches the workspace — the CLI refuses it internally. That refusal breaks the channel the approvals travel on, so every later approval in the same turn fails too, including ones from the main conversation. Reproduced on CLI 2.1.229.
+
+**Fix.** Sessions that can ask a person for approval now start the CLI with `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`, the official switch for this. With subagents running one at a time instead of behind the conversation, approvals travel normally. Sessions that never ask (bypass mode, automated PR review) keep running them in the background. Once the original bug is fixed, the admin switch `bgTasksWithPrompts` (off by default) puts the old behavior back.
 
 </details>
 
@@ -94,30 +119,36 @@ A team-agent test turn lost ALL write ability mid-flight: every Edit/Write/Bash-
 - merge: `feat/sidebar-and-agents-v2` — `fca7dde`
 
 <details>
-<summary><b>feat(sidebar): project-group spacing, per-project quick add, distinct import icon</b> — three session-list papercuts · <code>84966f5</code></summary>
+<summary><b>feat(sidebar): project-group spacing, per-project quick add, distinct import icon</b> — three small session-list annoyances · <code>84966f5</code></summary>
 
-Project groups in the sidebar stacked with zero margin between them — a `mb-2` on the group wrapper gives each project its own visual block. Every group header grows a `+` that opens a new chat already assigned to that project (`POST /api/sessions` accepted `projectId` all along; `newSession()` now forwards it and the demo mock mirrors it). Session **import** used the same download-arrow icon as **export** — a new `IconUpload` makes the two directions tell apart at a glance.
+Project groups in the sidebar ran together with no gap, so it was hard to see where one project ended — each group now has space beneath it and reads as its own block. Every project title row gains a `+` that opens a new chat already assigned to that project (the server accepted a project id all along; the web app simply wasn't passing it). Session **import** used the same downward-arrow icon as **export**; import now uses an upward arrow, so the two directions are told apart at a glance.
 
 </details>
 
 <details>
 <summary><b>feat(agents): project-scope team agents</b> — an agent for the project, not the person · <code>a123de8</code></summary>
 
-`team_agents` grows `project_id` ('' on common/user rows; the unique index is recreated as scope+owner+project+name *after* the ALTER so existing DBs migrate in place). Scope `'project'` applies the agent to every session whose `projectId` matches — personal or room — resolved common < project < personal on name collisions. Management is admin-only except on the caller's own personal projects (a project agent's prompt injects into other members' turns on shared projects — same trust class as common agents). `GET /api/agents` adds a `projects` group filtered by project visibility; `POST` accepts `scope:'project'` + `projectId`. The panel gains a project card (project select, per-row edit rights, project chip) and the chat-header picker only offers project agents matching the session's project.
+Until now a team agent was either shared with the whole team or personal. It can now belong to a **project**: any session opened in that project can use it, whoever runs it and whether it is a private chat or a shared room. If names collide, a personal agent wins, then a project one, then a team-wide one.
+
+A project agent's instructions also go into **other people's** conversations in that project, so creating and editing them is treated as the same level of trust as team-wide agents: admins only, except for personal projects, which their owner manages. You only see agents from projects you have access to.
+
+The agents panel gains a project card — you pick the project when creating one, and each row shows which project it belongs to. The agent picker in the chat header only offers agents belonging to the current session's project. (Storage: `team_agents` gains a `project_id` column, and its uniqueness rule is rebuilt to include the project, so existing databases carry over as they are.)
 
 </details>
 
 <details>
 <summary><b>feat(agents): surface filesystem agents (.claude/agents) in the UI</b> — what Claude writes, you now see · <code>e7af605</code></summary>
 
-The CLI loads `.claude/agents/*.md` by itself (settingSources includes 'user' and 'project'), so agents created as files — including by Claude mid-session — were invocable but invisible. A new fs-agents module scans the caller's HOME agents dir plus `.claude/agents` of every visible project (frontmatter only) and `GET /api/agents` returns them as a read-only `files` group, shown in their own panel card with a home/project source badge. Managing them stays file editing by design.
+Besides creating agents in the UI, you can write them as files (`.claude/agents/*.md`) — and Claude sometimes writes them itself while working. The CLI picks those files up on its own, but the workspace never showed them, so an agent you had just created appeared to be missing. The server now scans your home folder and the `.claude/agents` folder of every project you can see (reading only the header at the top of each file) and shows them in the agents panel as **read-only** cards, labelled with where they came from. Editing and deleting them stays file work, by design.
 
 </details>
 
 <details>
-<summary><b>feat(tasks): tmux-style live view for running subagents</b> — watch a team agent work · <code>2e982cb</code></summary>
+<summary><b>feat(tasks): watch a running subagent live</b> — see a team agent work · <code>2e982cb</code></summary>
 
-Subagent stream text was leaking into the main thread's `assistant:delta` (the handler ignored `parent_tool_use_id`) and completed nested text blocks landed in the transcript unmarked. Now nested partials emit as `subagent:delta` keyed by the spawning Task call's tool_use id, completed nested blocks as `subagent:block`, and both are stored with `parentId`/`agentType` so mid-turn joiners replay them. The main transcript stops rendering nested text; each subagent task row gains a **Live** toggle opening a terminal-like pane — that agent's own tool cards + streaming text, auto-pinned to the bottom with a pulse cursor. The demo simulates the nested stream.
+Text written by a subagent was being shown as part of the main conversation, because the server ignored the marker saying which agent it came from. Subagent text is now sent and stored with that marker attached, so it also reaches anyone who opens the session while the turn is still running, and it no longer mixes into the main conversation.
+
+Instead, each running subagent in the task panel gets a **Live** button that opens a terminal-like window showing that agent's own tool calls and the text it is writing, following along as new lines arrive. The static demo simulates the same thing, so you can click through it there too.
 
 </details>
 
@@ -130,9 +161,13 @@ Subagent stream text was leaking into the main thread's `assistant:delta` (the h
 <sub>release commit `747c2c2`</sub>
 
 <details>
-<summary><b>fix(usage): never cache a failed plan-limit probe; cache-skipping refresh</b> — the "shows nothing, then suddenly works" mystery · <code>2426cdb</code></summary>
+<summary><b>fix(usage): stop reusing a failed limit lookup, and add a refresh button</b> — the "shows nothing, then suddenly works" mystery · <code>2426cdb</code></summary>
 
-`probeUsage` cached its result unconditionally — including probes whose account lookup returned `null` (timeout/error). The 45s lookup window is easy to blow when the host is busy (e.g. image builds on the same machine), and each failure was then pinned for the whole `usageProbeTtlMs`, so reopening the popover re-served the failure instead of retrying. Now only an answered lookup is cached; a null lookup clears the entry so the next open retries. The popover (which already refetches on every open) gains a refresh button sending `?fresh=1` to bypass the server cache entirely. The underlying probe was verified inside the live container (plain-login path and the credential-store redirect both return real windows).
+**Symptom.** Plan limits would refuse to appear for a while, then suddenly work again.
+
+**Cause.** The server asks for the limits once and reuses that answer briefly (`usageProbeTtlMs`, two minutes by default) — but it was **reusing failures too**. When the machine is busy (building a Docker image on the same host, say), the answer often does not arrive in time, and that failure was then kept for the full two minutes, so reopening the popover showed the same failure again instead of retrying.
+
+**Fix.** Only an answer that actually arrived is reused; a failure is not stored, so the next open tries again. The popover also gains a **refresh** button that skips the stored value and asks again on the spot. The lookup itself was verified inside the running container.
 
 </details>
 
@@ -143,9 +178,13 @@ Subagent stream text was leaking into the main thread's `assistant:delta` (the h
 <sub>release commit `bd5a532`</sub>
 
 <details>
-<summary><b>fix(usage): plan limits show with a pasted setup-token; spend ledger removed</b> — probe with the full-scope sign-in · <code>f77ffad</code></summary>
+<summary><b>fix(usage): read the limits with the browser sign-in, not the pasted token; drop the spend ledger</b> · <code>f77ffad</code></summary>
 
-The popover claimed "no user:profile scope" even for users who had signed in via the browser: a pasted token deliberately wins the provider resolution for turns, so the plan-limit lookup also ran on it — and `claude setup-token` is inference-only. The account-level lookup now prefers the requester's full-scope **browser sign-in** whenever one exists (`CLAUDE_SECURESTORAGE_CONFIG_DIR` relocates just the credential store; turns keep pasted-token precedence), and when no sign-in exists the message says the actionable fix (My Page → sign in). With real windows showing, the homegrown "실사용량 (워크스페이스 집계)" spend section is removed end to end — popover UI, the endpoint's `spend` field, `spendSummary` + test, demo seed, `usage.spend*` i18n keys. `recordUsage` keeps writing (cheap rows, cleanup manages them).
+**Symptom.** Even for people who had signed in through the browser, the usage popover only said the account lacked permission (`user:profile`).
+
+**Cause.** When running a turn, the workspace deliberately prefers a **pasted token** — that is explicit configuration. But the limit lookup used the same token, and a token from `claude setup-token` can only run requests; it cannot read account details, so the lookup always failed.
+
+**Fix.** For the limit lookup only, the requester's **browser sign-in** is used when they have one (turns keep the old order). When there is no sign-in at all, the popover says what to do about it — sign in from My Page — instead of blaming the plan. With real plan limits finally visible, the workspace's own "usage totals" section we had built as a stand-in was removed everywhere it appeared: the popover, the API field, the summing function and its test, the demo data, and the wording. Usage records are still written (they are small, and cleanup manages them).
 
 </details>
 
@@ -160,21 +199,21 @@ The popover claimed "no user:profile scope" even for users who had signed in via
 <details>
 <summary><b>feat(web): URL routing — refresh restores the open view</b> — /chat/:id · /room/:id · /admin … · <code>8ceceb4</code></summary>
 
-A dependency-free history-API router ([web/src/lib/router.ts](web/src/lib/router.ts)) serializes every view to a path (`/chat/:id`, `/room/:id`, `/wiki/:id`, `/review/:id`, `/dm/:id`, `/admin`, `/plugins`, `/me`) and back. Derivation mirrors Shell's view priority (panel > DM > thread > home; wiki before the private kind — a wiki thread restores through its topic endpoint). Thread routes clear an open panel first (`join()` doesn't touch `panel`, which outranks the thread — without this, back from `/admin` snapped the URL right back). Store→URL sync never runs while logged out so the login screen can't rewrite a deep link; failed/foreign ids fall home and self-correct the bar; authorization stays server-side. Demo `autoOpenFirst` yields to deep links, and the Pages deploy copies `index.html` to `404.html` so refreshes on deep links work on GitHub Pages. The server's SPA fallback already existed.
+A dependency-free history-API router ([web/src/lib/router.ts](web/src/lib/router.ts)) serializes every view to a path (`/chat/:id`, `/room/:id`, `/wiki/:id`, `/review/:id`, `/dm/:id`, `/admin`, `/plugins`, `/me`) and back. Derivation mirrors Shell's view priority (panel > DM > thread > home; wiki before the private kind — a wiki thread restores through its topic endpoint). Thread routes clear an open panel first (`join()` doesn't touch `panel`, which outranks the thread — without this, back from `/admin` snapped the URL right back). The app never rewrites the address while you are logged out, so the login screen cannot wipe a link you arrived on; an id that is missing or belongs to someone else sends you home and corrects the address bar to match; who may see what is still decided on the server. Demo `autoOpenFirst` yields to deep links, and the Pages deploy copies `index.html` to `404.html` so refreshes on deep links work on GitHub Pages. The server's SPA fallback already existed.
 
 </details>
 
 <details>
-<summary><b>feat(agents): team/personal custom agents on every session</b> — Task-tool subagents + a main-thread persona picker · <code>fce75e7</code></summary>
+<summary><b>feat(agents): team/personal custom agents on every session</b> — subagents you call from the Task tool, plus a picker for who drives the main conversation · <code>fce75e7</code></summary>
 
-"Team agent env vars" resolved to the SDK's real mechanism — there is no env var: the Agent SDK takes `options.agents` (programmatic subagent definitions, invocable via the Task tool) and `options.agent` (a named agent driving the main thread). Definitions live in a new `team_agents` table (two scopes like plugins: admin-managed common — its prompt injects into every member's turns, so admin-only — and personal, which wins name collisions). `resolveAgents()` feeds every spawn; a session's main-thread agent (`chat_sessions.agent`, header pill, "next turn onward") is validated at PATCH time **and** guarded at spawn time — an unresolved `options.agent` errors the whole CLI turn, and a deleted agent must degrade to default. Description/prompt are length-capped (model-facing input); per-agent `permissionMode` is deliberately not definable (would bypass the workspace clamp). New `teamAgentsEnabled` flag gates the API server-side. Web: AgentsPanel (create/edit/enable/delete), sidebar entry, chat-header picker, demo mocks with 3 seeded agents. Also fixes an item-7 gap this surfaced: `Alt+↑/↓` now closes an open panel before opening the thread, otherwise the thread opened invisibly behind it.
+"Team agent env vars" resolved to the SDK's real mechanism — there is no env var: the Agent SDK takes `options.agents` (programmatic subagent definitions, invocable via the Task tool) and `options.agent` (a named agent driving the main thread). Definitions live in a new `team_agents` table (two scopes like plugins: admin-managed common — its prompt injects into every member's turns, so admin-only — and personal, which wins name collisions). `resolveAgents()` hands the definitions over every time a session starts. The agent put in charge of a session's main conversation (`chat_sessions.agent`, header button, applied from the next turn) is checked when it is set **and** again when the session starts — a name that no longer resolves fails the whole CLI turn, so an agent deleted in between has to fall back to the default. Description and prompt are length-capped (they go straight into the model's input); a per-agent permission mode is deliberately not offered, since an agent could otherwise ask for more than the workspace's permission ceiling allows. Turning off `teamAgentsEnabled` makes the server refuse these requests. Web: AgentsPanel (create/edit/enable/delete), sidebar entry, chat-header picker, demo mocks with 3 seeded agents. Also fixes an item-7 gap this surfaced: `Alt+↑/↓` now closes an open panel before opening the thread, otherwise the thread opened invisibly behind it.
 
 </details>
 
 <details>
 <summary><b>feat(admin): whole-workspace backup &amp; restore</b> — one .tgz migrates the server · <code>532711d</code></summary>
 
-Backup = a consistent SQLite snapshot (`VACUUM INTO`, WAL-safe) + a streamed system-tar of the data dirs (user/room homes incl. CLI credential files, wiki, brand, review clones — WAL sidecars deliberately excluded, a stale WAL corrupts a restored DB). `backup-meta.json` records version, DATA_DIR and an encryption-key **fingerprint** (never the key). Restore: streamed upload (`restoreMaxMB`) → staging extract → validation summary (version · users · size · key match · DATA_DIR match) → typed-keyword apply, which kills editors, refuses while turns run, parks the current state in `.pre-restore` (one-shot manual rollback), swaps the staged data in and exits — docker's restart policy revives on the restored data, and boot-time DDL/ALTERs migrate an older DB forward. Key mismatch isn't fatal but is loudly warned: decrypt sites degrade to "no token", so stored tokens/credentials drop. The archive is a credential dump — admin-only, server-gated by the new **`backupEnabled`** flag (+ `backupIncludeReviews`, `restoreMaxMB`). Admin panel gains a Backup tab (download card, upload→summary→RESTORE-keyword apply with health-poll reload); demo mocks + i18n + README included.
+Backup = a consistent SQLite snapshot (`VACUUM INTO`, WAL-safe) + a streamed system-tar of the data dirs (user/room homes incl. CLI credential files, wiki, brand, review clones — WAL sidecars deliberately excluded, a stale WAL corrupts a restored DB). `backup-meta.json` records version, DATA_DIR and an encryption-key **fingerprint** (never the key). Restore: streamed upload (`restoreMaxMB`) → staging extract → validation summary (version · users · size · key match · DATA_DIR match) → typed-keyword apply, which kills editors, refuses while turns run, parks the current state in `.pre-restore` (one-shot manual rollback), swaps the staged data in and exits — docker's restart policy revives on the restored data, and boot-time DDL/ALTERs migrate an older DB forward. Key mismatch isn't fatal but is loudly warned: decrypt sites degrade to "no token", so stored tokens/credentials drop. The archive contains everyone's stored sign-in credentials, so it is admin-only and the server itself refuses the request unless the new **`backupEnabled`** flag is on (alongside `backupIncludeReviews` and `restoreMaxMB`). Admin panel gains a Backup tab (download card, upload→summary→RESTORE-keyword apply with health-poll reload); demo mocks + i18n + README included.
 
 </details>
 
@@ -347,9 +386,9 @@ Also guards `endRunningTasks` in the `finally` — a throw there would replace t
 <details>
 <summary><b>Tasks panel</b> — subagents, background shells and workflows beside the conversation · <code>f1051b3</code></summary>
 
-A turn's Task-tool subagents, backgrounded shells, local workflows and MCP monitors never appeared anywhere in the UI: the CLI reports them as `system` messages (`task_started` / `task_progress` / `task_updated` / `task_notification` / `background_tasks_changed`), which the turn stream dropped on the floor. Their nested tool calls DID show up — indistinguishable from main-thread ones.
+A turn's Task-tool subagents, backgrounded shells, local workflows and MCP monitors never appeared anywhere in the UI: the CLI reports them as `system` messages (`task_started` / `task_progress` / `task_updated` / `task_notification` / `background_tasks_changed`), which the turn stream received and discarded without showing. Their nested tool calls DID show up — indistinguishable from main-thread ones.
 
-- `server/src/claude/tasks.ts` folds those events into one ordered list per chat session and broadcasts the whole list on each change (`tasks:update`, replace semantics so a missed edge can't wedge a stale running row). `session:join` replays it, and `runTurn`'s `finally` settles anything still running — the CLI subprocess dies with the turn, so nothing it spawned can outlive it
+- `server/src/claude/tasks.ts` folds those events into one ordered list per chat session and broadcasts the whole list on each change (`tasks:update` — each message replaces the list, so a dropped event cannot leave a finished task stuck showing "running"). `session:join` replays it, and `runTurn`'s `finally` settles anything still running — the CLI subprocess dies with the turn, so nothing it spawned can outlive it
 - Web: a "Tasks" header pill (live count, glints while work runs) opens a resizable right-side panel with per-kind filter tabs, status, elapsed time, token/tool-call counts, the tool each task is on, and its summary or error. Full-screen overlay on a phone. Subagent tool calls now carry `parentId` and get badged in the transcript
 - Admin: `taskPanelEnabled` / `taskHistoryMax` / `taskSessionsMax`
 
@@ -662,7 +701,7 @@ Automatic naming fired once, on the first turn of a chat still carrying the plac
 #### Import integrity
 
 <details>
-<summary><b>fix(import): drop CLI plumbing lines from imported transcripts</b> — <code>d105d33</code></summary>
+<summary><b>fix(import): drop the CLI's own inserted lines from imported transcripts</b> — <code>d105d33</code></summary>
 
 An imported session ended with a raw `<local-command-caveat>` block: the CLI files its own injected lines as `type:"user"`, and `jsonlToMessages` only skipped `isSidechain` and the meta *types*, so `isMeta` lines came through as real chat messages. Slash-command wrappers and captured local-command stdout landed the same way.
 
@@ -673,7 +712,7 @@ Both are dropped at the one place every caller routes through, so the message ro
 <details>
 <summary><b>fix(import): make an imported <code>/clear</code> or <code>/compact</code> fold the history above it</b> — <code>0c06e3f</code></summary>
 
-Chat.tsx folds a segment when a user message starts with `/clear` or `/compact` — the plain form our own composer sends. The CLI files the same action as `<command-name>/clear</command-name><command-args>…</command-args>`, which never matched, so an imported session showed the tag soup (and, after the plumbing filter, nothing at all) with no fold.
+Chat.tsx folds a segment when a user message starts with `/clear` or `/compact` — the plain form our own composer sends. The CLI files the same action as `<command-name>/clear</command-name><command-args>…</command-args>`, which never matched, so an imported session showed those raw tags instead — and once the inserted lines were filtered out, nothing at all — with no fold.
 
 Slash-command lines are rewritten to `/name args` on import; `userTexts` skips them, so a command can never become the generated title.
 
