@@ -55,7 +55,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ## Unreleased
 
 <details>
-<summary><b>docs: clear out the jargon that had built up, and a rule to stop it returning</b> — recent entries and the README rewritten in plain language</summary>
+<summary><b>docs: clear out the jargon that had built up, and a rule to stop it returning</b> — recent entries and the README rewritten in plain language · <code>7f17b19</code></summary>
 
 Wording that made sense while writing the code (probe, cold start, starve, plumbing, corrupted stream, foreground/background, last-known-good, headless, spawn, clamp, gating, replay, persona…) kept getting copied straight into the docs, leaving sentences that only their author could read. A sweep over six documents turned up 90 such passages; they were rewritten against one shared list of plain replacements.
 
