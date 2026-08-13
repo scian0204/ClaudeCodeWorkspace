@@ -26,9 +26,10 @@ import { ingestTaskEvent, endRunningTasks } from './tasks.js';
 type Emit = (event: string, payload: any) => void;
 
 export type Block =
-  | { type: 'text'; text: string }
-  // parentId/agentType are set when the call came from a subagent (Task tool) rather than the main
-  // thread, so the transcript can mark it instead of showing it as a plain top-level tool call.
+  // parentId/agentType are set when the block came from a subagent (Task tool) rather than the main
+  // thread — nested tool calls get marked cards, nested TEXT is kept out of the main transcript and
+  // rendered in the task panel's live view instead.
+  | { type: 'text'; text: string; parentId?: string; agentType?: string }
   | { type: 'tool_use'; id: string; name: string; input: any; output?: string; isError?: boolean; parentId?: string; agentType?: string };
 
 interface ActiveTurn {
@@ -555,10 +556,13 @@ async function runReal(a: {
         if (ev?.type === 'content_block_delta') {
           const d = ev.delta;
           if (d?.type === 'text_delta') {
-            a.emit('assistant:delta', { sessionId: a.sessionId, text: d.text });
+            // Subagent partials must not leak into the main thread's text — they stream to the task
+            // panel's live view instead, keyed by the spawning Task call's tool_use id.
+            if (msg.parent_tool_use_id) a.emit('subagent:delta', { sessionId: a.sessionId, parentId: String(msg.parent_tool_use_id), text: d.text });
+            else a.emit('assistant:delta', { sessionId: a.sessionId, text: d.text });
           } else if (d?.type === 'thinking_delta') {
             // extended thinking: the client only needs "still thinking" + how much, never the text
-            a.emit('assistant:thinking', { sessionId: a.sessionId, len: String(d.thinking || '').length });
+            if (!msg.parent_tool_use_id) a.emit('assistant:thinking', { sessionId: a.sessionId, len: String(d.thinking || '').length });
           }
         } else if (ev?.type === 'message_delta' && ev.usage?.output_tokens != null) {
           // exact output tokens, cumulative per assistant message — a turn has one per agent-loop
@@ -569,19 +573,20 @@ async function runReal(a: {
         break;
       }
       case 'assistant': {
+        // Subagent messages ride the same stream as the main thread's, told apart only by
+        // parent_tool_use_id — carry it through so nested work renders in the task panel.
+        const nested = msg.parent_tool_use_id
+          ? { parentId: String(msg.parent_tool_use_id), ...(msg.subagent_type ? { agentType: String(msg.subagent_type) } : {}) }
+          : null;
         for (const b of msg.message?.content || []) {
           if (b.type === 'text') {
-            a.blocks.push({ type: 'text', text: b.text });
-            a.emit('assistant:block', { sessionId: a.sessionId, block: { type: 'text', text: b.text } });
+            a.blocks.push({ type: 'text', text: b.text, ...(nested || {}) });
+            if (nested) a.emit('subagent:block', { sessionId: a.sessionId, ...nested, text: b.text });
+            else a.emit('assistant:block', { sessionId: a.sessionId, block: { type: 'text', text: b.text } });
           } else if (b.type === 'tool_use') {
-            // Subagent tool calls ride the same stream as the main thread's, told apart only by
-            // parent_tool_use_id — carry it through so the card can be marked as nested.
-            const nested = msg.parent_tool_use_id
-              ? { parentId: String(msg.parent_tool_use_id), ...(msg.subagent_type ? { agentType: String(msg.subagent_type) } : {}) }
-              : {};
-            const idx = a.blocks.push({ type: 'tool_use', id: b.id, name: b.name, input: b.input, ...nested }) - 1;
+            const idx = a.blocks.push({ type: 'tool_use', id: b.id, name: b.name, input: b.input, ...(nested || {}) }) - 1;
             toolIndex.set(b.id, idx);
-            a.emit('tool:use', { sessionId: a.sessionId, id: b.id, name: b.name, input: b.input, ...nested });
+            a.emit('tool:use', { sessionId: a.sessionId, id: b.id, name: b.name, input: b.input, ...(nested || {}) });
           }
         }
         break;

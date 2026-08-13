@@ -4,8 +4,9 @@ import { getSocket } from './socket';
 import { t, getLang, setLang, LANGS, type Lang } from './i18n';
 
 export type Block =
-  | { type: 'text'; text: string }
-  // parentId set => the call came from a subagent, not the main thread (agentType = its subagent type)
+  // parentId set => the block came from a subagent, not the main thread (agentType = its subagent
+  // type). Nested text renders in the task panel's live view, not the main transcript.
+  | { type: 'text'; text: string; parentId?: string; agentType?: string }
   | { type: 'tool_use'; id: string; name: string; input: any; output?: string; isError?: boolean; parentId?: string; agentType?: string };
 // One piece of agent-side work a turn spawned: a Task-tool subagent, a backgrounded shell, a local
 // workflow, an MCP monitor. Mirrors server/src/claude/tasks.ts (AgentTask).
@@ -47,7 +48,9 @@ export interface SearchHit { type: HitType; id: string; title: string; subtitle?
 // one per assistant message); `outChars` is the text/thinking streamed since then, which the UI turns
 // into an approximate delta so the meter keeps moving between exact updates. `thinking` = the model
 // is producing extended-thinking tokens right now (no visible text yet).
-export interface Live { blocks: Block[]; toolMap: Record<string, number>; outTokens: number; outChars: number; thinking: boolean; }
+// `subDelta` = in-flight partial text per subagent (keyed by the Task call's tool_use id) — the
+// task panel's live view streams from it until the completed block lands in `blocks`.
+export interface Live { blocks: Block[]; toolMap: Record<string, number>; outTokens: number; outChars: number; thinking: boolean; subDelta: Record<string, string>; }
 // Guide assistant (the floating corner panel). Its own per-user thread, never a chat session.
 export interface GuideMsg { id: string; role: 'user' | 'assistant'; content: { text?: string; blocks?: Block[]; interrupted?: boolean }; createdAt: number; }
 export interface QueueState { running: { id: string; author: { id: string; name: string } } | null; waiting: { id: string; author: { id: string; name: string } }[]; }
@@ -212,7 +215,7 @@ interface State {
   clearAvatar: () => Promise<void>;
 }
 
-const emptyLive = (): Live => ({ blocks: [], toolMap: {}, outTokens: 0, outChars: 0, thinking: false });
+const emptyLive = (): Live => ({ blocks: [], toolMap: {}, outTokens: 0, outChars: 0, thinking: false, subDelta: {} });
 
 let wired = false;
 
@@ -865,10 +868,28 @@ function wire(set: any, get: () => State) {
     const live = get().live || emptyLive();
     const blocks = live.blocks.slice();
     const last = blocks[blocks.length - 1];
-    if (last && last.type === 'text') blocks[blocks.length - 1] = { type: 'text', text: last.text + p.text };
+    // never merge into a subagent's text block — main-thread text starts its own block
+    if (last && last.type === 'text' && !last.parentId) blocks[blocks.length - 1] = { type: 'text', text: last.text + p.text };
     else blocks.push({ type: 'text', text: p.text });
     // visible text means the thinking phase is over
     set({ live: { ...live, blocks, thinking: false, outChars: live.outChars + String(p.text || '').length } });
+  });
+
+  // subagent partial text — streams into the task panel's live view, never the main transcript
+  sock.on('subagent:delta', (p: any) => {
+    if (!isCur(p.sessionId)) return;
+    const live = get().live || emptyLive();
+    set({ live: { ...live, subDelta: { ...live.subDelta, [p.parentId]: (live.subDelta[p.parentId] || '') + p.text }, outChars: live.outChars + String(p.text || '').length } });
+  });
+
+  // a subagent finished a text block — the completed block replaces its delta buffer
+  sock.on('subagent:block', (p: any) => {
+    if (!isCur(p.sessionId)) return;
+    const live = get().live || emptyLive();
+    const blocks = [...live.blocks, { type: 'text', text: p.text, parentId: p.parentId, agentType: p.agentType } as Block];
+    const subDelta = { ...live.subDelta };
+    delete subDelta[p.parentId];
+    set({ live: { ...live, blocks, subDelta } });
   });
 
   // extended thinking is streaming: nothing to render, but the turn is demonstrably alive and the

@@ -835,11 +835,13 @@ function MdText({ text, sources }: { text: string; sources: WikiSource[] }) {
   return <div ref={ref} className="font-serif text-[15px] leading-relaxed break-words" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
-function BlockList({ blocks, sources = [] }: { blocks: Block[]; sources?: WikiSource[] }) {
+// `nested` = rendering a single subagent's own pane (task panel live view): show its text blocks.
+// In the main transcript nested text is skipped — it streams in the task panel, not the thread.
+export function BlockList({ blocks, sources = [], nested = false }: { blocks: Block[]; sources?: WikiSource[]; nested?: boolean }) {
   return (
     <>
       {blocks.map((b, i) => b.type === 'text'
-        ? <MdText key={i} text={b.text} sources={sources} />
+        ? (b.parentId && !nested ? null : <MdText key={i} text={b.text} sources={sources} />)
         : <ToolCard key={i} b={b} />)}
     </>
   );
