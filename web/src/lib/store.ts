@@ -169,7 +169,7 @@ interface State {
   mergeReview: (reviewId: string) => Promise<{ mergeState: string; output: string }>;
   autoReviewRun: (reviewId: string) => Promise<void>;
   approveReview: (reviewId: string) => Promise<{ output: string }>;
-  newSession: () => Promise<void>;
+  newSession: (projectId?: string) => Promise<void>;
   importSessions: (payload: { sid: string; projectName?: string; sessionUuids: string[]; autoTitle: boolean; overwrite: string[]; projectOverwrite: boolean; projectWipe: boolean }) => Promise<{ project: any; sessions: any[] }>;
   newRoom: (name: string) => Promise<void>;
   newWikiTopic: (payload: { name: string; description: string; stagingId?: string; precompiled?: boolean }) => Promise<void>;
@@ -501,8 +501,8 @@ export const useStore = create<State>((set, get) => ({
     if (n.messageId) set({ highlightMsgId: n.messageId });
   },
 
-  newSession: async () => {
-    const { session } = await api.post('/api/sessions', {});
+  newSession: async (projectId) => {
+    const { session } = await api.post('/api/sessions', projectId ? { projectId } : {});
     await get().refreshLists();
     await get().openPrivate(session.id);
   },

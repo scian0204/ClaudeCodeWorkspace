@@ -313,7 +313,7 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   // ---- sessions ----
   if (P === '/api/sessions' && M === 'GET') return ok({ sessions: db.sessions });
   if (P === '/api/sessions' && M === 'POST') {
-    const s = { id: genId('s'), title: 'New chat', updatedAt: Date.now(), projectId: null, model: 'claude-opus-4-8', effort: 'high', permissionMode: 'default' };
+    const s = { id: genId('s'), title: 'New chat', updatedAt: Date.now(), projectId: b.projectId ? String(b.projectId) : null, model: 'claude-opus-4-8', effort: 'high', permissionMode: 'default' };
     db.sessions.unshift(s); db.messages[s.id] = []; return ok({ session: s });
   }
   if (seg[1] === 'sessions' && seg[3] === 'commands') return ok({ commands: COMMANDS });

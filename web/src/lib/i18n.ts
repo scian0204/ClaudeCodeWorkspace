@@ -286,6 +286,7 @@ const ko: Dict = {
   // sidebar
   'sidebar.teamName': '{name} 팀',
   'sidebar.newChat': '새 대화',
+  'sidebar.newChatInProject': '이 프로젝트에서 새 대화',
   'sidebar.personal': '개인',
   'sidebar.noProjectGroup': '프로젝트 미지정',
   'sidebar.deleteChatTitle': '대화 삭제',
@@ -1440,6 +1441,7 @@ const en: Dict = {
   // sidebar
   'sidebar.teamName': '{name} team',
   'sidebar.newChat': 'New chat',
+  'sidebar.newChatInProject': 'New chat in this project',
   'sidebar.personal': 'Personal',
   'sidebar.noProjectGroup': 'No project',
   'sidebar.deleteChatTitle': 'Delete chat',
