@@ -50,6 +50,17 @@
 
 ---
 
+## Unreleased
+
+<details>
+<summary><b>fix(agents): 승인 모드에서 서브에이전트를 포그라운드로 고정</b> — "Stream closed" 쓰기 실패의 SDK #27203 우회 · <code>9323c43</code></summary>
+
+팀 에이전트 테스트 턴에서 중간부터 **모든 쓰기가 불가**: Edit/Write/Bash 리다이렉트 전부 `Tool permission request failed: AbortError: Stream closed`로 실패, 읽기 도구만 정상. 원인은 업스트림 버그([anthropics/claude-code#27203](https://github.com/anthropics/claude-code/issues/27203)) — **백그라운드** 서브에이전트의 승인 필요 도구 호출이 `canUseTool`에 도달하지 못하고 CLI 내부에서 거부되는데, 이 거부가 컨트롤 스트림을 오염시켜 그 턴의 이후 모든 승인 왕복(메인 스레드 포함)이 죽음. 2.1.229에서 재현. 우회: 사람에게 승인을 물을 수 있는 세션은 CLI를 `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`로 띄워 서브에이전트를 포그라운드로 고정(승인이 정상 흐름을 탐). bypass·무인 리뷰 턴은 승인이 없으므로 백그라운드 유지. 새 관리자 플래그 `bgTasksWithPrompts`(기본 꺼짐)로 업스트림 수정 후 원복 가능.
+
+</details>
+
+---
+
 ## v1.15.0 — 2026-08-13
 
 <sub>릴리스 커밋 `6555973`</sub>

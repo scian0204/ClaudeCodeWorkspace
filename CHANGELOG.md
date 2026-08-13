@@ -50,6 +50,17 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
+## Unreleased
+
+<details>
+<summary><b>fix(agents): keep subagents foreground in prompting modes</b> — SDK #27203 workaround for "Stream closed" write failures · <code>9323c43</code></summary>
+
+A team-agent test turn lost ALL write ability mid-flight: every Edit/Write/Bash-write failed with `Tool permission request failed: AbortError: Stream closed` while read-only tools kept working. Upstream bug ([anthropics/claude-code#27203](https://github.com/anthropics/claude-code/issues/27203)): a **background** subagent's tool call that needs permission never reaches `canUseTool` — the CLI denies it internally and that denial corrupts the control stream, killing every later permission round-trip in the turn, main thread included. Reproduced on 2.1.229. Workaround: sessions that can prompt a human now spawn the CLI with `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` (subagents run foreground, prompts flow normally); bypass and unattended review turns keep background tasks. New admin flag `bgTasksWithPrompts` (default off) restores background tasks once the upstream fix lands.
+
+</details>
+
+---
+
 ## v1.15.0 — 2026-08-13
 
 <sub>release commit `6555973`</sub>
