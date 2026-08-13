@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore, type AgentTask } from '../lib/store';
 import { useT } from '../lib/i18n';
 import { useIsMobile } from '../lib/ui';
+import { BlockList } from './Chat';
 import {
   IconActivity, IconUsers, IconTerminal, IconGitBranch, IconEye, IconBox, IconChevronRight,
   IconChevronDown, IconCheck, IconX, IconBan, IconSquare, IconClock, IconDot, IconDotOutline,
@@ -125,12 +126,21 @@ export function TasksPanel({ width, onResize }: { width: number; onResize: (w: n
 
 function TaskRow({ task, now }: { task: AgentTask; now: number }) {
   const [open, setOpen] = useState(false);
+  const [watch, setWatch] = useState(false);
   const t = useT();
   const st = statusUi(task, t);
   const Icon = kindIcon(task.kind);
   const running = isTaskLive(task);
   const elapsed = running ? now - task.startedAt : (task.endedAt ? task.endedAt - task.startedAt : task.durationMs);
   const detail = task.error || task.summary;
+  // live sub-transcript (tmux-style): everything this subagent streamed during the in-flight turn,
+  // joined to the task via the spawning Task call's tool_use id
+  const live = useStore((s) => s.live);
+  const subBlocks = useMemo(
+    () => (task.toolUseId && live ? live.blocks.filter((b) => b.parentId === task.toolUseId) : []),
+    [live, task.toolUseId]);
+  const subDelta = (task.toolUseId && live?.subDelta[task.toolUseId]) || '';
+  const watchable = subBlocks.length > 0 || !!subDelta;
 
   return (
     <div className={`border rounded-lg mb-1.5 overflow-hidden ${running ? 'border-clay/50 bg-claysoft' : 'border-line bg-card'}`}>
@@ -156,15 +166,36 @@ function TaskRow({ task, now }: { task: AgentTask; now: number }) {
             {task.tokens != null && <span>{fmtTokens(task.tokens)} tok</span>}
             {task.toolUses != null && <span>{t('tasks.toolUses', { n: task.toolUses })}</span>}
             {task.lastTool && <span className="truncate">{task.lastTool}</span>}
+            {watchable && (
+              <button className={`inline-flex items-center gap-1 shrink-0 ${watch ? 'text-clay' : 'text-txt3 hover:text-clay'}`}
+                title={t('tasks.watchTip')} onClick={(e) => { e.stopPropagation(); setWatch(!watch); }}>
+                <IconEye size={12} />{t('tasks.watch')}
+              </button>
+            )}
             {detail && <span className="ml-auto text-txt3">{open ? <IconChevronDown size={12} /> : <IconChevronRight size={12} />}</span>}
           </div>
         </div>
       </div>
+      {watch && watchable && <SubagentLive blocks={subBlocks} delta={subDelta} streaming={running} />}
       {open && detail && (
         <div className={`border-t border-line px-2.5 py-2 text-[11px] whitespace-pre-wrap break-words bg-bg max-h-56 overflow-auto scrolly ${task.error ? 'text-danger' : 'text-txt2'}`}>
           {detail}
         </div>
       )}
+    </div>
+  );
+}
+
+// One subagent's own pane: its completed blocks plus the still-streaming text tail, pinned to the
+// bottom like a terminal so new output stays in view.
+function SubagentLive({ blocks, delta, streaming }: { blocks: any[]; delta: string; streaming: boolean }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => { const el = ref.current; if (el) el.scrollTop = el.scrollHeight; }, [blocks, delta]);
+  return (
+    <div ref={ref} className="border-t border-line px-2.5 py-2 bg-bg max-h-72 overflow-auto scrolly text-[12px]">
+      <BlockList nested blocks={blocks} />
+      {delta && <div className="whitespace-pre-wrap break-words text-txt2">{delta}</div>}
+      {streaming && <span className="inline-block w-1.5 h-3.5 bg-clay/70 align-text-bottom animate-pulse" />}
     </div>
   );
 }

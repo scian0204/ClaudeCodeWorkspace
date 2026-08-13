@@ -55,11 +55,18 @@ function taskUpsert(sessionId: string, id: string, patch: any) {
 }
 
 // One turn's worth of behind-the-scenes work: a Task-tool subagent that finishes, plus a backgrounded
-// shell that keeps running past it — enough to exercise every panel state.
+// shell that keeps running past it — enough to exercise every panel state. The subagent also streams
+// a nested tool call + text (subagent:delta/subagent:block) so the task panel's live view is demoable.
 function runDemoTasks(sessionId: string) {
   const sub = `task_${rid().slice(0, 6)}`, sh = `task_${rid().slice(0, 6)}`;
-  later(300, () => taskUpsert(sessionId, sub, { kind: 'subagent', agentType: 'code-reviewer', label: 'Review the changed files for hook-order bugs', status: 'running', startedAt: Date.now() }));
+  const subTool = `tu_${rid().slice(0, 6)}`, grep = `t_${rid().slice(0, 6)}`;
+  later(300, () => taskUpsert(sessionId, sub, { kind: 'subagent', agentType: 'code-reviewer', toolUseId: subTool, label: 'Review the changed files for hook-order bugs', status: 'running', startedAt: Date.now() }));
   later(700, () => taskUpsert(sessionId, sh, { kind: 'shell', label: 'npm run build -w web', status: 'running', background: true, startedAt: Date.now() }));
+  later(900, () => deliver('tool:use', { sessionId, id: grep, name: 'Grep', input: { pattern: 'useEffect\\(' }, parentId: subTool, agentType: 'code-reviewer' }));
+  later(1500, () => deliver('tool:result', { sessionId, id: grep, output: 'web/src/lib/ui.tsx:41: useEffect(() => { ... }, [])\nweb/src/components/Sidebar.tsx:118: useEffect(...)', isError: false }));
+  const subText = 'Two suspicious dependency arrays so far — checking whether the hooks read state they never list.';
+  chunks(subText).forEach((c, i) => later(1700 + i * 160, () => deliver('subagent:delta', { sessionId, parentId: subTool, text: c })));
+  later(1700 + chunks(subText).length * 160 + 200, () => deliver('subagent:block', { sessionId, parentId: subTool, agentType: 'code-reviewer', text: subText }));
   later(1600, () => taskUpsert(sessionId, sub, { lastTool: 'Grep', tokens: 8400, toolUses: 5 }));
   later(2900, () => taskUpsert(sessionId, sub, { status: 'completed', endedAt: Date.now(), tokens: 12800, toolUses: 9, summary: '2 findings: a stale dependency array in useGuideInset, and a missing IME guard on the retitle input.' }));
   later(5200, () => taskUpsert(sessionId, sh, { status: 'completed', endedAt: Date.now(), background: false, summary: 'built in 4.1s — 1 chunk over 500 kB' }));

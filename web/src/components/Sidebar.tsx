@@ -13,7 +13,7 @@ import { SearchButton } from './SearchPalette';
 import { UploadProgress } from './UploadProgress';
 import { useT } from '../lib/i18n';
 import {
-  IconX, IconDownload, IconMessage, IconPencil, IconTrash, IconUsers, IconClock, IconWarning,
+  IconX, IconUpload, IconMessage, IconPencil, IconTrash, IconUsers, IconClock, IconWarning,
   IconBook, IconPuzzle, IconSliders, IconLogout, IconFile, IconBox, IconRefresh, IconPlus,
   IconCheckCircle, IconBan, IconGitBranch, IconCheckSquare, IconSquare, IconFolder, IconPanelLeft,
   IconGlobe, IconKeyboard, IconSparkle, IconChevronDown, IconChevronRight, IconCopy,
@@ -103,11 +103,12 @@ export function Sidebar() {
 
       <div className="flex-1 overflow-y-auto scrolly px-2 pb-1">
         <Section label={t('sidebar.personal')} onAdd={() => newSession()}
-          extra={sessionImportEnabled ? <button className="cursor-pointer leading-none text-txt3 hover:text-txt" title={t('import.button')} aria-label={t('import.button')} onClick={() => setImportOpen(true)}><IconDownload size={15} /></button> : undefined} />
+          extra={sessionImportEnabled ? <button className="cursor-pointer leading-none text-txt3 hover:text-txt" title={t('import.button')} aria-label={t('import.button')} onClick={() => setImportOpen(true)}><IconUpload size={15} /></button> : undefined} />
         {sessions.length === 0 && <div className="text-[11px] text-txt3 px-2 py-1">{t('common.none')}</div>}
-        {groups.map((g) => (<div key={g.key || '_none'}>
+        {groups.map((g) => (<div key={g.key || '_none'} className="mb-2">
           <GroupHeader name={g.name} tag={g.tag} count={g.items.length}
-            open={!closedGroups.includes(g.key)} onToggle={() => toggleGroup(g.key)} />
+            open={!closedGroups.includes(g.key)} onToggle={() => toggleGroup(g.key)}
+            onAdd={() => newSession(g.key || undefined)} />
           {!closedGroups.includes(g.key) && g.items.map((s) => (
           <Item key={s.id} active={panel === null && current?.chatSessionId === s.id} onClick={() => { setPanel(null); openPrivate(s.id); }}
             menu={[{ label: t('ctx.open'), icon: <IconMessage size={14} />, onSelect: () => { setPanel(null); openPrivate(s.id); } }]}>
@@ -694,7 +695,7 @@ function Section({ label, onAdd, extra }: { label: string; onAdd?: () => void; e
   );
 }
 // Collapsible project header above a group of chats — same row look as the review-repo header.
-function GroupHeader({ name, tag, count, open, onToggle }: { name: string; tag: string; count: number; open: boolean; onToggle: () => void }) {
+function GroupHeader({ name, tag, count, open, onToggle, onAdd }: { name: string; tag: string; count: number; open: boolean; onToggle: () => void; onAdd?: () => void }) {
   const t = useT();
   return (
     // named for screen readers (and for the right-click menu, which reads controls off the DOM)
@@ -705,6 +706,9 @@ function GroupHeader({ name, tag, count, open, onToggle }: { name: string; tag: 
       <span className="flex-1 truncate text-left font-semibold" title={name}>{name}</span>
       {tag && <span className="text-txt3 shrink-0">{tag}</span>}
       <span className="text-txt3 shrink-0">{count}</span>
+      {onAdd && <span role="button" aria-label={t('sidebar.newChatInProject')} title={t('sidebar.newChatInProject')}
+        className="cursor-pointer leading-none text-txt3 hover:text-txt shrink-0"
+        onClick={(e) => { e.stopPropagation(); onAdd(); }}><IconPlus size={13} /></span>}
     </button>
   );
 }

@@ -123,14 +123,16 @@ export async function createProject(input: ProjectInput, user: AuthUser): Promis
   return row;
 }
 
-function canAccess(u: AuthUser, p: NonNullable<ReturnType<typeof getProject>>): boolean {
+// also used by routes/agents.ts to gate project-scope agents
+export function canAccessProject(u: AuthUser, p: NonNullable<ReturnType<typeof getProject>>): boolean {
   if (u.role === 'admin') return true;
   if (p.scope === 'common') return true;
   if (p.scope === 'user') return p.ownerId === u.id;
   if (p.scope === 'room') return rooms.isMember(p.ownerId!, u.id);
   return false;
 }
-function getProject(id: string) {
+const canAccess = canAccessProject;
+export function getProject(id: string) {
   return db.select().from(schema.projects).where(eq(schema.projects.id, id)).get();
 }
 

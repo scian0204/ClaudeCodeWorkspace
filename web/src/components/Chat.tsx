@@ -114,14 +114,17 @@ function AgentPicker() {
   const c = useStore((s) => s.current);
   const setAgent = useStore((s) => s.setAgent);
   const t = useT();
-  const [names, setNames] = useState<string[]>([]);
+  const [rows, setRows] = useState<any[]>([]);
   useEffect(() => {
     if (!teamAgentsEnabled) return;
     api.get('/api/agents').then((r) => {
-      const enabled = [...(r.common || []), ...(r.mine || [])].filter((a: any) => a.enabled).map((a: any) => a.name);
-      setNames([...new Set(enabled)]);
+      setRows([...(r.common || []), ...(r.mine || []), ...(r.projects || [])]);
     }).catch(() => {});
   }, [teamAgentsEnabled]);
+  // project agents only apply to sessions of their project — mirror resolveAgents' filter
+  const names = [...new Set(rows
+    .filter((a) => a.enabled && (a.scope !== 'project' || a.projectId === c?.projectId))
+    .map((a) => a.name))];
   if (!teamAgentsEnabled || !c || (names.length === 0 && !c.agent)) return null;
   return (
     <DM.Root>
@@ -832,11 +835,13 @@ function MdText({ text, sources }: { text: string; sources: WikiSource[] }) {
   return <div ref={ref} className="font-serif text-[15px] leading-relaxed break-words" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
-function BlockList({ blocks, sources = [] }: { blocks: Block[]; sources?: WikiSource[] }) {
+// `nested` = rendering a single subagent's own pane (task panel live view): show its text blocks.
+// In the main transcript nested text is skipped — it streams in the task panel, not the thread.
+export function BlockList({ blocks, sources = [], nested = false }: { blocks: Block[]; sources?: WikiSource[]; nested?: boolean }) {
   return (
     <>
       {blocks.map((b, i) => b.type === 'text'
-        ? <MdText key={i} text={b.text} sources={sources} />
+        ? (b.parentId && !nested ? null : <MdText key={i} text={b.text} sources={sources} />)
         : <ToolCard key={i} b={b} />)}
     </>
   );
