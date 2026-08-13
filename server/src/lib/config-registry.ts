@@ -70,6 +70,9 @@ export const DEFS: ConfigDef[] = [
   // enough that the cost is paid once, not on every popover open.
   { key: 'usageProbeTtlMs', group: 'claude', type: 'int', default: '120000', min: 1000, max: 600000, unit: 'ms' },
   { key: 'usageProbeTimeoutMs', group: 'claude', type: 'int', default: '45000', min: 1000, max: 120000, unit: 'ms' },
+  // when the probe gets NO answer (CLI cold start starved under load), serve the account's previous
+  // answer instead of "unavailable" — plan windows are account-wide and drift slowly. 0 disables.
+  { key: 'usageLastGoodTtlMs', group: 'claude', type: 'int', default: '1800000', min: 0, max: 86400000, unit: 'ms' },
   // auto-resume a turn that hit the claude.ai plan window (5h / weekly), once the window resets
   { key: 'autoResumeEnabled', group: 'claude', type: 'bool', default: '1' },
   { key: 'autoResumeGraceMs', group: 'claude', type: 'int', default: '60000', min: 0, max: 3600000, unit: 'ms' },

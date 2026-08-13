@@ -640,6 +640,7 @@ const ko: Dict = {
   'cfg.turnBackoffCapMs': '백오프 상한', 'cfgDesc.turnBackoffCapMs': '429 재시도 백오프의 최대 지연',
   'cfg.usageProbeTtlMs': '사용량 캐시 TTL', 'cfgDesc.usageProbeTtlMs': '사용량/한도 프로브 결과 캐시 수명',
   'cfg.usageProbeTimeoutMs': '사용량 프로브 타임아웃', 'cfgDesc.usageProbeTimeoutMs': 'CLI 사용량 프로브 최대 대기',
+  'cfg.usageLastGoodTtlMs': '한도 최근값 유지 시간', 'cfgDesc.usageLastGoodTtlMs': '프로브가 응답을 못 받으면(부하로 CLI 기동 지연 등) 이 시간 안의 직전 정상 한도를 대신 표시. 0이면 비활성',
   'cfg.reviewAuto': '자동 리뷰', 'cfgDesc.reviewAuto': '새 PR 감지 시 리뷰 파이프라인 자동 실행',
   'cfg.reviewComment': 'PR 코멘트 게시', 'cfgDesc.reviewComment': '완료된 리뷰 결과를 PR 코멘트로 게시',
   // 가이드 어시스턴트 (우측 하단 플로팅 패널)
@@ -1806,6 +1807,7 @@ const en: Dict = {
   'cfg.turnBackoffCapMs': 'Backoff cap', 'cfgDesc.turnBackoffCapMs': 'Ceiling for the 429 retry backoff delay',
   'cfg.usageProbeTtlMs': 'Usage cache TTL', 'cfgDesc.usageProbeTtlMs': 'How long a usage/limit probe result is cached',
   'cfg.usageProbeTimeoutMs': 'Usage probe timeout', 'cfgDesc.usageProbeTimeoutMs': 'Max wait for the CLI usage probe',
+  'cfg.usageLastGoodTtlMs': 'Limits last-good TTL', 'cfgDesc.usageLastGoodTtlMs': 'When a probe gets no answer (CLI start starved under load), show the account\'s previous limits if newer than this. 0 disables',
   'cfg.reviewAuto': 'Auto review', 'cfgDesc.reviewAuto': 'Auto-run the review pipeline when a new PR is detected',
   'cfg.reviewComment': 'Post PR comment', 'cfgDesc.reviewComment': 'Post the finished review back as a PR comment',
   // guide assistant (the floating bottom-right panel)

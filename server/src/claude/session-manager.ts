@@ -196,6 +196,16 @@ const authKindOf = (env: Record<string, string>): AuthKind =>
   env.CLAUDE_CODE_OAUTH_TOKEN ? 'oauth' : env.ANTHROPIC_API_KEY ? 'apiKey' : Object.keys(env).length ? 'other' : 'none';
 const EMPTY_USAGE: UsageInfo = { context: null, rateLimitsAvailable: false, subscriptionType: null, rateLimits: null, authKind: 'none' };
 const usageCache = new Map<string, { at: number; data: UsageInfo }>();
+// Account-level last-known-good plan limits. A probe that got NO answer (CLI cold start starved
+// under heavy load → timeout) must not blank the popover for an account whose limits we reported
+// minutes ago — plan windows are account-wide and drift slowly, so serve the previous answer. A
+// probe that ANSWERED "no limits" (API key) is a real answer and never lands here.
+type LimitsSlice = Pick<UsageInfo, 'rateLimitsAvailable' | 'subscriptionType' | 'rateLimits'>;
+const lastLimits = new Map<string, { at: number; d: LimitsSlice }>();
+const lastGoodFor = (acctKey: string): LimitsSlice | null => {
+  const lg = lastLimits.get(acctKey);
+  return lg && Date.now() - lg.at < cfg.int('usageLastGoodTtlMs') ? lg.d : null;
+};
 const win = (w: any): Win | null => (w ? { utilization: w.utilization ?? null, resetsAt: w.resets_at ?? null } : null);
 
 export async function probeUsage(chatSessionId: string, requesterId?: string | null, opts?: { fresh?: boolean }): Promise<UsageInfo> {
@@ -220,7 +230,8 @@ export async function probeUsage(chatSessionId: string, requesterId?: string | n
   // an OAuth subscription — and the only kind that can actually report plan windows.
   const authKind: AuthKind = prov.source === 'login' || loginProbe ? 'oauth' : authKindOf(prov.env);
 
-  const cacheKey = `${chatSessionId}|${authId ?? 'shared'}`;
+  const acctKey = authId ?? 'shared';
+  const cacheKey = `${chatSessionId}|${acctKey}`;
   const hit = usageCache.get(cacheKey);
   if (!opts?.fresh && hit && Date.now() - hit.at < cfg.int('usageProbeTtlMs')) return hit.data;
 
@@ -270,10 +281,20 @@ export async function probeUsage(chatSessionId: string, requesterId?: string | n
     // Cache only a probe whose account lookup actually ANSWERED. A timed-out/errored lookup (`us`
     // null — e.g. CLI startup starved under heavy host load) must not pin "no plan limits" for the
     // whole TTL: reopening the popover should retry, not re-serve the failure.
-    if (us) usageCache.set(cacheKey, { at: Date.now(), data });
-    else usageCache.delete(cacheKey);
+    if (us) {
+      usageCache.set(cacheKey, { at: Date.now(), data });
+      lastLimits.set(acctKey, { at: Date.now(), d: { rateLimitsAvailable: data.rateLimitsAvailable, subscriptionType: data.subscriptionType, rateLimits: data.rateLimits } });
+    } else {
+      usageCache.delete(cacheKey);
+      const lg = lastGoodFor(acctKey);
+      if (lg) Object.assign(data, lg);
+      console.warn(`[usage] limits probe got no answer (session=${chatSessionId})${lg ? ' — served last-known-good' : ''}`);
+    }
     return data;
-  } catch { return { ...EMPTY_USAGE, authKind }; }
+  } catch {
+    const lg = lastGoodFor(acctKey);
+    return { ...EMPTY_USAGE, authKind, ...(lg ?? {}) };
+  }
   finally {
     try { abort.abort(); } catch { /* noop */ }
     try { abortLimits.abort(); } catch { /* noop */ }
