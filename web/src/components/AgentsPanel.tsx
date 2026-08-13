@@ -9,6 +9,7 @@ interface AgentRow {
   id: string; scope: 'common' | 'user' | 'project'; ownerId: string; projectId: string; name: string;
   description: string; prompt: string; tools: string; model: string | null; enabled: number;
 }
+type FsAgentRow = { name: string; description: string; model?: string; tools?: string; source: 'home' | 'project'; projectId?: string; file: string };
 type FormState = { id: string | null; name: string; description: string; prompt: string; tools: string; model: string; projectId: string };
 const emptyForm = (): FormState => ({ id: null, name: '', description: '', prompt: '', tools: '', model: '', projectId: '' });
 const toForm = (a: AgentRow): FormState => ({
@@ -25,11 +26,11 @@ export function AgentsPanel() {
   const user = useStore((s) => s.user)!;
   const projects = useStore((s) => s.projects);
   const isAdmin = user.role === 'admin';
-  const [data, setData] = useState<{ common: AgentRow[]; mine: AgentRow[]; projects: AgentRow[] }>({ common: [], mine: [], projects: [] });
+  const [data, setData] = useState<{ common: AgentRow[]; mine: AgentRow[]; projects: AgentRow[]; files: FsAgentRow[] }>({ common: [], mine: [], projects: [], files: [] });
   const [models, setModels] = useState<Record<string, string>>({});
   const t = useT();
 
-  const load = async () => setData({ projects: [], ...(await api.get('/api/agents')) });
+  const load = async () => setData({ projects: [], files: [], ...(await api.get('/api/agents')) });
   useEffect(() => {
     load().catch((e) => useStore.getState().setError(e.message));
     api.get('/api/config').then((cf) => { if (cf?.models) setModels(cf.models); }).catch(() => {});
@@ -59,6 +60,23 @@ export function AgentsPanel() {
         <ScopeCard
           title={t('agents.personal')} desc={t('agents.personalDesc')}
           rows={data.mine} canEdit models={models} scope="user" onChange={load} onErr={err} />
+        {data.files.length > 0 && (
+          <div className="bg-card border border-line rounded-xl p-4">
+            <div className="font-semibold mb-1">{t('agents.files')}</div>
+            <div className="text-xs text-txt3 mb-3">{t('agents.filesDesc')}</div>
+            <div className="space-y-1.5">
+              {data.files.map((a, i) => (
+                <div key={`${a.source}:${a.projectId || ''}:${a.file}:${i}`} className="flex items-center gap-2 border border-line rounded-lg px-3 py-2 flex-wrap">
+                  <code className="font-mono text-xs font-semibold shrink-0">{a.name}</code>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0 bg-line text-txt2">
+                    {a.source === 'home' ? t('agents.sourceHome') : (projName[a.projectId || ''] || a.projectId)}</span>
+                  {a.model && <span className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'var(--claysoft)', color: 'var(--clay)' }}>{models[a.model] || a.model}</span>}
+                  <span className="text-xs text-txt2 truncate flex-1 min-w-[120px]" title={a.file}>{a.description || a.file}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

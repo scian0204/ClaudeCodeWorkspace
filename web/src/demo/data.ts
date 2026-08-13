@@ -219,6 +219,11 @@ export const db = {
     projects: [
       { id: 'ag_api_migrate', scope: 'project', ownerId: '', projectId: 'p_api', name: 'schema-migrator', description: 'Writes and reviews DB migrations for the api-server project.', prompt: 'You own the api-server database schema. Every migration must be reversible and documented.', tools: '["Read","Edit","Write","Grep"]', model: null, enabled: 1 },
     ] as any[],
+    // read-only .claude/agents/*.md found on disk (the CLI loads these itself)
+    files: [
+      { name: 'release-notes', description: 'Drafts release notes from merged PRs since the last tag.', source: 'home', file: '.claude/agents/release-notes.md' },
+      { name: 'api-linter', description: 'Checks handlers against the internal API style guide.', model: 'claude-haiku-4-5-20251001', source: 'project', projectId: 'p_api', file: '.claude/agents/api-linter.md' },
+    ] as any[],
   },
   marketplaces: { common: [{ name: 'anthropic' }, { name: 'community' }], mine: [] as any[] },
   reviewRepos: [

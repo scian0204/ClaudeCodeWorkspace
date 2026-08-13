@@ -216,7 +216,7 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   }
 
   // ---- team agents ----
-  if (P === '/api/agents' && M === 'GET') return ok({ common: db.agents.common, mine: db.agents.mine, projects: db.agents.projects });
+  if (P === '/api/agents' && M === 'GET') return ok({ common: db.agents.common, mine: db.agents.mine, projects: db.agents.projects, files: db.agents.files });
   if (P === '/api/agents' && M === 'POST') {
     const scope = b.scope === 'common' ? 'common' : b.scope === 'project' ? 'project' : 'user';
     if (scope === 'project' && !b.projectId) return { status: 400, data: { error: 'unknown project' } };

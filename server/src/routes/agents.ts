@@ -3,6 +3,7 @@ import { requireAuth } from '../auth/index.js';
 import { cfg } from '../lib/config-registry.js';
 import { db, schema } from '../db/index.js';
 import { listAgents, getAgent, createAgent, updateAgent, setAgentEnabled, deleteAgent } from '../claude/team-agents.js';
+import { listFsAgents } from '../claude/fs-agents.js';
 import { canAccessProject, getProject } from './projects.js';
 
 // Team-agent CRUD. Mirrors the plugins trust model: 'common' agents are admin-only (their prompt is
@@ -25,8 +26,10 @@ export async function agentRoutes(app: FastifyInstance) {
   app.get('/api/agents', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
     if (off(reply)) return;
-    const visible = db.select().from(schema.projects).all().filter((p) => canAccessProject(u, p)).map((p) => p.id);
-    return listAgents(u.id, visible);
+    const visible = db.select().from(schema.projects).all().filter((p) => canAccessProject(u, p));
+    // `files` = read-only .claude/agents/*.md found on disk (the CLI loads them by itself via
+    // settingSources — listing them here is what makes agents Claude wrote as files visible in the UI)
+    return { ...listAgents(u.id, visible.map((p) => p.id)), files: listFsAgents(u.id, visible) };
   });
 
   app.post('/api/agents', async (req, reply) => {
