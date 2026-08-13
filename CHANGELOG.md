@@ -4,7 +4,7 @@
 
 # Update notes
 
-Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and **v1.16.0** (2026-08-13) — all **304 commits**.
+Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and **v1.16.0** (2026-08-13) — all **305 commits**.
 
 Each row shows only its **title and commit hash**; click the triangle for the detail (root cause, implementation, config keys).
 
@@ -51,6 +51,15 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 | [Early development](#early-development--2026-07-20--07-31) | 07-20 → 07-31 | 144 | P0–P5 skeleton · LLM Wiki · tokens · git · PR review · config · import · DM |
 
 ---
+
+## Unreleased
+
+<details>
+<summary><b>fix(usage): serve last-known-good plan limits when the probe gets no answer</b> — popover no longer blanks under load · <code>d0ff87d</code></summary>
+
+Under heavy load (e.g. a team-agent turn spawning several CLI subprocesses) the usage probe's own CLI cold start can starve past `usageProbeTimeoutMs`; the popover then reported "unavailable" even for a signed-in account whose limits were shown minutes earlier. The probe now keeps an **account-level last-known-good** limits slice and serves it whenever a lookup gets NO answer (timeout/error) — a real "no limits" answer (API key) is a genuine answer and is never masked. New config: `usageLastGoodTtlMs` (default 30 min, 0 disables). No-answer probes now log one `[usage]` warn line so the next report is diagnosable.
+
+</details>
 
 ## v1.16.0 — 2026-08-13
 
