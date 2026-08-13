@@ -49,6 +49,40 @@
 
 ---
 
+## Unreleased
+
+<details>
+<summary><b>feat(sidebar): 프로젝트 그룹 간격 · 프로젝트별 빠른 새 대화 · 가져오기 아이콘 구분</b> — 세션 목록 손질 3건 · <code>84966f5</code></summary>
+
+사이드바의 프로젝트 그룹이 마진 없이 붙어 있었음 — 그룹 래퍼에 `mb-2`를 줘서 프로젝트마다 시각적 블록이 생김. 모든 그룹 헤더에 `+` 버튼이 생겨 그 프로젝트에 소속된 새 대화를 바로 만듦(`POST /api/sessions`는 원래 `projectId`를 받고 있었고, `newSession()`이 이제 전달 — 데모 목도 동일 반영). 세션 **가져오기**가 **내보내기**와 같은 다운로드 화살표 아이콘을 쓰고 있었는데, 새 `IconUpload`로 두 방향이 한눈에 구분됨.
+
+</details>
+
+<details>
+<summary><b>feat(agents): 프로젝트 단위 팀 에이전트</b> — 사람이 아니라 프로젝트에 붙는 에이전트 · <code>a123de8</code></summary>
+
+`team_agents`에 `project_id` 컬럼 추가(common/user 행은 ''; 유니크 인덱스는 scope+owner+project+name으로 ALTER **이후에** 재생성해 기존 DB가 그대로 마이그레이션됨). scope `'project'`는 `projectId`가 일치하는 모든 세션(개인·방 무관)에 적용 — 이름 충돌 시 common < project < personal 순으로 우선. 관리는 관리자 전용이되 본인 개인 프로젝트만 예외(공유 프로젝트의 프로젝트 에이전트 프롬프트는 다른 멤버 턴에도 주입되므로 공통 에이전트와 같은 신뢰 등급). `GET /api/agents`에 프로젝트 가시성으로 필터된 `projects` 그룹 추가, `POST`는 `scope:'project'` + `projectId` 수용. 패널에 프로젝트 카드(생성 시 프로젝트 선택, 행별 수정 권한, 프로젝트 칩)가 생기고, 채팅 헤더 피커는 세션의 프로젝트와 일치하는 프로젝트 에이전트만 보여줌.
+
+</details>
+
+<details>
+<summary><b>feat(agents): 파일시스템 에이전트(.claude/agents)를 UI에 표시</b> — Claude가 만든 파일이 이제 보임 · <code>e7af605</code></summary>
+
+CLI는 `.claude/agents/*.md`를 스스로 로드하므로(settingSources에 'user'·'project' 포함) 파일로 만든 에이전트 — 세션 중 Claude가 직접 만든 것 포함 — 는 호출은 되는데 눈에는 안 보였음. 새 fs-agents 모듈이 사용자 HOME의 agents 디렉터리 + 가시 프로젝트들의 `.claude/agents`를 스캔(frontmatter만 읽음)하고, `GET /api/agents`가 읽기 전용 `files` 그룹으로 반환 — 패널 전용 카드에 홈/프로젝트 출처 배지와 함께 표시. 관리(수정·삭제)는 의도적으로 파일 편집으로 남김.
+
+</details>
+
+<details>
+<summary><b>feat(tasks): 실행 중 서브에이전트의 tmux식 실시간 뷰</b> — 팀 에이전트가 일하는 걸 같이 본다 · <code>2e982cb</code></summary>
+
+서브에이전트의 스트리밍 텍스트가 메인 스레드의 `assistant:delta`로 새고 있었고(핸들러가 `parent_tool_use_id`를 무시), 완료된 중첩 텍스트 블록도 표시 없이 본문에 섞였음. 이제 중첩 부분 텍스트는 생성한 Task 호출의 tool_use id를 키로 `subagent:delta`로, 완료 블록은 `subagent:block`으로 나가고, 둘 다 `parentId`/`agentType`을 달고 저장되어 턴 중간에 합류한 클라이언트도 리플레이됨. 메인 본문은 중첩 텍스트를 더 이상 렌더하지 않고, 서브에이전트 작업 행의 **실시간** 토글을 켜면 터미널 같은 창 — 그 에이전트의 도구 카드 + 스트리밍 텍스트가 바닥 고정 + 펄스 커서로 표시. 데모도 중첩 스트림을 시뮬레이션.
+
+</details>
+
+- **docs(readme): 프로젝트 에이전트 · 파일 에이전트 · 실시간 서브에이전트 뷰 반영 (en/ko)** · `5e31ac0`
+
+---
+
 ## v1.14.2 — 2026-08-13
 
 <sub>릴리스 커밋 `747c2c2`</sub>

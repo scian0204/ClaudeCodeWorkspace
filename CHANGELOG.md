@@ -49,6 +49,40 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
+## Unreleased
+
+<details>
+<summary><b>feat(sidebar): project-group spacing, per-project quick add, distinct import icon</b> — three session-list papercuts · <code>84966f5</code></summary>
+
+Project groups in the sidebar stacked with zero margin between them — a `mb-2` on the group wrapper gives each project its own visual block. Every group header grows a `+` that opens a new chat already assigned to that project (`POST /api/sessions` accepted `projectId` all along; `newSession()` now forwards it and the demo mock mirrors it). Session **import** used the same download-arrow icon as **export** — a new `IconUpload` makes the two directions tell apart at a glance.
+
+</details>
+
+<details>
+<summary><b>feat(agents): project-scope team agents</b> — an agent for the project, not the person · <code>a123de8</code></summary>
+
+`team_agents` grows `project_id` ('' on common/user rows; the unique index is recreated as scope+owner+project+name *after* the ALTER so existing DBs migrate in place). Scope `'project'` applies the agent to every session whose `projectId` matches — personal or room — resolved common < project < personal on name collisions. Management is admin-only except on the caller's own personal projects (a project agent's prompt injects into other members' turns on shared projects — same trust class as common agents). `GET /api/agents` adds a `projects` group filtered by project visibility; `POST` accepts `scope:'project'` + `projectId`. The panel gains a project card (project select, per-row edit rights, project chip) and the chat-header picker only offers project agents matching the session's project.
+
+</details>
+
+<details>
+<summary><b>feat(agents): surface filesystem agents (.claude/agents) in the UI</b> — what Claude writes, you now see · <code>e7af605</code></summary>
+
+The CLI loads `.claude/agents/*.md` by itself (settingSources includes 'user' and 'project'), so agents created as files — including by Claude mid-session — were invocable but invisible. A new fs-agents module scans the caller's HOME agents dir plus `.claude/agents` of every visible project (frontmatter only) and `GET /api/agents` returns them as a read-only `files` group, shown in their own panel card with a home/project source badge. Managing them stays file editing by design.
+
+</details>
+
+<details>
+<summary><b>feat(tasks): tmux-style live view for running subagents</b> — watch a team agent work · <code>2e982cb</code></summary>
+
+Subagent stream text was leaking into the main thread's `assistant:delta` (the handler ignored `parent_tool_use_id`) and completed nested text blocks landed in the transcript unmarked. Now nested partials emit as `subagent:delta` keyed by the spawning Task call's tool_use id, completed nested blocks as `subagent:block`, and both are stored with `parentId`/`agentType` so mid-turn joiners replay them. The main transcript stops rendering nested text; each subagent task row gains a **Live** toggle opening a terminal-like pane — that agent's own tool cards + streaming text, auto-pinned to the bottom with a pulse cursor. The demo simulates the nested stream.
+
+</details>
+
+- **docs(readme): project agents, file agents, live subagent view (en/ko)** · `5e31ac0`
+
+---
+
 ## v1.14.2 — 2026-08-13
 
 <sub>release commit `747c2c2`</sub>
