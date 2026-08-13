@@ -344,6 +344,7 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
     permissionMode: mode, plugins: resolvePluginPaths(kind, ownerId),
     authToken: '', providerEnv: prov.env, providerModel: prov.model, gitEnv, mcpServers, disallowedTools,
     agents: resolveAgents(kind, ownerId, s.projectId), agentName: s.agent || undefined,
+    unattended: s.kind === 'review', // review turns auto-allow (makeAutoAllow) — no human prompts
   };
 
   // room + "include chat": collect team-chat accrued since Claude last saw a message,

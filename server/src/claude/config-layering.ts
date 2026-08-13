@@ -23,6 +23,7 @@ export interface SessionContext {
   disallowedTools?: string[];       // review turns deny host 'Bash' → exec only via the sandbox tool
   agents?: Record<string, { description: string; prompt: string; tools?: string[]; model?: string }>; // team agents (SDK options.agents)
   agentName?: string;               // main-thread agent (SDK options.agent) — must be a key of `agents`
+  unattended?: boolean;             // review pipeline: auto-allow canUseTool, never prompts a human
 }
 
 export function homeFor(ctx: SessionContext): string {
@@ -83,6 +84,17 @@ export function buildOptions(ctx: SessionContext, extra: {
   // admin toggle is off we leave the inherited env alone so a deliberate OTel setup still works.
   const privacy = privacyPlan((k) => cfg.bool(k));
   applyPrivacyEnv(env, privacy);
+  // Upstream SDK bug (anthropics/claude-code#27203): a BACKGROUND subagent's tool call that needs
+  // permission never reaches canUseTool — the CLI denies it internally, and that denial corrupts
+  // the control stream so every later permission round-trip in the turn fails with
+  // "Tool permission request failed: AbortError: Stream closed" (main thread included; observed
+  // live on 2.1.229). Foreground subagents pass prompts through canUseTool normally, so whenever
+  // this session can actually prompt a human, keep subagents in the foreground with the official
+  // kill switch. bypass mode and unattended (review) turns never prompt — they keep background
+  // tasks. `bgTasksWithPrompts` re-enables them everywhere once the upstream fix lands.
+  if (ctx.permissionMode !== 'bypassPermissions' && !ctx.unattended && !cfg.bool('bgTasksWithPrompts')) {
+    env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS = '1';
+  }
 
   const options: any = {
     cwd: ctx.cwd,
