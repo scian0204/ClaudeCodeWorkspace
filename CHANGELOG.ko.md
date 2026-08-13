@@ -51,6 +51,17 @@
 
 ---
 
+## Unreleased
+
+<details>
+<summary><b>feat(agents): 에이전트 팀 세션 활성화 + tmux식 분할 보기</b> — 작업 패널이 곧 팀원 패널 · <code>43c4f12</code></summary>
+
+이제 세션이 `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`로 실행됨(관리자 플래그 `agentTeamsEnabled`, 기본 켜짐). 컨테이너 안에서 SDK 스파이크를 돌려 확인: 헤드리스 모드에서 팀원은 **같은 스트림 위의 이름 붙은 백그라운드 에이전트**로 나타남(`task_*` 이벤트 + `parent_tool_use_id` 태깅) — 작업 패널의 실시간 뷰가 이미 렌더하는 바로 그 배관이라, 패널이 CLI 팀원 패널의 워크스페이스 대응물임. 패널 헤더에 분할 보기 토글(IconGrid) 추가 — 모든 에이전트의 실시간 창을 tmux처럼 한 번에 펼침. 주의: 팀원 = 백그라운드 작업이므로 승인 모드 세션은 #27203 우회 때문에 순차 실행 — 동시 실행 팀은 업스트림 수정 전까지 bypass 모드 세션에서.
+
+</details>
+
+---
+
 ## v1.15.1 — 2026-08-13
 
 <sub>릴리스 커밋 `006e4de`</sub>

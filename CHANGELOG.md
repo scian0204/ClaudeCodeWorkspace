@@ -51,6 +51,17 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
+## Unreleased
+
+<details>
+<summary><b>feat(agents): agent teams enabled per session + tmux-style split view</b> — the task panel becomes the teammate panel · <code>43c4f12</code></summary>
+
+Sessions now run with `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` (admin flag `agentTeamsEnabled`, default on). A live SDK spike showed that in headless mode teammates surface as **named background agents on the same stream** (`task_*` events + `parent_tool_use_id`-tagged messages) — the very plumbing the task panel's live view renders, so the panel is the workspace's equivalent of the CLI's teammate panel. New split-view toggle (IconGrid) opens every agent's live pane at once, tmux-style. Caveat: teammates are background tasks, so prompting-mode sessions keep them sequential under the #27203 workaround — concurrent teams need a bypass-mode session until the upstream fix.
+
+</details>
+
+---
+
 ## v1.15.1 — 2026-08-13
 
 <sub>release commit `006e4de`</sub>
