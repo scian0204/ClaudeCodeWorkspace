@@ -6,33 +6,40 @@ import { useT } from '../lib/i18n';
 import { IconArrowLeft, IconUsers, IconCheck, IconPencil } from '../lib/icons';
 
 interface AgentRow {
-  id: string; scope: 'common' | 'user'; ownerId: string; name: string;
+  id: string; scope: 'common' | 'user' | 'project'; ownerId: string; projectId: string; name: string;
   description: string; prompt: string; tools: string; model: string | null; enabled: number;
 }
-type FormState = { id: string | null; name: string; description: string; prompt: string; tools: string; model: string };
-const emptyForm = (): FormState => ({ id: null, name: '', description: '', prompt: '', tools: '', model: '' });
+type FormState = { id: string | null; name: string; description: string; prompt: string; tools: string; model: string; projectId: string };
+const emptyForm = (): FormState => ({ id: null, name: '', description: '', prompt: '', tools: '', model: '', projectId: '' });
 const toForm = (a: AgentRow): FormState => ({
   id: a.id, name: a.name, description: a.description, prompt: a.prompt,
   tools: (() => { try { return (JSON.parse(a.tools) as string[]).join(', '); } catch { return ''; } })(),
-  model: a.model || '',
+  model: a.model || '', projectId: a.projectId || '',
 });
 
 // Team-agent management: admin-managed common agents (usable by everyone, invoked via the Task tool
-// or as a session's main-thread persona) + per-user personal agents. Mirrors PluginsPanel's layout.
+// or as a session's main-thread persona) + per-user personal agents + per-project agents that apply
+// to every session of the project. Mirrors PluginsPanel's layout.
 export function AgentsPanel() {
   const setPanel = useStore((s) => s.setPanel);
   const user = useStore((s) => s.user)!;
+  const projects = useStore((s) => s.projects);
   const isAdmin = user.role === 'admin';
-  const [data, setData] = useState<{ common: AgentRow[]; mine: AgentRow[] }>({ common: [], mine: [] });
+  const [data, setData] = useState<{ common: AgentRow[]; mine: AgentRow[]; projects: AgentRow[] }>({ common: [], mine: [], projects: [] });
   const [models, setModels] = useState<Record<string, string>>({});
   const t = useT();
 
-  const load = async () => setData(await api.get('/api/agents'));
+  const load = async () => setData({ projects: [], ...(await api.get('/api/agents')) });
   useEffect(() => {
     load().catch((e) => useStore.getState().setError(e.message));
     api.get('/api/config').then((cf) => { if (cf?.models) setModels(cf.models); }).catch(() => {});
   }, []);
   const err = (e: any) => useStore.getState().setError(e.message || String(e));
+
+  // where the caller may create/edit project agents: admins anywhere, members on their own projects
+  const manageable = isAdmin ? [...projects.common, ...projects.mine] : projects.mine;
+  const manageableIds = new Set(manageable.map((p) => p.id));
+  const projName = Object.fromEntries([...projects.common, ...projects.mine].map((p) => [p.id, p.name]));
 
   return (
     <div className="h-full overflow-y-auto scrolly">
@@ -46,6 +53,10 @@ export function AgentsPanel() {
           title={t('agents.common')} desc={isAdmin ? t('agents.commonAdminDesc') : t('agents.commonUserDesc')}
           rows={data.common} canEdit={isAdmin} models={models} scope="common" onChange={load} onErr={err} />
         <ScopeCard
+          title={t('agents.project')} desc={t('agents.projectDesc')}
+          rows={data.projects} canEdit={manageable.length > 0} models={models} scope="project" onChange={load} onErr={err}
+          projects={manageable} projName={projName} rowEditable={(a) => isAdmin || manageableIds.has(a.projectId)} />
+        <ScopeCard
           title={t('agents.personal')} desc={t('agents.personalDesc')}
           rows={data.mine} canEdit models={models} scope="user" onChange={load} onErr={err} />
       </div>
@@ -53,22 +64,24 @@ export function AgentsPanel() {
   );
 }
 
-function ScopeCard({ title, desc, rows, canEdit, models, scope, onChange, onErr }: {
+function ScopeCard({ title, desc, rows, canEdit, models, scope, onChange, onErr, projects, projName, rowEditable }: {
   title: string; desc: string; rows: AgentRow[]; canEdit: boolean;
-  models: Record<string, string>; scope: 'common' | 'user'; onChange: () => void; onErr: (e: any) => void;
+  models: Record<string, string>; scope: 'common' | 'user' | 'project'; onChange: () => void; onErr: (e: any) => void;
+  projects?: { id: string; name: string }[]; projName?: Record<string, string>; rowEditable?: (a: AgentRow) => boolean;
 }) {
   const t = useT();
   const [form, setForm] = useState<FormState | null>(null);
 
   const save = async () => {
     if (!form) return;
+    if (scope === 'project' && !form.id && !form.projectId) { onErr(new Error(t('agents.selectProject'))); return; }
     const body = {
       name: form.name.trim(), description: form.description.trim(), prompt: form.prompt.trim(),
       tools: form.tools.split(',').map((s) => s.trim()).filter(Boolean), model: form.model || null,
     };
     try {
       if (form.id) await api.patch(`/api/agents/${form.id}`, body);
-      else await api.post('/api/agents', { scope, ...body });
+      else await api.post('/api/agents', { scope, projectId: form.projectId || undefined, ...body });
       setForm(null); onChange();
     } catch (e) { onErr(e); }
   };
@@ -82,6 +95,12 @@ function ScopeCard({ title, desc, rows, canEdit, models, scope, onChange, onErr 
       )}
       {canEdit && form && (
         <div className="space-y-1.5 border-t border-line pt-3">
+          {scope === 'project' && !form.id && (
+            <select className="input !py-1.5 !text-xs" value={form.projectId} onChange={(e) => setForm({ ...form, projectId: e.target.value })}>
+              <option value="">{t('agents.selectProject')}</option>
+              {(projects || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
             <input className="input !py-1.5 !text-xs font-mono" placeholder={t('agents.namePlaceholder')} value={form.name}
               disabled={!!form.id} onChange={(e) => setForm({ ...form, name: e.target.value })} />
@@ -107,9 +126,10 @@ function ScopeCard({ title, desc, rows, canEdit, models, scope, onChange, onErr 
         {rows.map((a) => (
           <div key={a.id} className="flex items-center gap-2 border border-line rounded-lg px-3 py-2 flex-wrap">
             <code className="font-mono text-xs font-semibold shrink-0">{a.name}</code>
+            {a.scope === 'project' && <span className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0 bg-line text-txt2">{projName?.[a.projectId] || a.projectId}</span>}
             {a.model && <span className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'var(--claysoft)', color: 'var(--clay)' }}>{models[a.model] || a.model}</span>}
             <span className="text-xs text-txt2 truncate flex-1 min-w-[120px]">{a.description}</span>
-            {canEdit ? (
+            {(rowEditable ? rowEditable(a) : canEdit) ? (
               <span className="flex items-center gap-2 shrink-0">
                 <button className={`text-[11px] inline-flex items-center gap-1 ${a.enabled ? 'text-ok' : 'text-txt3'}`}
                   onClick={async () => { try { await api.post(`/api/agents/${a.id}/enabled`, { enabled: !a.enabled }); onChange(); } catch (e) { onErr(e); } }}>

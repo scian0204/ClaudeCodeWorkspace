@@ -114,14 +114,17 @@ function AgentPicker() {
   const c = useStore((s) => s.current);
   const setAgent = useStore((s) => s.setAgent);
   const t = useT();
-  const [names, setNames] = useState<string[]>([]);
+  const [rows, setRows] = useState<any[]>([]);
   useEffect(() => {
     if (!teamAgentsEnabled) return;
     api.get('/api/agents').then((r) => {
-      const enabled = [...(r.common || []), ...(r.mine || [])].filter((a: any) => a.enabled).map((a: any) => a.name);
-      setNames([...new Set(enabled)]);
+      setRows([...(r.common || []), ...(r.mine || []), ...(r.projects || [])]);
     }).catch(() => {});
   }, [teamAgentsEnabled]);
+  // project agents only apply to sessions of their project — mirror resolveAgents' filter
+  const names = [...new Set(rows
+    .filter((a) => a.enabled && (a.scope !== 'project' || a.projectId === c?.projectId))
+    .map((a) => a.name))];
   if (!teamAgentsEnabled || !c || (names.length === 0 && !c.agent)) return null;
   return (
     <DM.Root>

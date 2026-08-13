@@ -147,14 +147,16 @@ export const plugins = sqliteTable('plugins', {
   createdAt: integer('created_at').notNull(),
 });
 
-// Team/personal agent definitions, applied to every spawned session via the SDK's programmatic
-// `agents` option (subagents invocable via the Task tool; optionally driving the main thread via
-// chat_sessions.agent). Mirrors the plugins two-scope model: admin-managed common + per-user personal.
+// Team/personal/project agent definitions, applied to every spawned session via the SDK's
+// programmatic `agents` option (subagents invocable via the Task tool; optionally driving the main
+// thread via chat_sessions.agent). Scopes: admin-managed common + per-user personal + per-project
+// (applies to any session whose projectId matches, whoever owns it).
 // permissionMode is deliberately NOT stored — a per-agent mode could bypass the workspace clamp.
 export const teamAgents = sqliteTable('team_agents', {
   id: text('id').primaryKey(),
-  scope: text('scope').notNull(),      // 'common' | 'user'
-  ownerId: text('owner_id').notNull(), // uid for 'user'; '' for 'common'
+  scope: text('scope').notNull(),      // 'common' | 'user' | 'project'
+  ownerId: text('owner_id').notNull(), // uid for 'user'; '' for 'common'/'project'
+  projectId: text('project_id').notNull().default(''), // projects.id for 'project'; '' otherwise
   name: text('name').notNull(),        // SDK agent key: ^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$
   description: text('description').notNull(),
   prompt: text('prompt').notNull(),

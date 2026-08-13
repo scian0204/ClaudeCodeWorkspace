@@ -262,7 +262,7 @@ export async function sessionRoutes(app: FastifyInstance) {
       if (name) {
         const kind = s.kind === 'room' ? 'room' as const : 'user' as const;
         const owner = kind === 'room' ? s.roomId! : s.ownerId;
-        if (!resolveAgents(kind, owner)[name]) return reply.code(400).send({ error: `unknown agent '${name}'` });
+        if (!resolveAgents(kind, owner, s.projectId)[name]) return reply.code(400).send({ error: `unknown agent '${name}'` });
       }
       patch.agent = name || null;
     }

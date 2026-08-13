@@ -1,13 +1,14 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { newId } from '../lib/ids.js';
 import { cfg } from '../lib/config-registry.js';
 
-// Team/personal agent definitions → the SDK's programmatic `agents` option (no env var exists for
-// this, and DB-driven beats materializing .claude/agents/*.md files into every home). A session gets
-// every enabled common agent plus (for personal sessions) the owner's personal agents; a personal
-// agent wins a name collision with a common one. `options.agent` (the main-thread persona) is a name
-// into this map, validated both at PATCH time and at spawn time (a deleted agent degrades to default).
+// Team/personal/project agent definitions → the SDK's programmatic `agents` option (no env var
+// exists for this, and DB-driven beats materializing .claude/agents/*.md files into every home).
+// A session gets every enabled common agent, plus the agents of its project (if any), plus (for
+// personal sessions) the owner's personal agents. Collision precedence: common < project < personal.
+// `options.agent` (the main-thread persona) is a name into this map, validated both at PATCH time
+// and at spawn time (a deleted agent degrades to default).
 
 export const AGENT_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/;
 // Model-facing inputs written by users — cap them so a common agent can't blow up every turn's prompt.
@@ -34,11 +35,16 @@ function toDef(r: Row): AgentDef {
 }
 
 // Enabled agents for a session spawn. {} when the feature is off — buildOptions then omits `agents`.
-export function resolveAgents(kind: 'user' | 'room', ownerId: string): Record<string, AgentDef> {
+export function resolveAgents(kind: 'user' | 'room', ownerId: string, projectId?: string | null): Record<string, AgentDef> {
   if (!cfg.bool('teamAgentsEnabled')) return {};
   const out: Record<string, AgentDef> = {};
   const common = db.select().from(schema.teamAgents).where(eq(schema.teamAgents.scope, 'common')).all();
   for (const a of common) if (a.enabled) out[a.name] = toDef(a);
+  if (projectId) {
+    const proj = db.select().from(schema.teamAgents)
+      .where(and(eq(schema.teamAgents.scope, 'project'), eq(schema.teamAgents.projectId, projectId))).all();
+    for (const a of proj) if (a.enabled) out[a.name] = toDef(a); // project wins over common
+  }
   if (kind === 'user') {
     const personal = db.select().from(schema.teamAgents)
       .where(and(eq(schema.teamAgents.scope, 'user'), eq(schema.teamAgents.ownerId, ownerId))).all();
@@ -49,13 +55,17 @@ export function resolveAgents(kind: 'user' | 'room', ownerId: string): Record<st
 
 // ── CRUD (used by routes/agents.ts) ──
 
-export type AgentScope = 'common' | 'user';
+export type AgentScope = 'common' | 'user' | 'project';
 
-export function listAgents(userId: string): { common: Row[]; mine: Row[] } {
+export function listAgents(userId: string, visibleProjectIds: string[]): { common: Row[]; mine: Row[]; projects: Row[] } {
   return {
     common: db.select().from(schema.teamAgents).where(eq(schema.teamAgents.scope, 'common')).all(),
     mine: db.select().from(schema.teamAgents)
       .where(and(eq(schema.teamAgents.scope, 'user'), eq(schema.teamAgents.ownerId, userId))).all(),
+    projects: visibleProjectIds.length
+      ? db.select().from(schema.teamAgents)
+          .where(and(eq(schema.teamAgents.scope, 'project'), inArray(schema.teamAgents.projectId, visibleProjectIds))).all()
+      : [],
   };
 }
 
@@ -77,14 +87,17 @@ function validate(b: any): { name: string; description: string; prompt: string; 
   return { name, description, prompt, tools, model };
 }
 
-export function createAgent(scope: AgentScope, ownerId: string, body: any): Row {
+export function createAgent(scope: AgentScope, ownerId: string, body: any, projectId = ''): Row {
   const v = validate(body);
-  const owner = scope === 'common' ? '' : ownerId;
+  const owner = scope === 'user' ? ownerId : '';
+  const proj = scope === 'project' ? projectId : '';
+  if (scope === 'project' && !proj) throw new Error('projectId required');
   const dup = db.select().from(schema.teamAgents)
-    .where(and(eq(schema.teamAgents.scope, scope), eq(schema.teamAgents.ownerId, owner), eq(schema.teamAgents.name, v.name))).get();
+    .where(and(eq(schema.teamAgents.scope, scope), eq(schema.teamAgents.ownerId, owner),
+      eq(schema.teamAgents.projectId, proj), eq(schema.teamAgents.name, v.name))).get();
   if (dup) throw new Error(`an agent named '${v.name}' already exists in this scope`);
   const now = Date.now();
-  const row = { id: newId(), scope, ownerId: owner, name: v.name, description: v.description, prompt: v.prompt, tools: JSON.stringify(v.tools), model: v.model, enabled: 1, createdAt: now, updatedAt: now };
+  const row = { id: newId(), scope, ownerId: owner, projectId: proj, name: v.name, description: v.description, prompt: v.prompt, tools: JSON.stringify(v.tools), model: v.model, enabled: 1, createdAt: now, updatedAt: now };
   db.insert(schema.teamAgents).values(row).run();
   return row as Row;
 }

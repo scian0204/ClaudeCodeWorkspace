@@ -342,7 +342,7 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
     effort: (s.effort || cfg.str('defaultEffort')) as SessionContext['effort'],
     permissionMode: mode, plugins: resolvePluginPaths(kind, ownerId),
     authToken: '', providerEnv: prov.env, providerModel: prov.model, gitEnv, mcpServers, disallowedTools,
-    agents: resolveAgents(kind, ownerId), agentName: s.agent || undefined,
+    agents: resolveAgents(kind, ownerId, s.projectId), agentName: s.agent || undefined,
   };
 
   // room + "include chat": collect team-chat accrued since Claude last saw a message,
