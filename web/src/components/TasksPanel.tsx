@@ -5,7 +5,7 @@ import { useIsMobile } from '../lib/ui';
 import { BlockList } from './Chat';
 import {
   IconActivity, IconUsers, IconTerminal, IconGitBranch, IconEye, IconBox, IconChevronRight,
-  IconChevronDown, IconCheck, IconX, IconBan, IconSquare, IconClock, IconDot, IconDotOutline,
+  IconChevronDown, IconCheck, IconX, IconBan, IconSquare, IconClock, IconDot, IconDotOutline, IconGrid,
 } from '../lib/icons';
 
 // Right-side panel for everything a turn spawns behind the main thread: Task-tool subagents,
@@ -58,6 +58,7 @@ export function TasksPanel({ width, onResize }: { width: number; onResize: (w: n
   const setTasksOpen = useStore((s) => s.setTasksOpen);
   const isMobile = useIsMobile();
   const [filter, setFilter] = useState<Filter>('all');
+  const [split, setSplit] = useState(false); // tmux-style: every agent's live pane open at once
   const t = useT();
   const live = tasks.some(isTaskLive);
   const now = useNow(live);
@@ -88,7 +89,9 @@ export function TasksPanel({ width, onResize }: { width: number; onResize: (w: n
         <span className={live ? 'text-clay' : 'text-txt3'}><IconActivity size={15} /></span>
         <span className="font-semibold text-sm">{t('tasks.title')}</span>
         <span className="text-txt3 text-xs">{tasks.length}</span>
-        <button className="ml-auto text-txt3 hover:text-clay" title={t('tasks.collapse')} aria-label={t('tasks.collapse')}
+        <button className={`ml-auto ${split ? 'text-clay' : 'text-txt3 hover:text-clay'}`} title={t('tasks.split')} aria-label={t('tasks.split')}
+          onClick={() => setSplit(!split)}><IconGrid size={15} /></button>
+        <button className="text-txt3 hover:text-clay" title={t('tasks.collapse')} aria-label={t('tasks.collapse')}
           onClick={() => setTasksOpen(false)}>{isMobile ? <IconX size={16} /> : <IconChevronRight size={16} />}</button>
       </div>
       <div className="flex items-center gap-1 px-2 py-1.5 border-b border-line shrink-0 overflow-x-auto scrolly">
@@ -106,7 +109,7 @@ export function TasksPanel({ width, onResize }: { width: number; onResize: (w: n
       <div className="flex-1 overflow-y-auto scrolly p-2 min-h-0">
         {rows.length === 0
           ? <div className="text-txt3 text-xs p-2 leading-relaxed">{t('tasks.empty')}</div>
-          : rows.map((x) => <TaskRow key={x.id} task={x} now={now} />)}
+          : rows.map((x) => <TaskRow key={x.id} task={x} now={now} forceWatch={split} />)}
       </div>
     </>
   );
@@ -124,7 +127,7 @@ export function TasksPanel({ width, onResize }: { width: number; onResize: (w: n
   );
 }
 
-function TaskRow({ task, now }: { task: AgentTask; now: number }) {
+function TaskRow({ task, now, forceWatch = false }: { task: AgentTask; now: number; forceWatch?: boolean }) {
   const [open, setOpen] = useState(false);
   const [watch, setWatch] = useState(false);
   const t = useT();
@@ -176,7 +179,7 @@ function TaskRow({ task, now }: { task: AgentTask; now: number }) {
           </div>
         </div>
       </div>
-      {watch && watchable && <SubagentLive blocks={subBlocks} delta={subDelta} streaming={running} />}
+      {(watch || forceWatch) && watchable && <SubagentLive blocks={subBlocks} delta={subDelta} streaming={running} />}
       {open && detail && (
         <div className={`border-t border-line px-2.5 py-2 text-[11px] whitespace-pre-wrap break-words bg-bg max-h-56 overflow-auto scrolly ${task.error ? 'text-danger' : 'text-txt2'}`}>
           {detail}

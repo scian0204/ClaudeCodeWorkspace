@@ -95,6 +95,13 @@ export function buildOptions(ctx: SessionContext, extra: {
   if (ctx.permissionMode !== 'bypassPermissions' && !ctx.unattended && !cfg.bool('bgTasksWithPrompts')) {
     env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS = '1';
   }
+  // Agent Teams (experimental upstream): turns on the CLI's team plumbing — named teammates,
+  // shared task list, inter-agent mail (SendMessage). In SDK/headless mode teammates surface as
+  // named background agents on the same stream (parent_tool_use_id + task_* events), so the task
+  // panel's live/split view is their UI. NOTE: teammates ARE background tasks — in prompting modes
+  // the #27203 workaround above forces them foreground, so real concurrent teams currently need a
+  // bypass-mode session (or bgTasksWithPrompts on).
+  if (cfg.bool('agentTeamsEnabled')) env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = '1';
 
   const options: any = {
     cwd: ctx.cwd,

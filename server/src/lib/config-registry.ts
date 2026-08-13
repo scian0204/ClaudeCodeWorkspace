@@ -55,6 +55,8 @@ export const DEFS: ConfigDef[] = [
   // run with CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 (subagents run foreground; prompts work).
   // Turn this ON to allow background tasks in prompting modes anyway (e.g. after an upstream fix).
   { key: 'bgTasksWithPrompts', group: 'claude', type: 'bool', default: '0' },
+  // CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS for every real turn (teams only form when a user asks)
+  { key: 'agentTeamsEnabled', group: 'claude', type: 'bool', default: '1' },
   { key: 'autoTitleEnabled', group: 'claude', type: 'bool', default: '1' },
   { key: 'autoTitleModel', group: 'claude', type: 'string', default: 'claude-haiku-4-5-20251001' },
   { key: 'autoTitleMaxChars', group: 'claude', type: 'int', default: '40', min: 10, max: 120 },
