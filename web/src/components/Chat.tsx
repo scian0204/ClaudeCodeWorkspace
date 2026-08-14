@@ -26,6 +26,7 @@ import {
   IconTerminal, IconX, IconPaperclip, IconSend, IconShield, IconBolt, IconCheckSquare, IconCrown,
   IconGitBranch, IconClock, IconCheckCircle, IconBan, IconWarning, IconLink, IconRotateCcw,
   IconCheck, IconRefresh, IconSquare, IconMessage, IconActivity, IconDownload, IconUsers, IconBox,
+  IconPlus,
 } from '../lib/icons';
 
 const MODELS: Record<string, string> = {
@@ -441,10 +442,10 @@ function UsagePill() {
   return (
     <DM.Root open={open} onOpenChange={setOpen}>
       <DM.Trigger asChild>
-        <button className="pill" title={t('usage.title')}><IconGauge size={14} />{pctLabel}<IconChevronDown size={14} /></button>
+        <button className="ctl" title={t('usage.title')}><IconGauge size={12} />{pctLabel}<IconChevronDown size={12} /></button>
       </DM.Trigger>
       <DM.Portal>
-        <DM.Content sideOffset={4} side="top" align="start" collisionPadding={8}
+        <DM.Content sideOffset={4} side="top" align="end" collisionPadding={8}
           className="bg-panel border border-line rounded-lg p-3.5 shadow-2xl z-50 w-[320px] max-w-[calc(100vw-1.5rem)] max-h-[70vh] overflow-y-auto text-txt">
           {/* context window */}
           <div className="flex items-baseline justify-between text-xs gap-2">
@@ -1185,38 +1186,56 @@ function ImageLightbox({ preview, onClose }: { preview: { src: string; name: str
   );
 }
 
-// Per-turn knobs — permission mode, model, effort, usage — docked under the composer, next to the
-// text they apply to (the header row could no longer hold them on one line).
-function TurnControls() {
+// Anything but the default mode loosens what Claude may do without asking, so it says so in colour.
+const MODE_TONE: Record<string, string> = {
+  default: '', acceptEdits: 'text-clay', bypassPermissions: 'text-danger', plan: 'text-clay',
+};
+
+// Permission mode, at the left end of the composer row: the knob people flip most, so it keeps its
+// icon and reads in colour whenever it is not the asking-first default.
+function ModeControl() {
   const c = useStore((s) => s.current);
   const control = useStore((s) => s.control);
+  const setMode = useStore((s) => s.setMode);
+  const t = useT();
+  if (!c) return null;
+  const isRoom = c.kind === 'room';
+  const isReview = c.kind === 'review';
+  const m = MODES[c.permissionMode];
+  return (
+    <DM.Root>
+      <DM.Trigger asChild>
+        <button className={`ctl ${MODE_TONE[c.permissionMode] || ''}`} disabled={(isRoom || isReview) && !control.canSetMode}>
+          {m ? <><m.Icon size={12} />{t(m.key)}</> : c.permissionMode}<IconChevronDown size={12} />
+        </button>
+      </DM.Trigger>
+      <Menu side="top" align="start">
+        {Object.entries(MODES).map(([id, mm]) => (
+          <MenuItem key={id} onSelect={() => setMode(id)}><span className="inline-flex items-center gap-1.5"><mm.Icon size={14} />{t(mm.key)}</span></MenuItem>
+        ))}
+        {isRoom && !control.canSetMode && <div className="px-2 py-1 text-[11px] text-txt3">{t('chat.ownerOnlyMode')}</div>}
+      </Menu>
+    </DM.Root>
+  );
+}
+
+// Model · effort · usage, at the right end of the composer row, next to send.
+function RunControls() {
+  const c = useStore((s) => s.current);
   const setModel = useStore((s) => s.setModel);
   const setEffort = useStore((s) => s.setEffort);
-  const setMode = useStore((s) => s.setMode);
   // model list is admin-configurable (server registry); fetch it, fall back to the built-in defaults
   const [models, setModels] = useState<Record<string, string>>(MODELS);
   useEffect(() => { api.get('/api/config').then((cf) => { if (cf?.models) setModels(cf.models); }).catch(() => {}); }, []);
   const t = useT();
   if (!c) return null;
-  const isRoom = c.kind === 'room';
-  const isReview = c.kind === 'review';
-  const modeUi = MODES[c.permissionMode];
-
+  // an id the registry doesn't name still has to fit the row — "claude-opus-4-8" reads as "opus-4-8"
+  const modelLabel = models[c.model] || c.model.replace(/^claude-/, '');
   return (
-    <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+    <>
       <DM.Root>
-        <DM.Trigger asChild><button className="pill" disabled={(isRoom || isReview) && !control.canSetMode}>{modeUi ? <span className="inline-flex items-center gap-1"><modeUi.Icon size={13} />{t(modeUi.key)}</span> : c.permissionMode}<IconChevronDown size={14} /></button></DM.Trigger>
-        <Menu side="top" align="start">
-          {Object.entries(MODES).map(([id, m]) => (
-            <MenuItem key={id} onSelect={() => setMode(id)}><span className="inline-flex items-center gap-1.5"><m.Icon size={14} />{t(m.key)}</span></MenuItem>
-          ))}
-          {isRoom && !control.canSetMode && <div className="px-2 py-1 text-[11px] text-txt3">{t('chat.ownerOnlyMode')}</div>}
-        </Menu>
-      </DM.Root>
-
-      <DM.Root>
-        <DM.Trigger asChild><button className="pill" disabled={!!c.readOnly}>{models[c.model] || c.model}<IconChevronDown size={14} /></button></DM.Trigger>
-        <Menu side="top" align="start">
+        <DM.Trigger asChild><button className="ctl" disabled={!!c.readOnly} title={t('chat.model')}>{modelLabel}<IconChevronDown size={12} /></button></DM.Trigger>
+        <Menu side="top" align="end">
           {Object.entries(models).map(([id, label]) => (
             <MenuItem key={id} onSelect={() => setModel(id)}>{label}</MenuItem>
           ))}
@@ -1224,8 +1243,8 @@ function TurnControls() {
       </DM.Root>
 
       <DM.Root>
-        <DM.Trigger asChild><button className="pill" disabled={!!c.readOnly} title={t('cfg.defaultEffort')}>{t('effort.' + c.effort)}<IconChevronDown size={14} /></button></DM.Trigger>
-        <Menu side="top" align="start">
+        <DM.Trigger asChild><button className="ctl" disabled={!!c.readOnly} title={t('cfg.defaultEffort')}>{t('effort.' + c.effort)}<IconChevronDown size={12} /></button></DM.Trigger>
+        <Menu side="top" align="end">
           {EFFORTS.map((lvl) => (
             <MenuItem key={lvl} onSelect={() => setEffort(lvl)}>{t('effort.' + lvl)}</MenuItem>
           ))}
@@ -1233,7 +1252,7 @@ function TurnControls() {
       </DM.Root>
 
       <UsagePill />
-    </div>
+    </>
   );
 }
 
@@ -1476,9 +1495,15 @@ function Composer() {
             <AttachmentList atts={atts} sessionId={c.chatSessionId} onRemove={removeAtt} />
             {/* guideInset keeps send/attach clear of the guide launcher, which floats in this exact
                 corner — 0 whenever the row already ends left of it (see useGuideInset). */}
+            {/* One line: what the turn runs as on the left, what it costs and send on the right. The
+                keyboard hint is the only thing that may go — it drops out before the row can wrap. */}
             <div ref={toolbarRef} style={{ paddingRight: guideInset || undefined }}
-              className="flex items-center gap-2 mt-2 flex-wrap">
-              <TurnControls />
+              className="flex items-center gap-1 mt-1.5 min-w-0 flex-wrap md:flex-nowrap">
+              <ModeControl />
+              <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => { void uploadPicked(Array.from(e.target.files || [])); }} />
+              {canAttach && (
+                <button type="button" className="ctl" disabled={!!uploading} title={t('chat.attach')} aria-label={t('chat.attach')} onClick={() => fileRef.current?.click()}><IconPlus size={15} /></button>
+              )}
               {isRoom && (
                 <div className="flex items-center gap-1 shrink-0">
                   <button type="button" onClick={() => setMode('chat')} className={`text-xs px-2 py-0.5 rounded-full border inline-flex items-center gap-1 ${mode === 'chat' ? 'bg-clay text-white border-clay' : 'border-line text-txt2 hover:border-clay'}`}><IconMessage size={12} />{t('chat.modeChat')}</button>
@@ -1490,12 +1515,15 @@ function Composer() {
                   <input type="checkbox" checked={includeChat} onChange={(e) => setIncludeChat(e.target.checked)} /> {t('chat.includeChat')}
                 </label>
               )}
-              <span className="text-xs text-txt3 truncate inline-flex items-center gap-1 min-w-0">{wikiCompiling ? <ClayWait size={5} label={wikiStep ? t('chat.compilingStep', { step: wikiStep }) : t('chat.compilingReady')} /> : turnActive ? <ClayWait size={5} label={t('chat.claudeResponding')} /> : (isRoom && mode === 'chat' ? t('chat.composerHintChat') : t(canRef ? 'chat.composerHintRef' : 'chat.composerHint'))}</span>
-              <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => { void uploadPicked(Array.from(e.target.files || [])); }} />
-              {canAttach && (
-                <button type="button" className="ml-auto toolbtn shrink-0 disabled:opacity-40" disabled={!!uploading} title={t('chat.attach')} aria-label={t('chat.attach')} onClick={() => fileRef.current?.click()}><IconPaperclip size={16} /></button>
-              )}
-              <button className={`${canAttach ? '' : 'ml-auto '}bg-clay text-white rounded-lg w-8 h-8 grid place-items-center disabled:opacity-40`} disabled={wikiCompiling || readOnly || !!uploading} onClick={submit} aria-label={t('chat.send')}><IconSend size={16} /></button>
+              <span className="text-xs text-txt3 truncate min-w-0 px-1">
+                {wikiCompiling ? <ClayWait size={5} label={wikiStep ? t('chat.compilingStep', { step: wikiStep }) : t('chat.compilingReady')} />
+                  : turnActive ? <ClayWait size={5} label={t('chat.claudeResponding')} />
+                  : <span className="hidden lg:inline">{isRoom && mode === 'chat' ? t('chat.composerHintChat') : t(canRef ? 'chat.composerHintRef' : 'chat.composerHint')}</span>}
+              </span>
+              <div className="ml-auto flex items-center gap-1 shrink-0">
+                <RunControls />
+                <button className="bg-clay text-white rounded-lg w-7 h-7 grid place-items-center disabled:opacity-40 shrink-0" disabled={wikiCompiling || readOnly || !!uploading} onClick={submit} aria-label={t('chat.send')}><IconSend size={15} /></button>
+              </div>
             </div>
           </div>
         </div>

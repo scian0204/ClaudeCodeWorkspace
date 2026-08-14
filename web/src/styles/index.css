@@ -52,6 +52,11 @@ body{margin:0;background:var(--bg);color:var(--txt);font-family:var(--sans);font
   .seg button{ @apply border-0 bg-transparent text-txt2 px-3 py-1 rounded-md text-xs cursor-pointer font-medium; }
   .seg button.on{ background:var(--panel); color:var(--txt); box-shadow:0 1px 2px rgba(0,0,0,.06); }
   .toolbtn{ @apply bg-transparent border border-line text-txt2 rounded-lg w-[30px] h-[30px] grid place-items-center cursor-pointer; }
+  /* composer controls — bordered pills crowd the row under the message box, so these are bare text */
+  .ctl{ @apply inline-flex items-center gap-1 bg-transparent border-0 text-txt3 rounded-md px-1.5 py-1 text-xs cursor-pointer shrink-0 whitespace-nowrap; }
+  .ctl:hover{ color:var(--txt); background:var(--line); }
+  .ctl:disabled{ @apply opacity-40 cursor-default; }
+  .ctl:disabled:hover{ background:transparent; }
   .avatar{ @apply grid place-items-center rounded-full text-white font-semibold; }
   .input{ @apply w-full bg-card border border-line2 rounded-lg px-3 py-2 text-sm text-txt outline-none; }
   .input:focus{ border-color:var(--clay); }
