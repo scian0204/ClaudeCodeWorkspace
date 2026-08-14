@@ -63,6 +63,23 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
+## Unreleased
+
+<details>
+<summary><b>fix(docker): a plain <code>docker run</code> never used the data volume</b> — the editor refused to open, and the whole workspace vanished on the next container recreate · <code>a6848ca</code></summary>
+
+**What people saw.** Deploy with the `docker run` command from the README, then press the split button in a session: `no such container - cannot access path /var/lib/docker/volumes/claudecode-workspace_data/_data/common/projects`.
+
+**Why.** The command mounts the named volume at `/data`, but it never passed `DATA_DIR` and the image had no default for it, so the app fell back to `./data` — which resolves against the directory it starts in, `/app/server/data`. Everything (the database, projects, sign-ins) was written inside the container while the volume stayed empty. The editor container mounts that volume and asks for the `common/projects` folder inside it; in an empty volume there is no such folder, so the Docker daemon rejected it. The same setup also meant a `docker rm` or a version upgrade threw the workspace away.
+
+**What changed.** The image now sets `DATA_DIR=/data` itself, so it matches the mount every published command uses (Compose already set it). On top of that, the server now checks at startup that the volume named by `DATA_VOLUME` really is the one mounted at `DATA_DIR`; if it is not, the boot log and the admin **Overview** say so in words, the editor is switched off up front with that reason on hover, and pressing it returns the reason instead of a raw daemon error. When the app is not running inside Docker the check is skipped rather than treated as a failure. The `docker run` snippets and the environment tables in both READMEs now spell `DATA_DIR` out.
+
+**Upgrading an affected deployment:** its data is inside the container, not on the volume, so copy it across before recreating — `docker cp claudecode-app:/app/server/data/. ./ccw-data` with the container stopped, then write it into the volume from a throwaway container, e.g. `docker run --rm -v claudecode-workspace_data:/data -v "$PWD/ccw-data:/src:ro" alpine cp -a /src/. /data/`.
+
+</details>
+
+---
+
 ## v1.19.4 — 2026-08-14
 
 <sub>release commit `05c83be`</sub>

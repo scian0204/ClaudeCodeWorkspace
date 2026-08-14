@@ -63,6 +63,23 @@
 
 ---
 
+## Unreleased
+
+<details>
+<summary><b>fix(docker): <code>docker run</code>으로 띄우면 데이터 볼륨을 전혀 쓰지 않던 문제</b> — 에디터가 열리지 않고, 컨테이너를 다시 만들면 작업 공간이 통째로 사라짐 · <code>a6848ca</code></summary>
+
+**증상.** README의 `docker run` 명령으로 배포한 뒤 세션에서 분할 버튼을 누르면 `no such container - cannot access path /var/lib/docker/volumes/claudecode-workspace_data/_data/common/projects` 오류가 났습니다.
+
+**원인.** 그 명령은 이름 있는 볼륨을 `/data`에 마운트하지만 `DATA_DIR`을 넘기지 않았고, 이미지에도 기본값이 없었습니다. 그래서 앱은 `./data`로 되돌아갔고 이 경로는 앱이 시작되는 디렉터리 기준이라 실제로는 `/app/server/data`가 됐습니다. 데이터베이스·프로젝트·로그인 등 모든 것이 컨테이너 안에 쓰이고 볼륨은 빈 채로 남았습니다. 에디터 컨테이너는 그 볼륨을 마운트하면서 안에 있는 `common/projects` 폴더를 요구하는데, 빈 볼륨에는 그런 폴더가 없어 Docker가 거부한 것입니다. 같은 이유로 `docker rm`이나 버전 업그레이드 한 번에 작업 공간이 통째로 날아가는 상태이기도 했습니다.
+
+**조치.** 이미지가 직접 `DATA_DIR=/data`를 설정하도록 해서, 공개된 모든 실행 명령의 마운트 경로와 일치시켰습니다(Compose는 원래 설정하고 있었습니다). 여기에 더해 서버가 시작할 때 `DATA_VOLUME`이 가리키는 볼륨이 정말 `DATA_DIR`에 마운트돼 있는지 확인합니다. 아니면 부팅 로그와 관리자 **개요**에 그 사실을 말로 알리고, 에디터는 애초에 비활성으로 두고 마우스를 올리면 사유가 뜨며, 눌러도 raw 데몬 오류 대신 사유를 돌려줍니다. 앱이 Docker 안에서 돌고 있지 않아 확인이 불가능한 경우는 실패로 보지 않고 건너뜁니다. 두 README의 `docker run` 예시와 환경변수 표에도 `DATA_DIR`을 명시했습니다.
+
+**이미 이렇게 배포한 경우:** 데이터가 볼륨이 아니라 컨테이너 안에 있으므로 다시 만들기 전에 옮겨야 합니다. 컨테이너를 멈춘 뒤 `docker cp claudecode-app:/app/server/data/. ./ccw-data`로 꺼내고, 일회용 컨테이너로 볼륨에 넣습니다 — 예: `docker run --rm -v claudecode-workspace_data:/data -v "$PWD/ccw-data:/src:ro" alpine cp -a /src/. /data/`.
+
+</details>
+
+---
+
 ## v1.19.4 — 2026-08-14
 
 <sub>릴리스 커밋 `05c83be`</sub>
