@@ -186,7 +186,10 @@ export function initDb() {
   try { sqlite.exec("ALTER TABLE chat_sessions ADD COLUMN effort TEXT NOT NULL DEFAULT 'high'"); } catch { /* already present */ }
   // per-session main-thread team agent (SDK options.agent); null = default Claude
   try { sqlite.exec("ALTER TABLE chat_sessions ADD COLUMN agent TEXT"); } catch { /* already present */ }
-  // per-session shared-plan pool (null = the workspace-wide pool, if one is set)
+  // per-user default shared-plan pool (their party) — sits between the session's own choice and the
+  // workspace-wide pool an admin set for everyone
+  try { sqlite.exec("ALTER TABLE users ADD COLUMN default_pool_id TEXT"); } catch { /* already present */ }
+  // per-session shared-plan pool (null = inherit, 'own' = every sender pays for their own turns)
   try { sqlite.exec("ALTER TABLE chat_sessions ADD COLUMN pool_id TEXT"); } catch { /* already present */ }
   // per-session build container (0 = build/run in the app container, as before)
   try { sqlite.exec("ALTER TABLE chat_sessions ADD COLUMN sandbox INTEGER NOT NULL DEFAULT 0"); } catch { /* already present */ }

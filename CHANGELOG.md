@@ -57,6 +57,27 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
+## Unreleased
+
+<details>
+<summary><b>feat(pool): three levels of shared plans, with the workspace-wide one moved to the admin panel</b> — new per-user default pool, explicit per-session opt-out · <code>PENDING</code></summary>
+
+The first cut had two levels and put the workspace-wide choice in My Page. Reworked to what the feature actually needs.
+
+**Where each level is set.** The workspace-wide pool applies to *every* user, so it now lives in the admin panel (Config tab → "Shared plans — workspace default") as a dropdown of the existing pools. My Page keeps only what a member decides for themselves: which pools they join, and which one is their own default.
+
+**A new middle level.** A member can mark one pool they have joined as **their own** default (`PUT /api/pools/my-default`, stored in `users.default_pool_id`). It applies to their turns wherever no session picked a pool, and it overrides the workspace-wide one. It is per user, so two members of one shared room can draw from different pools. Only a pool you already joined can be your default, and leaving one clears it.
+
+**An explicit opt-out.** With "not set" now meaning "inherit", a shared room could never be put *back* on "everyone pays for their own turns". The session picker gains that as its own choice, stored as the sentinel `own` in `chat_sessions.pool_id` (null still means inherit). `PATCH /api/sessions/:id` also rejects an unknown pool id instead of storing a binding that resolves to nothing.
+
+**Resolution order**, most specific first: the session's own choice (a pool, or `own` for no pooling) → the sender's own default pool → the workspace-wide pool → the sender's own plan.
+
+Verified against the running container: every step of the order, the opt-out, a session naming a deleted pool falling through instead of dropping off pooling, and `my-default` refusing a pool the caller has not joined.
+
+</details>
+
+---
+
 ## v1.17.3 — 2026-08-14
 
 <sub>release commit `28effc1`</sub>

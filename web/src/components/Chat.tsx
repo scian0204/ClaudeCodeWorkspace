@@ -806,18 +806,29 @@ function MessageView({ m }: { m: Msg }) {
 
 // Which shared plan this session's turns run on. Hidden entirely while pooling is off, so a
 // workspace that never turns it on sees no new control.
+const POOL_OWN = 'own'; // mirrors server/src/auth/token-pool.ts
+
 function PoolPicker() {
   const t = useT();
-  const { current: c, pools, globalPoolId, tokenPoolEnabled, setPool } = useStore();
+  const { current: c, pools, globalPoolId, myPoolId, tokenPoolEnabled, setPool } = useStore();
   if (!tokenPoolEnabled || !c) return null;
+  // Three states, matching the server's resolution order:
+  //   a named pool → that pool; POOL_OWN → every sender pays for their own turns;
+  //   null → inherit (the sender's own pool, else the workspace-wide one an admin set).
   const bound = pools.find((p) => p.id === c.poolId);
-  const fallback = pools.find((p) => p.id === globalPoolId);
-  const label = bound ? bound.name : fallback ? t('pool.usingGlobal', { name: fallback.name }) : t('pool.own');
+  const inherited = pools.find((p) => p.id === (myPoolId || globalPoolId));
+  const inheritLabel = inherited
+    ? t(myPoolId ? 'pool.inheritMine' : 'pool.inheritGlobal', { name: inherited.name })
+    : t('pool.own');
+  const label = bound ? bound.name : c.poolId === POOL_OWN ? t('pool.own') : inheritLabel;
   return (
     <DM.Root>
       <DM.Trigger asChild><button className="pill" disabled={!!c.readOnly} title={t('pool.pickTip')}><IconUsers size={13} />{label}<IconChevronDown size={14} /></button></DM.Trigger>
       <Menu>
-        <MenuItem onSelect={() => void setPool(null)}>{fallback ? t('pool.usingGlobal', { name: fallback.name }) : t('pool.own')}</MenuItem>
+        <MenuItem onSelect={() => void setPool(null)}>{inheritLabel}</MenuItem>
+        {/* explicit opt-out: "not set" now inherits, so without this a shared room could never be put
+            back on "everyone pays for their own turns" */}
+        <MenuItem onSelect={() => void setPool(POOL_OWN)}>{t('pool.ownExplicit')}</MenuItem>
         {pools.map((p) => <MenuItem key={p.id} onSelect={() => void setPool(p.id)}>{p.name}</MenuItem>)}
         {!pools.length && <div className="px-2 py-1 text-[11px] text-txt3">{t('pool.none')}</div>}
       </Menu>

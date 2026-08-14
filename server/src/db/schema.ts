@@ -15,6 +15,7 @@ export const users = sqliteTable('users', {
   autoResume: integer('auto_resume').notNull().default(0), // 1 = re-run a turn that hit the claude.ai 5h limit once the window resets (opt-in: it runs unattended)
   primeWindow: integer('prime_window').notNull().default(0), // 1 = open a fresh claude.ai 5h window with a tiny throwaway query as soon as none is running
   primedAt: integer('primed_at'), // when the primer last opened a window (epoch ms), null = never
+  defaultPoolId: text('default_pool_id'), // this user's own shared-plan pool, used when a session names none
 });
 
 // A turn parked because its author's claude.ai plan window (5h / weekly) was exhausted. Re-enqueued

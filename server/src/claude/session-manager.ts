@@ -343,7 +343,7 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
   // resolveProvider layers an optional LLM-provider override on top of the default Claude-token path.
   // With a shared-plan pool bound, `order` is the list of members to draw credentials from instead:
   // the first entry runs, the rest are fallbacks for a spent plan window (the sender is always last).
-  const poolId = poolForSession(s);
+  const poolId = poolForSession(s, p.author.id);
   const order = poolId ? runOrder(poolId, p.author.id) : [p.author.id];
   let credentialId = order[0];
   let prov = resolveProvider(credentialId);

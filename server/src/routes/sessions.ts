@@ -16,6 +16,7 @@ import { paths, ensure } from '../lib/paths.js';
 import { safeBase, isBareBasename, contentTypeFor, IMAGE_MIME } from '../lib/attachments.js';
 import * as rooms from '../rooms/manager.js';
 import type { AuthUser } from '../auth/index.js';
+import { POOL_OWN, getPool } from '../auth/token-pool.js';
 
 const EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'];
 
@@ -273,8 +274,14 @@ export async function sessionRoutes(app: FastifyInstance) {
     if (('poolId' in b || 'sandbox' in b) && !canWriteSession(u, s)) {
       return reply.code(403).send({ error: 'forbidden' });
     }
-    // shared-plan pool backing this session's turns; ''/null falls back to the workspace-wide pool
-    if ('poolId' in b) patch.poolId = String(b.poolId || '') || null;
+    // Shared-plan pool backing this session's turns. Three states: null = inherit (the sender's own
+    // pool, else the workspace-wide one), POOL_OWN = opt out so every sender pays for their own, or
+    // a pool id. An unknown id is rejected rather than stored as a binding that resolves to nothing.
+    if ('poolId' in b) {
+      const pid = String(b.poolId || '');
+      if (pid && pid !== POOL_OWN && !getPool(pid)) return reply.code(400).send({ error: 'unknown pool' });
+      patch.poolId = pid || null;
+    }
     // per-session build container (only meaningful while the admin flag is on; the turn re-checks)
     if ('sandbox' in b) patch.sandbox = b.sandbox ? 1 : 0;
     // Changing the project changes the turn's cwd. The CLI stores each conversation's

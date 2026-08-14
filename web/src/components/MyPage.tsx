@@ -302,7 +302,7 @@ function TokenSection() {
 // leaving/removing only ever spends LESS of a plan, so the creator and admins may do that too.
 function PoolSection() {
   const t = useT();
-  const { pools, globalPoolId, poolCanCreate, poolHasCredential, user, refreshPools } = useStore();
+  const { pools, globalPoolId, myPoolId, poolCanCreate, poolHasCredential, user, refreshPools, setMyPool } = useStore();
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const isAdmin = user?.role === 'admin';
@@ -329,7 +329,8 @@ function PoolSection() {
             <div className="flex items-center gap-2 flex-wrap">
               <IconUsers size={14} className="text-clay shrink-0" />
               <span className="font-semibold text-sm">{p.name}</span>
-              {p.id === globalPoolId && <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: 'var(--claysoft)', color: 'var(--clay)' }}>{t('pool.globalBadge')}</span>}
+              {p.id === myPoolId && <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: 'var(--claysoft)', color: 'var(--clay)' }}>{t('pool.myBadge')}</span>}
+              {p.id === globalPoolId && <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-line text-txt3">{t('pool.globalBadge')}</span>}
               {/* order is a per-pool override of the admin default; only the creator/admins may set it */}
               {canManage ? (
                 <select className="input !py-0.5 !text-[11px] !w-auto" value={p.strategy} disabled={busy}
@@ -347,10 +348,13 @@ function PoolSection() {
                   onClick={() => void call(() => api.post(`/api/pools/${p.id}/${mine ? 'leave' : 'join'}`, {}))}>
                   {mine ? t('pool.leave') : t('pool.join')}
                 </button>
-                {isAdmin && (
-                  <button className="btn-ghost !py-1 !text-xs" disabled={busy}
-                    onClick={() => void call(() => api.put('/api/pools/global', { poolId: p.id === globalPoolId ? '' : p.id }))}>
-                    {p.id === globalPoolId ? t('pool.unsetGlobal') : t('pool.setGlobal')}
+                {/* my own default — only meaningful once joined; the workspace-wide one is admin-only
+                    and lives in the admin panel, since it spends everyone's plans */}
+                {mine && (
+                  <button className={`btn-ghost !py-1 !text-xs ${p.id === myPoolId ? 'text-clay' : ''}`} disabled={busy}
+                    title={t('pool.myDefaultTip')}
+                    onClick={() => void call(() => setMyPool(p.id === myPoolId ? null : p.id))}>
+                    {p.id === myPoolId ? t('pool.unsetMyDefault') : t('pool.setMyDefault')}
                   </button>
                 )}
                 {canManage && (

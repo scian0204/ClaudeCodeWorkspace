@@ -3,7 +3,7 @@ import { requireAuth, requireAdmin } from '../auth/index.js';
 import { cfg } from '../lib/config-registry.js';
 import {
   listPools, createPool, deletePool, setStrategy, join, leave,
-  getPool, getGlobalPoolId, setGlobalPool, hasCredential,
+  getPool, getGlobalPoolId, setGlobalPool, hasCredential, userDefaultPool, setUserDefaultPool,
 } from '../auth/token-pool.js';
 
 // Shared-plan pools ("토큰 모아쓰기"). Every route is gated on the admin flag server-side — hiding
@@ -14,10 +14,11 @@ export async function poolRoutes(app: FastifyInstance) {
 
   app.get('/api/pools', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
-    if (!cfg.bool('tokenPoolEnabled')) return { pools: [], globalPoolId: null, hasCredential: false, canCreate: false };
+    if (!cfg.bool('tokenPoolEnabled')) return { pools: [], globalPoolId: null, myPoolId: null, hasCredential: false, canCreate: false };
     return {
       pools: listPools(),
-      globalPoolId: getGlobalPoolId(),
+      globalPoolId: getGlobalPoolId(), // admin-set, applies to every user as the last fallback
+      myPoolId: userDefaultPool(u.id), // this user's own party, one level more specific
       hasCredential: hasCredential(u.id), // no plan registered → joining would contribute nothing
       canCreate: u.role === 'admin' || cfg.bool('tokenPoolPartyCreate'),
     };
@@ -86,6 +87,16 @@ export async function poolRoutes(app: FastifyInstance) {
     }
     leave(id, target);
     return { ok: true };
+  });
+
+  // The caller's OWN default pool — the middle level, under a session's explicit choice and over the
+  // admin's workspace-wide one. Self-only by construction (id from the cookie) and it can only name a
+  // pool the caller already joined, so it never enrols anyone.
+  app.put('/api/pools/my-default', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    if (!cfg.bool('tokenPoolEnabled')) return off(reply);
+    try { setUserDefaultPool(u.id, ((req.body as any)?.poolId as string) || null); return { ok: true }; }
+    catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
   });
 
   // Which pool backs sessions that name none. Admin-only: it changes whose plan the whole workspace

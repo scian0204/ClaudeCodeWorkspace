@@ -173,6 +173,8 @@ export function AdminPanel() {
               )}
             </Section>
 
+            <WorkspacePool />
+
             <ConfigManager />
           </>
         )}
@@ -318,6 +320,38 @@ function BrandManager() {
 // Full config registry: every admin-manageable setting (env + hardcoded constants), grouped.
 // Driven entirely by the /api/admin/config metadata so new registry entries appear here for free.
 // Human names + descriptions come from i18n (cfg.<key> / cfgDesc.<key>) with graceful fallback.
+// The shared-plan pool applied to EVERY user, as the last fallback under a session's own choice and
+// the sender's own pool. It spends the whole workspace's plans, so it belongs in the admin panel —
+// members manage only their own membership and their own default, over in My Page.
+function WorkspacePool() {
+  const t = useT();
+  const { pools, globalPoolId, tokenPoolEnabled, refreshPools } = useStore();
+  const [busy, setBusy] = useState(false);
+  if (!tokenPoolEnabled) return null;
+  const set = async (id: string) => {
+    setBusy(true);
+    try { await api.put('/api/pools/global', { poolId: id }); await refreshPools(); }
+    catch (e: any) { useStore.getState().setError(String(e?.message || e)); }
+    finally { setBusy(false); }
+  };
+  return (
+    <Section title={t('admin.workspacePool')}>
+      <div className="text-xs text-txt2 bg-claysoft border border-line rounded-lg px-3 py-2 mb-3">{t('admin.workspacePoolIntro')}</div>
+      {pools.length === 0 ? (
+        <div className="text-xs text-txt3">{t('admin.workspacePoolNone')}</div>
+      ) : (
+        <select className="input !w-auto max-w-full" value={globalPoolId || ''} disabled={busy}
+          onChange={(e) => void set(e.target.value)}>
+          <option value="">{t('admin.workspacePoolOff')}</option>
+          {pools.map((p) => (
+            <option key={p.id} value={p.id}>{p.name} ({p.members.length})</option>
+          ))}
+        </select>
+      )}
+    </Section>
+  );
+}
+
 function cfgLabel(t: (k: string) => string, key: string) { const s = t(`cfg.${key}`); return s === `cfg.${key}` ? key : s; }
 function cfgDesc(t: (k: string) => string, key: string) { const s = t(`cfgDesc.${key}`); return s === `cfgDesc.${key}` ? '' : s; }
 

@@ -257,13 +257,22 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, sessionExportEnabled: true, teamAgentsEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenu: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true, guideEnabled: true, guideWriteEnabled: true, taskPanelEnabled: true, processPollMs: 5000, toolFoldMin: 3, tokenPoolEnabled: true, tokenPoolPartyCreate: true, sessionSandboxEnabled: true, dockerReady: ADMIN.docker.ok && ADMIN.docker.configured, dockerReason: ADMIN.docker.reason });
 
   // ── shared-plan pools ("토큰 모아쓰기") ──
-  if (P === '/api/pools' && M === 'GET') return ok({ pools: db.pools, globalPoolId: db.globalPoolId, hasCredential: true, canCreate: true });
+  if (P === '/api/pools' && M === 'GET') return ok({ pools: db.pools, globalPoolId: db.globalPoolId, myPoolId: db.myPoolId, hasCredential: true, canCreate: true });
   if (P === '/api/pools' && M === 'POST') {
     const id = genId('pool');
     db.pools.push({ id, name: String(b?.name || 'pool'), ownerId: ME.id, ownerName: ME.displayName, strategy: 'rotate', isGlobal: false, members: [] });
     return ok({ id });
   }
   if (P === '/api/pools/global') { db.globalPoolId = String(b?.poolId || '') || null; return ok({ ok: true }); }
+  // this user's own default pool — one level under a session's own choice, over the workspace one
+  if (P === '/api/pools/my-default') {
+    const id = String(b?.poolId || '');
+    const pool = db.pools.find((p) => p.id === id);
+    if (id && !pool) return { status: 400, data: { error: 'pool not found' } };
+    if (id && !pool!.members.some((m) => m.userId === ME.id)) return { status: 400, data: { error: 'join the pool first' } };
+    db.myPoolId = id || null;
+    return ok({ ok: true });
+  }
   {
     const pm = /^\/api\/pools\/([^/]+)(?:\/(join|leave|strategy))?$/.exec(P);
     const pool = pm ? db.pools.find((p) => p.id === pm[1]) : null;
@@ -271,6 +280,7 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
       if (M === 'DELETE') {
         db.pools = db.pools.filter((p) => p.id !== pool.id);
         if (db.globalPoolId === pool.id) db.globalPoolId = null;
+        if (db.myPoolId === pool.id) db.myPoolId = null;
         return ok({ ok: true });
       }
       if (pm[2] === 'join') {
@@ -282,6 +292,7 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
       if (pm[2] === 'leave') {
         const target = String(b?.userId || ME.id);
         pool.members = pool.members.filter((x) => x.userId !== target);
+        if (target === ME.id && db.myPoolId === pool.id) db.myPoolId = null;
         return ok({ ok: true });
       }
       if (pm[2] === 'strategy') { pool.strategy = String(b?.strategy || 'rotate'); return ok({ ok: true }); }

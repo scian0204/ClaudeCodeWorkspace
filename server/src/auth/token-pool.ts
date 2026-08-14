@@ -15,7 +15,12 @@ import { hasLogin } from './claude-login.js';
 // another's row). Removal is allowed for the member themselves, the pool's creator, and admins —
 // taking someone out of a pool can only ever reduce what gets spent.
 
-const GLOBAL_KEY = 'token_pool_global'; // pool id used by any session that names none
+const GLOBAL_KEY = 'token_pool_global'; // pool an admin set for EVERY user, as the last fallback
+
+// Stored in chat_sessions.pool_id to mean "this session opts out — every sender pays for their own
+// turns". Distinct from null, which means "inherit"; without it a session could never escape the
+// workspace-wide pool. No generated pool id can collide with it.
+export const POOL_OWN = 'own';
 
 export interface PoolMemberView {
   userId: string; name: string; priority: number;
@@ -94,8 +99,9 @@ export function createPool(name: string, ownerId: string, strategy = ''): string
 export function deletePool(poolId: string): void {
   db.delete(schema.tokenPoolMembers).where(eq(schema.tokenPoolMembers.poolId, poolId)).run();
   db.delete(schema.tokenPools).where(eq(schema.tokenPools.id, poolId)).run();
-  // sessions pointing at it fall back to the global pool; the global binding itself is cleared
+  // sessions and users pointing at it fall back a level; the global binding itself is cleared
   db.update(schema.chatSessions).set({ poolId: null }).where(eq(schema.chatSessions.poolId, poolId)).run();
+  db.update(schema.users).set({ defaultPoolId: null }).where(eq(schema.users.defaultPoolId, poolId)).run();
   if (getSetting(GLOBAL_KEY, '') === poolId) setSetting(GLOBAL_KEY, '');
 }
 
@@ -116,6 +122,9 @@ export function join(poolId: string, userId: string): void {
 export function leave(poolId: string, userId: string): void {
   db.delete(schema.tokenPoolMembers)
     .where(and(eq(schema.tokenPoolMembers.poolId, poolId), eq(schema.tokenPoolMembers.userId, userId))).run();
+  // a pool you left can't stay your default (userDefaultPool re-checks anyway; this keeps the row honest)
+  db.update(schema.users).set({ defaultPoolId: null })
+    .where(and(eq(schema.users.id, userId), eq(schema.users.defaultPoolId, poolId))).run();
 }
 
 // A member's plan window came back exhausted → skip them until it reopens. `until` is the reset
@@ -133,15 +142,44 @@ export function markAvailable(poolId: string, userId: string): void {
 }
 
 // ── turn-time resolution ──
-// Which pool (if any) backs this session: the session's own binding first, else the workspace-wide
-// one. Returns null when pooling is off or nothing is bound.
-export function poolForSession(s: { poolId?: string | null }): string | null {
+// Three levels, most specific first:
+//   1. the session's own choice — a named pool, or POOL_OWN for "every sender pays for their own"
+//   2. the sender's default pool (their party). Per USER, so two members of one shared room can draw
+//      from different pools — that is what "each person uses their own arrangement" means.
+//   3. the workspace-wide pool an admin set for every user.
+// Returns null when pooling is off, the session opted out, or nothing is set at any level.
+// A session naming a pool that no longer exists falls THROUGH rather than dropping off pooling:
+// deletePool clears the bindings it knows about, but a row removed another way (a restore from an
+// older backup, a manual DB edit) must not silently disable the feature for that session.
+export function poolForSession(s: { poolId?: string | null }, authorId: string): string | null {
   if (!cfg.bool('tokenPoolEnabled')) return null;
-  // A session naming a pool that no longer exists must still fall back to the workspace-wide one.
-  // deletePool clears the bindings it knows about, but a row removed any other way (restore from an
-  // older backup, manual DB edit) would otherwise drop that session off pooling entirely.
-  const named = s.poolId && getPool(s.poolId) ? s.poolId : null;
-  return named ?? getGlobalPoolId();
+  if (s.poolId === POOL_OWN) return null;
+  if (s.poolId && getPool(s.poolId)) return s.poolId;
+  return userDefaultPool(authorId) ?? getGlobalPoolId();
+}
+
+// The pool this user picked as their own default. Only counts while they are still a member —
+// leaving a pool has to stop it backing their turns, whatever the stale column says.
+export function userDefaultPool(userId: string): string | null {
+  const id = db.select({ p: schema.users.defaultPoolId }).from(schema.users)
+    .where(eq(schema.users.id, userId)).get()?.p;
+  if (!id || !getPool(id)) return null;
+  return isMember(id, userId) ? id : null;
+}
+
+// Set (or clear with null) the caller's own default pool. Joining stays a separate act: you can only
+// default to a pool you already joined, so this can never enrol anyone.
+export function setUserDefaultPool(userId: string, poolId: string | null): void {
+  if (poolId) {
+    if (!getPool(poolId)) throw new Error('pool not found');
+    if (!isMember(poolId, userId)) throw new Error('join the pool first');
+  }
+  db.update(schema.users).set({ defaultPoolId: poolId }).where(eq(schema.users.id, userId)).run();
+}
+
+function isMember(poolId: string, userId: string): boolean {
+  return !!db.select().from(schema.tokenPoolMembers)
+    .where(and(eq(schema.tokenPoolMembers.poolId, poolId), eq(schema.tokenPoolMembers.userId, userId))).get();
 }
 
 // The order a turn should try credentials in. First entry runs; the rest are fallbacks for a spent
