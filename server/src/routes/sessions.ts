@@ -266,6 +266,13 @@ export async function sessionRoutes(app: FastifyInstance) {
       }
       patch.agent = name || null;
     }
+    // Pool binding and the build container both have a COST: one picks whose Claude plan the turns
+    // spend, the other spawns a container. canEditChat lets any authed user edit a room's shared row
+    // (it leans on chatSessionId obscurity), which is fine for the model dropdown but too loose here —
+    // require the same authority as sending a turn (admin, or a member of the room).
+    if (('poolId' in b || 'sandbox' in b) && !canWriteSession(u, s)) {
+      return reply.code(403).send({ error: 'forbidden' });
+    }
     // shared-plan pool backing this session's turns; ''/null falls back to the workspace-wide pool
     if ('poolId' in b) patch.poolId = String(b.poolId || '') || null;
     // per-session build container (only meaningful while the admin flag is on; the turn re-checks)
