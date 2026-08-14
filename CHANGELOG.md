@@ -58,7 +58,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ## v1.17.2 — 2026-08-14
 
-<sub>release commit `RELEASEHASH`</sub>
+<sub>release commit `1ead1ac`</sub>
 
 <details>
 <summary><b>fix(pool): the pool endpoints were never reachable</b> — plus two smaller pool fixes found while testing the running app · <code>PENDING</code></summary>

@@ -58,7 +58,7 @@
 
 ## v1.17.2 — 2026-08-14
 
-<sub>release commit `RELEASEHASH`</sub>
+<sub>release commit `1ead1ac`</sub>
 
 <details>
 <summary><b>fix(pool): 모임 API가 아예 연결되지 않고 있었음</b> — 실제 앱으로 테스트하다 발견한 나머지 두 건 포함 · <code>PENDING</code></summary>
