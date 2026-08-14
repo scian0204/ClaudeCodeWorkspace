@@ -45,10 +45,18 @@ export const NO_LOGIN: LoginMeta = { loggedIn: false, scopes: [], planLimits: fa
 const PROFILE_SCOPE = 'user:profile';
 const credentialsPath = (key: string) => path.join(claudeDirOf(key), '.credentials.json');
 
-// Env that points the CLI at a scope's credential store without touching its HOME. Empty for a
-// user's own login — that credential already sits in the HOME the turn runs with.
+// Env that points the CLI at a scope's credential store without touching its HOME.
+//
+// Always set, including for a user's own login. It used to be empty there, on the assumption that the
+// turn's HOME is that user's home so the CLI finds the credential by itself — true for a personal
+// session, false for every other kind. A room session runs with the ROOM's home, so the CLI looked
+// for .credentials.json in the room home, found none, and failed the turn with "Not logged in ·
+// Please run /login" even though the sender was signed in. Same for a pooled turn borrowing another
+// member's plan: without this it read the session owner's credential instead of that member's.
+// Pointing at the store explicitly is what the usage probe already did, and it changes nothing for a
+// personal session — it names the very directory HOME would have led to.
 export function credentialEnv(key: string): Record<string, string> {
-  return key === COMMON ? { CLAUDE_SECURESTORAGE_CONFIG_DIR: paths.commonClaude } : {};
+  return { CLAUDE_SECURESTORAGE_CONFIG_DIR: claudeDirOf(key) };
 }
 
 // The CLI's own credential record. Read for status only — no token value ever leaves this module.

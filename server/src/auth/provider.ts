@@ -82,8 +82,9 @@ export function providerEnv(type: ProviderType, c: ProviderConfig): { env: Recor
 // env before applying the resolved provider env, so a stray host-global var (e.g. an exported
 // ANTHROPIC_BASE_URL or AWS creds) can never bleed into a default-token or mock turn.
 // CLAUDE_SECURESTORAGE_CONFIG_DIR belongs here for the same reason as the tokens: it selects WHICH
-// credential store the CLI reads, so a leftover value would silently run a turn on the shared
-// account. Only the common-login branch of resolveProvider ever sets it.
+// credential store the CLI reads, so a leftover value would silently run a turn on the wrong
+// account. Only the sign-in branches of resolveProvider set it (the signed-in user's own store, or
+// the shared one).
 export const PROVIDER_ENV_KEYS = [
   'ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_SECURESTORAGE_CONFIG_DIR',
   'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX',
@@ -123,12 +124,13 @@ export function resolveProvider(userId: string | null): { env: Record<string, st
   if (userId) {
     const p = fromRow('user', userId, 'user'); if (p) return p;
     const tok = getUserToken(userId); if (tok) return { env: tokenEnv(tok), source: 'token' };
-    // Browser sign-in: the credential lives in the user's HOME as the CLI's own .credentials.json,
-    // so the right env is NO token env at all — buildOptions clears every provider key and the CLI
-    // reads the file (and refreshes it) by itself. An explicitly pasted token above still wins:
-    // that is deliberate configuration, this is ambient. Ranked over the shared token because it is
-    // the user's own account.
-    if (hasLogin(userId)) return { env: {}, source: 'login' };
+    // Browser sign-in: the credential is the CLI's own .credentials.json in the user's workspace
+    // home, so there is no token env — credentialEnv only names the store to read it from, and the
+    // CLI refreshes it in place. That pointer is required whenever the turn's HOME is not this
+    // user's own (a room session, or a pooled turn borrowing this member's plan). An explicitly
+    // pasted token above still wins: that is deliberate configuration, this is ambient. Ranked over
+    // the shared token because it is the user's own account.
+    if (hasLogin(userId)) return { env: credentialEnv(userId), source: 'login' };
   }
   const cp = fromRow('common', COMMON_OWNER, 'common'); if (cp) return cp;
   const shared = getCommonToken(); if (shared) return { env: tokenEnv(shared), source: 'token' };
