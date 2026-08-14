@@ -59,7 +59,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ## v1.17.3 — 2026-08-14
 
-<sub>release commit `RELEASEHASH`</sub>
+<sub>release commit `28effc1`</sub>
 
 - **fix(sessions): binding a pool or a build container to a room needs room membership** — `PATCH /api/sessions/:id` guards a room's shared row with `canEditChat`, which returns true for any signed-in user (it leans on the chat-session id being unguessable). That is fine for the model dropdown, but the two fields added in v1.17.0 have a cost attached: one decides whose Claude plan the room's turns spend, the other spawns a container. `poolId` and `sandbox` now require the same authority as sending a turn in that room — an admin, or a member. Everything else in the same request is unchanged. · `8582d6a`
 
