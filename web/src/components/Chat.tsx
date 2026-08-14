@@ -821,19 +821,30 @@ function PoolPicker() {
   //   null → inherit (the sender's own pool, else the workspace-wide one if the admin turned it on).
   const bound = pools.find((p) => p.id === c.poolId);
   const mine = pools.find((p) => p.id === myPoolId);
-  const inheritLabel = mine ? t('pool.inheritMine', { name: mine.name })
-    : poolAllUsers ? t('pool.inheritAll')
-    : t('pool.own');
+  // The inherit row names what it currently resolves to, but is prefixed so it never reads as the
+  // same choice as picking that pool outright — those two entries would otherwise share a label.
+  const inheritTarget = mine ? mine.name : poolAllUsers ? t('pool.allUsersName') : t('pool.own');
+  const inheritLabel = t('pool.auto', { name: inheritTarget });
   const label = bound ? nameOf(bound) : c.poolId === POOL_OWN ? t('pool.own') : inheritLabel;
+  // one tick on whichever entry is active, so the pill's state is readable inside the menu too
+  const Row = ({ on, children }: { on: boolean; children: React.ReactNode }) => (
+    <span className="inline-flex items-center gap-1.5">
+      <IconCheck size={12} className={on ? 'text-clay' : 'opacity-0'} />{children}
+    </span>
+  );
   return (
     <DM.Root>
       <DM.Trigger asChild><button className="pill" disabled={!!c.readOnly} title={t('pool.pickTip')}><IconUsers size={13} />{label}<IconChevronDown size={14} /></button></DM.Trigger>
       <Menu>
-        <MenuItem onSelect={() => void setPool(null)}>{inheritLabel}</MenuItem>
+        <MenuItem onSelect={() => void setPool(null)}><Row on={!c.poolId}>{inheritLabel}</Row></MenuItem>
         {/* explicit opt-out: "not set" now inherits, so without this a shared room could never be put
             back on "everyone pays for their own turns" */}
-        <MenuItem onSelect={() => void setPool(POOL_OWN)}>{t('pool.ownExplicit')}</MenuItem>
-        {pools.map((p) => <MenuItem key={p.id} onSelect={() => void setPool(p.id)}>{nameOf(p)}</MenuItem>)}
+        <MenuItem onSelect={() => void setPool(POOL_OWN)}><Row on={c.poolId === POOL_OWN}>{t('pool.ownExplicit')}</Row></MenuItem>
+        {pools.map((p) => (
+          <MenuItem key={p.id} onSelect={() => void setPool(p.id)}>
+            <Row on={c.poolId === p.id}>{nameOf(p)}</Row>
+          </MenuItem>
+        ))}
         {!pools.length && <div className="px-2 py-1 text-[11px] text-txt3">{t('pool.none')}</div>}
       </Menu>
     </DM.Root>

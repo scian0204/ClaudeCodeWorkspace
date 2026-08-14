@@ -59,6 +59,12 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
+## Unreleased
+
+- **fix(chat): the session pool menu listed "Everyone" twice** — with workspace-wide sharing on, the inherit row and the workspace pool itself both rendered as plain `전체 사용자`, so the menu showed the same label twice with no way to tell which was which. The inherit row now reads `자동 · <what it resolves to>`, and a tick marks whichever entry is active. · `PENDING`
+
+---
+
 ## v1.19.0 — 2026-08-14
 
 <sub>release commit `61acc49`</sub>
