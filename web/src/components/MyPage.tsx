@@ -330,7 +330,18 @@ function PoolSection() {
               <IconUsers size={14} className="text-clay shrink-0" />
               <span className="font-semibold text-sm">{p.name}</span>
               {p.id === globalPoolId && <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: 'var(--claysoft)', color: 'var(--clay)' }}>{t('pool.globalBadge')}</span>}
-              <span className="text-[11px] text-txt3">{t('pool.strategy.' + p.strategy)} · {t('pool.owner', { name: p.ownerName })}</span>
+              {/* order is a per-pool override of the admin default; only the creator/admins may set it */}
+              {canManage ? (
+                <select className="input !py-0.5 !text-[11px] !w-auto" value={p.strategy} disabled={busy}
+                  title={t('pool.strategyTip')}
+                  onChange={(e) => void call(() => api.put(`/api/pools/${p.id}/strategy`, { strategy: e.target.value }))}>
+                  <option value="rotate">{t('pool.strategy.rotate')}</option>
+                  <option value="sequential">{t('pool.strategy.sequential')}</option>
+                </select>
+              ) : (
+                <span className="text-[11px] text-txt3">{t('pool.strategy.' + p.strategy)}</span>
+              )}
+              <span className="text-[11px] text-txt3">{t('pool.owner', { name: p.ownerName })}</span>
               <span className="ml-auto flex items-center gap-1.5">
                 <button className={`btn-ghost !py-1 !text-xs ${mine ? '' : 'text-clay'}`} disabled={busy}
                   onClick={() => void call(() => api.post(`/api/pools/${p.id}/${mine ? 'leave' : 'join'}`, {}))}>
