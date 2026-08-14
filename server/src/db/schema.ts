@@ -16,6 +16,7 @@ export const users = sqliteTable('users', {
   primeWindow: integer('prime_window').notNull().default(0), // 1 = open a fresh claude.ai 5h window with a tiny throwaway query as soon as none is running
   primedAt: integer('primed_at'), // when the primer last opened a window (epoch ms), null = never
   defaultPoolId: text('default_pool_id'), // this user's own shared-plan pool, used when a session names none
+  poolOptOut: integer('pool_opt_out').notNull().default(0), // 1 = keep my plan out of the workspace-wide pool
 });
 
 // A turn parked because its author's claude.ai plan window (5h / weekly) was exhausted. Re-enqueued

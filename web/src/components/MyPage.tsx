@@ -10,6 +10,8 @@ import { ClaudeLoginBlock } from './TokenSettings';
 import { GitPanel } from './GitPanel';
 import { IconArrowLeft, IconDot, IconFolder, IconGitBranch, IconUser, IconUsers, IconTrash, IconCheck, IconWarning } from '../lib/icons';
 
+const POOL_ALL = 'all'; // mirrors server/src/auth/token-pool.ts
+
 function fmtDate(ms?: number | null) {
   if (!ms) return '';
   const d = new Date(ms);
@@ -302,7 +304,7 @@ function TokenSection() {
 // leaving/removing only ever spends LESS of a plan, so the creator and admins may do that too.
 function PoolSection() {
   const t = useT();
-  const { pools, globalPoolId, myPoolId, poolCanCreate, poolHasCredential, user, refreshPools, setMyPool } = useStore();
+  const { pools, poolAllUsers, poolOptedOut, myPoolId, poolCanCreate, poolHasCredential, user, refreshPools, setMyPool, setPoolOptOut } = useStore();
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const isAdmin = user?.role === 'admin';
@@ -322,15 +324,18 @@ function PoolSection() {
         </div>
       )}
       {pools.map((p) => {
-        const mine = p.members.some((m) => m.userId === user?.id);
-        const canManage = isAdmin || p.ownerId === user?.id;
+        // the workspace-wide pool is derived, not joined: an admin switch turns it on and each member
+        // answers it with the opt-out below, so it has no join / order / delete controls
+        const isAll = p.id === POOL_ALL;
+        const mine = isAll ? !poolOptedOut : p.members.some((m) => m.userId === user?.id);
+        const canManage = !isAll && (isAdmin || p.ownerId === user?.id);
         return (
           <div key={p.id} className="border border-line rounded-lg p-3">
             <div className="flex items-center gap-2 flex-wrap">
               <IconUsers size={14} className="text-clay shrink-0" />
-              <span className="font-semibold text-sm">{p.name}</span>
+              <span className="font-semibold text-sm">{isAll ? t('pool.allUsersName') : p.name}</span>
               {p.id === myPoolId && <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: 'var(--claysoft)', color: 'var(--clay)' }}>{t('pool.myBadge')}</span>}
-              {p.id === globalPoolId && <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-line text-txt3">{t('pool.globalBadge')}</span>}
+              {isAll && <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-line text-txt3">{t('pool.globalBadge')}</span>}
               {/* order is a per-pool override of the admin default; only the creator/admins may set it */}
               {canManage ? (
                 <select className="input !py-0.5 !text-[11px] !w-auto" value={p.strategy} disabled={busy}
@@ -342,15 +347,18 @@ function PoolSection() {
               ) : (
                 <span className="text-[11px] text-txt3">{t('pool.strategy.' + p.strategy)}</span>
               )}
-              <span className="text-[11px] text-txt3">{t('pool.owner', { name: p.ownerName })}</span>
+              {!isAll && <span className="text-[11px] text-txt3">{t('pool.owner', { name: p.ownerName })}</span>}
               <span className="ml-auto flex items-center gap-1.5">
                 <button className={`btn-ghost !py-1 !text-xs ${mine ? '' : 'text-clay'}`} disabled={busy}
-                  onClick={() => void call(() => api.post(`/api/pools/${p.id}/${mine ? 'leave' : 'join'}`, {}))}>
-                  {mine ? t('pool.leave') : t('pool.join')}
+                  title={isAll ? t('pool.optOutTip') : undefined}
+                  onClick={() => void call(() => isAll
+                    ? setPoolOptOut(!poolOptedOut)
+                    : api.post(`/api/pools/${p.id}/${mine ? 'leave' : 'join'}`, {}))}>
+                  {isAll ? t(mine ? 'pool.optOut' : 'pool.optIn') : t(mine ? 'pool.leave' : 'pool.join')}
                 </button>
                 {/* my own default — only meaningful once joined; the workspace-wide one is admin-only
                     and lives in the admin panel, since it spends everyone's plans */}
-                {mine && (
+                {mine && !isAll && (
                   <button className={`btn-ghost !py-1 !text-xs ${p.id === myPoolId ? 'text-clay' : ''}`} disabled={busy}
                     title={t('pool.myDefaultTip')}
                     onClick={() => void call(() => setMyPool(p.id === myPoolId ? null : p.id))}>
@@ -378,7 +386,7 @@ function PoolSection() {
           </div>
         );
       })}
-      {pools.length === 0 && <div className="text-xs text-txt3">{t('pool.none')}</div>}
+      {pools.length === 0 && <div className="text-xs text-txt3">{t(poolAllUsers ? 'pool.none' : 'pool.none')}</div>}
       {poolCanCreate && (
         <div className="flex items-center gap-2">
           <input className="input flex-1 min-w-0" placeholder={t('pool.newPlaceholder')} value={name}

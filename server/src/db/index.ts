@@ -189,6 +189,8 @@ export function initDb() {
   // per-user default shared-plan pool (their party) — sits between the session's own choice and the
   // workspace-wide pool an admin set for everyone
   try { sqlite.exec("ALTER TABLE users ADD COLUMN default_pool_id TEXT"); } catch { /* already present */ }
+  // a member keeping their own plan out of the workspace-wide "everyone shares" pool
+  try { sqlite.exec("ALTER TABLE users ADD COLUMN pool_opt_out INTEGER NOT NULL DEFAULT 0"); } catch { /* already present */ }
   // per-session shared-plan pool (null = inherit, 'own' = every sender pays for their own turns)
   try { sqlite.exec("ALTER TABLE chat_sessions ADD COLUMN pool_id TEXT"); } catch { /* already present */ }
   // per-session build container (0 = build/run in the app container, as before)

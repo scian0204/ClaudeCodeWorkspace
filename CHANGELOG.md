@@ -58,6 +58,27 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
+## Unreleased
+
+<details>
+<summary><b>feat(pool): the workspace-wide level is now "everyone shares", not "an admin picks one pool"</b> — new <code>tokenPoolAllUsers</code> switch, per-member opt-out · <code>PENDING</code></summary>
+
+The previous cut read "workspace-wide" as *an admin nominates one of the existing pools as the default*. What it should mean is simpler and stronger: **every user in the workspace pools their plan together**, with nothing to create and nothing to join.
+
+**How it works now.** One admin switch, `tokenPoolAllUsers` (Config tab, "Shared plans" group). On, the workspace-wide pool is *derived*: its members are every user who registered a Claude plan. It has no row in `token_pools` and no membership to manage — the reserved pool id `all` stands for it wherever a pool id is accepted, including a session that names it explicitly. Cooldowns for its members are still recorded (a `token_pool_members` row keyed by `all`, written the first time someone's window runs out), so a spent plan is skipped and the turn falls through exactly like in a named pool.
+
+**Opt-out.** An admin turning the switch on would otherwise spend the plan of someone who registered a token purely for their own use. Each member gets one switch in My Page — "keep mine out" — that removes only their own plan (`users.pool_opt_out`, `PUT /api/pools/opt-out`, always self-only). Nothing else about the workspace-wide pool is member-editable: join, leave, delete and order all answer 400 for it.
+
+**Removed.** `PUT /api/pools/global` and the settings key `token_pool_global` are gone, along with the custom admin-panel section they needed — the ordinary settings row for `tokenPoolAllUsers` is the whole control now.
+
+**Resolution order** is unchanged in shape: the session's own choice (a pool, or `own` to opt out) → the sender's own default pool → the workspace-wide "everyone" pool → the sender's own plan.
+
+Verified on the running container: the derived membership list, the opt-out removing exactly one member, all four mutation endpoints refusing `all`, round-robin across every user, a spent member being skipped, and each step of the order with the switch on and off.
+
+</details>
+
+---
+
 ## v1.18.0 — 2026-08-14
 
 <sub>release commit `da01277`</sub>

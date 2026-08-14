@@ -15,12 +15,37 @@ import { hasLogin } from './claude-login.js';
 // another's row). Removal is allowed for the member themselves, the pool's creator, and admins —
 // taking someone out of a pool can only ever reduce what gets spent.
 
-const GLOBAL_KEY = 'token_pool_global'; // pool an admin set for EVERY user, as the last fallback
-
 // Stored in chat_sessions.pool_id to mean "this session opts out — every sender pays for their own
 // turns". Distinct from null, which means "inherit"; without it a session could never escape the
 // workspace-wide pool. No generated pool id can collide with it.
 export const POOL_OWN = 'own';
+
+// The workspace-wide pool: NOT a named pool an admin picks, but "everyone in this workspace shares".
+// It has no row in token_pools — its members are derived, every user who registered a plan and did
+// not opt out. Reserved id, usable anywhere a pool id is (a session can name it explicitly).
+export const POOL_ALL = 'all';
+const ALL_CURSOR_KEY = 'token_pool_all_cursor'; // round-robin position for the derived pool
+
+export function allUsersPoolOn(): boolean {
+  return cfg.bool('tokenPoolEnabled') && cfg.bool('tokenPoolAllUsers');
+}
+
+// Everyone whose plan backs the workspace-wide pool. Opting out is a member's own switch: an admin
+// turning the mode on must not be able to spend the plan of someone who declined.
+export function allUsersMembers(): { userId: string; name: string }[] {
+  return db.select({ id: schema.users.id, n: schema.users.displayName, out: schema.users.poolOptOut })
+    .from(schema.users).all()
+    .filter((u) => u.out !== 1 && hasCredential(u.id))
+    .map((u) => ({ userId: u.id, name: u.n }));
+}
+
+export function setPoolOptOut(userId: string, optOut: boolean): void {
+  db.update(schema.users).set({ poolOptOut: optOut ? 1 : 0 }).where(eq(schema.users.id, userId)).run();
+}
+export function poolOptOut(userId: string): boolean {
+  return db.select({ o: schema.users.poolOptOut }).from(schema.users)
+    .where(eq(schema.users.id, userId)).get()?.o === 1;
+}
 
 export interface PoolMemberView {
   userId: string; name: string; priority: number;
@@ -44,19 +69,6 @@ export function hasCredential(userId: string): boolean {
 }
 
 // ── reads ──
-export function getGlobalPoolId(): string | null {
-  const id = getSetting(GLOBAL_KEY, '');
-  if (!id) return null;
-  return db.select().from(schema.tokenPools).where(eq(schema.tokenPools.id, id)).get() ? id : null;
-}
-
-export function setGlobalPool(poolId: string | null): void {
-  if (poolId && !db.select().from(schema.tokenPools).where(eq(schema.tokenPools.id, poolId)).get()) {
-    throw new Error('pool not found');
-  }
-  setSetting(GLOBAL_KEY, poolId || '');
-}
-
 function memberRows(poolId: string) {
   return db.select().from(schema.tokenPoolMembers).where(eq(schema.tokenPoolMembers.poolId, poolId)).all();
 }
@@ -66,13 +78,26 @@ export function getPool(poolId: string) {
 }
 
 export function listPools(): PoolView[] {
-  const globalId = getGlobalPoolId();
   const names = new Map(db.select({ id: schema.users.id, n: schema.users.displayName }).from(schema.users).all()
     .map((u) => [u.id, u.n] as const));
   const now = Date.now();
-  return db.select().from(schema.tokenPools).all().map((p) => ({
+  // The derived workspace-wide pool leads the list when the mode is on. It has no row of its own, so
+  // its cooldowns are read from token_pool_members rows keyed by POOL_ALL (written on exhaustion).
+  const all: PoolView[] = [];
+  if (allUsersPoolOn()) {
+    const cools = new Map(memberRows(POOL_ALL).map((m) => [m.userId, m.cooldownUntil] as const));
+    all.push({
+      id: POOL_ALL, name: '', ownerId: '', ownerName: '',
+      strategy: cfg.str('tokenPoolStrategy'), isGlobal: true,
+      members: allUsersMembers().map((m): PoolMemberView => ({
+        userId: m.userId, name: m.name, priority: 0, hasCredential: true,
+        cooldownUntil: (cools.get(m.userId) || 0) > now ? cools.get(m.userId)! : 0,
+      })),
+    });
+  }
+  return all.concat(db.select().from(schema.tokenPools).all().map((p) => ({
     id: p.id, name: p.name, ownerId: p.ownerId, ownerName: names.get(p.ownerId) || '?',
-    strategy: p.strategy || cfg.str('tokenPoolStrategy'), isGlobal: p.id === globalId,
+    strategy: p.strategy || cfg.str('tokenPoolStrategy'), isGlobal: false,
     members: memberRows(p.id)
       .filter((m) => names.has(m.userId)) // a deleted user's leftover row is not a runnable member
       .sort((a, b) => a.priority - b.priority || a.joinedAt - b.joinedAt)
@@ -81,7 +106,7 @@ export function listPools(): PoolView[] {
         hasCredential: hasCredential(m.userId),
         cooldownUntil: m.cooldownUntil > now ? m.cooldownUntil : 0,
       })),
-  }));
+  })));
 }
 
 // ── writes ──
@@ -102,7 +127,6 @@ export function deletePool(poolId: string): void {
   // sessions and users pointing at it fall back a level; the global binding itself is cleared
   db.update(schema.chatSessions).set({ poolId: null }).where(eq(schema.chatSessions.poolId, poolId)).run();
   db.update(schema.users).set({ defaultPoolId: null }).where(eq(schema.users.defaultPoolId, poolId)).run();
-  if (getSetting(GLOBAL_KEY, '') === poolId) setSetting(GLOBAL_KEY, '');
 }
 
 export function setStrategy(poolId: string, strategy: string): void {
@@ -131,8 +155,14 @@ export function leave(poolId: string, userId: string): void {
 // instant the CLI reported; without one, fall back to the configured cooldown.
 export function markExhausted(poolId: string, userId: string, until?: number | null): void {
   const at = until && until > Date.now() ? until : Date.now() + cfg.int('tokenPoolCooldownMs');
-  db.update(schema.tokenPoolMembers).set({ cooldownUntil: at })
-    .where(and(eq(schema.tokenPoolMembers.poolId, poolId), eq(schema.tokenPoolMembers.userId, userId))).run();
+  // The workspace-wide pool has no membership rows until someone's window runs out — insert on demand
+  // so its cooldowns survive a restart like any other pool's.
+  db.insert(schema.tokenPoolMembers)
+    .values({ poolId, userId, priority: 0, cooldownUntil: at, joinedAt: Date.now() })
+    .onConflictDoUpdate({
+      target: [schema.tokenPoolMembers.poolId, schema.tokenPoolMembers.userId],
+      set: { cooldownUntil: at },
+    }).run();
 }
 
 // A member ran a turn successfully → their window is demonstrably open again.
@@ -154,8 +184,9 @@ export function markAvailable(poolId: string, userId: string): void {
 export function poolForSession(s: { poolId?: string | null }, authorId: string): string | null {
   if (!cfg.bool('tokenPoolEnabled')) return null;
   if (s.poolId === POOL_OWN) return null;
+  if (s.poolId === POOL_ALL) return allUsersPoolOn() ? POOL_ALL : null;
   if (s.poolId && getPool(s.poolId)) return s.poolId;
-  return userDefaultPool(authorId) ?? getGlobalPoolId();
+  return userDefaultPool(authorId) ?? (allUsersPoolOn() ? POOL_ALL : null);
 }
 
 // The pool this user picked as their own default. Only counts while they are still a member —
@@ -187,19 +218,31 @@ function isMember(poolId: string, userId: string): boolean {
 // (window reopened early, reset instant guessed) must never make a pool unusable.
 // The sender is always last-resort so a pool with nothing available still runs their own turn.
 export function runOrder(poolId: string, authorId: string): string[] {
-  const rows = memberRows(poolId).filter((m) => hasCredential(m.userId));
+  // The workspace-wide pool has no row: membership is derived from the user list, and its cooldowns
+  // and round-robin position live in token_pool_members / settings instead.
+  const isAll = poolId === POOL_ALL;
+  const rows = isAll ? allUsersRows() : memberRows(poolId).filter((m) => hasCredential(m.userId));
   if (!rows.length) return [authorId];
-  const pool = getPool(poolId)!;
-  const strategy = pool.strategy || cfg.str('tokenPoolStrategy');
-  const order = orderFrom(rows, authorId, Date.now(), pool.cursor, strategy);
+  const cursor = isAll ? Number(getSetting(ALL_CURSOR_KEY, '0')) || 0 : getPool(poolId)!.cursor;
+  const strategy = isAll ? cfg.str('tokenPoolStrategy') : (getPool(poolId)!.strategy || cfg.str('tokenPoolStrategy'));
+  const order = orderFrom(rows, authorId, Date.now(), cursor, strategy);
   if (strategy === 'rotate') {
     const ready = rows.filter((m) => m.cooldownUntil <= Date.now()).length;
     if (ready > 1) {
-      db.update(schema.tokenPools).set({ cursor: (pool.cursor + 1) % ready })
-        .where(eq(schema.tokenPools.id, poolId)).run();
+      const next = (cursor + 1) % ready;
+      if (isAll) setSetting(ALL_CURSOR_KEY, String(next));
+      else db.update(schema.tokenPools).set({ cursor: next }).where(eq(schema.tokenPools.id, poolId)).run();
     }
   }
   return order;
+}
+
+// Derived rows for the workspace-wide pool, carrying whatever cooldown was recorded for each member.
+function allUsersRows(): { userId: string; priority: number; cooldownUntil: number; joinedAt: number }[] {
+  const cools = new Map(memberRows(POOL_ALL).map((m) => [m.userId, m.cooldownUntil] as const));
+  return allUsersMembers().map((m, i) => ({
+    userId: m.userId, priority: 0, cooldownUntil: cools.get(m.userId) || 0, joinedAt: i,
+  }));
 }
 
 // Pure ordering — the only non-trivial logic in this module, so it is separated for the self-check.

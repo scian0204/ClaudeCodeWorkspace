@@ -16,7 +16,7 @@ import { paths, ensure } from '../lib/paths.js';
 import { safeBase, isBareBasename, contentTypeFor, IMAGE_MIME } from '../lib/attachments.js';
 import * as rooms from '../rooms/manager.js';
 import type { AuthUser } from '../auth/index.js';
-import { POOL_OWN, getPool } from '../auth/token-pool.js';
+import { POOL_OWN, POOL_ALL, getPool } from '../auth/token-pool.js';
 
 const EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'];
 
@@ -279,7 +279,7 @@ export async function sessionRoutes(app: FastifyInstance) {
     // a pool id. An unknown id is rejected rather than stored as a binding that resolves to nothing.
     if ('poolId' in b) {
       const pid = String(b.poolId || '');
-      if (pid && pid !== POOL_OWN && !getPool(pid)) return reply.code(400).send({ error: 'unknown pool' });
+      if (pid && pid !== POOL_OWN && pid !== POOL_ALL && !getPool(pid)) return reply.code(400).send({ error: 'unknown pool' });
       patch.poolId = pid || null;
     }
     // per-session build container (only meaningful while the admin flag is on; the turn re-checks)

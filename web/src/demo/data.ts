@@ -184,17 +184,18 @@ export const db = {
   // three states: available, skipped until their allowance resets, and no plan registered yet.
   pools: [
     {
-      id: 'pool_team', name: '팀 공용', ownerId: ME.id, ownerName: ME.displayName, strategy: 'rotate', isGlobal: true,
+      id: 'all', name: '', ownerId: '', ownerName: '', strategy: 'rotate', isGlobal: true,
       members: [
         { userId: ME.id, name: ME.displayName, priority: 0, hasCredential: true, cooldownUntil: 0 },
         { userId: U_JAMIE.id, name: U_JAMIE.displayName, priority: 0, hasCredential: true, cooldownUntil: Date.now() + 90 * 60 * 1000 },
         { userId: U_RILEY.id, name: U_RILEY.displayName, priority: 0, hasCredential: false, cooldownUntil: 0 },
       ],
     },
+    { id: 'pool_team', name: '팀 파티', ownerId: ME.id, ownerName: ME.displayName, strategy: 'rotate', isGlobal: false, members: [{ userId: ME.id, name: ME.displayName, priority: 0, hasCredential: true, cooldownUntil: 0 }] },
     { id: 'pool_night', name: '야간 파티', ownerId: U_SAM.id, ownerName: U_SAM.displayName, strategy: 'sequential', isGlobal: false, members: [] },
   ] as { id: string; name: string; ownerId: string; ownerName: string; strategy: string; isGlobal: boolean; members: { userId: string; name: string; priority: number; hasCredential: boolean; cooldownUntil: number }[] }[],
-  globalPoolId: 'pool_team' as string | null, // admin-set, applies to every user
-  myPoolId: null as string | null,           // this user's own default pool (their party)
+  poolOptedOut: false,             // this user's plan is in the workspace-wide pool
+  myPoolId: null as string | null, // this user's own default pool (their party)
   sessions: [
     { id: 's_auth', title: 'Auth module refactor', updatedAt: ago(11), projectId: 'p_api', model: 'claude-opus-4-8', effort: 'high', permissionMode: 'default' },
     { id: 's_socket', title: 'Socket reconnect bug', updatedAt: ago(138), projectId: 'p_web', model: 'claude-sonnet-5', effort: 'medium', permissionMode: 'acceptEdits' },

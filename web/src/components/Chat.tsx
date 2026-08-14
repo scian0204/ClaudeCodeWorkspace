@@ -806,21 +806,25 @@ function MessageView({ m }: { m: Msg }) {
 
 // Which shared plan this session's turns run on. Hidden entirely while pooling is off, so a
 // workspace that never turns it on sees no new control.
-const POOL_OWN = 'own'; // mirrors server/src/auth/token-pool.ts
+// mirrors server/src/auth/token-pool.ts
+const POOL_OWN = 'own'; // this session opts out — every sender pays for their own turns
+const POOL_ALL = 'all'; // the derived workspace-wide pool: everyone who registered a plan
 
 function PoolPicker() {
   const t = useT();
-  const { current: c, pools, globalPoolId, myPoolId, tokenPoolEnabled, setPool } = useStore();
+  const { current: c, pools, poolAllUsers, myPoolId, tokenPoolEnabled, setPool } = useStore();
   if (!tokenPoolEnabled || !c) return null;
+  const nameOf = (p: { id: string; name: string }) => (p.id === POOL_ALL ? t('pool.allUsersName') : p.name);
   // Three states, matching the server's resolution order:
-  //   a named pool → that pool; POOL_OWN → every sender pays for their own turns;
-  //   null → inherit (the sender's own pool, else the workspace-wide one an admin set).
+  //   a pool (a party, or the workspace-wide one) → that pool;
+  //   POOL_OWN → every sender pays for their own turns;
+  //   null → inherit (the sender's own pool, else the workspace-wide one if the admin turned it on).
   const bound = pools.find((p) => p.id === c.poolId);
-  const inherited = pools.find((p) => p.id === (myPoolId || globalPoolId));
-  const inheritLabel = inherited
-    ? t(myPoolId ? 'pool.inheritMine' : 'pool.inheritGlobal', { name: inherited.name })
+  const mine = pools.find((p) => p.id === myPoolId);
+  const inheritLabel = mine ? t('pool.inheritMine', { name: mine.name })
+    : poolAllUsers ? t('pool.inheritAll')
     : t('pool.own');
-  const label = bound ? bound.name : c.poolId === POOL_OWN ? t('pool.own') : inheritLabel;
+  const label = bound ? nameOf(bound) : c.poolId === POOL_OWN ? t('pool.own') : inheritLabel;
   return (
     <DM.Root>
       <DM.Trigger asChild><button className="pill" disabled={!!c.readOnly} title={t('pool.pickTip')}><IconUsers size={13} />{label}<IconChevronDown size={14} /></button></DM.Trigger>
@@ -829,7 +833,7 @@ function PoolPicker() {
         {/* explicit opt-out: "not set" now inherits, so without this a shared room could never be put
             back on "everyone pays for their own turns" */}
         <MenuItem onSelect={() => void setPool(POOL_OWN)}>{t('pool.ownExplicit')}</MenuItem>
-        {pools.map((p) => <MenuItem key={p.id} onSelect={() => void setPool(p.id)}>{p.name}</MenuItem>)}
+        {pools.map((p) => <MenuItem key={p.id} onSelect={() => void setPool(p.id)}>{nameOf(p)}</MenuItem>)}
         {!pools.length && <div className="px-2 py-1 text-[11px] text-txt3">{t('pool.none')}</div>}
       </Menu>
     </DM.Root>

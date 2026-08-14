@@ -124,7 +124,8 @@ interface State {
   processPollMs: number;         // admin process panel auto-poll interval (from /api/config)
   toolFoldMin: number;           // fold a run of N+ back-to-back tool calls into one row (0 = never)
   pools: Pool[];                 // shared-plan pools ("토큰 모아쓰기") — /api/pools
-  globalPoolId: string | null;   // admin-set pool for EVERY user — the last fallback
+  poolAllUsers: boolean;         // admin mode: everyone with a plan shares — the last fallback
+  poolOptedOut: boolean;         // this user keeps their own plan out of that workspace-wide pool
   myPoolId: string | null;       // this user's own pool (their party) — one level more specific
   poolCanCreate: boolean;        // this user may start a party pool
   poolHasCredential: boolean;    // this user has a Claude plan to contribute
@@ -212,6 +213,7 @@ interface State {
   setPool: (poolId: string | null) => Promise<void>;
   setSandbox: (on: boolean) => Promise<void>;
   setMyPool: (poolId: string | null) => Promise<void>;
+  setPoolOptOut: (optOut: boolean) => Promise<void>;
   refreshPools: () => Promise<void>;
   setMode: (mode: string) => Promise<void>;
   reloadRoom: () => Promise<void>;
@@ -246,7 +248,7 @@ export const useStore = create<State>((set, get) => ({
   control: { canApprove: true, canInterrupt: true, canSetMode: true, isOwner: true, delegable: [] },
   presence: [], congested: false, sessionImportEnabled: true, sessionExportEnabled: true, teamAgentsEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenuEnabled: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true, dockerReady: true, dockerReason: 'ok',
   guideEnabled: true, guideWriteEnabled: true, guideOpen: false, guideLoaded: false, guideMessages: [], guideLive: null, guideBusy: false, guideUnread: false,
-  resumes: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, toolFoldMin: 3, tokenPoolEnabled: false, sessionSandboxEnabled: false, pools: [], globalPoolId: null, myPoolId: null, poolCanCreate: false, poolHasCredential: false, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, gitPanelOpen: false, explorerOpen: false, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
+  resumes: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, toolFoldMin: 3, tokenPoolEnabled: false, sessionSandboxEnabled: false, pools: [], poolAllUsers: false, poolOptedOut: false, myPoolId: null, poolCanCreate: false, poolHasCredential: false, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, gitPanelOpen: false, explorerOpen: false, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
   channels: [], activeChannelId: null, channelMessages: [], titling: [],
   commands: [],
 
@@ -686,11 +688,16 @@ export const useStore = create<State>((set, get) => ({
     await api.put('/api/pools/my-default', { poolId: poolId || '' });
     await get().refreshPools();
   },
+  // keep my own plan out of the workspace-wide "everyone shares" pool
+  setPoolOptOut: async (optOut) => {
+    await api.put('/api/pools/opt-out', { optOut });
+    await get().refreshPools();
+  },
   refreshPools: async () => {
     if (!get().tokenPoolEnabled) return;
     try {
       const r = await api.get('/api/pools');
-      set({ pools: r.pools || [], globalPoolId: r.globalPoolId || null, myPoolId: r.myPoolId || null, poolCanCreate: !!r.canCreate, poolHasCredential: !!r.hasCredential });
+      set({ pools: r.pools || [], poolAllUsers: !!r.allUsers, poolOptedOut: !!r.optedOut, myPoolId: r.myPoolId || null, poolCanCreate: !!r.canCreate, poolHasCredential: !!r.hasCredential });
     } catch { /* pooling off or not reachable — leave the last list alone */ }
   },
   setMode: async (mode) => {

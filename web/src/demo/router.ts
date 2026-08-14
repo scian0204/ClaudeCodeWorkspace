@@ -254,16 +254,16 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   if (P === '/api/admin/restore/apply' && M === 'POST') { ADMIN.restoreStaged = null; return ok({ ok: true }); }
 
   // ---- client-facing config (model dropdown) ----
-  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, sessionExportEnabled: true, teamAgentsEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenu: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true, guideEnabled: true, guideWriteEnabled: true, taskPanelEnabled: true, processPollMs: 5000, toolFoldMin: 3, tokenPoolEnabled: true, tokenPoolPartyCreate: true, sessionSandboxEnabled: true, dockerReady: ADMIN.docker.ok && ADMIN.docker.configured, dockerReason: ADMIN.docker.reason });
+  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, sessionExportEnabled: true, teamAgentsEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenu: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true, guideEnabled: true, guideWriteEnabled: true, taskPanelEnabled: true, processPollMs: 5000, toolFoldMin: 3, tokenPoolEnabled: true, tokenPoolAllUsers: true, tokenPoolPartyCreate: true, sessionSandboxEnabled: true, dockerReady: ADMIN.docker.ok && ADMIN.docker.configured, dockerReason: ADMIN.docker.reason });
 
   // ── shared-plan pools ("토큰 모아쓰기") ──
-  if (P === '/api/pools' && M === 'GET') return ok({ pools: db.pools, globalPoolId: db.globalPoolId, myPoolId: db.myPoolId, hasCredential: true, canCreate: true });
+  if (P === '/api/pools' && M === 'GET') return ok({ pools: db.pools, allUsers: true, myPoolId: db.myPoolId, optedOut: db.poolOptedOut, hasCredential: true, canCreate: true });
   if (P === '/api/pools' && M === 'POST') {
     const id = genId('pool');
     db.pools.push({ id, name: String(b?.name || 'pool'), ownerId: ME.id, ownerName: ME.displayName, strategy: 'rotate', isGlobal: false, members: [] });
     return ok({ id });
   }
-  if (P === '/api/pools/global') { db.globalPoolId = String(b?.poolId || '') || null; return ok({ ok: true }); }
+  if (P === '/api/pools/opt-out') { db.poolOptedOut = !!b?.optOut; return ok({ ok: true }); }
   // this user's own default pool — one level under a session's own choice, over the workspace one
   if (P === '/api/pools/my-default') {
     const id = String(b?.poolId || '');
@@ -279,7 +279,6 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
     if (pm && pool) {
       if (M === 'DELETE') {
         db.pools = db.pools.filter((p) => p.id !== pool.id);
-        if (db.globalPoolId === pool.id) db.globalPoolId = null;
         if (db.myPoolId === pool.id) db.myPoolId = null;
         return ok({ ok: true });
       }
