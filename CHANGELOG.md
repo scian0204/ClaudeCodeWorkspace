@@ -60,6 +60,27 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
+## Unreleased
+
+<details>
+<summary><b>fix(usage): the usage limits came up empty — three causes, fixed together</b> — a half-finished lookup taken as the answer + a fallback wiped by every deploy + a privacy switch deleting the row that mattered · <code>04fac4b</code></summary>
+
+**What people saw.** Opening the usage popover in the chat header showed an empty "Usage limits" section, or a message saying the token lacked permission. It kept coming back after several attempts to fix it.
+
+**Cause 1 — a half-finished lookup was taken as the answer.** To read the limits the server briefly starts a Claude CLI and asks it. That CLI answers with *whatever it has at that moment*. One that has just started has not finished its account lookup, so it says "yes, this token may read plan windows" but sends the figures back empty. The server believed that, cached it for two minutes and also stored it as the account's "last good value" — so the screen said the account had no limits at all. It now counts an answer as an answer **only when the figures are actually in it** (a flat "no limits", as an API key gives, is still a real answer), and while they are missing it re-asks the session it already has open for `usageLimitsRetryMs` (10s by default). No model runs, so this costs nothing.
+
+**Cause 2 — deploying wiped the fallback.** The "last good value" kept for when a lookup fails lived only in server memory. The container is replaced on every release, so **the first popover opened right after a new version went up** had nothing to fall back on — which is why this kept resurfacing. It is now one row per account in the database.
+
+**Cause 3 — a privacy switch deleted the row that mattered most.** Testing the live CLI one environment variable at a time: with `DISABLE_TELEMETRY=1` or `DO_NOT_TRACK=1` (both set by the privacy switches, which are on by default) the CLI leaves the **per-model weekly window** out of its answer entirely. On this workspace the 5-hour window sat at 8% while the per-model weekly was at 91% — so the only number that mattered was the one being hidden. The CLI used for the limits lookup is an empty session that never says a word to the model, so those two variables are dropped for that lookup alone. Chat turns and every other lookup keep the admin's privacy settings exactly as they are. To keep them blocked instead, turn `usageLimitsFullDetail` off and lose only that row.
+
+**Fixed alongside.** A lookup that simply did not come back no longer gets reported as a token-permission problem (`limitsUnknown` plus a new "could not read the limits just now — hit refresh" message). The 5-hour window primer was making the same misreading of "not ready yet" as "no window is open", which would have spent a real message opening a window that was already running.
+
+**New settings.** `usageLimitsRetryMs` (default 10000), `usageLimitsFullDetail` (default on). Runnable check: `npx vitest run server/src/claude/usage-limits.test.ts`.
+
+</details>
+
+---
+
 ## v1.19.1 — 2026-08-14
 
 <sub>release commit `2a05741`</sub>
