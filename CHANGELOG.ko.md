@@ -60,7 +60,7 @@
 
 ## v1.18.0 — 2026-08-14
 
-<sub>release commit `RELEASEHASH`</sub>
+<sub>release commit `da01277`</sub>
 
 <details>
 <summary><b>feat(pool): 함께 쓰기를 3단계로, 전체 기본은 관리자 패널로 이동</b> — 개인 기본 모임 추가, 세션별 "각자 요금제" 선택 추가 · <code>PENDING</code></summary>

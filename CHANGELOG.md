@@ -60,7 +60,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ## v1.18.0 — 2026-08-14
 
-<sub>release commit `RELEASEHASH`</sub>
+<sub>release commit `da01277`</sub>
 
 <details>
 <summary><b>feat(pool): three levels of shared plans, with the workspace-wide one moved to the admin panel</b> — new per-user default pool, explicit per-session opt-out · <code>PENDING</code></summary>
