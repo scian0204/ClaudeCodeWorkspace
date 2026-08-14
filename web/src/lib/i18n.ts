@@ -645,6 +645,8 @@ const ko: Dict = {
   'cfg.turnBackoffCapMs': '백오프 상한', 'cfgDesc.turnBackoffCapMs': '429 재시도 백오프의 최대 지연',
   'cfg.usageProbeTtlMs': '사용량 캐시 TTL', 'cfgDesc.usageProbeTtlMs': '사용량/한도 프로브 결과 캐시 수명',
   'cfg.usageProbeTimeoutMs': '사용량 프로브 타임아웃', 'cfgDesc.usageProbeTimeoutMs': 'CLI 사용량 프로브 최대 대기',
+  'cfg.usageLimitsRetryMs': '한도 조회 재시도 시간', 'cfgDesc.usageLimitsRetryMs': '방금 켜진 CLI는 계정 조회가 끝나기 전에 답할 때가 있어 한도가 비어 옵니다. 이 시간 동안 같은 세션에 다시 물어봅니다(모델은 돌지 않음). 0이면 한 번만 물어봅니다',
+  'cfg.usageLimitsFullDetail': '모델별 주간 한도까지 조회', 'cfgDesc.usageLimitsFullDetail': 'CLI는 텔레메트리를 막으면 모델별 주간 한도(예: Fable 91%)를 응답에서 빼는데, 이 값이 계정이 가장 먼저 걸리는 한도인 경우가 많습니다. 켜면 한도 조회에 쓰는 CLI에서만 텔레메트리 차단을 풉니다(대화 턴과 나머지 조회는 그대로). 끄면 그 줄만 안 보입니다',
   'cfg.usageLastGoodTtlMs': '한도 최근값 유지 시간', 'cfgDesc.usageLastGoodTtlMs': '프로브가 응답을 못 받으면(부하로 CLI 기동 지연 등) 이 시간 안의 직전 정상 한도를 대신 표시. 0이면 비활성',
   'cfg.reviewAuto': '자동 리뷰', 'cfgDesc.reviewAuto': '새 PR 감지 시 리뷰 파이프라인 자동 실행',
   'cfg.reviewComment': 'PR 코멘트 게시', 'cfgDesc.reviewComment': '완료된 리뷰 결과를 PR 코멘트로 게시',
@@ -1246,6 +1248,7 @@ const ko: Dict = {
   'usage.loading': '불러오는 중…',
   'usage.noContext': '아직 컨텍스트 데이터가 없어요 (대화를 시작하면 표시됩니다).',
   'usage.refresh': '캐시 없이 새로 조회',
+  'usage.unknownRetry': '지금은 한도를 못 읽었습니다. 서버가 방금 켜졌거나 바쁠 때 잠깐 이럴 수 있어요 — 위 새로고침을 눌러 다시 조회하세요.',
   'usage.unavailable': 'API 키·Bedrock·커스텀 프로바이더에는 플랜 한도가 없습니다 (토큰 단위 과금).',
   'usage.unavailableScope': '등록된 OAuth 토큰에 user:profile 스코프가 없어 플랜 한도를 읽을 수 없습니다 (claude setup-token은 추론 전용). 마이페이지에서 Claude 계정 브라우저 로그인을 하면 표시됩니다.',
 
@@ -1868,6 +1871,8 @@ const en: Dict = {
   'cfg.turnBackoffCapMs': 'Backoff cap', 'cfgDesc.turnBackoffCapMs': 'Ceiling for the 429 retry backoff delay',
   'cfg.usageProbeTtlMs': 'Usage cache TTL', 'cfgDesc.usageProbeTtlMs': 'How long a usage/limit probe result is cached',
   'cfg.usageProbeTimeoutMs': 'Usage probe timeout', 'cfgDesc.usageProbeTimeoutMs': 'Max wait for the CLI usage probe',
+  'cfg.usageLimitsRetryMs': 'Limits lookup retry window', 'cfgDesc.usageLimitsRetryMs': 'A just-started CLI can answer before its account lookup finishes, returning empty limits. Keep re-asking the same session for this long (the model never runs). 0 asks once',
+  'cfg.usageLimitsFullDetail': 'Include the per-model weekly limit', 'cfgDesc.usageLimitsFullDetail': 'With telemetry blocked the CLI leaves the per-model weekly window (e.g. Fable 91%) out of its answer, and that is often the first limit an account hits. On: lift the telemetry block for the limits lookup only (chat turns and every other lookup keep it). Off: that row is simply missing',
   'cfg.usageLastGoodTtlMs': 'Limits last-good TTL', 'cfgDesc.usageLastGoodTtlMs': 'When a probe gets no answer (CLI start starved under load), show the account\'s previous limits if newer than this. 0 disables',
   'cfg.reviewAuto': 'Auto review', 'cfgDesc.reviewAuto': 'Auto-run the review pipeline when a new PR is detected',
   'cfg.reviewComment': 'Post PR comment', 'cfgDesc.reviewComment': 'Post the finished review back as a PR comment',
@@ -2469,6 +2474,7 @@ const en: Dict = {
   'usage.loading': 'Loading…',
   'usage.noContext': 'No context data yet (starts once the conversation begins).',
   'usage.refresh': 'Re-probe (skip cache)',
+  'usage.unknownRetry': 'Could not read the limits just now. This happens for a moment when the server has just started or is busy — hit refresh above to look them up again.',
   'usage.unavailable': 'API key / Bedrock / custom providers have no plan window — they bill per token.',
   'usage.unavailableScope': 'The registered OAuth token has no user:profile scope, so plan limits cannot be read (claude setup-token is inference-only). Sign in to your Claude account from My Page and they will appear.',
 

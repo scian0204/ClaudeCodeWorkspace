@@ -5,7 +5,7 @@ import { db, schema } from '../db/index.js';
 import { newId } from '../lib/ids.js';
 import { paths, ensure } from '../lib/paths.js';
 import { isBareBasename } from '../lib/attachments.js';
-import { allowBypass } from '../lib/settings.js';
+import { allowBypass, getSetting, setSetting } from '../lib/settings.js';
 import { turnLimiter, withRateLimitRetry } from './throttle.js';
 import { buildOptions, clampMode, rootsFor, type SessionContext, type PermMode } from './config-layering.js';
 import { makeCanUseTool, makeAutoAllow } from './permissions.js';
@@ -24,6 +24,7 @@ import { cfg } from '../lib/config-registry.js';
 import { maybeAutoTitle } from './auto-title.js';
 import { isUsageLimitError, resetAtFromError, eligible as autoResumeEligible, parkTurn } from './auto-resume.js';
 import { ingestTaskEvent, endRunningTasks } from './tasks.js';
+import { limitsSettled } from './usage-limits.js';
 
 type Emit = (event: string, payload: any) => void;
 
@@ -197,23 +198,60 @@ export interface UsageInfo {
   subscriptionType: string | null;
   rateLimits: { fiveHour: Win | null; sevenDay: Win | null; modelScoped: ModelWin[] } | null;
   authKind: AuthKind;
+  // The lookup could not determine the plan windows AND there was no previous value to fall back on.
+  // Distinct from "this credential has no plan windows" (an API key), which is a real answer — the
+  // popover must not blame the plan/scope for what is really a lookup that did not come back.
+  limitsUnknown: boolean;
 }
 // Key names only — a secret value is never read here, so nothing sensitive can reach the client.
 const authKindOf = (env: Record<string, string>): AuthKind =>
   env.CLAUDE_CODE_OAUTH_TOKEN ? 'oauth' : env.ANTHROPIC_API_KEY ? 'apiKey' : Object.keys(env).length ? 'other' : 'none';
-const EMPTY_USAGE: UsageInfo = { context: null, rateLimitsAvailable: false, subscriptionType: null, rateLimits: null, authKind: 'none' };
+const EMPTY_USAGE: UsageInfo = { context: null, rateLimitsAvailable: false, subscriptionType: null, rateLimits: null, authKind: 'none', limitsUnknown: false };
 const usageCache = new Map<string, { at: number; data: UsageInfo }>();
-// Account-level last-known-good plan limits. A probe that got NO answer (CLI cold start starved
+// Account-level last-known-good plan limits. A lookup that did not come back (CLI cold start starved
 // under heavy load → timeout) must not blank the popover for an account whose limits we reported
 // minutes ago — plan windows are account-wide and drift slowly, so serve the previous answer. A
-// probe that ANSWERED "no limits" (API key) is a real answer and never lands here.
+// lookup that ANSWERED "no limits" (API key) is a real answer and never lands here.
+// Kept in the settings table rather than in memory: the container is rebuilt on every release, and an
+// in-memory copy is empty exactly then — the first popover after a deploy is the one that used to
+// come up blank. One row per account, no secrets (utilization %, reset instants, plan name).
 type LimitsSlice = Pick<UsageInfo, 'rateLimitsAvailable' | 'subscriptionType' | 'rateLimits'>;
-const lastLimits = new Map<string, { at: number; d: LimitsSlice }>();
+const lastGoodKey = (acctKey: string) => `usage_limits_lastgood:${acctKey}`;
 const lastGoodFor = (acctKey: string): LimitsSlice | null => {
-  const lg = lastLimits.get(acctKey);
-  return lg && Date.now() - lg.at < cfg.int('usageLastGoodTtlMs') ? lg.d : null;
+  const ttl = cfg.int('usageLastGoodTtlMs');
+  if (ttl <= 0) return null;
+  try {
+    const raw = getSetting(lastGoodKey(acctKey), '');
+    if (!raw) return null;
+    const { at, d } = JSON.parse(raw) as { at: number; d: LimitsSlice };
+    return d && Date.now() - at < ttl ? d : null;
+  } catch { return null; } // corrupt row → treat as no previous value
+};
+const rememberLimits = (acctKey: string, d: LimitsSlice) => {
+  try { setSetting(lastGoodKey(acctKey), JSON.stringify({ at: Date.now(), d })); } catch { /* cache only */ }
 };
 const win = (w: any): Win | null => (w ? { utilization: w.utilization ?? null, resetsAt: w.resets_at ?? null } : null);
+
+// Ask the still-open query for the account figures, re-asking while they are not ready yet. Costs
+// nothing but a control round-trip — the model never runs. Bounded by both the retry window and the
+// overall probe timeout so a CLI that never answers cannot hold the request open.
+async function askLimits(q: any, deadline: number): Promise<any | null> {
+  if (typeof q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET !== 'function') return null;
+  const retryUntil = Math.min(deadline, Date.now() + cfg.int('usageLimitsRetryMs'));
+  let latest: any = null;
+  for (;;) {
+    const left = deadline - Date.now();
+    if (left <= 0) return latest;
+    const us = await Promise.race([
+      q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET().catch(() => null),
+      new Promise<null>((r) => setTimeout(() => r(null), left)),
+    ]);
+    if (limitsSettled(us)) return us;
+    if (us) latest = us; // keep the partial: its subscription_type is still real
+    if (Date.now() >= retryUntil) return latest;
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+}
 
 export async function probeUsage(chatSessionId: string, requesterId?: string | null, opts?: { fresh?: boolean }): Promise<UsageInfo> {
   const s = getSession(chatSessionId);
@@ -262,12 +300,24 @@ export async function probeUsage(chatSessionId: string, requesterId?: string | n
     // both at once made two CLI startups fight for the CPU — either way it blew the timeout and the
     // popover reported "no plan limits" for an account that has them.
     // ponytail: two CLI subprocesses per probe, serialized; the TTL cache keeps reopens free.
-    const qLimits: any = query({
-      prompt: idleInput() as any,
-      options: buildOptions({ ...ctx, plugins: [], providerEnv: limitsEnv }, { canUseTool: deny, abortController: abortLimits }),
-    });
-    const us = typeof qLimits.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET === 'function'
-      ? await withTimeout(qLimits.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET()) : null;
+    const limitsOptions = buildOptions({ ...ctx, plugins: [], providerEnv: limitsEnv }, { canUseTool: deny, abortController: abortLimits });
+    // The privacy switches (on by default) cost the popover a whole row. Bisected one var at a time
+    // against the live CLI: DISABLE_TELEMETRY=1 and DO_NOT_TRACK=1 — both set by `privacyTelemetry`,
+    // and implied by the umbrella var — each make the answer come back WITHOUT `model_scoped`, while
+    // the other eleven privacy vars change nothing. So the per-model weekly window silently vanished,
+    // and that is usually the first limit an account runs into (91% here while the 5-hour sat at 8%):
+    // the popover looked healthy while hiding the only number that mattered.
+    // Reading your own plan windows is the feature, not background chatter, so by default lift just
+    // those vars for THIS lookup — a bare session that runs no model turn. Everything else (turns,
+    // command probes, the context probe) keeps the admin's privacy settings untouched, and an operator
+    // who would rather block the traffic can turn `usageLimitsFullDetail` off and lose only that row.
+    if (cfg.bool('usageLimitsFullDetail')) {
+      for (const k of ['CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC', 'DISABLE_TELEMETRY', 'DO_NOT_TRACK']) {
+        delete limitsOptions.env[k];
+      }
+    }
+    const qLimits: any = query({ prompt: idleInput() as any, options: limitsOptions });
+    const us = await askLimits(qLimits, Date.now() + cfg.int('usageProbeTimeoutMs'));
     try { abortLimits.abort(); } catch { /* noop */ }
 
     const options = buildOptions(ctx, { canUseTool: deny, resume: s.claudeSessionId, abortController: abort });
@@ -284,23 +334,25 @@ export async function probeUsage(chatSessionId: string, requesterId?: string | n
         modelScoped: (rl.model_scoped || []).map((m: any) => ({ displayName: m.display_name, utilization: m.utilization ?? null, resetsAt: m.resets_at ?? null })),
       } : null,
       authKind,
+      limitsUnknown: false,
     };
-    // Cache only a probe whose account lookup actually ANSWERED. A timed-out/errored lookup (`us`
-    // null — e.g. CLI startup starved under heavy host load) must not pin "no plan limits" for the
-    // whole TTL: reopening the popover should retry, not re-serve the failure.
-    if (us) {
+    // Cache only a lookup that actually SETTLED. One that timed out, errored, or came back not-ready
+    // (`rate_limits: null` while available) must not pin "no plan limits" for the whole TTL, and must
+    // never become the account's last-known-good: reopening the popover should retry, not re-serve it.
+    if (limitsSettled(us)) {
       usageCache.set(cacheKey, { at: Date.now(), data });
-      lastLimits.set(acctKey, { at: Date.now(), d: { rateLimitsAvailable: data.rateLimitsAvailable, subscriptionType: data.subscriptionType, rateLimits: data.rateLimits } });
+      rememberLimits(acctKey, { rateLimitsAvailable: data.rateLimitsAvailable, subscriptionType: data.subscriptionType, rateLimits: data.rateLimits });
     } else {
       usageCache.delete(cacheKey);
       const lg = lastGoodFor(acctKey);
       if (lg) Object.assign(data, lg);
-      console.warn(`[usage] limits probe got no answer (session=${chatSessionId})${lg ? ' — served last-known-good' : ''}`);
+      else Object.assign(data, { rateLimitsAvailable: false, subscriptionType: null, rateLimits: null, limitsUnknown: true });
+      console.warn(`[usage] limits lookup unsettled (session=${chatSessionId}, partial=${!!us})${lg ? ' — served last-known-good' : ''}`);
     }
     return data;
   } catch {
     const lg = lastGoodFor(acctKey);
-    return { ...EMPTY_USAGE, authKind, ...(lg ?? {}) };
+    return { ...EMPTY_USAGE, authKind, ...(lg ?? { limitsUnknown: true }) };
   }
   finally {
     try { abort.abort(); } catch { /* noop */ }

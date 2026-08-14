@@ -150,6 +150,7 @@ export const USAGE = {
   rateLimitsAvailable: true,
   subscriptionType: 'team',
   authKind: 'oauth',
+  limitsUnknown: false,
   rateLimits: {
     fiveHour: { utilization: 2, resetsAt: inMin(4 * 60 + 18) },
     sevenDay: { utilization: 59, resetsAt: inMin(18 * 60 + 28) },

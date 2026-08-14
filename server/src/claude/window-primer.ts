@@ -21,6 +21,7 @@ import { recordUsage } from '../usage/tracker.js';
 import { resolveProvider } from '../auth/provider.js';
 import { buildOptions, type SessionContext } from './config-layering.js';
 import { io } from '../realtime/io.js';
+import { limitsSettled } from './usage-limits.js';
 
 const timers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -79,7 +80,10 @@ export async function probeWindow(userId: string): Promise<WindowState> {
     typeof q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET === 'function'
       ? q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET() : Promise.resolve(null)
   ));
-  if (!res || !(res as any).rate_limits_available) return { known: false, resetsAt: null };
+  // No figures at all, or a freshly started CLI that has not finished its account lookup yet →
+  // not known. Reading "not ready" as "no window is open" would spend a real message opening one
+  // that is already running. A subscription with no `rate_limits` is likewise nothing to act on.
+  if (!limitsSettled(res) || !(res as any).rate_limits) return { known: false, resetsAt: null };
   const raw = (res as any).rate_limits?.five_hour?.resets_at;
   const at = raw ? new Date(raw).getTime() : NaN;
   return { known: true, resetsAt: Number.isFinite(at) && at > Date.now() ? at : null };

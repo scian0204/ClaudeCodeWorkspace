@@ -70,7 +70,15 @@ export const DEFS: ConfigDef[] = [
   // enough that the cost is paid once, not on every popover open.
   { key: 'usageProbeTtlMs', group: 'claude', type: 'int', default: '120000', min: 1000, max: 600000, unit: 'ms' },
   { key: 'usageProbeTimeoutMs', group: 'claude', type: 'int', default: '45000', min: 1000, max: 120000, unit: 'ms' },
-  // when the probe gets NO answer (CLI cold start starved under load), serve the account's previous
+  // A freshly started CLI answers the account lookup with whatever it has — on a cold start that is
+  // "not yet" (rate_limits null while available). Keep re-asking the open session for this long
+  // before giving up; each retry is a control round-trip, so the model never runs. 0 = ask once.
+  { key: 'usageLimitsRetryMs', group: 'claude', type: 'int', default: '10000', min: 0, max: 60000, unit: 'ms' },
+  // The CLI omits the per-model weekly window (`model_scoped`) when DISABLE_TELEMETRY is set, which
+  // the privacy switches do by default — and that row is usually the first limit an account hits.
+  // On: lift that one var for the limits lookup only (a bare session that runs no model turn).
+  { key: 'usageLimitsFullDetail', group: 'claude', type: 'bool', default: '1' },
+  // when the lookup does not settle (CLI cold start starved under load), serve the account's previous
   // answer instead of "unavailable" — plan windows are account-wide and drift slowly. 0 disables.
   { key: 'usageLastGoodTtlMs', group: 'claude', type: 'int', default: '1800000', min: 0, max: 86400000, unit: 'ms' },
   // auto-resume a turn that hit the claude.ai plan window (5h / weekly), once the window resets

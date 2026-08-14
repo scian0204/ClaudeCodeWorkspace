@@ -381,6 +381,7 @@ interface Usage {
   subscriptionType: string | null;
   rateLimits: { fiveHour: UsageWin | null; sevenDay: UsageWin | null; modelScoped: ({ displayName: string } & UsageWin)[] } | null;
   authKind: 'oauth' | 'apiKey' | 'other' | 'none';
+  limitsUnknown?: boolean; // the lookup did not come back — not the same as "this account has none"
 }
 
 const fmtTokens = (n: number): string =>
@@ -499,12 +500,18 @@ function UsagePill() {
               ))}
             </>
           ) : (
-            // An OAuth token that still reports no window is a *scope* problem, not a plan problem —
-            // `claude setup-token` mints an inference-only token, and the CLI needs user:profile.
-            // The fix is actionable (browser sign-in from My Page), so the message says so.
+            // Three different reasons the rows are missing, and they must not be confused:
+            //  · the lookup did not come back (server says limitsUnknown, or it answered "available"
+            //    without the windows) — temporary, the refresh button retries;
+            //  · an OAuth token that reports no window is a *scope* problem, not a plan problem —
+            //    `claude setup-token` mints an inference-only token, the CLI needs user:profile, and
+            //    the fix is actionable (browser sign-in from My Page);
+            //  · anything else genuinely has no plan window (API key, Bedrock, custom provider).
             <div className="text-[11px] text-txt3">
               {loading ? t('usage.loading')
-                : t(data?.authKind === 'oauth' ? 'usage.unavailableScope' : 'usage.unavailable')}
+                : !data ? t('usage.unknownRetry')
+                : (data.limitsUnknown || data.rateLimitsAvailable) ? t('usage.unknownRetry')
+                : t(data.authKind === 'oauth' ? 'usage.unavailableScope' : 'usage.unavailable')}
             </div>
           )}
         </DM.Content>
