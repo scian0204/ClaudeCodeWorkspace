@@ -24,6 +24,7 @@ export interface SessionContext {
   agents?: Record<string, { description: string; prompt: string; tools?: string[]; model?: string }>; // team agents (SDK options.agents)
   agentName?: string;               // main-thread agent (SDK options.agent) — must be a key of `agents`
   unattended?: boolean;             // review pipeline: auto-allow canUseTool, never prompts a human
+  systemPromptAppend?: string;      // extra house rules appended to the CLI's own prompt (never shown in the transcript)
 }
 
 export function homeFor(ctx: SessionContext): string {
@@ -120,6 +121,11 @@ export function buildOptions(ctx: SessionContext, extra: {
   // user's own ~/.claude/settings.json without us writing to it.
   if (Object.keys(privacy.settings).length) options.settings = privacy.settings;
   if (extra.resume) options.resume = extra.resume;
+  // Extra house rules on top of Claude Code's own prompt (currently: the per-session build container).
+  // A preset+append keeps every default behaviour — replacing systemPrompt with a string would drop it.
+  if (ctx.systemPromptAppend) {
+    options.systemPrompt = { type: 'preset', preset: 'claude_code', append: ctx.systemPromptAppend };
+  }
   if (ctx.mcpServers) options.mcpServers = ctx.mcpServers;
   if (ctx.disallowedTools?.length) options.disallowedTools = ctx.disallowedTools;
   // team agents: subagent definitions + (guarded) the main-thread persona. The guard is load-bearing:

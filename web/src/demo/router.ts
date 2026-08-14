@@ -1,7 +1,7 @@
 // Routes every /api/* request to canned data / in-memory mutations for the static demo.
 // Called by the fetch + XHR interceptors in ./install. Returns a plain {status, data}.
 import {
-  db, ADMIN, ATTACHMENTS, GIT, PROVIDERS, COMMANDS, USAGE, TREE_PROJECT, TREE_PLUGIN, WIKI_ARTICLES, WIKI_RAW, WIKI_TREE_ARTICLES,
+  db, ME, ADMIN, ATTACHMENTS, GIT, PROVIDERS, COMMANDS, USAGE, TREE_PROJECT, TREE_PLUGIN, WIKI_ARTICLES, WIKI_RAW, WIKI_TREE_ARTICLES,
   REQUEST_ACTIONS, IMPORT_SESSIONS, fileContent, wikiFileContent, WIKI_RAW_EDITS, pluginDetail, EDITOR_URL, genId,
 } from './data';
 import { runDemoGuide, clearDemoGuide } from './socket';
@@ -254,7 +254,39 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   if (P === '/api/admin/restore/apply' && M === 'POST') { ADMIN.restoreStaged = null; return ok({ ok: true }); }
 
   // ---- client-facing config (model dropdown) ----
-  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, sessionExportEnabled: true, teamAgentsEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenu: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true, guideEnabled: true, guideWriteEnabled: true, taskPanelEnabled: true, processPollMs: 5000, dockerReady: ADMIN.docker.ok && ADMIN.docker.configured, dockerReason: ADMIN.docker.reason });
+  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, sessionExportEnabled: true, teamAgentsEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenu: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true, guideEnabled: true, guideWriteEnabled: true, taskPanelEnabled: true, processPollMs: 5000, toolFoldMin: 3, tokenPoolEnabled: true, tokenPoolPartyCreate: true, sessionSandboxEnabled: true, dockerReady: ADMIN.docker.ok && ADMIN.docker.configured, dockerReason: ADMIN.docker.reason });
+
+  // ── shared-plan pools ("토큰 모아쓰기") ──
+  if (P === '/api/pools' && M === 'GET') return ok({ pools: db.pools, globalPoolId: db.globalPoolId, hasCredential: true, canCreate: true });
+  if (P === '/api/pools' && M === 'POST') {
+    const id = genId('pool');
+    db.pools.push({ id, name: String(b?.name || 'pool'), ownerId: ME.id, ownerName: ME.displayName, strategy: 'rotate', isGlobal: false, members: [] });
+    return ok({ id });
+  }
+  if (P === '/api/pools/global') { db.globalPoolId = String(b?.poolId || '') || null; return ok({ ok: true }); }
+  {
+    const pm = /^\/api\/pools\/([^/]+)(?:\/(join|leave|strategy))?$/.exec(P);
+    const pool = pm ? db.pools.find((p) => p.id === pm[1]) : null;
+    if (pm && pool) {
+      if (M === 'DELETE') {
+        db.pools = db.pools.filter((p) => p.id !== pool.id);
+        if (db.globalPoolId === pool.id) db.globalPoolId = null;
+        return ok({ ok: true });
+      }
+      if (pm[2] === 'join') {
+        if (!pool.members.some((x) => x.userId === ME.id)) {
+          pool.members.push({ userId: ME.id, name: ME.displayName, priority: 0, hasCredential: true, cooldownUntil: 0 });
+        }
+        return ok({ ok: true });
+      }
+      if (pm[2] === 'leave') {
+        const target = String(b?.userId || ME.id);
+        pool.members = pool.members.filter((x) => x.userId !== target);
+        return ok({ ok: true });
+      }
+      if (pm[2] === 'strategy') { pool.strategy = String(b?.strategy || 'rotate'); return ok({ ok: true }); }
+    }
+  }
 
   // ---- guide assistant (floating corner panel) ----
   // The turn itself is synthesized in ./socket (it has to emit the guide:* stream); this only

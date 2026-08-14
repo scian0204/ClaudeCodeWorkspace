@@ -33,6 +33,8 @@ import { startWindowPrimer } from './claude/window-primer.js';
 import { cleanupSandboxOrphans } from './review/sandbox.js';
 import { initRealtime } from './realtime/io.js';
 import { startReaper, cleanupOrphans, ensureNetwork } from './codeserver/manager.js';
+import { removeAllSessionSandboxes, startReaper as startSessionSandboxReaper } from './claude/session-sandbox.js';
+import { poolRoutes } from './routes/pools.js';
 import { reconcileSelfUpdate, scheduleUpdateCheck } from './admin/self-update.js';
 import { startDockerProbe } from './lib/docker-status.js';
 import { isCsPath, handleHttp, handleUpgrade } from './codeserver/proxy.js';
@@ -117,7 +119,9 @@ async function main() {
   await ensureNetwork(); // plain-`docker run` deploys: self-provision + join the code-server network
   await cleanupOrphans(); // clear orphans from a previous run
   await cleanupSandboxOrphans(); // clear leftover review build sandboxes from a previous run
+  await removeAllSessionSandboxes(); // same for per-session build containers (registry is in-memory)
   startReaper();
+  startSessionSandboxReaper();
   startReviewPoller(); // poll each watched repo's host for open PRs → spawn/refresh review sessions
   scheduleModelRefresh(); // pull the live model list into the `models` config (frontier ids move fast)
   armPendingResumes(); // re-arm turns parked for a claude.ai window reset (must follow initRealtime: they emit)

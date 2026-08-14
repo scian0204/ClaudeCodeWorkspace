@@ -109,8 +109,8 @@ export async function removeAllSandboxes(): Promise<number> {
 // Run a command inside the sandbox (TTY → raw combined stdout+stderr, no multiplex headers).
 // On timeout we return the partial output + code 124 and move on; the lingering process dies when
 // the container is removed at turn end.
-async function execInSandbox(name: string, cwd: string, command: string, timeoutMs: number): Promise<{ code: number; output: string }> {
-  const MAX = cfg.int('reviewSandboxMaxOutputBytes');
+export async function execInSandbox(name: string, cwd: string, command: string, timeoutMs: number, maxBytes?: number): Promise<{ code: number; output: string }> {
+  const MAX = maxBytes ?? cfg.int('reviewSandboxMaxOutputBytes');
   const exec = await docker.getContainer(name).exec({
     Cmd: ['sh', '-lc', command], AttachStdout: true, AttachStderr: true, Tty: true, WorkingDir: cwd,
   });
@@ -128,7 +128,9 @@ async function execInSandbox(name: string, cwd: string, command: string, timeout
 
 // In-process MCP server exposing the sandbox as a single `run` tool (agent-facing name:
 // mcp__sandbox__run). Async because the SDK is dynamically imported (matches session-manager).
-export async function sandboxMcpServer(containerName: string, cwd: string, execTimeoutMs: number) {
+const REVIEW_RUN_DESC = 'Run a shell command inside the isolated review sandbox container (cwd = the merged PR worktree). This is the ONLY way to build/run/test the PR code; the host shell is unavailable. git works here too. Returns "exit=<code>" then combined stdout/stderr.';
+
+export async function sandboxMcpServer(containerName: string, cwd: string, execTimeoutMs: number, opts?: { description?: string; maxBytes?: number }) {
   const { createSdkMcpServer, tool } = await import('@anthropic-ai/claude-agent-sdk');
   return createSdkMcpServer({
     name: 'sandbox',
@@ -136,10 +138,10 @@ export async function sandboxMcpServer(containerName: string, cwd: string, execT
     tools: [
       tool(
         'run',
-        'Run a shell command inside the isolated review sandbox container (cwd = the merged PR worktree). This is the ONLY way to build/run/test the PR code; the host shell is unavailable. git works here too. Returns "exit=<code>" then combined stdout/stderr.',
+        opts?.description || REVIEW_RUN_DESC,
         { command: z.string().describe('shell command, e.g. "npm ci && npm run build && npm test"') },
         async (args: { command: string }) => {
-          const r = await execInSandbox(containerName, cwd, String(args.command), execTimeoutMs);
+          const r = await execInSandbox(containerName, cwd, String(args.command), execTimeoutMs, opts?.maxBytes);
           return { content: [{ type: 'text' as const, text: `exit=${r.code}\n${r.output}` }] };
         },
       ),

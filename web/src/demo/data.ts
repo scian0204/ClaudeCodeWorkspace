@@ -180,6 +180,20 @@ export const db = {
   // an upload stores the picked image inline as a data URL (install.ts reads the File).
   brand: { title: '', logo: null as string | null },
   users: [ME, U_JAMIE, U_RILEY, U_SAM].map((u) => ({ id: u.id, username: u.username, role: u.role, displayName: u.displayName, avatarColor: u.avatarColor })),
+  // shared-plan pools ("토큰 모아쓰기"). Seeded with one workspace-wide pool whose members show all
+  // three states: available, skipped until their allowance resets, and no plan registered yet.
+  pools: [
+    {
+      id: 'pool_team', name: '팀 공용', ownerId: ME.id, ownerName: ME.displayName, strategy: 'rotate', isGlobal: true,
+      members: [
+        { userId: ME.id, name: ME.displayName, priority: 0, hasCredential: true, cooldownUntil: 0 },
+        { userId: U_JAMIE.id, name: U_JAMIE.displayName, priority: 0, hasCredential: true, cooldownUntil: Date.now() + 90 * 60 * 1000 },
+        { userId: U_RILEY.id, name: U_RILEY.displayName, priority: 0, hasCredential: false, cooldownUntil: 0 },
+      ],
+    },
+    { id: 'pool_night', name: '야간 파티', ownerId: U_SAM.id, ownerName: U_SAM.displayName, strategy: 'sequential', isGlobal: false, members: [] },
+  ] as { id: string; name: string; ownerId: string; ownerName: string; strategy: string; isGlobal: boolean; members: { userId: string; name: string; priority: number; hasCredential: boolean; cooldownUntil: number }[] }[],
+  globalPoolId: 'pool_team' as string | null,
   sessions: [
     { id: 's_auth', title: 'Auth module refactor', updatedAt: ago(11), projectId: 'p_api', model: 'claude-opus-4-8', effort: 'high', permissionMode: 'default' },
     { id: 's_socket', title: 'Socket reconnect bug', updatedAt: ago(138), projectId: 'p_web', model: 'claude-sonnet-5', effort: 'medium', permissionMode: 'acceptEdits' },

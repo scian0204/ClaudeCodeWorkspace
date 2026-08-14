@@ -31,7 +31,11 @@ function reply(text: string, nAtt = 0) {
     tools: [
       { name: 'Bash', input: { command: 'grep -rn "TODO" src/ | head' }, output: 'src/index.ts:42:  // TODO: wire up metrics\nsrc/db.ts:88:  // TODO: add retry' },
       // a real Edit input so the chat's diff card (+N −N badge, colored body) is demoable
+      { name: 'Read', input: { file_path: 'src/db.ts' }, output: 'export async function run(sql: string) {\n  await db.query(sql);\n}' },
+      // a real Edit input so the chat's diff card (+N −N badge, colored body) is demoable
       { name: 'Edit', input: { file_path: 'src/db.ts', old_string: 'export async function run(sql: string) {\n  await db.query(sql);\n}', new_string: 'export async function run(sql: string) {\n  await withRetry(() => db.query(sql), { tries: 3 });\n}' }, output: 'Applied 1 edit.' },
+      // four back-to-back calls: enough to exercise the folded "commands" row (toolFoldMin)
+      { name: 'Bash', input: { command: 'npm test -- db' }, output: 'PASS src/db.test.ts (3 tests)' },
     ],
     outro: 'Applied the retry wrapper. The flaky call now retries up to 3 times before failing — want me to run the tests?',
   };
@@ -101,7 +105,7 @@ function runTurn(sessionId: string, text: string, nAtt = 0) {
     // same thinking-then-text shape the real SDK streams (see runReal's stream_event handling)
     for (let i = 0; i < 8; i++) later(d += 110, () => deliver('assistant:thinking', { sessionId, len: 38 }));
     chunks(r.outro).forEach((c) => later(d += 180, () => deliver('assistant:delta', { sessionId, text: c })));
-    later(d += 60, () => deliver('turn:usage', { sessionId, outputTokens: 420 }));
+    later(d += 60, () => deliver('turn:usage', { sessionId, inputTokens: 12400, outputTokens: 420 }));
     finalBlocks.push({ type: 'text', text: r.outro });
     later(d += 300, () => {
       const msg = { id: `m_${rid()}`, role: 'assistant', authorId: null, authorName: 'Claude', content: { blocks: finalBlocks }, createdAt: Date.now() };
@@ -125,8 +129,10 @@ function runTurn(sessionId: string, text: string, nAtt = 0) {
     });
   };
 
-  // a short thinking phase, then the intro text
+  // a short thinking phase, then the intro text. Input tokens land FIRST (the real stream reports
+  // them at the start of each agent-loop iteration), so the live meter moves before any text shows.
   let d = 150;
+  later(d, () => deliver('turn:usage', { sessionId, inputTokens: 6100, outputTokens: 0 }));
   for (let i = 0; i < 6; i++) later(d += 120, () => deliver('assistant:thinking', { sessionId, len: 34 }));
   chunks(r.intro).forEach((c) => later(d += 160, () => deliver('assistant:delta', { sessionId, text: c })));
   finalBlocks.push({ type: 'text', text: r.intro });

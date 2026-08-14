@@ -53,6 +53,58 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
+## Unreleased
+
+<details>
+<summary><b>feat(chat): live token counter that moves before the answer appears</b> — input tokens are reported at the start of each step · <code>6d50d29</code></summary>
+
+**Symptom.** The token count next to the waiting mark stayed at 0 until Claude's text started printing. A turn could think for a minute or run several commands and the number never moved, which read as "nothing is happening".
+
+**Cause.** The counter only ever counted what was already on screen. The server reported output tokens once per assistant message — that report arrives at the END of a message — and in between the client guessed from the characters it had received. Thinking and tool time produce no characters, so there was nothing to guess from. Input tokens (the conversation re-sent on every step, and usually the bulk of a command-heavy turn) were never reported at all.
+
+**Fix.** The server now also reports the input tokens Claude reports at the START of each step, cache reads and writes included, and sends both directions on the same `turn:usage` event. The chat shows `입력 6.1k · 출력 ~420` while the turn runs; the `~` still marks the character estimate that fills the gap until the next exact output count. The "생각 중" mark is also raised as soon as a thinking block opens rather than on its first chunk, so it appears immediately.
+
+</details>
+
+<details>
+<summary><b>feat(chat): fold a long run of back-to-back commands into one row</b> — new <code>toolFoldMin</code> setting · <code>6d50d29</code></summary>
+
+An answer that runs many commands in a row buried its own text between tool cards. Three or more consecutive command cards now collapse into a single row that names what ran (`명령 4개 · Bash ×2, Read, Edit`) with the run's overall result; clicking it expands the individual cards as before.
+
+A run stays open while any command in it is still running or came back with an error — folding away the command you are waiting on, or the one that failed, would be worse than the noise it saves. The threshold is the admin setting `toolFoldMin` (default 3, `0` disables folding).
+
+</details>
+
+<details>
+<summary><b>feat(pool): shared plans — run a turn on another member's Claude plan</b> — new <code>token_pools</code> tables, <code>/api/pools</code>, <code>tokenPool*</code> settings · <code>6d50d29</code></summary>
+
+Members who registered their own Claude plan can now pool them. A turn bound to a pool runs on a pool member's plan rather than only the sender's, and when that member's allowance is used up the same prompt continues on the next member's plan instead of failing.
+
+**Shapes.** A pool can be the workspace-wide default (an admin sets it), a per-session choice (a shared room is one session — the header pill picks it), or a party a few people start themselves. Resolution at turn time: the session's own pool, else the workspace default, else the sender's own plan exactly as before.
+
+**Order.** `rotate` moves to the next member each turn; `sequential` keeps using one member until their allowance runs out. Set per pool, defaulting to the admin's `tokenPoolStrategy`. A member whose allowance came back spent is skipped until the reset instant Claude reported (or `tokenPoolCooldownMs` when it reported none) — but they are pushed to the back of the order rather than dropped, so a wrong guess can never make a pool unusable. The sender is always the last resort.
+
+**Consent.** Joining is only ever the member's own action: the join endpoint takes the user id from the session cookie and never from the request body, so one person cannot enrol another's plan. Leaving is allowed for the member, the pool's creator and admins, since removing someone can only spend less. Each answer that ran on someone else's plan says whose, both live and in the saved transcript.
+
+New settings: `tokenPoolEnabled` (off by default — it spends other people's plans), `tokenPoolStrategy`, `tokenPoolCooldownMs`, `tokenPoolMaxFallback`, `tokenPoolPartyCreate`. Every endpoint checks `tokenPoolEnabled` server-side; hiding the UI is not the control.
+
+</details>
+
+<details>
+<summary><b>feat(sandbox): a build container per session</b> — <code>mcp__sandbox__run</code> for ordinary sessions, new <code>sessionSandbox*</code> settings · <code>6d50d29</code></summary>
+
+Every session shared the one app container, so two people who both started a dev server or a test suite collided on ports, caches and the process table.
+
+With `sessionSandboxEnabled` on, a session's header toggle gives it its own sibling container with only that session's project directory mounted, at the same absolute path the app sees. The turn then carries an `mcp__sandbox__run` tool and a house rule — appended to Claude's own instructions, never shown in the chat — telling it to run anything that installs, builds, serves or tests in there. The ordinary shell stays available on purpose: git, search and file work have no reason to pay for a container hop.
+
+Unlike the PR-review sandbox, which is destroyed after every turn because it runs code from outside the team, this one stays up between turns so installed dependencies survive, and is removed once the session has been quiet for `sessionSandboxIdleMs`. It runs with no capabilities and `no-new-privileges`, under a memory cap and a process cap, and appears in the admin process panel next to the review sandboxes. If the container cannot start, the turn falls back to the shared shell exactly as before.
+
+New settings: `sessionSandboxEnabled` (off by default — one container per active session), `sessionSandboxImage`, `sessionSandboxMemMB`, `sessionSandboxPidsLimit`, `sessionSandboxExecTimeoutMs`, `sessionSandboxMaxOutputBytes`, `sessionSandboxIdleMs`, `sessionSandboxReaperMs`.
+
+</details>
+
+---
+
 ## v1.16.1 — 2026-08-13
 
 <sub>release commit `e178dbd`</sub>

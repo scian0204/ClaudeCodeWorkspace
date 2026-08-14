@@ -87,9 +87,40 @@ export const DEFS: ConfigDef[] = [
   { key: 'windowPrimerRetryMs', group: 'claude', type: 'int', default: '900000', min: 60000, max: 21600000, unit: 'ms' },
   { key: 'windowPrimerTimeoutMs', group: 'claude', type: 'int', default: '20000', min: 2000, max: 120000, unit: 'ms' },
   // task panel: the subagents / background shells / workflows a turn spawns (server/src/claude/tasks.ts)
+  // transcript: fold a run of N+ back-to-back tool calls into one collapsible row. 0 = never fold.
+  { key: 'toolFoldMin', group: 'claude', type: 'int', default: '3', min: 0, max: 50 },
   { key: 'taskPanelEnabled', group: 'claude', type: 'bool', default: '1' },
   { key: 'taskHistoryMax', group: 'claude', type: 'int', default: '80', min: 5, max: 1000 },
   { key: 'taskSessionsMax', group: 'claude', type: 'int', default: '200', min: 10, max: 5000 },
+
+  // ── shared-plan pool ("토큰 모아쓰기") — see server/src/auth/token-pool.ts ──
+  // Members opt IN by joining a pool; a turn then runs on one member's Claude plan instead of only
+  // the sender's. Off by default: it spends someone else's plan, so an admin must turn it on.
+  { key: 'tokenPoolEnabled', group: 'pool', type: 'bool', default: '0' },
+  // rotate = round-robin every turn (spreads the load); sequential = drain the first member, then
+  // move to the next (keeps one plan's cache warm).
+  { key: 'tokenPoolStrategy', group: 'pool', type: 'select', default: 'rotate', options: ['rotate', 'sequential'] },
+  // How long a member is skipped after their plan window came back exhausted, when the error text
+  // carried no reset instant of its own. Default = one 5h window.
+  { key: 'tokenPoolCooldownMs', group: 'pool', type: 'int', default: '18000000', min: 60000, max: 604800000, unit: 'ms' },
+  // How many further members one turn may fall through to after a plan-window failure.
+  { key: 'tokenPoolMaxFallback', group: 'pool', type: 'int', default: '3', min: 0, max: 20 },
+  // Off = only admins create pools (members can still join existing ones).
+  { key: 'tokenPoolPartyCreate', group: 'pool', type: 'bool', default: '1' },
+
+  // ── per-session build container (server/src/claude/session-sandbox.ts) ──
+  // Every session shares the app container, so two people running `npm run dev` collide on ports and
+  // node_modules. On = each session gets its own sibling container and an mcp__sandbox__run tool that
+  // builds/runs inside it. Off by default: one container per active session is not free.
+  { key: 'sessionSandboxEnabled', group: 'sandbox', type: 'bool', default: '0' },
+  { key: 'sessionSandboxImage', group: 'sandbox', type: 'string', default: 'node:20-bookworm', image: true },
+  { key: 'sessionSandboxMemMB', group: 'sandbox', type: 'int', default: '4096', min: 256, max: 131072, unit: 'MB' },
+  { key: 'sessionSandboxPidsLimit', group: 'sandbox', type: 'int', default: '1024', min: 64, max: 65536 },
+  { key: 'sessionSandboxExecTimeoutMs', group: 'sandbox', type: 'int', default: '900000', min: 10000, max: 7200000, unit: 'ms' },
+  { key: 'sessionSandboxMaxOutputBytes', group: 'sandbox', type: 'int', default: '60000', min: 1000, max: 5000000, unit: 'bytes' },
+  // Kept alive between turns so a build's node_modules/target survive; reaped once the session idles.
+  { key: 'sessionSandboxIdleMs', group: 'sandbox', type: 'int', default: '3600000', min: 60000, max: 86400000, unit: 'ms' },
+  { key: 'sessionSandboxReaperMs', group: 'sandbox', type: 'int', default: '60000', min: 10000, max: 3600000, unit: 'ms' },
 
   // guide assistant — the floating product-guide / control agent (server/src/guide)
   { key: 'guideEnabled', group: 'guide', type: 'bool', default: '1' },
@@ -376,6 +407,6 @@ export function modelMap(): Record<string, string> {
 // Client-facing subset (any authed user): drives the model dropdown.
 // The Docker-readiness flags the UI also gates on are merged in by the /api/config route — importing
 // lib/docker-status.ts here would make the two modules circular (it reads cfg).
-export function publicConfig(): { models: Record<string, string>; defaultModel: string; defaultEffort: string; sessionImportEnabled: boolean; sessionExportEnabled: boolean; teamAgentsEnabled: boolean; llmProvidersEnabled: boolean; approvalsEnabled: boolean; dmEnabled: boolean; searchEnabled: boolean; customContextMenu: boolean; autoTitleEnabled: boolean; autoResumeEnabled: boolean; windowPrimerEnabled: boolean; gitPublishEnabled: boolean; wikiSourceEditEnabled: boolean; reviewWebhookEnabled: boolean; guideEnabled: boolean; guideWriteEnabled: boolean; taskPanelEnabled: boolean; processPollMs: number } {
-  return { models: modelMap(), defaultModel: cfg.str('defaultModel'), defaultEffort: cfg.str('defaultEffort'), sessionImportEnabled: cfg.bool('sessionImportEnabled'), sessionExportEnabled: cfg.bool('sessionExportEnabled'), teamAgentsEnabled: cfg.bool('teamAgentsEnabled'), llmProvidersEnabled: cfg.bool('llmProvidersEnabled'), approvalsEnabled: cfg.bool('approvalsEnabled'), dmEnabled: cfg.bool('dmEnabled'), searchEnabled: cfg.bool('searchEnabled'), customContextMenu: cfg.bool('customContextMenu'), autoTitleEnabled: cfg.bool('autoTitleEnabled'), autoResumeEnabled: cfg.bool('autoResumeEnabled'), windowPrimerEnabled: cfg.bool('windowPrimerEnabled'), gitPublishEnabled: cfg.bool('gitPublishEnabled'), wikiSourceEditEnabled: cfg.bool('wikiSourceEditEnabled'), reviewWebhookEnabled: cfg.bool('reviewWebhook'), guideEnabled: cfg.bool('guideEnabled'), guideWriteEnabled: cfg.bool('guideWriteEnabled'), taskPanelEnabled: cfg.bool('taskPanelEnabled'), processPollMs: cfg.int('processPollMs') };
+export function publicConfig(): { models: Record<string, string>; defaultModel: string; defaultEffort: string; sessionImportEnabled: boolean; sessionExportEnabled: boolean; teamAgentsEnabled: boolean; llmProvidersEnabled: boolean; approvalsEnabled: boolean; dmEnabled: boolean; searchEnabled: boolean; customContextMenu: boolean; autoTitleEnabled: boolean; autoResumeEnabled: boolean; windowPrimerEnabled: boolean; gitPublishEnabled: boolean; wikiSourceEditEnabled: boolean; reviewWebhookEnabled: boolean; guideEnabled: boolean; guideWriteEnabled: boolean; taskPanelEnabled: boolean; processPollMs: number; toolFoldMin: number; tokenPoolEnabled: boolean; tokenPoolPartyCreate: boolean; sessionSandboxEnabled: boolean } {
+  return { models: modelMap(), defaultModel: cfg.str('defaultModel'), defaultEffort: cfg.str('defaultEffort'), sessionImportEnabled: cfg.bool('sessionImportEnabled'), sessionExportEnabled: cfg.bool('sessionExportEnabled'), teamAgentsEnabled: cfg.bool('teamAgentsEnabled'), llmProvidersEnabled: cfg.bool('llmProvidersEnabled'), approvalsEnabled: cfg.bool('approvalsEnabled'), dmEnabled: cfg.bool('dmEnabled'), searchEnabled: cfg.bool('searchEnabled'), customContextMenu: cfg.bool('customContextMenu'), autoTitleEnabled: cfg.bool('autoTitleEnabled'), autoResumeEnabled: cfg.bool('autoResumeEnabled'), windowPrimerEnabled: cfg.bool('windowPrimerEnabled'), gitPublishEnabled: cfg.bool('gitPublishEnabled'), wikiSourceEditEnabled: cfg.bool('wikiSourceEditEnabled'), reviewWebhookEnabled: cfg.bool('reviewWebhook'), guideEnabled: cfg.bool('guideEnabled'), guideWriteEnabled: cfg.bool('guideWriteEnabled'), taskPanelEnabled: cfg.bool('taskPanelEnabled'), processPollMs: cfg.int('processPollMs'), toolFoldMin: cfg.int('toolFoldMin'), tokenPoolEnabled: cfg.bool('tokenPoolEnabled'), tokenPoolPartyCreate: cfg.bool('tokenPoolPartyCreate'), sessionSandboxEnabled: cfg.bool('sessionSandboxEnabled') };
 }

@@ -120,10 +120,16 @@ Claude pauses right before a risky tool and asks the browser: **Allow / Deny / A
 <td width="50%"><img src="docs/screenshots/11-slash.png" alt="Slash command palette" width="100%" /></td>
 </tr>
 <tr>
-<td valign="top"><b>Usage meter</b> in the chat header — per-session <b>context-window</b> fill plus your <b>claude.ai plan limits</b> (5-hour, weekly, per-model) with live reset countdowns, straight from the CLI. The limit lookup prefers your full-scope browser sign-in over an inference-only pasted token, so the windows actually show up. Header pills also switch the <b>model</b>, the <b>reasoning effort</b> (low → max) and the <b>permission mode</b>.</td>
+<td valign="top"><b>Usage meter</b> in the chat header — per-session <b>context-window</b> fill plus your <b>claude.ai plan limits</b> (5-hour, weekly, per-model) with live reset countdowns, straight from the CLI. The limit lookup prefers your full-scope browser sign-in over an inference-only pasted token, so the windows actually show up. Header pills also switch the <b>model</b>, the <b>reasoning effort</b> (low → max) and the <b>permission mode</b>. While a turn runs, a <b>live token counter</b> sits next to the waiting mark and counts both directions — input rises the moment Claude starts working, so it keeps moving while Claude is thinking or a tool is running, not only once text appears. A long run of back-to-back commands <b>folds into one row</b> ("4 commands · Bash ×2, Read, Edit"); it stays open while anything in it is still running or failed.</td>
 <td valign="top"><b>Slash command palette</b> — type <code>/</code> for built-in, plugin and skill commands (and client-side view actions like <code>/split</code>). Fuzzy-searchable, same feel as the <code>@</code> menu.</td>
 </tr>
 </table>
+
+### 🤝 Shared plans · 📦 Per-session build container
+
+**Shared plans ("토큰 모아쓰기")** — members who registered their own Claude plan can pool them, so a turn runs on a pool member's plan instead of only the sender's. When one member's allowance is used up, the same prompt continues on the next member's plan instead of failing. Pools come in three shapes: a **workspace-wide default**, a **per-session** choice (a shared room counts as one session), and any **party** a few people start themselves. Joining is always the member's own action — nobody can enrol someone else's plan — and each answer says whose plan paid for it. Off by default; an admin turns it on.
+
+**Per-session build container** — every session shares the app container, so two people who both run `npm run dev` or a test suite collide on ports and caches. Turn the header toggle on and the session gets its own sibling container: installs, builds, dev servers and tests run in there through a tool Claude is told to prefer, while the ordinary shell stays available for git and file work. The container survives between turns (so `node_modules` sticks around) and is removed once the session goes idle. Off by default; an admin turns it on.
 
 ### 📎 `@` file references · 🖇 attach & paste
 

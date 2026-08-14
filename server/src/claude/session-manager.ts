@@ -18,9 +18,11 @@ import { originHost } from '../lib/git-ops.js';
 import { resolveGitCred, gitIdentity, identityEnv, askpassEnv } from '../auth/git-cred.js';
 import { getReviewByChat, ensureWorktree } from '../review/manager.js';
 import { sandboxAvailable, ensureSandbox, removeSandbox, sandboxMcpServer } from '../review/sandbox.js';
+import { ensureSessionSandbox, sandboxMcp, sandboxHint, sessionSandboxAvailable } from './session-sandbox.js';
+import { poolForSession, runOrder, markExhausted, markAvailable } from '../auth/token-pool.js';
 import { cfg } from '../lib/config-registry.js';
 import { maybeAutoTitle } from './auto-title.js';
-import { isUsageLimitError, eligible as autoResumeEligible, parkTurn } from './auto-resume.js';
+import { isUsageLimitError, resetAtFromError, eligible as autoResumeEligible, parkTurn } from './auto-resume.js';
 import { ingestTaskEvent, endRunningTasks } from './tasks.js';
 
 type Emit = (event: string, payload: any) => void;
@@ -62,6 +64,11 @@ export function interruptTurn(sessionId: string): boolean {
 
 function getSession(id: string) {
   return db.select().from(schema.chatSessions).where(eq(schema.chatSessions.id, id)).get();
+}
+// Display name of whoever's Claude plan a turn ran on (shared-plan pool attribution).
+function credentialName(userId: string): string {
+  return db.select({ n: schema.users.displayName }).from(schema.users)
+    .where(eq(schema.users.id, userId)).get()?.n || '?';
 }
 function getProject(id: string) {
   return db.select().from(schema.projects).where(eq(schema.projects.id, id)).get();
@@ -334,7 +341,12 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
   const mode = clampMode((s.permissionMode as PermMode) || 'default', allowBypass());
   // Each turn runs under its author's auth (personal: owner; room: whoever sent this message).
   // resolveProvider layers an optional LLM-provider override on top of the default Claude-token path.
-  const prov = resolveProvider(p.author.id);
+  // With a shared-plan pool bound, `order` is the list of members to draw credentials from instead:
+  // the first entry runs, the rest are fallbacks for a spent plan window (the sender is always last).
+  const poolId = poolForSession(s);
+  const order = poolId ? runOrder(poolId, p.author.id) : [p.author.id];
+  let credentialId = order[0];
+  let prov = resolveProvider(credentialId);
   // SECURITY: review turns run unattended and build/run PR-controlled code with Bash auto-allowed,
   // so never hand them the merge-capable git PAT — it would be readable from the child env by any
   // build/test script the PR ships. Review never pushes (the remote merge uses the host API), and
@@ -347,6 +359,20 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
   let mcpServers: Record<string, any> | undefined;
   let disallowedTools: string[] | undefined;
   let sandboxCleanup: (() => Promise<void>) | undefined;
+  let systemPromptAppend: string | undefined;
+  // Ordinary session with its own build container turned on: expose mcp__sandbox__run and tell the
+  // agent to build/run there. Bash stays allowed (git/grep/file work has no reason to pay for a
+  // container hop) — unlike review, this code is the team's own. Kept alive between turns and
+  // reaped on idle, so it is NOT torn down in `finally`.
+  if (s.kind !== 'review' && s.sandbox === 1 && sessionSandboxAvailable()) {
+    try {
+      const cname = await ensureSessionSandbox(s.id, cwd);
+      if (cname) {
+        mcpServers = { sandbox: await sandboxMcp(cname, cwd) };
+        systemPromptAppend = sandboxHint(cwd);
+      }
+    } catch { /* container failed to start → host exec, exactly as before */ }
+  }
   if (s.kind === 'review' && sandboxAvailable()) {
     const rv = getReviewByChat(s.id);
     if (rv) {
@@ -363,7 +389,7 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
     kind, ownerId, cwd, model: s.model || cfg.str('defaultModel'),
     effort: (s.effort || cfg.str('defaultEffort')) as SessionContext['effort'],
     permissionMode: mode, plugins: resolvePluginPaths(kind, ownerId),
-    authToken: '', providerEnv: prov.env, providerModel: prov.model, gitEnv, mcpServers, disallowedTools,
+    authToken: '', providerEnv: prov.env, providerModel: prov.model, gitEnv, mcpServers, disallowedTools, systemPromptAppend,
     agents: resolveAgents(kind, ownerId, s.projectId), agentName: s.agent || undefined,
     unattended: s.kind === 'review', // review turns auto-allow (makeAutoAllow) — no human prompts
   };
@@ -420,7 +446,10 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
   const blocks: Block[] = [];
   const turn: ActiveTurn = { abort, blocks, author: p.author, startedAt: Date.now() }; // blocks kept live so join can replay progress
   active.set(s.id, turn);
-  p.emit('turn:start', { sessionId: s.id, author: p.author });
+  p.emit('turn:start', {
+    sessionId: s.id, author: p.author,
+    ...(poolId && credentialId !== p.author.id ? { credential: credentialName(credentialId) } : {}),
+  });
 
   let prompt = kind === 'room' ? `[${p.author.name}]: ${p.text}` : p.text;
   if (contextChat.length) {
@@ -464,22 +493,54 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
         (ms) => p.emit('turn:congested', { sessionId: s.id, backoffMs: ms }),
         abort.signal, // a stop during rate-limit backoff must break the sleep, not wait it out
       );
+      const attempt = async (): Promise<Awaited<ReturnType<typeof runOnce>>> => {
+        try {
+          return await runOnce(s.claudeSessionId);
+        } catch (e: any) {
+          // Stale resume id (transcript missing for this cwd, e.g. after a project switch)
+          // → drop the resume and start a fresh conversation once instead of failing the turn.
+          if (s.claudeSessionId && !abort.signal.aborted && /No conversation found/i.test(String(e?.message || e))) {
+            blocks.length = 0;
+            return await runOnce(null);
+          }
+          throw e;
+        }
+      };
       let res;
-      try {
-        res = await runOnce(s.claudeSessionId);
-      } catch (e: any) {
-        // Stale resume id (transcript missing for this cwd, e.g. after a project switch)
-        // → drop the resume and start a fresh conversation once instead of failing the turn.
-        if (s.claudeSessionId && !abort.signal.aborted && /No conversation found/i.test(String(e?.message || e))) {
-          blocks.length = 0;
-          res = await runOnce(null);
-        } else throw e;
+      // Shared-plan pool: a member whose plan window turns out to be spent is put on cooldown and the
+      // SAME prompt is retried on the next member's plan, rather than failing the turn. Only the
+      // plan-window error qualifies (a real 429 was already retried inside withRateLimitRetry), and
+      // only up to tokenPoolMaxFallback further members.
+      const maxFallback = poolId ? Math.min(cfg.int('tokenPoolMaxFallback'), order.length - 1) : 0;
+      for (let i = 0; ; i++) {
+        try {
+          res = await attempt();
+          if (poolId) markAvailable(poolId, credentialId); // it ran → that window is demonstrably open
+          break;
+        } catch (e: any) {
+          const msg = String(e?.message || e);
+          if (abort.signal.aborted || i >= maxFallback || !isUsageLimitError(msg)) throw e;
+          markExhausted(poolId!, credentialId, resetAtFromError(msg));
+          credentialId = order[i + 1];
+          prov = resolveProvider(credentialId);
+          if (prov.source === 'none') throw e; // that member has no usable credential after all
+          ctx.providerEnv = prov.env;
+          ctx.providerModel = prov.model;
+          blocks.length = 0; // the failed attempt produced nothing worth keeping
+          p.emit('turn:poolFallback', { sessionId: s.id, credential: credentialName(credentialId) });
+        }
       }
       if (res.claudeSessionId) rememberSessionId(res.claudeSessionId); // no-op unless the stream never reported it
       inTok = res.inputTokens; outTok = res.outputTokens; cost = res.costUsd;
     }
 
-    const asstMsg = saveMessage({ sessionId: s.id, role: 'assistant', authorName: 'Claude', content: { blocks } });
+    // Whose plan paid for the turn. Only recorded when it wasn't the sender's own — that is exactly
+    // the case the transcript has to be honest about, and it keeps every pre-pool message unchanged.
+    const onPlanOf = credentialId !== p.author.id ? credentialName(credentialId) : null;
+    const asstMsg = saveMessage({
+      sessionId: s.id, role: 'assistant', authorName: 'Claude',
+      content: onPlanOf ? { blocks, onPlanOf } : { blocks },
+    });
     recordUsage({ // (the resume id is already stored — rememberSessionId wrote it mid-stream)
       userId: p.author.id, sessionId: s.id, roomId: kind === 'room' ? ownerId : null,
       inputTokens: inTok, outputTokens: outTok, costUsd: cost,
@@ -561,7 +622,9 @@ async function runReal(a: {
 
   let claudeSessionId: string | null = a.resume ?? null;
   let inputTokens = 0, outputTokens = 0, costUsd = 0;
-  let streamOut = 0; // running output-token total broadcast mid-turn (turn:usage)
+  // Running totals broadcast mid-turn (turn:usage). Input arrives at each message's START, so the
+  // meter moves the moment an agent-loop iteration begins — before any text or thinking exists.
+  let streamIn = 0, streamOut = 0;
   const toolIndex = new Map<string, number>();
 
   for await (const msg of q as any) {
@@ -575,7 +638,20 @@ async function runReal(a: {
     switch (msg?.type) {
       case 'stream_event': {
         const ev = msg.event;
-        if (ev?.type === 'content_block_delta') {
+        // A thinking block OPENS here, before its first delta — flag it right away so the composer
+        // says "생각 중" instead of a generic wait for however long the first chunk takes.
+        if (ev?.type === 'content_block_start' && ev.content_block?.type === 'thinking' && !msg.parent_tool_use_id) {
+          a.emit('assistant:thinking', { sessionId: a.sessionId, len: 0 });
+        } else if (ev?.type === 'message_start' && ev.message?.usage) {
+          // Input tokens for this agent-loop iteration — the context, re-billed on every iteration and
+          // usually the bulk of a tool-heavy turn. Reported at the START, so the meter stops looking
+          // frozen while the model thinks or a tool runs. Cache reads/writes are billed too, so they
+          // count; the `result` message's own input_tokens is the authoritative final figure.
+          const u = ev.message.usage;
+          streamIn += (Number(u.input_tokens) || 0) + (Number(u.cache_read_input_tokens) || 0)
+            + (Number(u.cache_creation_input_tokens) || 0);
+          a.emit('turn:usage', { sessionId: a.sessionId, inputTokens: streamIn, outputTokens: streamOut });
+        } else if (ev?.type === 'content_block_delta') {
           const d = ev.delta;
           if (d?.type === 'text_delta') {
             // Subagent partials must not leak into the main thread's text — they stream to the task
@@ -590,7 +666,7 @@ async function runReal(a: {
           // exact output tokens, cumulative per assistant message — a turn has one per agent-loop
           // iteration, so sum them. The client interpolates between these with a char estimate.
           streamOut += Number(ev.usage.output_tokens) || 0;
-          a.emit('turn:usage', { sessionId: a.sessionId, outputTokens: streamOut });
+          a.emit('turn:usage', { sessionId: a.sessionId, inputTokens: streamIn, outputTokens: streamOut });
         }
         break;
       }
@@ -665,6 +741,7 @@ async function runMock(a: {
 
   // a short thinking phase before the first token, so the "thinking" mark and the live token
   // meter are exercisable without an API key
+  a.emit('turn:usage', { sessionId: a.sessionId, inputTokens: 3400, outputTokens: 0 });
   for (let i = 0; i < 10; i++) {
     if (a.signal.aborted) throw new Error('aborted');
     a.emit('assistant:thinking', { sessionId: a.sessionId, len: 36 });
@@ -672,7 +749,7 @@ async function runMock(a: {
   }
 
   await stream(`(mock 모드 — API 키 없이 동작 중) 요청 "${a.prompt.slice(0, 80)}" 확인했습니다. 작업 디렉터리를 살펴보겠습니다.`);
-  a.emit('turn:usage', { sessionId: a.sessionId, outputTokens: 120 });
+  a.emit('turn:usage', { sessionId: a.sessionId, inputTokens: 3400, outputTokens: 120 });
 
   // exercise the permission bridge with a real canUseTool call
   const toolId = 'mock_' + newId();
