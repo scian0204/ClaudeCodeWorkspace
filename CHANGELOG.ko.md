@@ -56,7 +56,7 @@
 
 ## v1.17.0 — 2026-08-14
 
-<sub>release commit `RELEASEHASH`</sub>
+<sub>release commit `e3b3d26`</sub>
 
 <details>
 <summary><b>feat(chat): 답변이 나오기 전에도 움직이는 실시간 토큰 표시</b> — 입력 토큰을 단계 시작 시점에 보고 · <code>6d50d29</code></summary>

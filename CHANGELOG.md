@@ -56,7 +56,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ## v1.17.0 — 2026-08-14
 
-<sub>release commit `RELEASEHASH`</sub>
+<sub>release commit `e3b3d26`</sub>
 
 <details>
 <summary><b>feat(chat): live token counter that moves before the answer appears</b> — input tokens are reported at the start of each step · <code>6d50d29</code></summary>
