@@ -57,7 +57,7 @@
 
 ## v1.17.1 — 2026-08-14
 
-<sub>release commit `RELEASEHASH`</sub>
+<sub>release commit `76cabd8`</sub>
 
 - **feat(pool): 모임 순서를 화면에서 고르기** — 모임별 `rotate`/`sequential` 지정이 `PUT /api/pools/:id/strategy` API로만 가능해서, 실제로는 모든 모임이 관리자 기본값을 그대로 쓰고 있었다. 마이페이지 → 자격증명의 모임 줄에서 만든 사람과 관리자에게 드롭다운으로 노출한다(그 외 사용자에게는 기존처럼 글자로만 보인다). · `245ee4b`
 

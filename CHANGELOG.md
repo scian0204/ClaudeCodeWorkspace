@@ -57,7 +57,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ## v1.17.1 — 2026-08-14
 
-<sub>release commit `RELEASEHASH`</sub>
+<sub>release commit `76cabd8`</sub>
 
 - **feat(pool): pick a pool's order from the UI** — the per-pool `rotate` / `sequential` override was reachable only through `PUT /api/pools/:id/strategy`, so in practice every pool sat on the admin default. The pool row in My Page → Credentials now shows it as a dropdown for the pool's creator and for admins; everyone else still sees it as text. · `245ee4b`
 
