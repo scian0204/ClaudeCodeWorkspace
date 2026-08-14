@@ -4,7 +4,7 @@
 
 # Update notes
 
-Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and **v1.19.0** (2026-08-14) — all **335 commits**.
+Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and **v1.19.1** (2026-08-14) — all **339 commits**.
 
 Each row shows only its **title and commit hash**; click the triangle for the detail (root cause, implementation, config keys).
 
@@ -16,7 +16,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 - [Timeline](#timeline)
 - [Unreleased](#unreleased) — commits not yet in a release
-- **1.x releases** — [v1.19.0](#v1190--2026-08-14) · [v1.18.0](#v1180--2026-08-14) · [v1.17.3](#v1173--2026-08-14) · [v1.17.2](#v1172--2026-08-14) · [v1.17.1](#v1171--2026-08-14) · [v1.17.0](#v1170--2026-08-14) · [v1.16.1](#v1161--2026-08-13) · [v1.16.0](#v1160--2026-08-13) · [v1.15.1](#v1151--2026-08-13) · [v1.15.0](#v1150--2026-08-13) · [v1.14.2](#v1142--2026-08-13) · [v1.14.1](#v1141--2026-08-13) · [v1.14.0](#v1140--2026-08-13) · [v1.13.0](#v1130--2026-08-13) · [v1.12.0](#v1120--2026-08-07) · [v1.11.0](#v1110--2026-08-06) · [v1.10.0](#v1100--2026-08-05) · [v1.9.1](#v191--2026-08-05) · [v1.9.0](#v190--2026-08-05) · [v1.8.0](#v180--2026-08-04) · [v1.7.0](#v170--2026-08-04) · [v1.6.0](#v160--2026-08-04) · [v1.5.0](#v150--2026-08-04) · [v1.4.0](#v140--2026-08-03) · [v1.3.1](#v131--2026-08-03) · [v1.3.0](#v130--2026-07-31) · [v1.2.0](#v120--2026-07-31) · [v1.1.1](#v111--2026-07-31) · [v1.1.0](#v110--2026-07-31)
+- **1.x releases** — [v1.19.1](#v1191--2026-08-14) · [v1.19.0](#v1190--2026-08-14) · [v1.18.0](#v1180--2026-08-14) · [v1.17.3](#v1173--2026-08-14) · [v1.17.2](#v1172--2026-08-14) · [v1.17.1](#v1171--2026-08-14) · [v1.17.0](#v1170--2026-08-14) · [v1.16.1](#v1161--2026-08-13) · [v1.16.0](#v1160--2026-08-13) · [v1.15.1](#v1151--2026-08-13) · [v1.15.0](#v1150--2026-08-13) · [v1.14.2](#v1142--2026-08-13) · [v1.14.1](#v1141--2026-08-13) · [v1.14.0](#v1140--2026-08-13) · [v1.13.0](#v1130--2026-08-13) · [v1.12.0](#v1120--2026-08-07) · [v1.11.0](#v1110--2026-08-06) · [v1.10.0](#v1100--2026-08-05) · [v1.9.1](#v191--2026-08-05) · [v1.9.0](#v190--2026-08-05) · [v1.8.0](#v180--2026-08-04) · [v1.7.0](#v170--2026-08-04) · [v1.6.0](#v160--2026-08-04) · [v1.5.0](#v150--2026-08-04) · [v1.4.0](#v140--2026-08-03) · [v1.3.1](#v131--2026-08-03) · [v1.3.0](#v130--2026-07-31) · [v1.2.0](#v120--2026-07-31) · [v1.1.1](#v111--2026-07-31) · [v1.1.0](#v110--2026-07-31)
 - [Early development (2026-07-20 → 07-31)](#early-development--2026-07-20--07-31)
 - [Where it diverged from the original design](#where-it-diverged-from-the-original-design)
 
@@ -26,6 +26,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 | Version | Date | Commits | Headline |
 |---|---|---|---|
+| [v1.19.1](#v1191--2026-08-14) | 2026-08-14 | 4 | Session pool menu no longer shows one name twice |
 | [v1.19.0](#v1190--2026-08-14) | 2026-08-14 | 4 | Workspace-wide sharing pools every user's plan |
 | [v1.18.0](#v1180--2026-08-14) | 2026-08-14 | 5 | Shared plans get three levels; workspace default moves to the admin panel |
 | [v1.17.3](#v1173--2026-08-14) | 2026-08-14 | 4 | Room pool/container binding needs membership |
@@ -59,9 +60,11 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
-## Unreleased
+## v1.19.1 — 2026-08-14
 
-- **fix(chat): the session pool menu listed "Everyone" twice** — with workspace-wide sharing on, the inherit row and the workspace pool itself both rendered as plain `전체 사용자`, so the menu showed the same label twice with no way to tell which was which. The inherit row now reads `자동 · <what it resolves to>`, and a tick marks whichever entry is active. · `PENDING`
+<sub>release commit `RELEASEHASH`</sub>
+
+- **fix(chat): the session pool menu listed "Everyone" twice** — with workspace-wide sharing on, the inherit row and the workspace pool itself both rendered as plain `전체 사용자`, so the menu showed the same label twice with no way to tell which was which. The inherit row now reads `자동 · <what it resolves to>`, and a tick marks whichever entry is active. · `656cf50`
 
 ---
 
