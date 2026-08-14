@@ -53,7 +53,13 @@ export async function poolRoutes(app: FastifyInstance) {
     const pool = getPool(id);
     if (!pool) return reply.code(404).send({ error: 'not found' });
     if (u.role !== 'admin' && pool.ownerId !== u.id) return reply.code(403).send({ error: 'forbidden' });
-    setStrategy(id, String((req.body as any)?.strategy || ''));
+    // '' means "follow the admin default". Anything else unrecognised is rejected rather than
+    // normalised to '' — a typo would silently discard the pool's real setting and still answer 200.
+    const strategy = String((req.body as any)?.strategy ?? '');
+    if (!['', 'rotate', 'sequential'].includes(strategy)) {
+      return reply.code(400).send({ error: `unknown strategy '${strategy}' (rotate | sequential)` });
+    }
+    setStrategy(id, strategy);
     return { ok: true };
   });
 

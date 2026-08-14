@@ -137,9 +137,11 @@ export function markAvailable(poolId: string, userId: string): void {
 // one. Returns null when pooling is off or nothing is bound.
 export function poolForSession(s: { poolId?: string | null }): string | null {
   if (!cfg.bool('tokenPoolEnabled')) return null;
-  const id = s.poolId || getGlobalPoolId();
-  if (!id) return null;
-  return getPool(id) ? id : null;
+  // A session naming a pool that no longer exists must still fall back to the workspace-wide one.
+  // deletePool clears the bindings it knows about, but a row removed any other way (restore from an
+  // older backup, manual DB edit) would otherwise drop that session off pooling entirely.
+  const named = s.poolId && getPool(s.poolId) ? s.poolId : null;
+  return named ?? getGlobalPoolId();
 }
 
 // The order a turn should try credentials in. First entry runs; the rest are fallbacks for a spent

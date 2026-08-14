@@ -55,6 +55,25 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
+## Unreleased
+
+<details>
+<summary><b>fix(pool): the pool endpoints were never reachable</b> — plus two smaller pool fixes found while testing the running app · <code>PENDING</code></summary>
+
+Testing v1.17.1 against the real container instead of the mocked demo turned up three things.
+
+**`/api/pools` answered 404.** `poolRoutes` was imported in `server/src/index.ts` but the `app.register(poolRoutes)` line next to the other route registrations was missing, so the whole feature was unreachable from the app — every pool screen showed an empty list and nothing could be created or joined. TypeScript did not catch it (an unused import is not an error) and the static demo did not either, since it answers `/api/pools` from its own mock router. Registered.
+
+**A session bound to a deleted pool stopped pooling entirely.** `poolForSession` read the session's own `pool_id` first and gave up when no such pool existed, instead of falling back to the workspace-wide one. `deletePool` clears the bindings it knows about, so this only bit rows removed another way (a restore from an older backup, a manual edit) — it now falls back as intended.
+
+**An unrecognised order value silently wiped the pool's setting.** `PUT /api/pools/:id/strategy` normalised anything it did not recognise to "follow the admin default" and answered 200, so a typo quietly discarded a pool's real `sequential`/`rotate` choice. It now answers 400 and leaves the setting alone; `""` still explicitly means "follow the admin default".
+
+Verified on the running container: pool create/join/leave/delete, the workspace-default binding, order changes, and every authorization boundary (a non-owner cannot change order, set the default, remove another member or delete the pool). Consent holds — a join request carrying someone else's `userId` in the body enrols only the caller. A real two-turn conversation confirmed the rest end to end: the first turn ran on the other member's plan and said so in the transcript, the second rotated to the sender's own plan, and the live meter read `입력 61.3k · 출력 3` before any answer text appeared.
+
+</details>
+
+---
+
 ## v1.17.1 — 2026-08-14
 
 <sub>release commit `76cabd8`</sub>

@@ -89,6 +89,7 @@ async function main() {
   await app.register(searchRoutes);
   await app.register(brandRoutes);
   await app.register(guideRoutes);
+  await app.register(poolRoutes);
 
   app.get('/api/health', async () => ({ ok: true, mock: cfg.bool('forceMock') }));
 
