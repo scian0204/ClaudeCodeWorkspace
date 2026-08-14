@@ -16,6 +16,7 @@ docker run -d --name claudecode-app \
   -p 3000:3000 \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v claudecode-workspace_data:/data \
+  -e DATA_DIR=/data \
   -e SESSION_SECRET=$(openssl rand -hex 32) \
   -e ANTHROPIC_API_KEY=sk-ant-... \
   -e CODE_SERVER_NETWORK=claudecode_internal \
@@ -29,6 +30,7 @@ docker run -d --name claudecode-app `
   -p 3000:3000 `
   -v /var/run/docker.sock:/var/run/docker.sock `
   -v claudecode-workspace_data:/data `
+  -e DATA_DIR=/data `
   -e SESSION_SECRET=$([guid]::NewGuid().Guid + [guid]::NewGuid().Guid) `
   -e ANTHROPIC_API_KEY=sk-ant-... `
   -e CODE_SERVER_NETWORK=claudecode_internal `
@@ -42,6 +44,7 @@ docker run -d --name claudecode-app ^
   -p 3000:3000 ^
   -v /var/run/docker.sock:/var/run/docker.sock ^
   -v claudecode-workspace_data:/data ^
+  -e DATA_DIR=/data ^
   -e SESSION_SECRET=replace-with-a-long-random-string ^
   -e ANTHROPIC_API_KEY=sk-ant-... ^
   -e CODE_SERVER_NETWORK=claudecode_internal ^
@@ -86,6 +89,7 @@ Full feature tour and screenshots in the [README](https://github.com/scian0204/C
 | `SESSION_SECRET` | `change-me-please` | Cookie/session signing — **set this** |
 | `BOOTSTRAP_ADMIN_USER` / `_PASSWORD` | `admin` / `admin` | First admin account |
 | `CODE_SERVER_NETWORK` | — | Docker network for editor containers (auto-created) |
+| `DATA_DIR` | `/data` | Where state is written — must match the `-v` mount point |
 | `DATA_VOLUME` | — | Named volume backing `/data` (must match the `-v` volume) |
 | `MAX_CONCURRENT_TURNS` | `3` | Parallel Claude turns cap |
 

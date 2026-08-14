@@ -1,3 +1,4 @@
+import os from 'node:os';
 import Docker from 'dockerode';
 import { config } from '../config.js';
 import { cfg, registerApply } from './config-registry.js';
@@ -16,11 +17,11 @@ import { cfg, registerApply } from './config-registry.js';
 
 const docker = new Docker();
 
-export type DockerReason = 'ok' | 'unconfigured' | 'socket-missing' | 'denied' | 'unreachable';
+export type DockerReason = 'ok' | 'unconfigured' | 'volume-mismatch' | 'socket-missing' | 'denied' | 'unreachable';
 
 export interface DockerStatus {
   ok: boolean;          // the daemon answered a ping
-  configured: boolean;  // DATA_VOLUME + CODE_SERVER_NETWORK are set (editors/sandboxes need both)
+  configured: boolean;  // DATA_VOLUME + CODE_SERVER_NETWORK are set AND DATA_VOLUME really backs DATA_DIR
   reason: DockerReason; // worst finding, for the message shown to an admin
   version: string | null;
   error: string | null;
@@ -38,6 +39,31 @@ export function classifyDockerError(e: any): DockerReason {
 
 function envConfigured(): boolean {
   return !!config.codeServer.dataVolume && !!config.codeServer.network;
+}
+
+// Editors and sandboxes mount DATA_VOLUME with a subpath computed against DATA_DIR, which assumes the
+// volume named by DATA_VOLUME is exactly the one mounted at DATA_DIR. When it is not, the daemon
+// rejects the mount with a bare "no such file or directory" — and worse, the workspace state is not on
+// the volume at all, so it dies with the container. The usual cause is a `docker run -v vol:/data`
+// without DATA_DIR=/data. A volume mounted at a *parent* of DATA_DIR counts as a mismatch too: the
+// subpath would be relative to the wrong root.
+export function dataDirOnVolume(mounts: any[], dataDir: string, volume: string): boolean {
+  return (mounts || []).some((m) => m?.Destination === dataDir && m?.Type === 'volume' && m?.Name === volume);
+}
+
+// null = could not verify (not running inside Docker, or our own container is not inspectable), which
+// must not be treated as a failure. Memoized on a definite answer: mounts cannot change without a restart.
+let volumeOk: boolean | undefined;
+async function checkDataVolume(): Promise<boolean | null> {
+  if (volumeOk !== undefined) return volumeOk;
+  const vol = config.codeServer.dataVolume;
+  if (!vol) return null;
+  try {
+    // os.hostname() is this container's short id by default — the ref the daemon takes.
+    const info: any = await docker.getContainer(os.hostname()).inspect();
+    volumeOk = dataDirOnVolume(info?.Mounts || [], config.dataDir, vol);
+    return volumeOk;
+  } catch { return null; }
 }
 
 let cached: DockerStatus = {
@@ -59,9 +85,13 @@ export async function probeDocker(): Promise<DockerStatus> {
       new Promise((_, rej) => setTimeout(() => rej(Object.assign(new Error('docker ping timed out'), { code: 'ETIMEDOUT' })), timeout)),
     ]);
     const v: any = await docker.version().catch(() => null);
+    const mismatch = configured && (await checkDataVolume()) === false;
     cached = {
-      ok: true, configured, reason: configured ? 'ok' : 'unconfigured',
-      version: v?.Version ? String(v.Version) : null, error: null, checkedAt: Date.now(),
+      ok: true, configured: configured && !mismatch,
+      reason: !configured ? 'unconfigured' : mismatch ? 'volume-mismatch' : 'ok',
+      version: v?.Version ? String(v.Version) : null,
+      error: mismatch ? `DATA_DIR ${config.dataDir} is not backed by volume ${config.codeServer.dataVolume}` : null,
+      checkedAt: Date.now(),
     };
   } catch (e: any) {
     cached = {
@@ -80,6 +110,10 @@ export async function startDockerProbe(): Promise<void> {
   if (timer) { clearInterval(timer); timer = null; }
   const st = await probeDocker();
   if (!st.ok) console.warn(`[ccw] docker unavailable (${st.reason}): ${st.error} — editors, review sandboxes and self-update are disabled`);
+  else if (st.reason === 'volume-mismatch') console.warn(
+    `[ccw] DATA_DIR (${config.dataDir}) is not the volume DATA_VOLUME names (${config.codeServer.dataVolume}) — ` +
+    'editors and review sandboxes are disabled, and this data is NOT on the volume: it is lost when the container is recreated. ' +
+    'Run with DATA_DIR set to the path the volume is mounted at (the images default to /data).');
   else if (!st.configured) console.warn('[ccw] docker reachable but DATA_VOLUME/CODE_SERVER_NETWORK unset — editors and review sandboxes are disabled');
   else console.log(`[ccw] docker ${st.version || 'ok'}`);
   const ms = cfg.int('dockerProbeMs');

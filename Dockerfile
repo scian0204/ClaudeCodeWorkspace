@@ -13,7 +13,13 @@ RUN npm run build -w web
 # ---------- runtime stage ----------
 FROM node:22-slim AS runtime
 WORKDIR /app
-ENV NODE_ENV=production
+# DATA_DIR defaults to the documented mount point. Without it the app resolves `./data` against the
+# workspace cwd (/app/server/data), so a `docker run -v claudecode-workspace_data:/data` deploy that
+# does not pass DATA_DIR writes every byte of state into the container layer while the named volume
+# stays empty: state is lost on the next recreate, and the code-server / sandbox containers — which
+# mount that volume with a subpath taken from DATA_DIR — fail with "no such file or directory".
+ENV NODE_ENV=production \
+    DATA_DIR=/data
 RUN apt-get update && apt-get install -y python3 make g++ ca-certificates git && apt-get clean
 COPY package.json ./
 COPY server/package.json server/

@@ -235,7 +235,7 @@ A per-user settings page consolidating **profile image**, **Claude token**, **LL
 | 🔀 | **Automatic PR review** | Admin registers a remote (merge-capable credential required); the server polls GitHub/GitLab/Bitbucket (or reacts **instantly to a webhook**) and each open PR becomes a review session — visible to admins and the PR's author (read-only). Each new PR **auto-runs the whole pipeline**: local merge → build/run → bug detection + code review → a **MERGE_SAFE / DO_NOT_MERGE verdict**. On the admin's word, one click **merges the PR on the remote** using the credential. |
 | 🎛 | **Everything configurable in the admin panel** | A single config registry surfaces every operational knob — turn cap, model list & default, the whole review pipeline (poll interval, auto/comment toggles, sandbox image/limits/timeouts), code-server image/idle, git timeouts, session lifetime, upload/body/socket limits — in one grouped, **live-editable** admin page (most apply instantly; a few flag *restart required*). Env vars just seed the defaults; infrastructure and secrets are shown read-only. |
 | 🏷 | **Custom logo & title (white-label)** | An admin uploads a logo (PNG/JPEG/WebP/GIF/SVG) and sets the workspace name in **Admin → Config → Branding**; both apply live for everyone — sidebar, login card, landing screen, browser tab + favicon. An empty title or no logo falls back to the built-in name and mark. |
-| 🩺 | **Docker readiness, surfaced up front** | Three features need the Docker daemon (code-server editors, PR review sandboxes, self-update), so the server pings it at boot and on an interval instead of letting each one fail on use. When it is unreachable the boot log says so, the admin **Overview** shows a banner naming the actual reason — socket not mounted / permission denied / daemon down / `DATA_VOLUME`+`CODE_SERVER_NETWORK` unset — plus what to fix and a **Re-check** button, and the editor and split views are switched off up front, showing that reason on hover, instead of failing when clicked. Everything else (chat, projects, wiki, search, DMs) keeps working. |
+| 🩺 | **Docker readiness, surfaced up front** | Three features need the Docker daemon (code-server editors, PR review sandboxes, self-update), so the server pings it at boot and on an interval instead of letting each one fail on use. When it is unreachable the boot log says so, the admin **Overview** shows a banner naming the actual reason — socket not mounted / permission denied / daemon down / `DATA_VOLUME`+`CODE_SERVER_NETWORK` unset / the data volume not actually mounted at `DATA_DIR` — plus what to fix and a **Re-check** button, and the editor and split views are switched off up front, showing that reason on hover, instead of failing when clicked. Everything else (chat, projects, wiki, search, DMs) keeps working. |
 | ⬆️ | **One-click self-update** | An admin **Update** tab shows the running version against the newest tag published for its own image, then updates the workspace **from inside the workspace**: it pulls the new image and hands the swap to a short-lived helper container. The helper creates the replacement *first*, so a broken configuration never takes the workspace offline; then it stops the old container gracefully so SQLite closes cleanly, and watches the new one — if it exits or crash-loops, the **previous image is restored automatically**. The panel reconnects itself and reports the outcome (including the helper's log on failure). Only ever pulls the app's own repo. Gated by `selfUpdateEnabled`; the periodic check never applies anything by itself. |
 | 🧹 | **Resource cleanup (host Docker included)** | An admin **Resources** tab scans app-spawned containers (code-server editors + review sandboxes, with orphan detection), referenced + dangling images, and orphaned dirs/DB rows — then cleans them per-resource or via a double-confirmed **full reset**. Only ever removes spawned containers, dangling images, and genuine orphans; user/room projects, accounts, and chat sessions are never touched. Gated by `resourceCleanupEnabled`. |
 | 🎛 | **Activity / process manager** | An admin **Activity** tab is a live task-manager over everything the server runs: in-flight Claude turns, queued messages, code-server editor + review-sandbox containers, and running review pipelines — each with a per-row control (interrupt / cancel / kill). Auto-polls while open (`processPollMs`). |
@@ -280,6 +280,7 @@ docker run -d --name claudecode-app \
   -p 3000:3000 \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v claudecode-workspace_data:/data \
+  -e DATA_DIR=/data \
   -e SESSION_SECRET=$(openssl rand -hex 32) \
   -e ANTHROPIC_API_KEY=sk-ant-... \
   -e CODE_SERVER_NETWORK=claudecode_internal \
@@ -295,6 +296,7 @@ docker run -d --name claudecode-app `
   -p 3000:3000 `
   -v /var/run/docker.sock:/var/run/docker.sock `
   -v claudecode-workspace_data:/data `
+  -e DATA_DIR=/data `
   -e SESSION_SECRET=$([guid]::NewGuid().Guid + [guid]::NewGuid().Guid) `
   -e ANTHROPIC_API_KEY=sk-ant-... `
   -e CODE_SERVER_NETWORK=claudecode_internal `
@@ -310,6 +312,7 @@ docker run -d --name claudecode-app ^
   -p 3000:3000 ^
   -v /var/run/docker.sock:/var/run/docker.sock ^
   -v claudecode-workspace_data:/data ^
+  -e DATA_DIR=/data ^
   -e SESSION_SECRET=replace-with-a-long-random-string ^
   -e ANTHROPIC_API_KEY=sk-ant-... ^
   -e CODE_SERVER_NETWORK=claudecode_internal ^
@@ -365,6 +368,7 @@ docker run -d --name claudecode-app --network claudecode_internal \
   -p 3000:3000 \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v claudecode-workspace_data:/data \
+  -e DATA_DIR=/data \
   -e SESSION_SECRET=$(openssl rand -hex 32) \
   -e CODE_SERVER_NETWORK=claudecode_internal \
   -e DATA_VOLUME=claudecode-workspace_data \
@@ -565,6 +569,7 @@ flowchart TB
 |---|---|---|
 | `ANTHROPIC_API_KEY` | Env-level shared fallback token (per-user & admin-common tokens take precedence). None set anywhere → MOCK mode | — |
 | `SESSION_SECRET` | Cookie signing secret (**must change**) | — |
+| `DATA_DIR` | Where all state is written. Must be the path the data volume is mounted at, or the editor containers cannot mount it and nothing survives a container recreate | `/data` (image) |
 | `MAX_CONCURRENT_TURNS` | Global concurrent-turn cap for the shared key + queueing + 429 backoff | `3` |
 | `REVIEW_POLL_MS` | How often to poll each watched review repo for open PRs (0 disables) | `60000` |
 | `REVIEW_AUTO` | Auto-run the review pipeline (merge→build/run→review→verdict) on each new PR; `0` = manual trigger only | `1` |
