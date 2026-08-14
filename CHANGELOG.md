@@ -56,7 +56,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ## Unreleased
 
 <details>
-<summary><b>feat(chat): live token counter that moves before the answer appears</b> — input tokens are reported at the start of each step · <code>PENDING</code></summary>
+<summary><b>feat(chat): live token counter that moves before the answer appears</b> — input tokens are reported at the start of each step · <code>6d50d29</code></summary>
 
 **Symptom.** The token count next to the waiting mark stayed at 0 until Claude's text started printing. A turn could think for a minute or run several commands and the number never moved, which read as "nothing is happening".
 
@@ -67,7 +67,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 </details>
 
 <details>
-<summary><b>feat(chat): fold a long run of back-to-back commands into one row</b> — new <code>toolFoldMin</code> setting · <code>PENDING</code></summary>
+<summary><b>feat(chat): fold a long run of back-to-back commands into one row</b> — new <code>toolFoldMin</code> setting · <code>6d50d29</code></summary>
 
 An answer that runs many commands in a row buried its own text between tool cards. Three or more consecutive command cards now collapse into a single row that names what ran (`명령 4개 · Bash ×2, Read, Edit`) with the run's overall result; clicking it expands the individual cards as before.
 
@@ -76,7 +76,7 @@ A run stays open while any command in it is still running or came back with an e
 </details>
 
 <details>
-<summary><b>feat(pool): shared plans — run a turn on another member's Claude plan</b> — new <code>token_pools</code> tables, <code>/api/pools</code>, <code>tokenPool*</code> settings · <code>PENDING</code></summary>
+<summary><b>feat(pool): shared plans — run a turn on another member's Claude plan</b> — new <code>token_pools</code> tables, <code>/api/pools</code>, <code>tokenPool*</code> settings · <code>6d50d29</code></summary>
 
 Members who registered their own Claude plan can now pool them. A turn bound to a pool runs on a pool member's plan rather than only the sender's, and when that member's allowance is used up the same prompt continues on the next member's plan instead of failing.
 
@@ -91,7 +91,7 @@ New settings: `tokenPoolEnabled` (off by default — it spends other people's pl
 </details>
 
 <details>
-<summary><b>feat(sandbox): a build container per session</b> — <code>mcp__sandbox__run</code> for ordinary sessions, new <code>sessionSandbox*</code> settings · <code>PENDING</code></summary>
+<summary><b>feat(sandbox): a build container per session</b> — <code>mcp__sandbox__run</code> for ordinary sessions, new <code>sessionSandbox*</code> settings · <code>6d50d29</code></summary>
 
 Every session shared the one app container, so two people who both started a dev server or a test suite collided on ports, caches and the process table.
 

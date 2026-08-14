@@ -56,7 +56,7 @@
 ## Unreleased
 
 <details>
-<summary><b>feat(chat): 답변이 나오기 전에도 움직이는 실시간 토큰 표시</b> — 입력 토큰을 단계 시작 시점에 보고 · <code>PENDING</code></summary>
+<summary><b>feat(chat): 답변이 나오기 전에도 움직이는 실시간 토큰 표시</b> — 입력 토큰을 단계 시작 시점에 보고 · <code>6d50d29</code></summary>
 
 **증상.** 대기 표시 옆 토큰 숫자가 Claude의 글이 화면에 찍히기 전까지 0에 머물렀다. 1분을 생각하거나 명령을 여러 개 돌려도 숫자가 그대로라, 아무 일도 안 하는 것처럼 보였다.
 
@@ -67,7 +67,7 @@
 </details>
 
 <details>
-<summary><b>feat(chat): 연달아 나오는 명령을 한 줄로 접기</b> — 설정 <code>toolFoldMin</code> 추가 · <code>PENDING</code></summary>
+<summary><b>feat(chat): 연달아 나오는 명령을 한 줄로 접기</b> — 설정 <code>toolFoldMin</code> 추가 · <code>6d50d29</code></summary>
 
 명령을 연달아 돌리는 답변은 정작 본문이 도구 카드 사이에 묻혔다. 이제 명령 카드가 3개 이상 연속으로 나오면 무엇을 돌렸는지 요약한 한 줄(`명령 4개 · Bash ×2, Read, Edit`)로 접히고, 전체 결과도 함께 보인다. 누르면 예전처럼 카드가 하나씩 펼쳐진다.
 
@@ -76,7 +76,7 @@
 </details>
 
 <details>
-<summary><b>feat(pool): 요금제 함께 쓰기 — 다른 참여자의 Claude 요금제로 실행</b> — <code>token_pools</code> 테이블·<code>/api/pools</code>·<code>tokenPool*</code> 설정 추가 · <code>PENDING</code></summary>
+<summary><b>feat(pool): 요금제 함께 쓰기 — 다른 참여자의 Claude 요금제로 실행</b> — <code>token_pools</code> 테이블·<code>/api/pools</code>·<code>tokenPool*</code> 설정 추가 · <code>6d50d29</code></summary>
 
 자기 Claude 요금제를 등록한 사람끼리 모아서 쓸 수 있다. 모임에 연결된 세션의 질문은 보낸 사람 것만이 아니라 모임 참여자의 요금제로 실행되고, 그 사람 사용량이 다 차면 같은 질문이 실패하지 않고 다음 사람 요금제로 이어진다.
 
@@ -91,7 +91,7 @@
 </details>
 
 <details>
-<summary><b>feat(sandbox): 세션마다 따로 도는 빌드 컨테이너</b> — 일반 세션에도 <code>mcp__sandbox__run</code>, <code>sessionSandbox*</code> 설정 추가 · <code>PENDING</code></summary>
+<summary><b>feat(sandbox): 세션마다 따로 도는 빌드 컨테이너</b> — 일반 세션에도 <code>mcp__sandbox__run</code>, <code>sessionSandbox*</code> 설정 추가 · <code>6d50d29</code></summary>
 
 모든 세션이 앱 컨테이너 하나를 같이 썼다. 두 사람이 각자 개발 서버나 테스트를 돌리면 포트·캐시·프로세스 목록이 그대로 겹쳤다.
 
