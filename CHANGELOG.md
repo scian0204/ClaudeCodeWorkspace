@@ -62,6 +62,19 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
+## Unreleased
+
+<details>
+<summary><b>fix(ui): the row under the message box is one line again, in plain text</b> — the buttons kept their heavy borders and pushed send onto a second line · <code>490bf60</code></summary>
+
+**What people saw.** After the move, the four bordered buttons plus the keyboard hint filled the row, so the send button dropped to a line of its own and the message box grew a step taller.
+
+**What changed.** These controls are now bare text — no border, no background until the pointer is over them. Permission mode and attach (a `+`) sit at the left, model, effort, usage and send at the right, and the keyboard hint sits between them and disappears first on narrow windows, so the row holds one line. Permission mode is coloured whenever it is not the ask-first default, so a session that is allowed to run without asking says so at a glance. A model id the admin registry does not name loses its `claude-` prefix instead of pushing everything sideways. On a phone the controls wrap in two tidy groups rather than being cut off.
+
+</details>
+
+---
+
 ## v1.19.3 — 2026-08-14
 
 <sub>release commit `764b93c`</sub>
