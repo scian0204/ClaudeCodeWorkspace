@@ -61,7 +61,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ## v1.19.0 — 2026-08-14
 
-<sub>release commit `RELEASEHASH`</sub>
+<sub>release commit `61acc49`</sub>
 
 <details>
 <summary><b>feat(pool): the workspace-wide level is now "everyone shares", not "an admin picks one pool"</b> — new <code>tokenPoolAllUsers</code> switch, per-member opt-out · <code>PENDING</code></summary>

@@ -61,7 +61,7 @@
 
 ## v1.19.0 — 2026-08-14
 
-<sub>release commit `RELEASEHASH`</sub>
+<sub>release commit `61acc49`</sub>
 
 <details>
 <summary><b>feat(pool): 워크스페이스 전역이 "모임 하나 지정"이 아니라 "전체 사용자가 같이 씀"으로</b> — <code>tokenPoolAllUsers</code> 스위치 추가, 개인별 제외 스위치 추가 · <code>PENDING</code></summary>
