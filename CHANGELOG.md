@@ -61,6 +61,21 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
+## Unreleased
+
+<details>
+<summary><b>feat(ui): model, effort, permission mode and usage move under the message box</b> — the top bar had more buttons than fit on one line · <code>8a921fb</code></summary>
+
+**What people saw.** The session top bar carried so many buttons that it wrapped onto a second line (a third on a phone), pushing the conversation down.
+
+**What changed.** The four buttons that decide *how the next message runs* — permission mode, model, effort, usage — now sit in a row under the message box, beside the attach and send buttons, the same place the Claude Code desktop app puts them. Everything else (project, files, Git, agent, plan, build container, tasks, view switch) stays in the top bar. What the buttons do is unchanged; their menus now open upward so they are not cut off at the bottom of the screen.
+
+**Fixed alongside.** The usage panel is positioned the moment it opens, while it still shows only "loading"; the limit rows arrive a moment later and make it taller. Opening upward, that extra height ran past the bottom edge and covered the button — it now measures again once the rows are in.
+
+</details>
+
+---
+
 ## v1.19.2 — 2026-08-14
 
 <sub>release commit `2bb0d7b`</sub>
