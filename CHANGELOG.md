@@ -66,6 +66,17 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ## Unreleased
 
 <details>
+<summary><b>fix(auth): a room session said "Not logged in" to people who were signed in</b> — turns in a shared room looked for the credential in the room's folder, not the sender's · <code>54d491c</code></summary>
+
+**What people saw.** Signed in on My Page (and again as the shared account in the admin panel), every turn in a room session still failed with `Not logged in · Please run /login`. Personal sessions were fine.
+
+**Why.** A browser sign-in stores its credential file in the signer's own workspace folder, and the code relied on the CLI finding it there because a turn runs with that folder as its home. A room session runs with the *room's* folder instead, so the CLI looked in a place that has no credential. The shared admin account would have worked — it has always been handed over as an explicit pointer — but the personal sign-in is picked first and never falls through to it. Sessions that borrow another member's plan had the mirror problem: they read the session owner's credential rather than that member's.
+
+**What changed.** The credential folder is now named explicitly for every sign-in, not just the shared account, so a turn reads the right one wherever it runs. Nothing changes for a personal session — the folder named is the same one it was already using.
+
+</details>
+
+<details>
 <summary><b>fix(docker): a plain <code>docker run</code> never used the data volume</b> — the editor refused to open, and the whole workspace vanished on the next container recreate · <code>a6848ca</code></summary>
 
 **What people saw.** Deploy with the `docker run` command from the README, then press the split button in a session: `no such container - cannot access path /var/lib/docker/volumes/claudecode-workspace_data/_data/common/projects`.
