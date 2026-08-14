@@ -142,7 +142,7 @@ function AgentPicker() {
 }
 
 function Header() {
-  const { current: c, presence, control, toggleTheme, setViewMode, viewMode, setModel, setEffort, setMode, dockerReady, dockerReason } = useStore();
+  const { current: c, presence, toggleTheme, setViewMode, viewMode, dockerReady, dockerReason } = useStore();
   const naming = useStore((s) => (s.current ? s.titling.includes(s.current.chatSessionId) : false));
   const [showMembers, setShowMembers] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -152,15 +152,11 @@ function Header() {
   const setExplorer = useStore((s) => s.setExplorerOpen);
   const gitOpen = useStore((s) => s.gitPanelOpen);
   const setGitOpen = useStore((s) => s.setGitPanelOpen);
-  // model list is admin-configurable (server registry); fetch it, fall back to the built-in defaults
-  const [models, setModels] = useState<Record<string, string>>(MODELS);
-  useEffect(() => { api.get('/api/config').then((cf) => { if (cf?.models) setModels(cf.models); }).catch(() => {}); }, []);
   const t = useT();
   if (!c) return null;
   const isRoom = c.kind === 'room';
   const isReview = c.kind === 'review';
   const owner = c.room?.members.find((m) => m.isOwner);
-  const modeUi = MODES[c.permissionMode];
 
 
   return (
@@ -202,40 +198,13 @@ function Header() {
       {!c.wikiTopicId && c.projectId && <button className="pill inline-flex items-center gap-1" title={withKeys(t('chat.projectFileExplorer'), 'Mod+Shift+F')} onClick={() => setExplorer(true)}><IconFolder size={13} />{t('chat.filesBtn')}</button>}
       {!c.wikiTopicId && c.projectId && <button className="pill inline-flex items-center gap-1" title={withKeys(t('git.title'), 'Mod+Shift+G')} onClick={() => setGitOpen(true)}><IconGitBranch size={13} />{t('git.pill')}</button>}
 
-      <DM.Root>
-        <DM.Trigger asChild><button className="pill" disabled={!!c.readOnly}>{models[c.model] || c.model}<IconChevronDown size={14} /></button></DM.Trigger>
-        <Menu>
-          {Object.entries(models).map(([id, label]) => (
-            <MenuItem key={id} onSelect={() => setModel(id)}>{label}</MenuItem>
-          ))}
-        </Menu>
-      </DM.Root>
-
-      <DM.Root>
-        <DM.Trigger asChild><button className="pill" disabled={!!c.readOnly} title={t('cfg.defaultEffort')}>{t('effort.' + c.effort)}<IconChevronDown size={14} /></button></DM.Trigger>
-        <Menu>
-          {EFFORTS.map((lvl) => (
-            <MenuItem key={lvl} onSelect={() => setEffort(lvl)}>{t('effort.' + lvl)}</MenuItem>
-          ))}
-        </Menu>
-      </DM.Root>
-
+      {/* model · effort · permission mode · usage now live under the composer (TurnControls) —
+          the header row had outgrown one line and wrapped */}
       {!c.wikiTopicId && !isReview && <AgentPicker />}
       {!isReview && <PoolPicker />}
       {!c.wikiTopicId && !isReview && <SandboxToggle />}
 
-      <DM.Root>
-        <DM.Trigger asChild><button className="pill" disabled={(isRoom || isReview) && !control.canSetMode}>{modeUi ? <span className="inline-flex items-center gap-1"><modeUi.Icon size={13} />{t(modeUi.key)}</span> : c.permissionMode}<IconChevronDown size={14} /></button></DM.Trigger>
-        <Menu>
-          {Object.entries(MODES).map(([id, m]) => (
-            <MenuItem key={id} onSelect={() => setMode(id)}><span className="inline-flex items-center gap-1.5"><m.Icon size={14} />{t(m.key)}</span></MenuItem>
-          ))}
-          {isRoom && !control.canSetMode && <div className="px-2 py-1 text-[11px] text-txt3">{t('chat.ownerOnlyMode')}</div>}
-        </Menu>
-      </DM.Root>
-
       <TasksButton />
-      <UsagePill />
 
       {!c.wikiTopicId && !isReview && (
         <div className="seg hidden md:flex">
@@ -359,10 +328,12 @@ function ProjectMenu() {
   );
 }
 
-function Menu({ children }: { children: React.ReactNode }) {
+// `side`/`align`: header pills drop down and hang off their right edge; the composer pills sit at the
+// bottom of the screen, so they open upward from their left edge instead.
+function Menu({ children, side, align = 'end' }: { children: React.ReactNode; side?: 'top' | 'bottom'; align?: 'start' | 'end' }) {
   return (
     <DM.Portal>
-      <DM.Content sideOffset={4} align="end"
+      <DM.Content sideOffset={4} side={side} align={align}
         className="bg-panel border border-line rounded-lg p-1 shadow-2xl z-50 min-w-[190px] text-txt">
         {children}
       </DM.Content>
@@ -457,6 +428,12 @@ function UsagePill() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, c.chatSessionId]);
 
+  // The panel is placed the moment it opens — when it still holds only the loading line — and the
+  // limit rows arrive after, making it taller. It now opens upward (it sits under the composer), so
+  // that growth would run off the bottom of the screen and cover the pill. A resize event is what
+  // the positioner listens to, so send one once the rows are actually in the DOM.
+  useEffect(() => { if (open) window.dispatchEvent(new Event('resize')); }, [open, data, loading]);
+
   const ctx = data?.context;
   const rl = data?.rateLimits;
   const pctLabel = ctx ? `${Math.round(ctx.percentage)}%` : '—';
@@ -467,7 +444,7 @@ function UsagePill() {
         <button className="pill" title={t('usage.title')}><IconGauge size={14} />{pctLabel}<IconChevronDown size={14} /></button>
       </DM.Trigger>
       <DM.Portal>
-        <DM.Content sideOffset={4} align="end"
+        <DM.Content sideOffset={4} side="top" align="start" collisionPadding={8}
           className="bg-panel border border-line rounded-lg p-3.5 shadow-2xl z-50 w-[320px] max-w-[calc(100vw-1.5rem)] max-h-[70vh] overflow-y-auto text-txt">
           {/* context window */}
           <div className="flex items-baseline justify-between text-xs gap-2">
@@ -1208,6 +1185,58 @@ function ImageLightbox({ preview, onClose }: { preview: { src: string; name: str
   );
 }
 
+// Per-turn knobs — permission mode, model, effort, usage — docked under the composer, next to the
+// text they apply to (the header row could no longer hold them on one line).
+function TurnControls() {
+  const c = useStore((s) => s.current);
+  const control = useStore((s) => s.control);
+  const setModel = useStore((s) => s.setModel);
+  const setEffort = useStore((s) => s.setEffort);
+  const setMode = useStore((s) => s.setMode);
+  // model list is admin-configurable (server registry); fetch it, fall back to the built-in defaults
+  const [models, setModels] = useState<Record<string, string>>(MODELS);
+  useEffect(() => { api.get('/api/config').then((cf) => { if (cf?.models) setModels(cf.models); }).catch(() => {}); }, []);
+  const t = useT();
+  if (!c) return null;
+  const isRoom = c.kind === 'room';
+  const isReview = c.kind === 'review';
+  const modeUi = MODES[c.permissionMode];
+
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+      <DM.Root>
+        <DM.Trigger asChild><button className="pill" disabled={(isRoom || isReview) && !control.canSetMode}>{modeUi ? <span className="inline-flex items-center gap-1"><modeUi.Icon size={13} />{t(modeUi.key)}</span> : c.permissionMode}<IconChevronDown size={14} /></button></DM.Trigger>
+        <Menu side="top" align="start">
+          {Object.entries(MODES).map(([id, m]) => (
+            <MenuItem key={id} onSelect={() => setMode(id)}><span className="inline-flex items-center gap-1.5"><m.Icon size={14} />{t(m.key)}</span></MenuItem>
+          ))}
+          {isRoom && !control.canSetMode && <div className="px-2 py-1 text-[11px] text-txt3">{t('chat.ownerOnlyMode')}</div>}
+        </Menu>
+      </DM.Root>
+
+      <DM.Root>
+        <DM.Trigger asChild><button className="pill" disabled={!!c.readOnly}>{models[c.model] || c.model}<IconChevronDown size={14} /></button></DM.Trigger>
+        <Menu side="top" align="start">
+          {Object.entries(models).map(([id, label]) => (
+            <MenuItem key={id} onSelect={() => setModel(id)}>{label}</MenuItem>
+          ))}
+        </Menu>
+      </DM.Root>
+
+      <DM.Root>
+        <DM.Trigger asChild><button className="pill" disabled={!!c.readOnly} title={t('cfg.defaultEffort')}>{t('effort.' + c.effort)}<IconChevronDown size={14} /></button></DM.Trigger>
+        <Menu side="top" align="start">
+          {EFFORTS.map((lvl) => (
+            <MenuItem key={lvl} onSelect={() => setEffort(lvl)}>{t('effort.' + lvl)}</MenuItem>
+          ))}
+        </Menu>
+      </DM.Root>
+
+      <UsagePill />
+    </div>
+  );
+}
+
 function Composer() {
   const store = useStore();
   const { current: c, send, queue, cancel, interrupt, turnActive, congested, user, commands, resumes, cancelResume } = store;
@@ -1449,6 +1478,7 @@ function Composer() {
                 corner — 0 whenever the row already ends left of it (see useGuideInset). */}
             <div ref={toolbarRef} style={{ paddingRight: guideInset || undefined }}
               className="flex items-center gap-2 mt-2 flex-wrap">
+              <TurnControls />
               {isRoom && (
                 <div className="flex items-center gap-1 shrink-0">
                   <button type="button" onClick={() => setMode('chat')} className={`text-xs px-2 py-0.5 rounded-full border inline-flex items-center gap-1 ${mode === 'chat' ? 'bg-clay text-white border-clay' : 'border-line text-txt2 hover:border-clay'}`}><IconMessage size={12} />{t('chat.modeChat')}</button>
