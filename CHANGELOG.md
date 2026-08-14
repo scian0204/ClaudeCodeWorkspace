@@ -62,7 +62,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ## v1.19.1 — 2026-08-14
 
-<sub>release commit `RELEASEHASH`</sub>
+<sub>release commit `2a05741`</sub>
 
 - **fix(chat): the session pool menu listed "Everyone" twice** — with workspace-wide sharing on, the inherit row and the workspace pool itself both rendered as plain `전체 사용자`, so the menu showed the same label twice with no way to tell which was which. The inherit row now reads `자동 · <what it resolves to>`, and a tick marks whichever entry is active. · `656cf50`
 
