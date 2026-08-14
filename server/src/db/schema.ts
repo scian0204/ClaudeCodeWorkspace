@@ -53,8 +53,34 @@ export const chatSessions = sqliteTable('chat_sessions', {
   effort: text('effort').notNull().default('high'), // SDK effort level: low|medium|high|xhigh|max
   permissionMode: text('permission_mode').notNull().default('default'),
   agent: text('agent'), // team-agent name driving the MAIN thread (SDK options.agent); null = default Claude
+  poolId: text('pool_id'),   // shared-plan pool this session's turns draw from; null = the global pool (if any)
+  sandbox: integer('sandbox').notNull().default(0), // 1 = build/run in this session's own container
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
+});
+
+// ── shared-plan pools ("토큰 모아쓰기") ──
+// A named group of members who agreed to let the workspace run turns on their own Claude plan.
+// A turn picks ONE member's credential; when that member's plan window is exhausted the turn falls
+// through to the next. `cursor` is the round-robin position for the 'rotate' strategy.
+// Binding: chat_sessions.pool_id, else the workspace-wide pool (settings key 'token_pool_global').
+export const tokenPools = sqliteTable('token_pools', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  ownerId: text('owner_id').notNull(), // creator; may delete it (admins may delete any)
+  strategy: text('strategy').notNull().default('rotate'), // 'rotate' | 'sequential' | '' = follow the admin default
+  cursor: integer('cursor').notNull().default(0),
+  createdAt: integer('created_at').notNull(),
+});
+
+// Membership is ALWAYS self-service: only the user themselves can add their own row (an admin can
+// remove one, never insert one), so nobody's plan is ever spent without their explicit opt-in.
+export const tokenPoolMembers = sqliteTable('token_pool_members', {
+  poolId: text('pool_id').notNull(),
+  userId: text('user_id').notNull(),
+  priority: integer('priority').notNull().default(0),      // lower runs first under 'sequential'
+  cooldownUntil: integer('cooldown_until').notNull().default(0), // skipped until this instant (plan window exhausted)
+  joinedAt: integer('joined_at').notNull(),
 });
 
 export const messages = sqliteTable('messages', {

@@ -134,6 +134,16 @@ CREATE TABLE IF NOT EXISTS pending_resumes (
   attempts INTEGER NOT NULL DEFAULT 0, resume_at INTEGER NOT NULL, created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_pending_resumes_session ON pending_resumes(session_id);
+CREATE TABLE IF NOT EXISTS token_pools (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, owner_id TEXT NOT NULL,
+  strategy TEXT NOT NULL DEFAULT 'rotate', cursor INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS token_pool_members (
+  pool_id TEXT NOT NULL, user_id TEXT NOT NULL, priority INTEGER NOT NULL DEFAULT 0,
+  cooldown_until INTEGER NOT NULL DEFAULT 0, joined_at INTEGER NOT NULL,
+  PRIMARY KEY (pool_id, user_id)
+);
 `;
 
 export let sqlite: Database.Database;
@@ -176,6 +186,10 @@ export function initDb() {
   try { sqlite.exec("ALTER TABLE chat_sessions ADD COLUMN effort TEXT NOT NULL DEFAULT 'high'"); } catch { /* already present */ }
   // per-session main-thread team agent (SDK options.agent); null = default Claude
   try { sqlite.exec("ALTER TABLE chat_sessions ADD COLUMN agent TEXT"); } catch { /* already present */ }
+  // per-session shared-plan pool (null = the workspace-wide pool, if one is set)
+  try { sqlite.exec("ALTER TABLE chat_sessions ADD COLUMN pool_id TEXT"); } catch { /* already present */ }
+  // per-session build container (0 = build/run in the app container, as before)
+  try { sqlite.exec("ALTER TABLE chat_sessions ADD COLUMN sandbox INTEGER NOT NULL DEFAULT 0"); } catch { /* already present */ }
   // project-scope team agents ('' for common/user rows). The unique index must include project_id,
   // so it is (re)created here — after the ALTER — instead of in the DDL block.
   try { sqlite.exec("ALTER TABLE team_agents ADD COLUMN project_id TEXT NOT NULL DEFAULT ''"); } catch { /* already present */ }

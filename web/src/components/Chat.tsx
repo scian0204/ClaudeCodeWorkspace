@@ -25,7 +25,7 @@ import {
   IconGauge, IconEye, IconBook, IconArchive, IconSparkle, IconCopy, IconPencil, IconHelp,
   IconTerminal, IconX, IconPaperclip, IconSend, IconShield, IconBolt, IconCheckSquare, IconCrown,
   IconGitBranch, IconClock, IconCheckCircle, IconBan, IconWarning, IconLink, IconRotateCcw,
-  IconCheck, IconRefresh, IconSquare, IconMessage, IconActivity, IconDownload,
+  IconCheck, IconRefresh, IconSquare, IconMessage, IconActivity, IconDownload, IconUsers, IconBox,
 } from '../lib/icons';
 
 const MODELS: Record<string, string> = {
@@ -221,6 +221,8 @@ function Header() {
       </DM.Root>
 
       {!c.wikiTopicId && !isReview && <AgentPicker />}
+      {!isReview && <PoolPicker />}
+      {!c.wikiTopicId && !isReview && <SandboxToggle />}
 
       <DM.Root>
         <DM.Trigger asChild><button className="pill" disabled={(isRoom || isReview) && !control.canSetMode}>{modeUi ? <span className="inline-flex items-center gap-1"><modeUi.Icon size={13} />{t(modeUi.key)}</span> : c.permissionMode}<IconChevronDown size={14} /></button></DM.Trigger>
@@ -789,11 +791,53 @@ function MessageView({ m }: { m: Msg }) {
               <AttachmentList atts={m.content.attachments} sessionId={sessionId} />
             )}
             {isClaude && <BlockList blocks={blocks} sources={sources} />}
+            {isClaude && m.content.onPlanOf && (
+              <div className="text-[11px] text-txt3 mt-1 inline-flex items-center gap-1" title={t('pool.ranOnTip')}>
+                <IconUsers size={12} />{t('pool.ranOn', { name: m.content.onPlanOf })}
+              </div>
+            )}
             {m.content.interrupted && <div className="text-[11px] text-warn mt-1 inline-flex items-center gap-1"><IconSquare size={12} />{t('chat.interrupted')}</div>}
           </>
         )}
       </div>
     </div>
+  );
+}
+
+// Which shared plan this session's turns run on. Hidden entirely while pooling is off, so a
+// workspace that never turns it on sees no new control.
+function PoolPicker() {
+  const t = useT();
+  const { current: c, pools, globalPoolId, tokenPoolEnabled, setPool } = useStore();
+  if (!tokenPoolEnabled || !c) return null;
+  const bound = pools.find((p) => p.id === c.poolId);
+  const fallback = pools.find((p) => p.id === globalPoolId);
+  const label = bound ? bound.name : fallback ? t('pool.usingGlobal', { name: fallback.name }) : t('pool.own');
+  return (
+    <DM.Root>
+      <DM.Trigger asChild><button className="pill" disabled={!!c.readOnly} title={t('pool.pickTip')}><IconUsers size={13} />{label}<IconChevronDown size={14} /></button></DM.Trigger>
+      <Menu>
+        <MenuItem onSelect={() => void setPool(null)}>{fallback ? t('pool.usingGlobal', { name: fallback.name }) : t('pool.own')}</MenuItem>
+        {pools.map((p) => <MenuItem key={p.id} onSelect={() => void setPool(p.id)}>{p.name}</MenuItem>)}
+        {!pools.length && <div className="px-2 py-1 text-[11px] text-txt3">{t('pool.none')}</div>}
+      </Menu>
+    </DM.Root>
+  );
+}
+
+// Per-session build container. Hidden while the admin flag is off or Docker isn't wired — the
+// toggle would have nothing to spawn.
+function SandboxToggle() {
+  const t = useT();
+  const { current: c, sessionSandboxEnabled, dockerReady, setSandbox } = useStore();
+  if (!sessionSandboxEnabled || !dockerReady || !c) return null;
+  const on = c.sandbox === 1;
+  return (
+    <button className={`pill inline-flex items-center gap-1 ${on ? 'ring-1 ring-clay text-clay' : ''}`}
+      disabled={!!c.readOnly} title={t(on ? 'sandbox.onTip' : 'sandbox.offTip')}
+      onClick={() => void setSandbox(!on)}>
+      <IconBox size={13} />{t(on ? 'sandbox.on' : 'sandbox.off')}
+    </button>
   );
 }
 
@@ -814,9 +858,16 @@ function LiveView() {
         <BlockList blocks={live.blocks} />
         <div className="flex items-center gap-2.5 mt-1 flex-wrap">
           <ClayWait label={t(live.thinking ? 'chat.thinkingLive' : 'chat.working')} className="text-[13px] italic" />
-          {out > 0 && (
-            <span className="text-[11px] text-txt3 font-mono tabular-nums shrink-0" title={t('chat.outTokensTip')}>
-              {t('chat.outTokens', { n: (approx ? '~' : '') + fmtTokens(out) })}
+          {live.credential && (
+            <span className="text-[11px] text-txt3 inline-flex items-center gap-1 shrink-0" title={t('pool.ranOnTip')}>
+              <IconUsers size={11} />{t('pool.ranOn', { name: live.credential })}
+            </span>
+          )}
+          {(live.inTokens > 0 || out > 0) && (
+            <span className="text-[11px] text-txt3 font-mono tabular-nums shrink-0" title={t('chat.liveTokensTip')}>
+              {live.inTokens > 0 ? t('chat.inTokens', { n: fmtTokens(live.inTokens) }) : ''}
+              {live.inTokens > 0 && out > 0 ? ' · ' : ''}
+              {out > 0 ? t('chat.outTokens', { n: (approx ? '~' : '') + fmtTokens(out) }) : ''}
             </span>
           )}
         </div>
@@ -838,12 +889,62 @@ function MdText({ text, sources }: { text: string; sources: WikiSource[] }) {
 // `nested` = rendering a single subagent's own pane (task panel live view): show its text blocks.
 // In the main transcript nested text is skipped — it streams in the task panel, not the thread.
 export function BlockList({ blocks, sources = [], nested = false }: { blocks: Block[]; sources?: WikiSource[]; nested?: boolean }) {
+  const foldMin = useStore((s) => s.toolFoldMin); // 0 = folding off
+  // A long unbroken run of tool calls between two sentences is the noisiest thing in a transcript.
+  // Collapse runs of `foldMin`+ into one row; anything shorter renders as before.
+  const rows = useMemo(() => {
+    const out: { key: string; text?: Extract<Block, { type: 'text' }>; run?: Extract<Block, { type: 'tool_use' }>[] }[] = [];
+    let run: Extract<Block, { type: 'tool_use' }>[] = [];
+    const flush = (at: number) => { if (run.length) { out.push({ key: `r${at}`, run }); run = []; } };
+    blocks.forEach((b, i) => {
+      if (b.type === 'tool_use') { run.push(b); return; }
+      flush(i);
+      out.push({ key: `t${i}`, text: b });
+    });
+    flush(blocks.length);
+    return out;
+  }, [blocks]);
   return (
     <>
-      {blocks.map((b, i) => b.type === 'text'
-        ? (b.parentId && !nested ? null : <MdText key={i} text={b.text} sources={sources} />)
-        : <ToolCard key={i} b={b} />)}
+      {rows.map((r) => {
+        if (r.text) return r.text.parentId && !nested ? null : <MdText key={r.key} text={r.text.text} sources={sources} />;
+        const run = r.run!;
+        if (!foldMin || run.length < foldMin) return run.map((b, i) => <ToolCard key={`${r.key}-${i}`} b={b} />);
+        return <ToolRun key={r.key} run={run} />;
+      })}
     </>
+  );
+}
+
+// A collapsed run of consecutive tool calls. Stays open while anything in it is still running or
+// failed — a fold that hides the command you're waiting on (or the one that broke) is worse than
+// the noise it saves.
+function ToolRun({ run }: { run: Extract<Block, { type: 'tool_use' }>[] }) {
+  const t = useT();
+  const [manual, setManual] = useState<boolean | null>(null);
+  const busy = run.some((b) => b.output == null);
+  const failed = run.some((b) => b.isError);
+  const open = manual ?? (busy || failed);
+  // "Bash ×3, Read ×2" — what the run actually did, without expanding it
+  const summary = useMemo(() => {
+    const n = new Map<string, number>();
+    for (const b of run) n.set(b.name, (n.get(b.name) || 0) + 1);
+    return [...n].map(([name, c]) => (c > 1 ? `${name} ×${c}` : name)).join(', ');
+  }, [run]);
+  return (
+    <div className="my-2">
+      <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs border border-line rounded-lg bg-card hover:bg-line/40 transition text-left"
+        onClick={() => setManual(!open)} aria-expanded={open}>
+        <span className="text-txt3 shrink-0">{open ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}</span>
+        <span className="text-clay shrink-0"><IconTerminal size={14} /></span>
+        <span className="font-semibold shrink-0">{t('chat.toolRunCount', { n: String(run.length) })}</span>
+        <span className="font-mono text-txt2 truncate flex-1 min-w-0">{summary}</span>
+        {busy ? <span className="text-[11px] text-txt3 shrink-0">{t('chat.toolRunning')}</span>
+          : failed ? <span className="text-[11px] shrink-0 inline-flex items-center gap-1" style={{ color: 'var(--danger)' }}><IconX size={12} />{t('chat.toolError')}</span>
+          : <span className="text-[11px] shrink-0 inline-flex items-center gap-1" style={{ color: 'var(--ok)' }}><IconCheck size={12} />{t('chat.toolDone')}</span>}
+      </button>
+      {open && <div className="pl-3 border-l-2 border-line ml-1.5">{run.map((b, i) => <ToolCard key={i} b={b} />)}</div>}
+    </div>
   );
 }
 

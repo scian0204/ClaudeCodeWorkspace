@@ -266,6 +266,10 @@ export async function sessionRoutes(app: FastifyInstance) {
       }
       patch.agent = name || null;
     }
+    // shared-plan pool backing this session's turns; ''/null falls back to the workspace-wide pool
+    if ('poolId' in b) patch.poolId = String(b.poolId || '') || null;
+    // per-session build container (only meaningful while the admin flag is on; the turn re-checks)
+    if ('sandbox' in b) patch.sandbox = b.sandbox ? 1 : 0;
     // Changing the project changes the turn's cwd. The CLI stores each conversation's
     // transcript under the cwd it was created in, so the old resume id can't be found
     // in the new cwd. Reset the SDK conversation when the project actually changes.

@@ -4,6 +4,7 @@ import { listCcwContainers } from '../lib/docker-images.js';
 import { listActiveTurns, interruptTurn } from '../claude/session-manager.js';
 import { allQueueStates, cancelQueued } from '../rooms/queue.js';
 import { killEditor } from '../codeserver/manager.js';
+import { killSessionSandbox } from '../claude/session-sandbox.js';
 import { killSandbox } from '../review/sandbox.js';
 
 // Admin "activity / processes" — a live task-manager view over the runtime activity the server
@@ -45,7 +46,8 @@ export async function listProcesses(): Promise<ProcessList> {
     const rooms = new Map(db.select().from(schema.rooms).all().map((r) => [r.id, r.name]));
     const projects = new Map(db.select().from(schema.projects).all().map((p) => [p.id, p.name]));
     const eds = await listCcwContainers('ccw.codeserver=1');
-    const sbx = await listCcwContainers('ccw.reviewsandbox=1');
+    // both build-container kinds render the same row: per-PR review sandboxes and per-session ones
+    const sbx = [...await listCcwContainers('ccw.reviewsandbox=1'), ...await listCcwContainers('ccw.sessionsandbox=1')];
     editors = eds.map((c): ProcEditor => {
       const oid = c.labels['ccw.owner']; const pid = c.labels['ccw.project'];
       return { id: c.id, name: c.name, owner: users.get(oid) || rooms.get(oid) || oid || '', project: projects.get(pid) || pid || '', state: c.state, createdAt: c.createdAt };
@@ -77,7 +79,9 @@ export async function controlProcess(kind: string, action: string, ids: { sessio
       return { ok: await killEditor(ids.id) };
     case 'sandbox':
       if (action !== 'stop' || !ids.id) throw new Error('sandbox: stop + id required');
-      return { ok: await killSandbox(ids.id) };
+      // one id, two kinds: the session killer force-removes by id either way and also drops the
+      // in-memory entry when it is a session container
+      return { ok: (await killSessionSandbox(ids.id)) || (await killSandbox(ids.id)) };
     case 'pipeline':
       // "stop" a running review pipeline = interrupt the Claude turn driving its chat session.
       if (action !== 'stop' || !ids.chatSessionId) throw new Error('pipeline: stop + chatSessionId required');

@@ -8,7 +8,7 @@ import { LlmProviderForm } from './LlmProvider';
 import { ProjectCreateForm } from './ProjectCreateForm';
 import { ClaudeLoginBlock } from './TokenSettings';
 import { GitPanel } from './GitPanel';
-import { IconArrowLeft, IconDot, IconFolder, IconGitBranch, IconUser } from '../lib/icons';
+import { IconArrowLeft, IconDot, IconFolder, IconGitBranch, IconUser, IconUsers, IconTrash, IconCheck, IconWarning } from '../lib/icons';
 
 function fmtDate(ms?: number | null) {
   if (!ms) return '';
@@ -39,6 +39,7 @@ export function MyPage() {
   const autoTitleEnabled = useStore((s) => s.autoTitleEnabled);
   const autoResumeEnabled = useStore((s) => s.autoResumeEnabled);
   const windowPrimerEnabled = useStore((s) => s.windowPrimerEnabled);
+  const tokenPoolEnabled = useStore((s) => s.tokenPoolEnabled);
   const t = useT();
   const [tab, setTab] = useState<MyTab>('profile');
   // Session tab holds the three per-user automation toggles — hidden when the admin disabled all three.
@@ -91,6 +92,12 @@ export function MyPage() {
               <div className="text-xs text-txt2 bg-claysoft border border-line rounded-lg px-3 py-2 mb-3">{t('gitcred.notice')}</div>
               <GitCredList scope="user" />
             </Section>
+            {tokenPoolEnabled && (
+              <Section title={t('mypage.pools')}>
+                <div className="text-xs text-txt2 bg-claysoft border border-line rounded-lg px-3 py-2 mb-3">{t('pool.intro')}</div>
+                <PoolSection />
+              </Section>
+            )}
           </>
         )}
         {tab === 'projects' && <Section title={t('mypage.projects')}><ProjectsSection /></Section>}
@@ -291,6 +298,85 @@ function TokenSection() {
 // fresh private chat (new session → attach the project → leave My Page to the chat), or manage its
 // git state right here — the same panel the chat header opens (pull / commit / push / branches /
 // remotes / publish), so a project never has to be attached to a session just to be pulled.
+// Shared-plan pools. Joining is the member's own act and nothing else here can enrol someone —
+// leaving/removing only ever spends LESS of a plan, so the creator and admins may do that too.
+function PoolSection() {
+  const t = useT();
+  const { pools, globalPoolId, poolCanCreate, poolHasCredential, user, refreshPools } = useStore();
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const isAdmin = user?.role === 'admin';
+
+  const call = async (fn: () => Promise<unknown>) => {
+    setBusy(true);
+    try { await fn(); await refreshPools(); }
+    catch (e: any) { useStore.getState().setError(String(e?.message || e)); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="space-y-3">
+      {!poolHasCredential && (
+        <div className="text-xs inline-flex items-start gap-1.5 rounded-lg px-3 py-2 border" style={{ borderColor: 'var(--warn)', background: 'var(--warn-soft)' }}>
+          <IconWarning size={13} className="shrink-0 mt-0.5" />{t('pool.noCredential')}
+        </div>
+      )}
+      {pools.map((p) => {
+        const mine = p.members.some((m) => m.userId === user?.id);
+        const canManage = isAdmin || p.ownerId === user?.id;
+        return (
+          <div key={p.id} className="border border-line rounded-lg p-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <IconUsers size={14} className="text-clay shrink-0" />
+              <span className="font-semibold text-sm">{p.name}</span>
+              {p.id === globalPoolId && <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: 'var(--claysoft)', color: 'var(--clay)' }}>{t('pool.globalBadge')}</span>}
+              <span className="text-[11px] text-txt3">{t('pool.strategy.' + p.strategy)} · {t('pool.owner', { name: p.ownerName })}</span>
+              <span className="ml-auto flex items-center gap-1.5">
+                <button className={`btn-ghost !py-1 !text-xs ${mine ? '' : 'text-clay'}`} disabled={busy}
+                  onClick={() => void call(() => api.post(`/api/pools/${p.id}/${mine ? 'leave' : 'join'}`, {}))}>
+                  {mine ? t('pool.leave') : t('pool.join')}
+                </button>
+                {isAdmin && (
+                  <button className="btn-ghost !py-1 !text-xs" disabled={busy}
+                    onClick={() => void call(() => api.put('/api/pools/global', { poolId: p.id === globalPoolId ? '' : p.id }))}>
+                    {p.id === globalPoolId ? t('pool.unsetGlobal') : t('pool.setGlobal')}
+                  </button>
+                )}
+                {canManage && (
+                  <button className="btn-ghost !py-1 !text-xs hover:text-danger" title={t('common.delete')} disabled={busy}
+                    onClick={() => { if (confirm(t('pool.deleteConfirm', { name: p.name }))) void call(() => api.del(`/api/pools/${p.id}`)); }}>
+                    <IconTrash size={13} />
+                  </button>
+                )}
+              </span>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {p.members.length === 0 && <span className="text-[11px] text-txt3">{t('pool.noMembers')}</span>}
+              {p.members.map((m) => (
+                <span key={m.userId} className="text-[11px] px-2 py-0.5 rounded-full border border-line inline-flex items-center gap-1"
+                  title={m.cooldownUntil ? t('pool.cooldownTip', { at: fmtDate(m.cooldownUntil) }) : m.hasCredential ? '' : t('pool.memberNoCredential')}>
+                  {m.hasCredential ? <IconCheck size={11} className="text-ok" /> : <IconWarning size={11} className="text-warn" />}
+                  <span className={m.cooldownUntil ? 'line-through text-txt3' : ''}>{m.name}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+      {pools.length === 0 && <div className="text-xs text-txt3">{t('pool.none')}</div>}
+      {poolCanCreate && (
+        <div className="flex items-center gap-2">
+          <input className="input flex-1 min-w-0" placeholder={t('pool.newPlaceholder')} value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing && name.trim()) { e.preventDefault(); void call(async () => { await api.post('/api/pools', { name }); setName(''); }); } }} />
+          <button className="btn-ghost !text-xs shrink-0" disabled={busy || !name.trim()}
+            onClick={() => void call(async () => { await api.post('/api/pools', { name }); setName(''); })}>{t('pool.create')}</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ProjectsSection() {
   const projects = useStore((s) => s.projects);
   const createProject = useStore((s) => s.createProject);

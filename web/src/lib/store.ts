@@ -50,7 +50,7 @@ export interface SearchHit { type: HitType; id: string; title: string; subtitle?
 // is producing extended-thinking tokens right now (no visible text yet).
 // `subDelta` = in-flight partial text per subagent (keyed by the Task call's tool_use id) — the
 // task panel's live view streams from it until the completed block lands in `blocks`.
-export interface Live { blocks: Block[]; toolMap: Record<string, number>; outTokens: number; outChars: number; thinking: boolean; subDelta: Record<string, string>; }
+export interface Live { blocks: Block[]; toolMap: Record<string, number>; inTokens: number; outTokens: number; outChars: number; thinking: boolean; subDelta: Record<string, string>; credential: string | null; }
 // Guide assistant (the floating corner panel). Its own per-user thread, never a chat session.
 export interface GuideMsg { id: string; role: 'user' | 'assistant'; content: { text?: string; blocks?: Block[]; interrupted?: boolean }; createdAt: number; }
 export interface QueueState { running: { id: string; author: { id: string; name: string } } | null; waiting: { id: string; author: { id: string; name: string } }[]; }
@@ -58,7 +58,11 @@ export interface QueueState { running: { id: string; author: { id: string; name:
 export interface PendingResume { id: string; sessionId: string; author: { id: string; name: string }; text: string; attempts: number; resumeAt: number; }
 export interface Control { canApprove: boolean; canInterrupt: boolean; canSetMode: boolean; isOwner: boolean; delegable: string[]; }
 export interface PermReq { requestId: string; tool: string; input: any; }
-export interface Current { chatSessionId: string; kind: 'private' | 'room' | 'review'; roomId?: string; wikiTopicId?: string; reviewId?: string; review?: ReviewMeta; readOnly?: boolean; title: string; projectId: string | null; model: string; effort: string; permissionMode: string; agent?: string | null; room?: RoomSummary; }
+export interface Current { chatSessionId: string; kind: 'private' | 'room' | 'review'; roomId?: string; wikiTopicId?: string; reviewId?: string; review?: ReviewMeta; readOnly?: boolean; title: string; projectId: string | null; model: string; effort: string; permissionMode: string; agent?: string | null; poolId?: string | null; sandbox?: number; room?: RoomSummary; }
+
+// A shared-plan pool ("토큰 모아쓰기") and its members, as /api/pools reports them.
+export interface PoolMember { userId: string; name: string; priority: number; hasCredential: boolean; cooldownUntil: number; }
+export interface Pool { id: string; name: string; ownerId: string; ownerName: string; strategy: string; isGlobal: boolean; members: PoolMember[]; }
 
 // Workspace branding (GET /api/brand): an admin-set title + logo, both optional. `logo` is a
 // cache-bust version token (the logo file's mtime) — or a data: URL in the static demo.
@@ -118,6 +122,13 @@ interface State {
   shortcutsOpen: boolean;        // keyboard-shortcut cheat sheet (?)
   highlightMsgId: string | null; // message a search hit jumped to (scroll target + ring)
   processPollMs: number;         // admin process panel auto-poll interval (from /api/config)
+  toolFoldMin: number;           // fold a run of N+ back-to-back tool calls into one row (0 = never)
+  pools: Pool[];                 // shared-plan pools ("토큰 모아쓰기") — /api/pools
+  globalPoolId: string | null;   // pool used by sessions that name none
+  poolCanCreate: boolean;        // this user may start a party pool
+  poolHasCredential: boolean;    // this user has a Claude plan to contribute
+  tokenPoolEnabled: boolean;     // admin feature flag (from /api/config) — gates the shared-plan pool UI
+  sessionSandboxEnabled: boolean; // admin feature flag (from /api/config) — gates the per-session build container
   channels: DmChannel[];         // DM + group chat channels the user belongs to
   activeChannelId: string | null; // open DM/group channel (main panel shows DmView when set)
   channelMessages: DmMessage[];  // messages of the open channel
@@ -197,6 +208,9 @@ interface State {
   createProject: (name: string) => Promise<void>;
   setModel: (model: string) => Promise<void>;
   setEffort: (effort: string) => Promise<void>;
+  setPool: (poolId: string | null) => Promise<void>;
+  setSandbox: (on: boolean) => Promise<void>;
+  refreshPools: () => Promise<void>;
   setMode: (mode: string) => Promise<void>;
   reloadRoom: () => Promise<void>;
   setPanel: (p: null | 'admin' | 'plugins' | 'agents' | 'me') => void;
@@ -215,7 +229,7 @@ interface State {
   clearAvatar: () => Promise<void>;
 }
 
-const emptyLive = (): Live => ({ blocks: [], toolMap: {}, outTokens: 0, outChars: 0, thinking: false, subDelta: {} });
+const emptyLive = (): Live => ({ blocks: [], toolMap: {}, inTokens: 0, outTokens: 0, outChars: 0, thinking: false, subDelta: {}, credential: null });
 
 let wired = false;
 
@@ -230,7 +244,7 @@ export const useStore = create<State>((set, get) => ({
   control: { canApprove: true, canInterrupt: true, canSetMode: true, isOwner: true, delegable: [] },
   presence: [], congested: false, sessionImportEnabled: true, sessionExportEnabled: true, teamAgentsEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenuEnabled: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true, dockerReady: true, dockerReason: 'ok',
   guideEnabled: true, guideWriteEnabled: true, guideOpen: false, guideLoaded: false, guideMessages: [], guideLive: null, guideBusy: false, guideUnread: false,
-  resumes: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, gitPanelOpen: false, explorerOpen: false, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
+  resumes: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, toolFoldMin: 3, tokenPoolEnabled: false, sessionSandboxEnabled: false, pools: [], globalPoolId: null, poolCanCreate: false, poolHasCredential: false, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, gitPanelOpen: false, explorerOpen: false, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
   channels: [], activeChannelId: null, channelMessages: [], titling: [],
   commands: [],
 
@@ -296,10 +310,14 @@ export const useStore = create<State>((set, get) => ({
       taskPanelEnabled: cf.taskPanelEnabled !== false,
       channels: dmc.channels || [],
       processPollMs: cf.processPollMs || 5000,
+      toolFoldMin: cf.toolFoldMin ?? 3,
+      tokenPoolEnabled: cf.tokenPoolEnabled === true,
+      sessionSandboxEnabled: cf.sessionSandboxEnabled === true,
       dockerReady: cf.dockerReady !== false,
       dockerReason: cf.dockerReason || 'ok',
     });
     await get().refreshRequests();
+    await get().refreshPools();
   },
 
   refreshRequests: async () => {
@@ -325,7 +343,7 @@ export const useStore = create<State>((set, get) => ({
     await join(set, get, {
       chatSessionId: session.id, kind: 'private', title: session.title,
       projectId: session.projectId, model: session.model, effort: session.effort || 'high', permissionMode: session.permissionMode,
-      agent: session.agent ?? null,
+      agent: session.agent ?? null, poolId: session.poolId ?? null, sandbox: session.sandbox ?? 0,
     }, messages);
   },
 
@@ -335,7 +353,8 @@ export const useStore = create<State>((set, get) => ({
     await join(set, get, {
       chatSessionId: room.chatSessionId, kind: 'room', roomId: room.id, title: room.name,
       projectId: chat?.session?.projectId ?? null, model: chat?.session?.model || 'claude-opus-4-8',
-      effort: chat?.session?.effort || 'high', permissionMode: room.permissionMode, agent: chat?.session?.agent ?? null, room,
+      effort: chat?.session?.effort || 'high', permissionMode: room.permissionMode, agent: chat?.session?.agent ?? null,
+      poolId: chat?.session?.poolId ?? null, sandbox: chat?.session?.sandbox ?? 0, room,
     }, messages);
   },
 
@@ -648,6 +667,25 @@ export const useStore = create<State>((set, get) => ({
     if (c.kind === 'private' || c.kind === 'review') await api.patch(`/api/sessions/${c.chatSessionId}`, { effort });
     set({ current: { ...c, effort } });
   },
+  // Whose Claude plan this session's turns draw from. '' = the workspace-wide pool (or the sender's
+  // own plan when none is set). Rooms PATCH too: their shared chat_sessions row is what runTurn reads.
+  setPool: async (poolId) => {
+    const c = get().current; if (!c) return;
+    await api.patch(`/api/sessions/${c.chatSessionId}`, { poolId: poolId || '' });
+    set({ current: { ...c, poolId: poolId || null } });
+  },
+  setSandbox: async (on) => {
+    const c = get().current; if (!c) return;
+    await api.patch(`/api/sessions/${c.chatSessionId}`, { sandbox: on ? 1 : 0 });
+    set({ current: { ...c, sandbox: on ? 1 : 0 } });
+  },
+  refreshPools: async () => {
+    if (!get().tokenPoolEnabled) return;
+    try {
+      const r = await api.get('/api/pools');
+      set({ pools: r.pools || [], globalPoolId: r.globalPoolId || null, poolCanCreate: !!r.canCreate, poolHasCredential: !!r.hasCredential });
+    } catch { /* pooling off or not reachable — leave the last list alone */ }
+  },
   setMode: async (mode) => {
     const c = get().current; if (!c) return;
     if (c.kind === 'room') await api.post(`/api/rooms/${c.roomId}/mode`, { mode });
@@ -861,7 +899,16 @@ function wire(set: any, get: () => State) {
     if (!exists) set({ messages: [...get().messages, p.message] });
   });
 
-  sock.on('turn:start', (p: any) => { if (isCur(p.sessionId)) set({ live: emptyLive(), turnActive: true, congested: false }); });
+  sock.on('turn:start', (p: any) => {
+    if (isCur(p.sessionId)) set({ live: { ...emptyLive(), credential: p.credential || null }, turnActive: true, congested: false });
+  });
+
+  // shared-plan pool: the member we started on had no allowance left, so the turn moved to the next
+  sock.on('turn:poolFallback', (p: any) => {
+    if (!isCur(p.sessionId)) return;
+    const live = get().live || emptyLive();
+    set({ live: { ...live, credential: p.credential || null } });
+  });
 
   sock.on('assistant:delta', (p: any) => {
     if (!isCur(p.sessionId)) return;
@@ -900,11 +947,15 @@ function wire(set: any, get: () => State) {
     set({ live: { ...live, thinking: true, outChars: live.outChars + (Number(p.len) || 0) } });
   });
 
-  // exact output-token total from the SDK — replaces the estimate accumulated since the last one
+  // exact token totals from the SDK — replaces the estimate accumulated since the last one.
+  // Input arrives at the start of each agent-loop iteration, output at its end.
   sock.on('turn:usage', (p: any) => {
     if (!isCur(p.sessionId)) return;
     const live = get().live || emptyLive();
-    set({ live: { ...live, outTokens: Number(p.outputTokens) || live.outTokens, outChars: 0 } });
+    set({ live: { ...live,
+      inTokens: Number(p.inputTokens) || live.inTokens,
+      outTokens: Number(p.outputTokens) || live.outTokens,
+      outChars: 0 } });
   });
 
   sock.on('tool:use', (p: any) => {
