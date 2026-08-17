@@ -62,6 +62,13 @@ ClaudeCode Workspace — 서버 1대 상주 Claude Code 팀 워크스페이스. 
     - **쉬운 말로 쓴다(문서 전반: CHANGELOG·README).** 독자는 이 코드를 안 본 사람이다. 버그 항목은 **증상 → 원인 → 조치** 순서로 나눠 쓰고, 한 문장에 절을 3개 넘게 쌓지 않는다. 작업하면서 머릿속에 생긴 은유·내부 용어(프로브·콜드 스타트·스폰·배관·굶다·스트림 오염·포그라운드/백그라운드·last-known-good·헤드리스·클램프·게이팅·리플레이·페르소나·papercut 등)는 **문서에 그대로 옮기지 않는다** — 조회 · CLI 시작 시간 · 새로 실행 · 내부 동작 · 시간을 넘겨 실패 · 승인 통로가 끊김 · 순서대로 실행/뒤에서 따로 실행 · 마지막에 정상 조회된 값 · 화면 없이 실행 · 권한 상한 · 켜고 끄기 · 앞부분을 다시 받아 봄 · 이름 붙은 에이전트 · 자잘한 불편 처럼 **행동으로** 쓴다. 설정 키·환경변수·API 경로·에러 문자열·`feat/fix` 같은 식별자는 원문 그대로 둔다.
     - 상단 요약(커밋 총계·타임라인 표)의 수치도 함께 갱신한다. 해시 누락 점검: `git log --pretty=%h | sort > /tmp/a; grep -oE '\b[0-9a-f]{7}\b' CHANGELOG.md | sort -u > /tmp/b; comm -23 /tmp/a /tmp/b` — CHANGELOG 자체를 고친 커밋만 남으면 정상.
 
+12. **가이드 에이전트도 같이 업데이트.** 우측 하단 가이드 패널(`server/src/guide/`)은 워크스페이스의 **모든** 기능을 설명하고 실행할 수 있어야 한다. 사용자에게 보이는 기능을 추가/변경했으면 아래 중 해당하는 곳을 반드시 함께 고친다(규칙 7 README와 같은 판단 기준 — 애매하면 넣는 쪽).
+    - **설명**: `server/src/guide/prompt.ts`의 `FEATURES` — UI에 뜨는 이름 그대로 한 줄, 기능 플래그가 있으면 키 이름도. 사람이 직접 해야 하는 것(삭제·자격증명·파일 업로드·PR 머지 등)은 `BY_HAND`에, 여러 단계를 거치는 흔한 요청은 `RECIPES`에 추가한다.
+    - **실행(REST)**: `server/src/guide/api-map.ts`의 `API_ROUTES`에 새 엔드포인트를 올린다. `note`가 그대로 프롬프트의 API 레퍼런스가 되므로 바디 필드까지 적는다. 단 **DELETE · 자격증명/비밀값 · 관리자 인프라 동작(재시작·백업/복구·이미지 pull·사용자 생성) · 서버 밖으로 나가 되돌리기 어려운 동작(PR 머지, 저장소 publish, 웹훅 시크릿 발급) · 멀티파트 업로드**는 올리지 않는다(파일 상단 주석 참고).
+    - **실행(브라우저 전용)**: API가 없는 UI 동작(패널 열기·뷰 전환 등)은 `server/src/guide/ui-actions.ts`의 `UI_ACTIONS`에 추가하고, **반드시** `web/src/lib/store.ts`의 `applyGuideAction`에 같은 이름의 `case`도 추가한다(한쪽만 있으면 조용히 무시된다).
+    - 검증: `npx tsx server/src/guide/api-map.test.ts` — 허용목록 경계와 `UI_ACTIONS` ↔ 스토어 미러를 검사한다. 단축키를 바꿨으면 `prompt.ts`의 `SHORTCUTS` 요약도 `web/src/lib/shortcuts.ts`에 맞춘다.
+    - 정적 데모(규칙 8)의 가이드 답변은 `web/src/demo/socket.ts`의 `guidePlan()`에 있다 — 데모에서도 눌러볼 만한 기능이면 인텐트를 추가한다.
+
 ## 개발
 
 ```bash

@@ -283,7 +283,23 @@ function guidePlan(text: string): { steps: { input: any; output: string }[]; rep
   if (/(shortcut|단축키|키보드)/.test(q)) {
     return {
       steps: [{ input: { action: 'openShortcuts' }, output: 'ok — dispatched openShortcuts' }],
-      reply: '자주 쓰는 것들:\n\n- `Ctrl/Cmd+K` 검색\n- `Ctrl/Cmd+Shift+O` 새 채팅\n- `Ctrl/Cmd+B` 사이드바\n- `Ctrl/Cmd+Shift+L` 테마\n- `Esc` 실행 중인 턴 중단\n- `?` 전체 목록\n\n전체 목록을 방금 열었습니다.',
+      reply: '자주 쓰는 것들:\n\n- `Ctrl/Cmd+K` 검색\n- `Ctrl/Cmd+Shift+O` 새 채팅\n- `Ctrl/Cmd+B` 사이드바\n- `Alt+↑/↓` 이전/다음 대화\n- `Ctrl/Cmd+Shift+E · G · F` 작업 / Git / 파일 패널\n- `Esc` 실행 중인 턴 중단\n- `?` 전체 목록\n\n전체 목록을 방금 열었습니다.',
+    };
+  }
+  if (/(agent|에이전트)/.test(q)) {
+    const n = db.agents.common.length + db.agents.mine.length;
+    return {
+      steps: [
+        { input: { method: 'GET', path: '/api/agents' }, output: `status=200\n{"common":${db.agents.common.length},"mine":${db.agents.mine.length},"project":${db.agents.projects.length},"files":${db.agents.files.length}}` },
+        { input: { action: 'openPanel', value: 'agents' }, output: 'ok — dispatched openPanel (agents)' },
+      ],
+      reply: `**팀 에이전트**는 이름·설명·시스템 프롬프트·허용 도구·모델을 미리 정해 두는 커스텀 에이전트입니다. 개인용 / 팀 공용(관리자) / 프로젝트별로 만들 수 있고, 모든 세션이 서브에이전트로 씁니다.\n\n지금 ${n}개가 등록돼 있어 패널을 열었습니다. "…하는 에이전트 만들어줘"라고 하면 프롬프트까지 써서 바로 만들어 드립니다.`,
+    };
+  }
+  if (/(pool|모아쓰기|토큰 공유|플랜 공유)/.test(q)) {
+    return {
+      steps: [{ input: { method: 'GET', path: '/api/pools' }, output: 'status=200\n{"pools":[],"allUsers":true,"myPoolId":null,"optedOut":false,"hasCredential":true,"canCreate":true}' }],
+      reply: '**토큰 모아쓰기**는 동의한 사람들의 Claude 플랜을 함께 써서, 아직 여유가 있는 플랜으로 턴이 실행되게 합니다. 관리자가 켜는 워크스페이스 전체 풀(개인별로 빠질 수 있음)과, 직접 만들어 참여하는 파티가 있어요.\n\n이 워크스페이스는 전체 풀이 켜져 있습니다. 마이 페이지에서 빠지거나 파티를 만들 수 있습니다.',
     };
   }
   if (/(5시간|선점|primer|prime)/.test(q)) {
@@ -295,7 +311,7 @@ function guidePlan(text: string): { steps: { input: any; output: string }[]; rep
   }
   return {
     steps: [],
-    reply: '핵심 기능은 이렇습니다:\n\n- **개인 채팅** — 사용자마다 격리된 Claude Code 세션\n- **공유 룸** — 여러 명이 하나의 Claude를 함께 조작 (FIFO 큐)\n- **웹 권한 승인** — 위험한 도구 실행 전 브라우저에서 허용/거부\n- **LLM Wiki** — 문서를 올리면 질의 가능한 지식베이스로 컴파일\n- **PR 자동 리뷰** — 열린 PR마다 머지→빌드→리뷰→판정 파이프라인\n- **통합 검색** (`Ctrl/Cmd+K`), **code-server** 편집기, **DM/그룹 채팅**\n\n더 궁금한 기능을 말씀하시면 자세히 설명하고, 필요하면 대신 실행해 드립니다.',
+    reply: '핵심 기능은 이렇습니다:\n\n- **개인 채팅** — 사용자마다 격리된 Claude Code 세션\n- **공유 룸** — 여러 명이 하나의 Claude를 함께 조작 (FIFO 큐)\n- **웹 권한 승인** — 위험한 도구 실행 전 브라우저에서 허용/거부\n- **프로젝트 · Git 패널 · 파일 탐색기 · code-server** 편집기\n- **작업 패널** — 답변 뒤에서 돈 서브에이전트·셸·워크플로를 실시간으로\n- **팀 에이전트 · 플러그인/스킬** — 커스텀 에이전트와 스킬 설치\n- **LLM Wiki** — 문서를 올리면 질의 가능한 지식베이스로 컴파일\n- **PR 자동 리뷰** — 열린 PR마다 머지→빌드→리뷰→판정 파이프라인\n- **통합 검색** (`Ctrl/Cmd+K`), **DM/그룹 채팅**, **토큰 모아쓰기**, **사용량 미터**\n\n더 궁금한 기능을 말씀하시면 자세히 설명하고, 필요하면 대신 실행해 드립니다.',
   };
 }
 

@@ -809,6 +809,10 @@ function setBrand(set: any, brand: Brand) {
 // missing here is an action the agent thinks it has, so keep the two tables in step.
 // Admin-scoped actions are re-checked client-side: the server already filters them out per role,
 // this is the second lock (and it keeps a member out of a panel whose every call would 403 anyway).
+// Git panel / file explorer / the split view only exist on a chat that has a working directory —
+// mirrors the pill gating in Chat.tsx and the shortcut gates in lib/shortcuts.ts.
+const projectPanels = (s: State) => !!s.current?.projectId && !s.current.wikiTopicId && s.current.kind !== 'review';
+
 async function applyGuideAction(get: () => State, action: string, value: string | null): Promise<void> {
   const s = get();
   const v = value || '';
@@ -818,12 +822,21 @@ async function applyGuideAction(get: () => State, action: string, value: string 
     case 'openWiki': if (v) await s.openWiki(v).catch(() => {}); break;
     case 'openReview': if (v) await s.openReview(v).catch(() => {}); break;
     case 'openChannel': if (v) await s.openChannel(v).catch(() => {}); break;
-    case 'openPanel': if (v === 'plugins' || v === 'me') s.setPanel(v); break;
+    case 'openPanel': if (v === 'plugins' || v === 'agents' || v === 'me') s.setPanel(v); break;
     case 'openAdmin': if (s.user?.role === 'admin') s.setPanel('admin'); break;
     case 'newChat': await s.newSession().catch(() => {}); break;
     case 'goHome': s.goHome(); break;
     case 'openShortcuts': s.setShortcutsOpen(true); break;
     case 'openSearch': if (s.searchEnabled) s.setSearchOpen(true); break;
+    // The chat-side panels. Same gates the Mod+Shift+E/G/F shortcuts use — an action fired for a
+    // screen that has no such panel is dropped rather than leaving a panel open over nothing.
+    case 'openTasks': if (s.taskPanelEnabled && s.current) s.setTasksOpen(v !== 'off'); break;
+    case 'openGit': if (projectPanels(s)) s.setGitPanelOpen(v !== 'off'); break;
+    case 'openFiles': if (projectPanels(s)) s.setExplorerOpen(v !== 'off'); break;
+    case 'setView':
+      if ((v === 'chat' || v === 'split' || v === 'editor') && projectPanels(s)
+        && (v === 'chat' || (s.dockerReady && !window.matchMedia('(max-width: 767px)').matches))) s.setViewMode(v);
+      break;
     case 'setLanguage': if ((LANGS as readonly string[]).includes(v)) setLang(v as Lang); break;
     case 'setTheme': if (v === 'light' || v === 'dark') setTheme(v); break;
     case 'toggleSidebar':

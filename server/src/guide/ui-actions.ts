@@ -5,7 +5,9 @@
 // server pushes it to every tab of that user (socket event `guide:action`). The store applies it.
 //
 // This table is the single source of truth for BOTH the tool's schema and the prompt's action list.
-// The mirror on the client is web/src/lib/store.ts (applyGuideAction) — keep the two in step.
+// The mirror on the client is web/src/lib/store.ts (applyGuideAction) — keep the two in step; the
+// check in api-map.test.ts fails if an action here has no case there. A browser-only feature added
+// later (a panel, a dialog, a view switch) belongs here too — rule 12 in CLAUDE.md.
 
 export interface UiAction {
   action: string;
@@ -20,12 +22,16 @@ export const UI_ACTIONS: UiAction[] = [
   { action: 'openWiki', value: '<topicId>', note: 'open an LLM Wiki topic thread.' },
   { action: 'openReview', value: '<reviewId>', note: 'open a PR review session.' },
   { action: 'openChannel', value: '<channelId>', note: 'open a DM / group channel.' },
-  { action: 'openPanel', value: 'plugins|me', note: 'open the plugins panel or My Page.' },
+  { action: 'openPanel', value: 'plugins|agents|me', note: 'open the plugins panel, the team-agents panel, or My Page.' },
   { action: 'openAdmin', note: 'open the admin panel.', admin: true },
   { action: 'newChat', note: 'create and open a fresh private chat (no API call needed).' },
   { action: 'goHome', note: 'go back to the landing screen.' },
   { action: 'openShortcuts', note: 'open the keyboard-shortcut cheat sheet.' },
   { action: 'openSearch', note: 'open the workspace search palette.' },
+  { action: 'openTasks', value: 'on|off', note: 'show/hide the Tasks panel of the open chat (subagents, background shells, workflows). Needs a chat open.' },
+  { action: 'openGit', value: 'on|off', note: 'show/hide the Git panel of the open chat (status, commit, push, history graph, diffs). Needs a chat with a project.' },
+  { action: 'openFiles', value: 'on|off', note: "show/hide the file explorer of the open chat's project." },
+  { action: 'setView', value: 'chat|split|editor', note: 'chat only / chat + VS Code side by side / editor alone. Desktop only, and the chat needs a project.' },
   { action: 'setLanguage', value: 'ko|en', note: 'switch the interface language.' },
   { action: 'setTheme', value: 'light|dark', note: 'switch the colour theme.' },
   { action: 'toggleSidebar', note: 'show/hide the sidebar.' },

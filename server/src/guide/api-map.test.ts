@@ -6,8 +6,12 @@
 //      cookie, so the target route's own auth runs (second half). If (2) ever stopped holding, the
 //      agent would silently act with no session at all.
 import assert from 'node:assert';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import Fastify from 'fastify';
 import { findRoute, apiReference, API_ROUTES } from './api-map.js';
+import { UI_ACTIONS, uiActionReference } from './ui-actions.js';
 
 // ── allowlist ──
 assert.ok(findRoute('GET', '/api/sessions'), 'listed route matches');
@@ -24,6 +28,11 @@ for (const [m, p] of [
   ['PUT', '/api/admin/claude-token'], ['PUT', '/api/auth/me/provider'], ['GET', '/api/admin/provider'],
   ['POST', '/api/admin/restart'], ['POST', '/api/admin/cleanup'], ['POST', '/api/users'],
   ['POST', '/api/admin/image/pull'], ['GET', '/api/sessions/x/attachments/y'],
+  // one-way doors outside this server + the infra verbs — see the header comment in api-map.ts
+  ['POST', '/api/review/sessions/x/merge'], ['POST', '/api/review/sessions/x/approve'],
+  ['POST', '/api/review/repos/x/webhook'], ['POST', '/api/projects/x/git/publish'],
+  ['POST', '/api/rooms/x/transfer'], ['GET', '/api/admin/backup'], ['POST', '/api/admin/restore/apply'],
+  ['POST', '/api/admin/update/apply'], ['POST', '/api/sessions/x/messages/y/edit'],
 ] as const) {
   assert.ok(!findRoute(m, p), `${m} ${p} must NOT be allowlisted`);
 }
@@ -39,6 +48,17 @@ assert.ok(adminRef.includes('/api/admin/config'), 'admin sees the admin routes')
 assert.ok(!memberRef.includes('/api/admin/config'), 'member does not');
 assert.ok(memberRef.includes('/api/sessions'), 'member still sees the ordinary ones');
 assert.ok(adminRef.split('\n').length > memberRef.split('\n').length);
+
+// ── ui actions: the browser really handles every action the agent is offered ──
+// The two tables live in different workspaces, so nothing but this check stops the prompt from
+// advertising an action that applyGuideAction() silently drops.
+const storeSrc = fs.readFileSync(
+  path.join(path.dirname(fileURLToPath(import.meta.url)), '../../../web/src/lib/store.ts'), 'utf8');
+const handled = new Set(Array.from(storeSrc.matchAll(/case '([a-zA-Z]+)':/g), (m) => m[1]));
+for (const a of UI_ACTIONS) {
+  assert.ok(handled.has(a.action), `ui action '${a.action}' has no case in web/src/lib/store.ts applyGuideAction`);
+}
+assert.ok(!uiActionReference(false).includes('openAdmin'), 'a member is not told about the admin action');
 
 // ── app.inject() from a child plugin reaches a sibling plugin's route, cookie intact ──
 const app = Fastify({ logger: false });
