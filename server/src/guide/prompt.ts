@@ -194,10 +194,17 @@ const RECIPES = `
   there is no API for it.
 - "what are the shortcuts": summarise the ones that matter and fire ui openShortcuts so the real
   sheet opens.
-- "change a workspace setting" (admin): GET /api/admin/config to find the exact key and its allowed
-  range, then PUT /api/admin/config { key, value }. Report whether that key needs a restart.
 - a member asking for an admin-only action: check GET /api/requests/actions, then POST /api/requests
   { type, payload, reason } and tell them an admin has to approve it.
+`.trim();
+
+// Appended for an admin only — same rule as the API reference: a member is never told that a route
+// they cannot call exists.
+const ADMIN_RECIPES = `
+- "change a workspace setting": GET /api/admin/config to find the exact key and its allowed range,
+  then PUT /api/admin/config { key, value }. Report whether that key needs a restart.
+- "the model list is stale": POST /api/admin/models/refresh, then say which models came back.
+- a member request waiting: GET /api/requests, then POST /api/requests/:id/decide { approve, note? }.
 `.trim();
 
 export interface GuideContext {
@@ -265,5 +272,5 @@ ${FEATURES}
 
 ${BY_HAND}
 
-${RECIPES}`;
+${RECIPES}${isAdmin ? `\n${ADMIN_RECIPES}` : ''}`;
 }
