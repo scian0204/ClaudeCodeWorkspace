@@ -81,6 +81,13 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 </details>
 
+<details>
+<summary><b>fix(guide): admin-only recipes were shown to members</b> — the how-to block named an admin route the list of callable routes already hid · <code>bcf0e8c</code></summary>
+
+The guide's list of callable routes has always been filtered by role, but the block of worked examples below it named the admin settings endpoint for everyone. A member could not call it — the server refuses it twice over — but they were told it existed. The admin examples are now appended only for an admin, and two more were added there: refreshing the model list, and deciding a member request that is waiting.
+
+</details>
+
 ---
 
 ## v1.19.5 — 2026-08-14
