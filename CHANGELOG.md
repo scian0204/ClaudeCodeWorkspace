@@ -64,6 +64,25 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
+## Unreleased
+
+<details>
+<summary><b>feat(guide): the corner guide now covers every feature of the workspace</b> — it used to deny having things this app ships · <code>50b6988</code></summary>
+
+**What people saw.** Ask the guide panel about team agents, shared plans, the task panel, the file explorer, git history or exporting a session and it answered as if none of them existed — or described a feature but had no way to carry it out.
+
+**Why.** The guide gets its knowledge from three tables in `server/src/guide/`: a feature list in the prompt, an allowlist of API routes it may call, and a list of browser actions. All three had stopped keeping up with the product, so anything added since was invisible to it.
+
+**What changed.** The feature list now names every user-visible feature, in the words the interface uses, grouped by area and with the admin setting that can switch each one off — so the guide says "your workspace has that turned off" instead of "that does not exist". Thirty-four more API routes are reachable: team agents, shared-plan pools, project files, git branches/commit/push/checkout, wiki documents and recompile, room members and rights, DM messages, plugin contents, PR review detail, and a few admin read-outs. Four new browser actions let it open the Tasks, Git and Files panels and switch between chat / split / editor. A new section lists what it must hand back to a person — deleting anything, credentials, file uploads, merging a PR, publishing a repository — with where the control is.
+
+**Kept out on purpose.** Deletes, anything holding a secret, admin infrastructure (restart, backup/restore, image pull, creating users), and one-way doors outside this server (merging a PR, publishing a repository, rotating a webhook secret). `git push` is the single exception, because it is the ordinary end of a commit the user just asked for — the guide states what it is about to push and waits for a yes.
+
+**Staying in step.** A new rule 12 in `CLAUDE.md` makes updating the guide part of shipping a feature, and the check in `api-map.test.ts` now fails when a browser action exists on the server but has no handler in the client, which is the failure that used to be silent.
+
+</details>
+
+---
+
 ## v1.19.5 — 2026-08-14
 
 <sub>release commit `4333ca7`</sub>
