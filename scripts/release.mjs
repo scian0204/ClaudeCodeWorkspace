@@ -21,6 +21,7 @@ const repo = process.env.DOCKER_REPO || 'cian0204/claudecode-workspace';
 const multiarch = process.argv.includes('--arm') || process.argv.includes('--multiarch');
 const platforms = process.env.PLATFORMS || (multiarch ? 'linux/amd64,linux/arm64' : 'linux/amd64');
 const builder = process.env.BUILDX_BUILDER || 'ccw-multi';
+const keepStorage = process.env.BUILDX_KEEP_STORAGE || '10GB';
 const dryRun = process.argv.includes('--dry-run') || process.env.DRY_RUN === '1';
 
 const { version } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
@@ -40,6 +41,28 @@ function ensureBuilder() {
   catch { run(`docker buildx create --name ${builder} --driver docker-container --bootstrap`); }
 }
 
+// Cap this builder's cache after a push.
+//
+// A docker-container builder keeps its cache in its OWN docker volume
+// (buildx_buildkit_<builder>0_state), and NEITHER `docker builder prune` nor `docker image prune`
+// touches it — so the cleanup step in CLAUDE.md rule 3 never saw it. Left alone it grew to 92GB
+// across releases, filled the host disk, and took the Docker engine down with it (the workspace with
+// it). Trimming to a ceiling rather than wiping keeps the next release's layer reuse.
+//
+// Best-effort by design: the image is already pushed by the time this runs, so a prune that fails
+// must not turn a successful release into a failed one. `--keep-storage` is the older flag name and
+// newer buildkit calls it `--max-used-space`; try both before giving up.
+function capBuilderCache() {
+  const attempts = [
+    `docker buildx prune --builder ${builder} --keep-storage ${keepStorage} -f`,
+    `docker buildx prune --builder ${builder} --max-used-space ${keepStorage} -f`,
+  ];
+  for (const cmd of attempts) {
+    try { run(cmd); return; } catch { /* try the next flag spelling */ }
+  }
+  console.warn(`(could not cap ${builder} cache — run \`docker buildx prune --builder ${builder} -a -f\` if the disk fills)`);
+}
+
 console.log(`Releasing ${repo}  version=${version}  sha=${sha}  platforms=${platforms}${dryRun ? '  (dry-run)' : ''}`);
 try {
   if (!dryRun) ensureBuilder();
@@ -51,4 +74,5 @@ try {
   console.error('Auth error? run `docker login`. Builder missing? `docker buildx create --name ccw-multi --driver docker-container --bootstrap`.');
   process.exit(1);
 }
+if (!dryRun) capBuilderCache();
 console.log(`\n${dryRun ? 'Would push' : 'Pushed'} (${platforms}):\n  ${tags.join('\n  ')}`);

@@ -69,6 +69,23 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
+## Unreleased
+
+<details>
+<summary><b>fix(release): cap the release builder's cache so it stops filling the disk</b> — it grew to 92GB and took the Docker engine down · <code>HASH</code></summary>
+
+**What happened.** The build host ran out of disk. Docker's engine then failed every command with a 500, and the workspace went down with it.
+
+**Why.** `npm run release:*` builds through a separate builder (`ccw-multi`) so it can produce multi-architecture images. That kind of builder keeps its cache in **its own storage**, and none of the cleanup this project already runs could see it — not `docker image prune`, not `docker builder prune`, and not even the "Build Cache" line in `docker system df`. So every release added to a pile nobody was watching. It reached 92GB, against 4.2GB for the workspace's own data.
+
+**What changed.** After a successful push the release script now trims that cache to a ceiling (10GB by default, `BUILDX_KEEP_STORAGE` to change it). Trimming rather than wiping keeps the next release fast. It runs only after the image is already pushed and never fails a release if the trim itself fails.
+
+**Also noted in CLAUDE.md.** How to spot this (a large "Local Volumes" figure in `docker system df`), how to clear it by hand, that Docker Desktop's image scanner had been piling up another 31GB of temporary databases and is now switched off, and that the Docker VM disk must never be deleted because the workspace's data lives inside it.
+
+</details>
+
+---
+
 ## v1.19.10 — 2026-08-19
 
 <sub>release commit `f6775f2`</sub>

@@ -69,6 +69,23 @@
 
 ---
 
+## Unreleased
+
+<details>
+<summary><b>fix(release): 릴리스 빌더 캐시에 상한을 둬서 디스크를 채우지 않게 한다</b> — 92GB까지 자라 Docker 엔진을 죽였다 · <code>HASH</code></summary>
+
+**증상.** 빌드하는 머신의 디스크가 꽉 찼다. 그러자 Docker 엔진이 모든 명령에 500을 돌려주기 시작했고, 워크스페이스도 같이 내려갔다.
+
+**원인.** `npm run release:*`는 멀티 아키텍처 이미지를 만들기 위해 별도 빌더(`ccw-multi`)로 빌드한다. 이런 빌더는 캐시를 **자기 저장 공간**에 따로 쌓는데, 이 프로젝트가 이미 돌리고 있던 정리 작업 중 어느 것도 그곳을 보지 못했다 — `docker image prune`도, `docker builder prune`도, `docker system df`의 "Build Cache" 줄조차도. 그래서 릴리스마다 아무도 안 보는 곳에 계속 쌓였다. 92GB까지 자랐다. 워크스페이스 자체 데이터가 4.2GB인 것과 비교된다.
+
+**조치.** push가 성공한 뒤 릴리스 스크립트가 그 캐시를 상한까지 잘라낸다(기본 10GB, `BUILDX_KEEP_STORAGE`로 조절). 전부 비우지 않고 잘라내므로 다음 릴리스 속도는 유지된다. 이미지를 이미 올린 뒤에 실행되고, 잘라내기가 실패해도 릴리스를 실패로 만들지 않는다.
+
+**CLAUDE.md에도 남겼다.** 이 상황을 알아보는 방법(`docker system df`의 "Local Volumes" 수치가 큰 경우), 손으로 비우는 명령, Docker Desktop 이미지 스캐너가 임시 DB를 31GB 더 쌓고 있었고 이제 껐다는 점, 그리고 워크스페이스 데이터가 들어 있으니 Docker VM 디스크는 절대 지우면 안 된다는 점.
+
+</details>
+
+---
+
 ## v1.19.10 — 2026-08-19
 
 <sub>릴리스 커밋 `f6775f2`</sub>

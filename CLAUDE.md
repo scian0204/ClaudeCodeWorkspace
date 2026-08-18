@@ -18,6 +18,13 @@ ClaudeCode Workspace — 서버 1대 상주 Claude Code 팀 워크스페이스. 
    ```
    - **로컬 빌드는 반드시 `npm run compose:up`으로** 한다. `docker compose up -d --build`를 맨손으로 돌리면 재빌드마다 이전 이미지가 `:latest` 태그를 잃고 dangling(`<none>`)으로 쌓인다. `compose:up`은 빌드·재실행 후 `docker image prune -f`로 즉시 정리한다(dangling만 삭제 — 태그 달린 이미지·실행 중 컨테이너·볼륨·빌드 캐시는 건드리지 않음).
    - 릴리스로 생긴 구버전 태그(`:1.2.3`, `:sha-abc1234`)까지 비우려면 명시적으로: `docker image rm cian0204/claudecode-workspace:<태그>`. 빌드 캐시가 커졌으면 `docker builder prune -f`.
+   - **`docker builder prune`은 릴리스 빌더의 캐시를 지우지 않는다.** `release:*`가 쓰는 `ccw-multi` 빌더(docker-container 드라이버)는 캐시를 **자기 볼륨**(`buildx_buildkit_ccw-multi0_state`)에 따로 쌓는데, `docker builder prune`·`docker image prune`·`docker system df`의 Build Cache 항목 모두 여기를 못 본다. 실제로 이게 92GB까지 자라 디스크를 채우고 Docker 엔진을 죽인 적이 있다(2026-08-19). 이제 `scripts/release.mjs`가 push 성공 후 `10GB`로 잘라내며, 상한은 `BUILDX_KEEP_STORAGE`로 조절한다. 수동 확인·정리:
+     ```bash
+     docker system df                                   # Local Volumes 항목이 크면 이 볼륨을 의심
+     docker buildx prune --builder ccw-multi -a -f       # 전부 비우기
+     ```
+   - Docker Desktop의 이미지 스캐너(Scout)는 실행마다 취약점 DB를 `%TEMP%\trivy-*`·`%TEMP%\docker-scout`에 복사해 쌓는다(31GB까지 자란 적 있음). 설정에서 꺼둔 상태(`settings-store.json`의 `SbomIndexing: false`) — 다시 켜지 말 것.
+   - **디스크가 꽉 차면 Docker 엔진이 모든 API에 500을 반환하고 워크스페이스도 함께 내려간다.** 복구: 공간 확보 → Docker Desktop 종료 → `wsl --shutdown` → Docker Desktop 재시작. VM 디스크(`%LOCALAPPDATA%\Docker\wsl\disk\docker_data.vhdx`)는 **워크스페이스 `/data` 볼륨을 담고 있으므로 절대 삭제하지 않는다.**
    - `release:*`는 `npm version`으로 `package.json` 버전을 올리고 git 태그(`vX.Y.Z`)를 만든 뒤, `scripts/release.mjs`가 `:버전`·`:latest`·`:sha-<short>` 3개 태그로 build & push 한다.
    - **기본은 amd64만**(빠름, 약 1–2분). arm64까지 멀티아치로 올리려면 `npm run release:patch -- --arm` (arm64는 qemu 에뮬 빌드라 느림, 약 20–30분 — **가끔만**).
    - **선행 조건**: 이 머신에서 최초 1회 `docker login`(Docker Hub 토큰) 되어 있어야 한다. 미로그인 시 push가 auth 에러로 실패한다. (Claude은 자격증명을 직접 입력하지 않는다 — 로그인은 사용자가 수행.)
