@@ -4,7 +4,7 @@
 
 # Update notes
 
-Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and **v1.19.8** (2026-08-18) — all **366 commits**.
+Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and **v1.19.9** (2026-08-18) — all **368 commits**.
 
 Each row shows only its **title and commit hash**; click the triangle for the detail (root cause, implementation, config keys).
 
@@ -16,7 +16,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 - [Timeline](#timeline)
 - [Unreleased](#unreleased) — commits not yet in a release
-- **1.x releases** — [v1.19.8](#v1198--2026-08-18) · [v1.19.7](#v1197--2026-08-18) · [v1.19.6](#v1196--2026-08-18) · [v1.19.5](#v1195--2026-08-14) · [v1.19.4](#v1194--2026-08-14) · [v1.19.3](#v1193--2026-08-14) · [v1.19.2](#v1192--2026-08-14) · [v1.19.1](#v1191--2026-08-14) · [v1.19.0](#v1190--2026-08-14) · [v1.18.0](#v1180--2026-08-14) · [v1.17.3](#v1173--2026-08-14) · [v1.17.2](#v1172--2026-08-14) · [v1.17.1](#v1171--2026-08-14) · [v1.17.0](#v1170--2026-08-14) · [v1.16.1](#v1161--2026-08-13) · [v1.16.0](#v1160--2026-08-13) · [v1.15.1](#v1151--2026-08-13) · [v1.15.0](#v1150--2026-08-13) · [v1.14.2](#v1142--2026-08-13) · [v1.14.1](#v1141--2026-08-13) · [v1.14.0](#v1140--2026-08-13) · [v1.13.0](#v1130--2026-08-13) · [v1.12.0](#v1120--2026-08-07) · [v1.11.0](#v1110--2026-08-06) · [v1.10.0](#v1100--2026-08-05) · [v1.9.1](#v191--2026-08-05) · [v1.9.0](#v190--2026-08-05) · [v1.8.0](#v180--2026-08-04) · [v1.7.0](#v170--2026-08-04) · [v1.6.0](#v160--2026-08-04) · [v1.5.0](#v150--2026-08-04) · [v1.4.0](#v140--2026-08-03) · [v1.3.1](#v131--2026-08-03) · [v1.3.0](#v130--2026-07-31) · [v1.2.0](#v120--2026-07-31) · [v1.1.1](#v111--2026-07-31) · [v1.1.0](#v110--2026-07-31)
+- **1.x releases** — [v1.19.9](#v1199--2026-08-18) · [v1.19.8](#v1198--2026-08-18) · [v1.19.7](#v1197--2026-08-18) · [v1.19.6](#v1196--2026-08-18) · [v1.19.5](#v1195--2026-08-14) · [v1.19.4](#v1194--2026-08-14) · [v1.19.3](#v1193--2026-08-14) · [v1.19.2](#v1192--2026-08-14) · [v1.19.1](#v1191--2026-08-14) · [v1.19.0](#v1190--2026-08-14) · [v1.18.0](#v1180--2026-08-14) · [v1.17.3](#v1173--2026-08-14) · [v1.17.2](#v1172--2026-08-14) · [v1.17.1](#v1171--2026-08-14) · [v1.17.0](#v1170--2026-08-14) · [v1.16.1](#v1161--2026-08-13) · [v1.16.0](#v1160--2026-08-13) · [v1.15.1](#v1151--2026-08-13) · [v1.15.0](#v1150--2026-08-13) · [v1.14.2](#v1142--2026-08-13) · [v1.14.1](#v1141--2026-08-13) · [v1.14.0](#v1140--2026-08-13) · [v1.13.0](#v1130--2026-08-13) · [v1.12.0](#v1120--2026-08-07) · [v1.11.0](#v1110--2026-08-06) · [v1.10.0](#v1100--2026-08-05) · [v1.9.1](#v191--2026-08-05) · [v1.9.0](#v190--2026-08-05) · [v1.8.0](#v180--2026-08-04) · [v1.7.0](#v170--2026-08-04) · [v1.6.0](#v160--2026-08-04) · [v1.5.0](#v150--2026-08-04) · [v1.4.0](#v140--2026-08-03) · [v1.3.1](#v131--2026-08-03) · [v1.3.0](#v130--2026-07-31) · [v1.2.0](#v120--2026-07-31) · [v1.1.1](#v111--2026-07-31) · [v1.1.0](#v110--2026-07-31)
 - [Early development (2026-07-20 → 07-31)](#early-development--2026-07-20--07-31)
 - [Where it diverged from the original design](#where-it-diverged-from-the-original-design)
 
@@ -26,7 +26,8 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 | Version | Date | Commits | Headline |
 |---|---|---|---|
-| [v1.19.8](#v1198--2026-08-18) | 2026-08-18 | 2 | Model list loads for browser sign-in accounts |
+| [v1.19.9](#v1199--2026-08-18) | 2026-08-18 | 2 | Model list really loads for browser sign-in accounts |
+| [v1.19.8](#v1198--2026-08-18) | 2026-08-18 | 2 | Model list loads for browser sign-in accounts (incomplete) |
 | [v1.19.7](#v1197--2026-08-18) | 2026-08-18 | 2 | Scrolling up during an answer keeps your place |
 | [v1.19.6](#v1196--2026-08-18) | 2026-08-18 | 5 | The corner guide now knows every feature of the workspace |
 | [v1.19.5](#v1195--2026-08-14) | 2026-08-14 | 6 | Room sessions stop asking for /login; a plain docker run keeps its data |
@@ -67,7 +68,9 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
-## Unreleased
+## v1.19.9 — 2026-08-18
+
+<sub>release commit `b0fd3f8`</sub>
 
 <details>
 <summary><b>fix(models): ask the Claude CLI for the model list when the account was signed in through the browser</b> — v1.19.8's attempt was still broken · <code>4314a6f</code></summary>
