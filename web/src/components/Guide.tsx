@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore, type Block, type GuideMsg } from '../lib/store';
 import { useT } from '../lib/i18n';
-import { useIsMobile, ClayDots } from '../lib/ui';
+import { useIsMobile, ClayDots, useStickToBottom } from '../lib/ui';
 import { md } from '../lib/md';
 import { IconGuide, IconX, IconSend, IconSparkle, IconTerminal, IconRotateCcw, IconCheck } from '../lib/icons';
 
@@ -53,14 +53,11 @@ function GuidePanel() {
   const isMobile = useIsMobile();
   const t = useT();
   const [text, setText] = useState('');
-  const bodyRef = useRef<HTMLDivElement>(null);
+  const { ref: bodyRef, onScroll, follow } = useStickToBottom<HTMLDivElement>();
   const taRef = useRef<HTMLTextAreaElement>(null);
 
-  // stick to the bottom as the answer streams in
-  useEffect(() => {
-    const el = bodyRef.current; if (!el) return;
-    el.scrollTop = el.scrollHeight;
-  }, [messages, live]);
+  // stick to the bottom as the answer streams in — unless the reader scrolled up to re-read
+  useEffect(() => { follow(); }, [messages, live, follow]);
   useEffect(() => { taRef.current?.focus(); }, []);
 
   const submit = (v?: string) => {
@@ -90,7 +87,7 @@ function GuidePanel() {
           onClick={() => setOpen(false)}><IconX size={15} /></button>
       </header>
 
-      <div ref={bodyRef} className="flex-1 min-h-0 overflow-y-auto scrolly px-3 py-3">
+      <div ref={bodyRef} onScroll={onScroll} className="flex-1 min-h-0 overflow-y-auto scrolly px-3 py-3">
         {messages.length === 0 && !live && (
           <div className="text-sm text-txt2">
             <p className="mb-3 leading-relaxed">{t('guide.greeting')}</p>

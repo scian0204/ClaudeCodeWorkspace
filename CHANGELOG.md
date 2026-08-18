@@ -65,6 +65,21 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
+## Unreleased
+
+<details>
+<summary><b>fix(chat): scrolling up during an answer no longer snaps back to the bottom</b> — the view follows new text only while you are already at the bottom · <code>HASH</code></summary>
+
+**What people saw.** While an answer was still being written, scrolling up to re-read something earlier pulled the view straight back to the newest line, over and over, until the answer finished.
+
+**Why.** Every chat pane jumped to the bottom on each update, no matter where the reader was.
+
+**What changed.** Each streaming pane now remembers whether the reader is sitting at the bottom (within 48px). At the bottom it keeps following new text as before; scrolled up it leaves the view where it is, and scrolling back down resumes the follow. This covers the main chat, the corner guide, direct messages and each subagent's live pane. A search hit still jumps to its message and now stays there.
+
+</details>
+
+---
+
 ## v1.19.6 — 2026-08-18
 
 <sub>release commit `d0d8c11`</sub>

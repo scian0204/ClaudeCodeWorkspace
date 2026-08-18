@@ -60,6 +60,25 @@ export function useGuideInset(enabled: boolean) {
   return [setEl, pad] as const;
 }
 
+// ── stick-to-bottom scrollers ───────────────────────────────────────────────────────────────
+// A streaming pane follows new output only while the reader is sitting at the bottom. Scrolling up
+// mid-answer parks the view where they left it; coming back down resumes the follow. Growing
+// content fires no scroll event, so the flag only ever flips on a real user scroll.
+const STICK_SLACK_PX = 48; // "close enough to the bottom" — sub-pixel rounding must still count
+export function useStickToBottom<T extends HTMLElement>() {
+  const ref = React.useRef<T>(null);
+  const stick = React.useRef(true);
+  const onScroll = React.useCallback(() => {
+    const el = ref.current; if (!el) return;
+    stick.current = el.scrollHeight - el.scrollTop - el.clientHeight <= STICK_SLACK_PX;
+  }, []);
+  const follow = React.useCallback(() => {
+    const el = ref.current;
+    if (el && stick.current) el.scrollTop = el.scrollHeight;
+  }, []);
+  return { ref, onScroll, follow, stick };
+}
+
 // ── growing textareas + live markdown ───────────────────────────────────────────────────────
 // A prompt box should follow its content instead of sitting at a fixed `rows`, up to a ceiling —
 // past that it scrolls, so a pasted wall of text can never push the conversation off screen.

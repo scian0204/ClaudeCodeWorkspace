@@ -5,7 +5,7 @@ import { useStore, type Block, type Msg, type Attachment, type Project } from '.
 import { ProjectCreateForm } from './ProjectCreateForm';
 import { api, type UploadState } from '../lib/api';
 import { UploadProgress } from './UploadProgress';
-import { Avatar, timeAgo, useIsMobile, MobileMenuButton, ClayDots, ClaySpark, ClayWait, useGuideInset, useAutoGrow, MdMirror } from '../lib/ui';
+import { Avatar, timeAgo, useIsMobile, MobileMenuButton, ClayDots, ClaySpark, ClayWait, useGuideInset, useAutoGrow, useStickToBottom, MdMirror } from '../lib/ui';
 import { copyToClipboard } from '../lib/clipboard';
 import { MembersDialog } from './MembersDialog';
 import { ExportSessionModal } from './ExportSessionModal';
@@ -638,24 +638,25 @@ function segmentMessages(messages: Msg[]): Segment[] {
 function ChatPane() {
   const { current: c, messages, live, viewMode } = useStore();
   const highlight = useStore((s) => s.highlightMsgId);
-  const streamRef = useRef<HTMLDivElement>(null);
+  const { ref: streamRef, onScroll, follow, stick } = useStickToBottom<HTMLDivElement>();
   const jumpedRef = useRef<string | null>(null); // ChatPane is keyed by session, so this resets on switch
-  // Normally pin to the newest message. A search hit instead scrolls its target into view — once
-  // (jumpedRef), so later turns in the same thread go back to following the bottom.
+  // Follow the newest message while the reader sits at the bottom; once they scroll up, streaming
+  // leaves the view alone until they come back down. A search hit instead scrolls its target into
+  // view — once (jumpedRef) — and parks there for the same reason.
   useEffect(() => {
     if (highlight && jumpedRef.current !== highlight) {
       const el = document.getElementById(`msg-${highlight}`);
-      if (el) { jumpedRef.current = highlight; el.scrollIntoView({ block: 'center' }); return; }
+      if (el) { jumpedRef.current = highlight; stick.current = false; el.scrollIntoView({ block: 'center' }); return; }
     }
-    streamRef.current?.scrollTo({ top: streamRef.current.scrollHeight });
-  }, [messages, live, highlight]);
+    follow();
+  }, [messages, live, highlight, follow, stick]);
   const segments = useMemo(() => segmentMessages(messages), [messages]);
   if (!c) return null;
 
   return (
     <div className={`flex flex-col min-w-0 min-h-0 ${viewMode === 'split' ? 'border-r border-line' : ''}`}>
       <WikiBanner />
-      <div ref={streamRef} className="flex-1 overflow-y-auto scrolly px-3 md:px-5 py-4 md:py-5">
+      <div ref={streamRef} onScroll={onScroll} className="flex-1 overflow-y-auto scrolly px-3 md:px-5 py-4 md:py-5">
         <div className="max-w-[760px] mx-auto">
           {segments.map((seg) => seg.cmd
             ? <FoldedSegment key={seg.key} seg={seg} />

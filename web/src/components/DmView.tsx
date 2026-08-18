@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useStore, type DmChannel } from '../lib/store';
-import { Avatar, avatarUrl, MobileMenuButton, useGuideInset } from '../lib/ui';
+import { Avatar, avatarUrl, MobileMenuButton, useGuideInset, useStickToBottom } from '../lib/ui';
 import { SearchButton } from './SearchPalette';
 import { useT } from '../lib/i18n';
 import { IconUsers } from '../lib/icons';
@@ -20,15 +20,14 @@ export function DmView() {
   const { user, channels, activeChannelId, channelMessages, sendDm, promoteChannel, guideEnabled } = useStore();
   const t = useT();
   const [text, setText] = useState('');
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const { ref: scrollRef, onScroll, follow, stick } = useStickToBottom<HTMLDivElement>();
   const [rowRef, guideInset] = useGuideInset(guideEnabled);
   const ch = channels.find((c) => c.id === activeChannelId);
 
-  // Stick to the bottom as messages arrive / on open.
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [channelMessages.length, activeChannelId]);
+  // Stick to the bottom as messages arrive, unless the reader scrolled up. Opening a channel always
+  // starts at the newest message, so the flag resets before the follow below runs.
+  useEffect(() => { stick.current = true; }, [activeChannelId, stick]);
+  useEffect(() => { follow(); }, [channelMessages.length, activeChannelId, follow]);
 
   if (!ch) {
     return (
@@ -78,7 +77,7 @@ export function DmView() {
       </div>
 
       {/* messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto scrolly px-3 md:px-5 py-4 min-h-0">
+      <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto scrolly px-3 md:px-5 py-4 min-h-0">
         {channelMessages.length === 0 && <div className="text-center text-txt3 text-sm mt-8">{t('dm.emptyHint')}</div>}
         {channelMessages.map((m) => {
           const mine = m.userId === user?.id;

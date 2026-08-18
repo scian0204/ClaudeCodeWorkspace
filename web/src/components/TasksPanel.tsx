@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useStore, type AgentTask } from '../lib/store';
 import { useT } from '../lib/i18n';
-import { useIsMobile } from '../lib/ui';
+import { useIsMobile, useStickToBottom } from '../lib/ui';
 import { BlockList } from './Chat';
 import {
   IconActivity, IconUsers, IconTerminal, IconGitBranch, IconEye, IconBox, IconChevronRight,
@@ -189,13 +189,13 @@ function TaskRow({ task, now, forceWatch = false }: { task: AgentTask; now: numb
   );
 }
 
-// One subagent's own pane: its completed blocks plus the still-streaming text tail, pinned to the
-// bottom like a terminal so new output stays in view.
+// One subagent's own pane: its completed blocks plus the still-streaming text tail, following the
+// bottom like a terminal so new output stays in view — until the reader scrolls up.
 function SubagentLive({ blocks, delta, streaming }: { blocks: any[]; delta: string; streaming: boolean }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => { const el = ref.current; if (el) el.scrollTop = el.scrollHeight; }, [blocks, delta]);
+  const { ref, onScroll, follow } = useStickToBottom<HTMLDivElement>();
+  useEffect(() => { follow(); }, [blocks, delta, follow]);
   return (
-    <div ref={ref} className="border-t border-line px-2.5 py-2 bg-bg max-h-72 overflow-auto scrolly text-[12px]">
+    <div ref={ref} onScroll={onScroll} className="border-t border-line px-2.5 py-2 bg-bg max-h-72 overflow-auto scrolly text-[12px]">
       <BlockList nested blocks={blocks} />
       {delta && <div className="whitespace-pre-wrap break-words text-txt2">{delta}</div>}
       {streaming && <span className="inline-block w-1.5 h-3.5 bg-clay/70 align-text-bottom animate-pulse" />}
