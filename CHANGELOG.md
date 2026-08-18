@@ -26,6 +26,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 | Version | Date | Commits | Headline |
 |---|---|---|---|
+| [v1.19.6](#v1196--2026-08-18) | 2026-08-18 | 5 | The corner guide now knows every feature of the workspace |
 | [v1.19.5](#v1195--2026-08-14) | 2026-08-14 | 6 | Room sessions stop asking for /login; a plain docker run keeps its data |
 | [v1.19.4](#v1194--2026-08-14) | 2026-08-14 | 4 | That row rebuilt in plain text, back to one line |
 | [v1.19.3](#v1193--2026-08-14) | 2026-08-14 | 4 | Message-run controls move under the message box |
@@ -64,7 +65,9 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
-## Unreleased
+## v1.19.6 — 2026-08-18
+
+<sub>release commit `d0d8c11`</sub>
 
 <details>
 <summary><b>feat(guide): the corner guide now covers every feature of the workspace</b> — it used to deny having things this app ships · <code>50b6988</code></summary>
