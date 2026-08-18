@@ -70,7 +70,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ## Unreleased
 
 <details>
-<summary><b>fix(models): ask the Claude CLI for the model list when the account was signed in through the browser</b> — v1.19.8's attempt was still broken · <code>HASH</code></summary>
+<summary><b>fix(models): ask the Claude CLI for the model list when the account was signed in through the browser</b> — v1.19.8's attempt was still broken · <code>4314a6f</code></summary>
 
 **What people saw.** The **Fetch now** button on the admin panel's model list still failed on workspaces whose Claude account was connected by signing in through the browser. v1.19.8 said this was fixed; it was not.
 

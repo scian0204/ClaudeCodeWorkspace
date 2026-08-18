@@ -70,7 +70,7 @@
 ## Unreleased
 
 <details>
-<summary><b>fix(models): 브라우저 로그인 계정은 모델 목록을 Claude CLI에 물어본다</b> — v1.19.8의 수정은 여전히 동작하지 않았다 · <code>HASH</code></summary>
+<summary><b>fix(models): 브라우저 로그인 계정은 모델 목록을 Claude CLI에 물어본다</b> — v1.19.8의 수정은 여전히 동작하지 않았다 · <code>4314a6f</code></summary>
 
 **증상.** 브라우저 로그인으로 Claude 계정을 연결한 워크스페이스에서 관리자 패널의 모델 목록 **지금 가져오기**가 여전히 실패했다. v1.19.8에서 고쳤다고 했지만 실제로는 안 고쳐졌다.
 
