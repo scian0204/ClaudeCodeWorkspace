@@ -69,7 +69,7 @@
 ## Unreleased
 
 <details>
-<summary><b>fix(models): 브라우저 로그인으로 Claude 계정을 연결한 경우에도 모델 목록 "지금 가져오기"가 동작</b> — 로그인 자격증명을 이 요청에서도 읽는다 · <code>HASH</code></summary>
+<summary><b>fix(models): 브라우저 로그인으로 Claude 계정을 연결한 경우에도 모델 목록 "지금 가져오기"가 동작</b> — 로그인 자격증명을 이 요청에서도 읽는다 · <code>88b87a1</code></summary>
 
 **증상.** 관리자 패널에서 모델 목록의 **지금 가져오기**를 누르면 `no Claude token or API key configured` 오류가 났다. 토큰을 붙여넣는 대신 브라우저 로그인으로 Claude 계정을 연결한 워크스페이스에서만 발생했다. 같은 목록의 자동 갱신(`modelsAutoFetch`)도 조용히 멈춰 있었다.
 

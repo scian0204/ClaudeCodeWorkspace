@@ -69,7 +69,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ## Unreleased
 
 <details>
-<summary><b>fix(models): "Fetch now" for the model list works when the Claude account was signed in through the browser</b> — the sign-in credential is now read for that request too · <code>HASH</code></summary>
+<summary><b>fix(models): "Fetch now" for the model list works when the Claude account was signed in through the browser</b> — the sign-in credential is now read for that request too · <code>88b87a1</code></summary>
 
 **What people saw.** In the admin panel, pressing **Fetch now** on the model list failed with `no Claude token or API key configured` — but only on workspaces whose Claude account was connected by signing in through the browser instead of pasting a token. The same list also silently stopped updating on its own (`modelsAutoFetch`).
 
