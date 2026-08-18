@@ -59,10 +59,22 @@ export function credentialEnv(key: string): Record<string, string> {
   return { CLAUDE_SECURESTORAGE_CONFIG_DIR: claudeDirOf(key) };
 }
 
-// The CLI's own credential record. Read for status only — no token value ever leaves this module.
-function readCredentials(key: string): any | null {
-  try { return JSON.parse(fs.readFileSync(credentialsPath(key), 'utf8'))?.claudeAiOauth ?? null; }
+// The CLI's own credential record, read straight off disk.
+function readCredentialsAt(dir: string): any | null {
+  try { return JSON.parse(fs.readFileSync(path.join(dir, '.credentials.json'), 'utf8'))?.claudeAiOauth ?? null; }
   catch { return null; } // missing / unreadable / malformed → not logged in
+}
+const readCredentials = (key: string): any | null => readCredentialsAt(claudeDirOf(key));
+
+// The signed-in account's current access token, for the one caller that has no CLI to read it for
+// it: the server's own HTTP call to /v1/models. Turns must keep using credentialEnv instead — the
+// CLI reads AND refreshes the store, this only reads it. Takes the store directory so the caller can
+// pass whatever CLAUDE_SECURESTORAGE_CONFIG_DIR the resolver handed it.
+// ponytail: no refresh here — an accessToken that expired since the last turn returns 401 until a
+// turn (or a fresh sign-in) rewrites the file. Add a refresh_token exchange if that bites.
+export function loginAccessToken(claudeDir: string): string | null {
+  const tok = readCredentialsAt(claudeDir)?.accessToken;
+  return typeof tok === 'string' && tok ? tok : null;
 }
 
 export function loginMeta(key: string): LoginMeta {

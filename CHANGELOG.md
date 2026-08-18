@@ -66,6 +66,23 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
+## Unreleased
+
+<details>
+<summary><b>fix(models): "Fetch now" for the model list works when the Claude account was signed in through the browser</b> — the sign-in credential is now read for that request too · <code>HASH</code></summary>
+
+**What people saw.** In the admin panel, pressing **Fetch now** on the model list failed with `no Claude token or API key configured` — but only on workspaces whose Claude account was connected by signing in through the browser instead of pasting a token. The same list also silently stopped updating on its own (`modelsAutoFetch`).
+
+**Why.** A browser sign-in does not produce a token the server can hand around. The credential lives in a file the Claude CLI owns and refreshes, and every chat turn just gets told which folder to read it from. The model-list request is the one call the server makes to Anthropic by itself, with no CLI involved — so it saw no token in that hand-off and gave up before sending anything.
+
+**What changed.** That request now reads the account's access token out of the same credential folder and sends it the way an OAuth token is normally sent. A token pasted into the settings still wins over the sign-in, matching the order everything else uses. Bedrock and Vertex are unchanged (they have no model-list endpoint), and a custom base URL that needs no auth still works. If the credential file is missing or unreadable the button now says so instead of reporting a missing token.
+
+**Known limit.** The stored access token is refreshed by the CLI, not by this request. If it expired since the last chat turn the fetch returns a `401` until a turn (or a fresh sign-in) renews it.
+
+</details>
+
+---
+
 ## v1.19.7 — 2026-08-18
 
 <sub>release commit `a94e01e`</sub>
