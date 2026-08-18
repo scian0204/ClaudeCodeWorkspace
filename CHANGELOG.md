@@ -72,7 +72,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ## Unreleased
 
 <details>
-<summary><b>fix(release): cap the release builder's cache so it stops filling the disk</b> — it grew to 92GB and took the Docker engine down · <code>HASH</code></summary>
+<summary><b>fix(release): cap the release builder's cache so it stops filling the disk</b> — it grew to 92GB and took the Docker engine down · <code>bb06599</code></summary>
 
 **What happened.** The build host ran out of disk. Docker's engine then failed every command with a 500, and the workspace went down with it.
 

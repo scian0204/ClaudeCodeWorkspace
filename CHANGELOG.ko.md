@@ -72,7 +72,7 @@
 ## Unreleased
 
 <details>
-<summary><b>fix(release): 릴리스 빌더 캐시에 상한을 둬서 디스크를 채우지 않게 한다</b> — 92GB까지 자라 Docker 엔진을 죽였다 · <code>HASH</code></summary>
+<summary><b>fix(release): 릴리스 빌더 캐시에 상한을 둬서 디스크를 채우지 않게 한다</b> — 92GB까지 자라 Docker 엔진을 죽였다 · <code>bb06599</code></summary>
 
 **증상.** 빌드하는 머신의 디스크가 꽉 찼다. 그러자 Docker 엔진이 모든 명령에 500을 돌려주기 시작했고, 워크스페이스도 같이 내려갔다.
 
