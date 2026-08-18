@@ -5,6 +5,7 @@ import { db, schema } from '../db/index.js';
 import { parseCookie, userForToken, COOKIE, type AuthUser } from '../auth/index.js';
 import { enqueueTurn, cancelQueued, queueState, setEmitFactory } from '../rooms/queue.js';
 import { interruptTurn, liveTurn, postChat } from '../claude/session-manager.js';
+import { isSlashCommand } from '../claude/prompt.js';
 import { tasksFor } from '../claude/tasks.js';
 import { pendingForSession as resumesForSession, cancelResume } from '../claude/auto-resume.js';
 import { respondPermission, pendingForSession, type Decision } from '../claude/permissions.js';
@@ -147,11 +148,15 @@ export function initRealtime(httpServer: HttpServer) {
         ? p.attachments.filter((x) => x && typeof x.name === 'string' && isBareBasename(x.name))
             .slice(0, cfg.int('attachmentMaxCount')).map((x) => ({ name: x.name, isImage: !!x.isImage }))
         : [];
+      const text = (p.text ?? '').trim();
       // a turn needs text OR at least one attachment (empty-text send is fine with files attached)
-      if (!p.text?.trim() && !attachments.length) { ack?.({ error: 'empty' }); return; }
-      // room team chat: persist + broadcast only, no Claude turn (chat flag valid in rooms only)
-      if (p.chat && a.kind === 'room') {
-        postChat(p.sessionId, { id: user.id, name: user.displayName }, (p.text ?? '').trim(),
+      if (!text && !attachments.length) { ack?.({ error: 'empty' }); return; }
+      // room team chat: persist + broadcast only, no Claude turn (chat flag valid in rooms only).
+      // A slash command is an instruction to the CLI, never a message to teammates — and the room
+      // composer opens in team-chat mode, so a command picked from the palette there used to be filed
+      // as chat text and never run at all. Route it to Claude whatever the composer says.
+      if (p.chat && a.kind === 'room' && !isSlashCommand(text)) {
+        postChat(p.sessionId, { id: user.id, name: user.displayName }, text,
           (event, payload) => io.to(sessionRoom(p.sessionId)).emit(event, payload));
         ack?.({ ok: true });
         return;
@@ -161,7 +166,7 @@ export function initRealtime(httpServer: HttpServer) {
         const topic = db.select().from(schema.wikiTopics).where(eq(schema.wikiTopics.id, a.s.wikiTopicId)).get();
         if (topic?.compileStatus === 'compiling') { ack?.({ error: '주제 컴파일 중입니다. 완료 후 질의하세요.' }); return; }
       }
-      const itemId = enqueueTurn(p.sessionId, { id: user.id, name: user.displayName }, (p.text ?? '').trim(),
+      const itemId = enqueueTurn(p.sessionId, { id: user.id, name: user.displayName }, text,
         undefined, a.kind === 'room' ? p.includeChat : false, attachments);
       ack?.({ itemId });
     });

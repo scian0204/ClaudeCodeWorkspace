@@ -68,6 +68,25 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
+## Unreleased
+
+<details>
+<summary><b>fix(rooms): slash commands now actually run in a shared session</b> — two separate reasons they never reached the CLI · <code>HASH</code></summary>
+
+**What people saw.** In a shared session (방) `/clear` did nothing. The history folded in the view as if it had worked, but the conversation carried on with everything still in it. Every command was affected the same way — `/compact`, `/context`, skills, plugin commands — not just `/clear`.
+
+**Why — first reason.** A shared session labels each message with who said it, so Claude can tell members apart. That label goes in front of the text, which turned `/clear` into `[이름]: /clear`. The CLI only treats input as a command when it *starts* with a slash, so it read the line as an ordinary sentence and answered it as one — sometimes even replying "Context cleared." while nothing had been cleared. Measured against the CLI: sent on its own, `/clear` uses no model tokens and hands back a fresh conversation; sent with a name in front, it costs a full turn and the whole history is still there afterwards. Attaching a file did the same thing in any session, shared or private, because the file paths are also written in front of the message.
+
+**Why — second reason.** The composer in a shared session starts in team-chat mode, where what you type goes to the other members and not to Claude. Picking a command from the `/` menu in that mode filed it as a chat message, so it never ran even before the first problem could apply.
+
+**What changed.** A command is now sent exactly as typed, with no label and no file list in front of it, and it is always routed to Claude no matter which composer mode is showing — commands are instructions to the CLI, never messages to teammates. Ordinary messages keep the speaker label, the team-chat catch-up and the attachment paths exactly as before. Files picked alongside a command are left out of that one turn, which is what the CLI does too.
+
+**Kept honest.** The message-building logic moved into `server/src/claude/prompt.ts` with tests (`npx vitest run server/src/claude/prompt.test.ts`) covering both the command case and every decoration an ordinary message still needs.
+
+</details>
+
+---
+
 ## v1.19.9 — 2026-08-18
 
 <sub>release commit `b0fd3f8`</sub>

@@ -1373,7 +1373,10 @@ function Composer() {
     if (uploading) return; // an upload is still in flight — sending now would drop the pending file from the turn
     if (!text.trim() && !atts.length) return; // allow attachment-only sends
     const attachments = atts.length ? atts.map((a) => ({ name: a.name, isImage: a.isImage })) : undefined;
-    send(text.trim(), { chat: isRoom && mode === 'chat', includeChat: isRoom && mode === 'claude' && includeChat, attachments });
+    // A slash command runs on the CLI, so it is never team chat — the room composer opens in chat
+    // mode, and sending one there used to just post the text. (The server enforces this too.)
+    const isCmd = text.trim().startsWith('/');
+    send(text.trim(), { chat: isRoom && mode === 'chat' && !isCmd, includeChat: isRoom && mode === 'claude' && includeChat, attachments });
     atts.forEach((a) => { if (a.url) URL.revokeObjectURL(a.url); });
     setText(''); setCaret(0); setAtts([]);
   };

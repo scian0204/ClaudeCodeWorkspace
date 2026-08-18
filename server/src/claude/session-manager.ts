@@ -9,6 +9,7 @@ import { allowBypass, getSetting, setSetting } from '../lib/settings.js';
 import { turnLimiter, withRateLimitRetry } from './throttle.js';
 import { buildOptions, clampMode, rootsFor, type SessionContext, type PermMode } from './config-layering.js';
 import { makeCanUseTool, makeAutoAllow } from './permissions.js';
+import { composePrompt } from './prompt.js';
 import { resolvePluginPaths } from '../plugins/manager.js';
 import { resolveAgents } from './team-agents.js';
 import { recordUsage, recordSkillUse, turnSkillKeys } from '../usage/tracker.js';
@@ -503,17 +504,12 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
     ...(poolId && credentialId !== p.author.id ? { credential: credentialName(credentialId) } : {}),
   });
 
-  let prompt = kind === 'room' ? `[${p.author.name}]: ${p.text}` : p.text;
-  if (contextChat.length) {
-    const convo = contextChat.map((c) => `[${c.name}]: ${c.text}`).join('\n');
-    prompt = `[\uc774\uc804 \ub300\ud654]\n${convo}\n\n[${p.author.name}]: ${p.text}`;
-  }
-  // prepend absolute attachment paths so the agent Reads the uploaded files / pasted screenshots.
-  // (Composed into the REAL prompt only; the mock path uses p.text and doesn't run a real agent.)
-  if (attachments.length) {
-    const list = attachments.map((a) => `- ${a.abs}${a.isImage ? ' (\uc774\ubbf8\uc9c0)' : ''}`).join('\n');
-    prompt = `[\ucca8\ubd80 \ud30c\uc77c]\n${list}\n\n${prompt}`;
-  }
+  // Speaker prefix / chat catch-up / attachment paths \u2014 and a slash command left exactly as typed so
+  // the CLI still recognises it (claude/prompt.ts explains why that mattered). The REAL prompt only;
+  // the mock path uses p.text and doesn't run an agent. p.text arrives trimmed (chat:send).
+  const prompt = composePrompt({
+    text: p.text, kind, authorName: p.author.name, contextChat, attachments,
+  });
   const roots = rootsFor(ctx);
   // review sessions run the pipeline unattended → auto-allow tools (class-1 fence still applies)
   const canUseTool = s.kind === 'review'
