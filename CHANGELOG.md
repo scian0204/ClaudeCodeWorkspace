@@ -32,7 +32,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 | [v1.19.3](#v1193--2026-08-14) | 2026-08-14 | 4 | Message-run controls move under the message box |
 | [v1.19.2](#v1192--2026-08-14) | 2026-08-14 | 4 | Usage limits came up empty (three causes) |
 | [v1.19.1](#v1191--2026-08-14) | 2026-08-14 | 4 | Session pool menu no longer shows one name twice |
-| [v1.19.0](#v1190--2026-08-14) | 2026-08-14 | 4 | Workspace-wide sharing pools every user's plan |
+| [v1.19.0](#v1190--2026-08-14) | 2026-08-14 | 5 | Workspace-wide sharing pools every user's plan |
 | [v1.18.0](#v1180--2026-08-14) | 2026-08-14 | 5 | Shared plans get three levels; workspace default moves to the admin panel |
 | [v1.17.3](#v1173--2026-08-14) | 2026-08-14 | 4 | Room pool/container binding needs membership |
 | [v1.17.2](#v1172--2026-08-14) | 2026-08-14 | 4 | Pool endpoints were unreachable; two more pool fixes |
@@ -191,7 +191,7 @@ The guide's list of callable routes has always been filtered by role, but the bl
 <sub>release commit `61acc49`</sub>
 
 <details>
-<summary><b>feat(pool): the workspace-wide level is now "everyone shares", not "an admin picks one pool"</b> — new <code>tokenPoolAllUsers</code> switch, per-member opt-out · <code>PENDING</code></summary>
+<summary><b>feat(pool): the workspace-wide level is now "everyone shares", not "an admin picks one pool"</b> — new <code>tokenPoolAllUsers</code> switch, per-member opt-out · <code>08c562d</code></summary>
 
 The previous cut read "workspace-wide" as *an admin nominates one of the existing pools as the default*. What it should mean is simpler and stronger: **every user in the workspace pools their plan together**, with nothing to create and nothing to join.
 
@@ -207,6 +207,8 @@ Verified on the running container: the derived membership list, the opt-out remo
 
 </details>
 
+- **docs: the READMEs describe the workspace-wide pool as "everyone shares"** — both language versions, matching the switch above · `d7a983f`
+
 ---
 
 ## v1.18.0 — 2026-08-14
@@ -214,7 +216,7 @@ Verified on the running container: the derived membership list, the opt-out remo
 <sub>release commit `da01277`</sub>
 
 <details>
-<summary><b>feat(pool): three levels of shared plans, with the workspace-wide one moved to the admin panel</b> — new per-user default pool, explicit per-session opt-out · <code>PENDING</code></summary>
+<summary><b>feat(pool): three levels of shared plans, with the workspace-wide one moved to the admin panel</b> — new per-user default pool, explicit per-session opt-out · <code>36fdb0c</code></summary>
 
 The first cut had two levels and put the workspace-wide choice in My Page. Reworked to what the feature actually needs.
 
@@ -229,6 +231,8 @@ The first cut had two levels and put the workspace-wide choice in My Page. Rewor
 Verified against the running container: every step of the order, the opt-out, a session naming a deleted pool falling through instead of dropping off pooling, and `my-default` refusing a pool the caller has not joined.
 
 </details>
+
+- **docs: the READMEs spell out the three-level order** — both language versions · `e90c666`
 
 ---
 
@@ -245,7 +249,7 @@ Verified against the running container: every step of the order, the opt-out, a 
 <sub>release commit `1ead1ac`</sub>
 
 <details>
-<summary><b>fix(pool): the pool endpoints were never reachable</b> — plus two smaller pool fixes found while testing the running app · <code>PENDING</code></summary>
+<summary><b>fix(pool): the pool endpoints were never reachable</b> — plus two smaller pool fixes found while testing the running app · <code>6855c47</code></summary>
 
 Testing v1.17.1 against the real container instead of the mocked demo turned up three things.
 
@@ -616,12 +620,12 @@ Those sessions now get our own ledger instead: **this session**, **my last 5 hou
 </details>
 
 <details>
-<summary><b>docs: these update notes</b> — every commit since the original design · <code>2671942</code> <code>5011c73</code> <code>4a4e0b7</code></summary>
+<summary><b>docs: these update notes</b> — every commit since the original design · <code>2671942</code> <code>5011c73</code> <code>4a4e0b7</code> <code>b4c02c8</code></summary>
 
 - `2671942` added `CHANGELOG.md`/`CHANGELOG.ko.md` (from the DESIGN.md spec through v1.11.0) and linked them from both READMEs' contents + roadmap
 - `5011c73` expanded the grouped summaries into one entry per commit — all 236, each with its root cause, config keys and security reasoning
 - `4a4e0b7` collapsed the detail behind `<details>` toggles and grouped entries under `####` subheadings, so a folded row shows only its title and hash
-- CLAUDE.md rule 11 added: from now on every commit gets an entry in both files (format, placement and the verification command included)
+- `b4c02c8` CLAUDE.md rule 11 added: from now on every commit gets an entry in both files (format, placement and the verification command included)
 
 </details>
 
