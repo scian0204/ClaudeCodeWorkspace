@@ -67,6 +67,27 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
+## Unreleased
+
+<details>
+<summary><b>fix(models): ask the Claude CLI for the model list when the account was signed in through the browser</b> — v1.19.8's attempt was still broken · <code>HASH</code></summary>
+
+**What people saw.** The **Fetch now** button on the admin panel's model list still failed on workspaces whose Claude account was connected by signing in through the browser. v1.19.8 said this was fixed; it was not.
+
+**Why.** v1.19.8 read the account's access token out of the file the Claude CLI keeps it in and sent it as a header. That token is short-lived, and the CLI is the only thing that renews it — it does so when a chat turn runs, and nothing else touches it. On this workspace the stored token was eleven days past its expiry, because the shared account had not been used for a chat in that time, so the request went out and came back rejected. Any account quiet for a few hours hits the same wall, which makes the previous fix useless in practice.
+
+**What changed.** The server no longer copies that token. For a browser sign-in it starts the Claude CLI instead and reads the model menu the CLI offers for the account — the CLI authenticates and renews the credential on its own, which is the whole reason chat turns keep working. The session it starts is given a prompt that never produces anything and is stopped as soon as the list arrives, so no messages are used.
+
+**What the list looks like now.** For a signed-in account it is the same menu the Claude CLI itself shows — `Default (recommended)`, `Opus (1M context)`, `Sonnet`, `Haiku` — rather than raw version ids. Those names stay valid across model releases. Workspaces using a pasted token, an API key or a custom endpoint are untouched and still get the endpoint's own list.
+
+**New setting.** `modelsCliTimeoutMs` (default 60s) — the existing 10s limit is sized for a web request, and starting the CLI takes longer than that.
+
+**Also.** An agent pinned to a model id that a refresh removed from the list used to show an empty box in the agent editor, and saving the form quietly reset it to "inherit". It now keeps showing the id it is actually pinned to.
+
+</details>
+
+---
+
 ## v1.19.8 — 2026-08-18
 
 <sub>release commit `06b71bf`</sub>

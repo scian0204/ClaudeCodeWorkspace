@@ -422,6 +422,7 @@ export const ADMIN = {
     { key: 'modelsRefreshMs', group: 'claude', type: 'int', value: '86400000', default: '86400000', min: 60000, max: 2592000000, unit: 'ms', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'modelsMax', group: 'claude', type: 'int', value: '8', default: '8', min: 1, max: 100, restart: false, readonly: false, secret: false, overridden: false },
     { key: 'modelsFetchTimeoutMs', group: 'claude', type: 'int', value: '10000', default: '10000', min: 1000, max: 120000, unit: 'ms', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'modelsCliTimeoutMs', group: 'claude', type: 'int', value: '60000', default: '60000', min: 5000, max: 300000, unit: 'ms', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'forceMock', group: 'claude', type: 'bool', value: '1', default: '0', restart: false, readonly: false, secret: false, overridden: true },
     { key: 'maxConcurrentTurns', group: 'claude', type: 'int', value: '3', default: '3', min: 1, max: 100, restart: false, readonly: false, secret: false, overridden: false },
     { key: 'autoTitleEnabled', group: 'claude', type: 'bool', value: '1', default: '1', restart: false, readonly: false, secret: false, overridden: false },

@@ -44,6 +44,10 @@ export const DEFS: ConfigDef[] = [
   { key: 'modelsRefreshMs', group: 'claude', type: 'int', default: '86400000', min: 60000, max: 2592000000, unit: 'ms' },
   { key: 'modelsMax', group: 'claude', type: 'int', default: '8', min: 1, max: 100 },
   { key: 'modelsFetchTimeoutMs', group: 'claude', type: 'int', default: '10000', min: 1000, max: 120000, unit: 'ms' },
+  // Separate from the HTTP one on purpose: a browser sign-in has no token to send, so the list comes
+  // from starting the Claude CLI and reading its model menu — that costs a process start, which is
+  // several times an HTTP round trip and would trip the 10s budget above.
+  { key: 'modelsCliTimeoutMs', group: 'claude', type: 'int', default: '60000', min: 5000, max: 300000, unit: 'ms' },
   { key: 'forceMock', group: 'claude', type: 'bool', default: '0', env: 'MOCK_CLAUDE' },
   { key: 'maxConcurrentTurns', group: 'claude', type: 'int', default: '3', env: 'MAX_CONCURRENT_TURNS', min: 1, max: 100 },
   { key: 'turnMaxRetries', group: 'claude', type: 'int', default: '5', min: 0, max: 20 },

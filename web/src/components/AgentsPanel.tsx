@@ -124,6 +124,9 @@ function ScopeCard({ title, desc, rows, canEdit, models, scope, onChange, onErr,
               disabled={!!form.id} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             <select className="input !py-1.5 !text-xs" value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })}>
               <option value="">{t('agents.modelInherit')}</option>
+              {/* An agent pinned to an id the current registry no longer names still has to show it —
+                  otherwise the select renders blank and saving would silently reset it to inherit. */}
+              {form.model && !models[form.model] && <option value={form.model}>{form.model}</option>}
               {Object.entries(models).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
             </select>
           </div>
