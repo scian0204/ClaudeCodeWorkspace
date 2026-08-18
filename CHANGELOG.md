@@ -68,7 +68,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ## Unreleased
 
 <details>
-<summary><b>fix(chat): scrolling up during an answer no longer snaps back to the bottom</b> — the view follows new text only while you are already at the bottom · <code>HASH</code></summary>
+<summary><b>fix(chat): scrolling up during an answer no longer snaps back to the bottom</b> — the view follows new text only while you are already at the bottom · <code>f97497f</code></summary>
 
 **What people saw.** While an answer was still being written, scrolling up to re-read something earlier pulled the view straight back to the newest line, over and over, until the answer finished.
 
