@@ -71,7 +71,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ## Unreleased
 
 <details>
-<summary><b>fix(rooms): slash commands now actually run in a shared session</b> — two separate reasons they never reached the CLI · <code>HASH</code></summary>
+<summary><b>fix(rooms): slash commands now actually run in a shared session</b> — two separate reasons they never reached the CLI · <code>ec7bb45</code></summary>
 
 **What people saw.** In a shared session (방) `/clear` did nothing. The history folded in the view as if it had worked, but the conversation carried on with everything still in it. Every command was affected the same way — `/compact`, `/context`, skills, plugin commands — not just `/clear`.
 

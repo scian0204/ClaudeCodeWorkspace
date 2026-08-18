@@ -71,7 +71,7 @@
 ## Unreleased
 
 <details>
-<summary><b>fix(rooms): 공통 세션에서 슬래시 명령이 실제로 실행된다</b> — CLI까지 도달하지 못한 원인이 두 가지였다 · <code>HASH</code></summary>
+<summary><b>fix(rooms): 공통 세션에서 슬래시 명령이 실제로 실행된다</b> — CLI까지 도달하지 못한 원인이 두 가지였다 · <code>ec7bb45</code></summary>
 
 **증상.** 공통 세션(방)에서 `/clear`를 보내도 아무 일도 일어나지 않았다. 화면에서는 위쪽 대화가 접혀서 실행된 것처럼 보이지만, 실제 대화는 이전 내용을 전부 안고 계속됐다. `/clear`만이 아니라 `/compact`·`/context`·스킬·플러그인 명령까지 **모든 명령이 같은 이유로** 안 됐다.
 
