@@ -75,7 +75,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ## Unreleased
 
 <details>
-<summary><b>feat(chat): ↑ and ↓ in the message box bring back what you sent before</b> — shell-style history in chat, DMs and the guide panel · <code>PENDING</code></summary>
+<summary><b>feat(chat): ↑ and ↓ in the message box bring back what you sent before</b> — shell-style history in chat, DMs and the guide panel · <code>b77e380</code></summary>
 
 Retyping a long prompt to change one word meant scrolling up and copying it out of the transcript.
 

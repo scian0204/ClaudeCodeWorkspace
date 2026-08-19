@@ -75,7 +75,7 @@
 ## Unreleased
 
 <details>
-<summary><b>feat(chat): 입력창에서 ↑ · ↓ 로 이전에 보낸 메시지 다시 불러오기</b> — 채팅 · DM · 가이드 패널 모두 터미널 명령 기록과 같은 방식 · <code>PENDING</code></summary>
+<summary><b>feat(chat): 입력창에서 ↑ · ↓ 로 이전에 보낸 메시지 다시 불러오기</b> — 채팅 · DM · 가이드 패널 모두 터미널 명령 기록과 같은 방식 · <code>b77e380</code></summary>
 
 긴 프롬프트를 단어 하나만 고쳐 다시 보내려면 대화 내역을 위로 올려 복사해 와야 했다.
 
