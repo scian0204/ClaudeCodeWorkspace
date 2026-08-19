@@ -6,6 +6,7 @@ import { db, schema } from '../db/index.js';
 import { requireAuth } from '../auth/index.js';
 import { newId } from '../lib/ids.js';
 import { probeCommands, probeUsage, cwdFor } from '../claude/session-manager.js';
+import { runAsideTurn, interruptAside, clearAside, forgetAsides, asideBusy } from '../claude/aside.js';
 import { resolveAgents } from '../claude/team-agents.js';
 import { encodeSlug, rewriteCwd } from '../lib/session-import.js';
 import { DEFAULT_TITLE, retitleSession } from '../claude/auto-title.js';
@@ -133,6 +134,46 @@ export async function sessionRoutes(app: FastifyInstance) {
     if (!s) return reply.code(404).send({ error: 'not found' });
     if (!canViewChat(u, s)) return reply.code(403).send({ error: 'forbidden' });
     return { commands: await probeCommands(id, u.id) };
+  });
+
+  // ── side chat (the CLI's /btw): a read-only question about this chat, answered off a fork of its
+  // transcript so the main conversation is untouched. Fire-and-forget like a guide turn — the answer
+  // streams over the socket to the asker's own tabs only.
+  const asideSession = (req: any, reply: any, u: AuthUser) => {
+    if (!cfg.bool('asideEnabled')) { reply.code(404).send({ error: 'side chat is disabled' }); return null; }
+    const { id } = req.params as any;
+    const s = db.select().from(schema.chatSessions).where(eq(schema.chatSessions.id, id)).get();
+    if (!s) { reply.code(404).send({ error: 'not found' }); return null; }
+    if (!canViewChat(u, s)) { reply.code(403).send({ error: 'forbidden' }); return null; }
+    return s;
+  };
+
+  app.post('/api/sessions/:id/aside', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    const s = asideSession(req, reply, u); if (!s) return;
+    const text = typeof (req.body as any)?.text === 'string' ? (req.body as any).text.trim() : '';
+    if (!text) return reply.code(400).send({ error: 'empty' });
+    if (text.length > cfg.int('asideMaxInputChars')) return reply.code(400).send({ error: 'message too long' });
+    if (asideBusy(s.id, u.id)) return reply.code(409).send({ error: 'a side-chat turn is already running' });
+    void runAsideTurn({
+      chatSessionId: s.id, userId: u.id, text,
+      emit: (event, payload) => emitToUser(u.id, event, payload),
+    }).catch((e) => emitToUser(u.id, 'aside:error', { sessionId: s.id, aborted: false, error: String(e?.message || e) }));
+    return { ok: true };
+  });
+
+  app.post('/api/sessions/:id/aside/interrupt', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    const s = asideSession(req, reply, u); if (!s) return;
+    return { ok: interruptAside(s.id, u.id) };
+  });
+
+  // "start over": forget the fork so the next question branches off the conversation as it stands now
+  app.delete('/api/sessions/:id/aside', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    const s = asideSession(req, reply, u); if (!s) return;
+    clearAside(s.id, u.id);
+    return { ok: true };
   });
 
   // context-window usage + claude.ai plan rate limits (5h / weekly / per-model) for this session
@@ -317,6 +358,7 @@ export async function sessionRoutes(app: FastifyInstance) {
     if (s.kind !== 'private' || (s.ownerId !== u.id && u.role !== 'admin')) return reply.code(403).send({ error: 'forbidden' });
     db.delete(schema.messages).where(eq(schema.messages.sessionId, id)).run();
     db.delete(schema.chatSessions).where(eq(schema.chatSessions.id, id)).run();
+    forgetAsides(id); // no side thread may outlive the chat it branched from
     return { ok: true };
   });
 

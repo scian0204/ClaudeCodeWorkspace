@@ -50,13 +50,19 @@ the chat–split–editor switch. Bottom-right corner: this guide panel.
   you were typing.
 - **Attachments & @ file references** — drag, paste or attach files into the composer; \`@\` completes
   paths from the chat's project; \`/\` lists the slash commands and skills that chat has.
+- **Side chat** (\`/btw\`) — a small window floating over a conversation for a question you do not want
+  in it: it is answered from a copy of that conversation, so Claude sees everything said so far while
+  the transcript itself is untouched and the next real turn is unaffected. Read-only (it may read
+  files, never change them) and not saved anywhere — closing the workspace throws it away. Opened by
+  \`/btw\` (\`/btw <question>\` asks straight away) or the \`openAside\` action. Flag \`asideEnabled\`.
 - **Terminal-only slash commands** — the CLI draws /permissions, /plan, /sandbox, /export, /theme,
   /plugin, /skills, /tasks, /bashes, /workflows, /diff, /branch, /memory, /login, /logout, /status,
-  /privacy-settings, /help, /resume, /session, /ide and /tui as a terminal panel, and the server-side
+  /hooks, /privacy-settings, /help, /resume, /session, /ide and /tui as a terminal panel, and the server-side
   CLI has no terminal, so they used to answer "isn't available in this environment". Typed in the
   composer they now run this workspace's own equivalent instead — the permission-mode pill, the
   export dialog, My Page, the search palette, the shortcut sheet, the Tasks / Git / Files panels, the
-  editor view. Commands with nothing here to open (/hooks, /bug, /install-github-app) still say so.
+  editor view (/hooks and /privacy-settings open the admin settings, admins only). Commands with
+  nothing here to open (/bug, /install-github-app) still say so.
 - **Tasks panel** — what ran behind an answer: every subagent, background shell, workflow and MCP
   monitor of the turn, with live status, elapsed time, token and tool counts. **Live** follows one
   agent's own window; **split view** shows them all at once. Header button or Ctrl/Cmd+Shift+E.

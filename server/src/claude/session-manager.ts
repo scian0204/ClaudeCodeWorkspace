@@ -27,7 +27,7 @@ import { isUsageLimitError, resetAtFromError, eligible as autoResumeEligible, pa
 import { ingestTaskEvent, endRunningTasks } from './tasks.js';
 import { limitsSettled } from './usage-limits.js';
 
-type Emit = (event: string, payload: any) => void;
+export type Emit = (event: string, payload: any) => void;
 
 export type Block =
   // parentId/agentType are set when the block came from a subagent (Task tool) rather than the main

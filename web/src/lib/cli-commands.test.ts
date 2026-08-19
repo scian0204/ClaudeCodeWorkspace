@@ -30,13 +30,14 @@ function stub(over: Partial<CmdStore> = {}) {
   const s: CmdStore = {
     current: { projectId: 'p1', permissionMode: 'default' },
     theme: 'light', user: { role: 'member' },
-    sessionExportEnabled: true, searchEnabled: true, taskPanelEnabled: true, dockerReady: true,
+    sessionExportEnabled: true, searchEnabled: true, taskPanelEnabled: true, dockerReady: true, asideEnabled: true,
     setMode: async (m) => { calls.push(`setMode:${m}`); },
     setSandbox: async (on) => { calls.push(`setSandbox:${on}`); },
     setExportOpen: rec('setExportOpen'), setPanel: rec('setPanel'), setTasksOpen: rec('setTasksOpen'),
     setGitPanelOpen: rec('setGitPanelOpen'), setExplorerOpen: rec('setExplorerOpen'),
     setShortcutsOpen: rec('setShortcutsOpen'), setSearchOpen: rec('setSearchOpen'),
-    setSidebarOpen: rec('setSidebarOpen'), setViewMode: rec('setViewMode'),
+    setSidebarOpen: rec('setSidebarOpen'), setViewMode: rec('setViewMode'), setAsideOpen: rec('setAsideOpen'),
+    sendAside: async (v) => { calls.push(`sendAside:${v}`); },
     toggleTheme: () => { calls.push('toggleTheme'); },
     ...over,
   };
@@ -68,6 +69,11 @@ eq(run('/memory').calls, ['setExplorerOpen:true'], '/memory');
 eq(run('/logout').calls, ['setPanel:me'], '/logout');
 eq(run('/tui').calls, ['setViewMode:editor'], '/tui');
 
+// ── /btw opens the side chat, and asks straight away when a question came with it ──
+eq(run('/btw').calls, ['setAsideOpen:true'], 'bare /btw just opens the window');
+eq(run('/btw', '왜 느려?').calls, ['setAsideOpen:true', 'sendAside:왜 느려?'], '/btw <question> opens and asks');
+eq(run('/btw', 'x', { asideEnabled: false }), { handled: true, calls: [] }, 'side chat switched off');
+
 // ── /sandbox and /theme read their argument ──
 eq(run('/sandbox').calls, ['setSandbox:true'], 'bare /sandbox turns it on');
 eq(run('/sandbox', 'off').calls, ['setSandbox:false'], '/sandbox off');
@@ -82,6 +88,7 @@ eq(run('/ide', '', { dockerReady: false }), { handled: true, calls: [] }, 'no do
 eq(run('/export', '', { sessionExportEnabled: false }), { handled: true, calls: [] }, 'export switched off');
 eq(run('/privacy-settings').calls, [], 'a member gets no admin panel');
 eq(run('/privacy-settings', '', { user: { role: 'admin' } }).calls, ['setPanel:admin'], 'an admin does');
+eq(run('/hooks', '', { user: { role: 'admin' } }).calls, ['setPanel:admin'], '/hooks lands on the admin settings too');
 // search switched off: the sidebar is where the past chats are
 eq(run('/resume', '', { searchEnabled: false }).calls, ['setSidebarOpen:true'], '/resume without search');
 eq(run('/resume').calls, ['setSearchOpen:true'], '/resume with search');

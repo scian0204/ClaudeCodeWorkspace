@@ -21,6 +21,7 @@ import { md } from '../lib/md';
 import { useT } from '../lib/i18n';
 import { withKeys } from '../lib/shortcuts';
 import { WORKSPACE_CMDS, splitCommand } from '../lib/cli-commands';
+import { AsideChat } from './AsideChat';
 import {
   IconChevronDown, IconChevronRight, IconChevronUp, IconTheme, IconFolder, IconFile, IconTrash,
   IconGauge, IconEye, IconBook, IconArchive, IconSparkle, IconCopy, IconPencil, IconHelp,
@@ -77,12 +78,14 @@ export function Chat() {
   return (
     <div className="flex flex-col min-w-0 h-full">
       <Header />
-      <div className="flex-1 grid min-h-0" style={{ gridTemplateColumns: cols, gridTemplateRows: 'minmax(0, 1fr)' }}>
+      <div className="flex-1 grid min-h-0 relative" style={{ gridTemplateColumns: cols, gridTemplateRows: 'minmax(0, 1fr)' }}>
         {vm !== 'editor' && <ChatPane key={c.chatSessionId} />}
         {showSources
           ? <SourcesPanel topicId={c.wikiTopicId!} open={sourcesOpen} onToggle={() => setSourcesOpen((v) => !v)} width={panelW} onResize={resize} />
           : (!isWiki && vm !== 'chat' && <EditorPane />)}
         {showTasks && <TasksPanel width={tasksW} onResize={resizeTasks} />}
+        {/* the /btw window — floats over the conversation, answers without joining it */}
+        <AsideChat />
       </div>
       {isWiki && <CiteHighlighter />}
     </div>

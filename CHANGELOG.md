@@ -75,6 +75,25 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
+## Unreleased
+
+<details>
+<summary><b>feat(chat): side chat — the CLI's <code>/btw</code>, as a window over the conversation</b> — ask about the work in progress without putting the question into it · <code>77e30ad</code></summary>
+
+**What it is.** `/btw` in Claude Code means "ask a quick side question without interrupting the main conversation". It is a terminal panel, so it never worked here. Now there is one: type `/btw` and a small window opens over the chat, or `/btw <question>` to open it already asking. There is also a guide action (`openAside`) if you would rather ask the corner assistant to open it.
+
+**Why it is useful.** "What did that error mean?", "which file were we in?", "summarise where we are" — questions you want answered *about* the work, not recorded *in* it. Asked normally they become part of the conversation, and every later turn re-reads them.
+
+**How the answer knows everything without leaving a trace.** The server branches the chat's own Claude session: the whole conversation is read in, and every word written afterwards goes to a new session that we name up front. The chat's own transcript is not opened for writing at all, so it reads exactly the same afterwards and the next real turn carries nothing extra. Follow-up questions continue the same branch; **Start over** forgets it, and the next question branches off the conversation as it stands then.
+
+**What it will not do.** The window has no approval buttons, so it is answer-only: it may read files to check something, and editing, running commands, web access and subagents are refused rather than asked about. Nothing is stored anywhere — the side chat lives in the tab that asked and goes away with it.
+
+New settings: `asideEnabled` (turn the whole thing off), `asideMaxTurns`, `asideMaxInputChars`. New endpoints: `POST /api/sessions/:id/aside`, `POST /api/sessions/:id/aside/interrupt`, `DELETE /api/sessions/:id/aside` — each behind the same permission check as reading the chat, and the answer is streamed only to the tabs of the person who asked, even in a shared room.
+
+</details>
+
+---
+
 ## v1.20.2 — 2026-08-19
 
 <sub>release commit `9d08a7e`</sub>
