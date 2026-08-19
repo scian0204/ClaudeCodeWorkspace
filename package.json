@@ -1,6 +1,6 @@
 {
   "name": "claudecode-workspace",
-  "version": "1.19.12",
+  "version": "1.19.13",
   "private": true,
   "description": "Team workspace WebUI for a server-resident Claude Code — per-session isolation + shared rooms + code-server.",
   "workspaces": [
