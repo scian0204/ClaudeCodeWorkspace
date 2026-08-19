@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore, type Block, type GuideMsg } from '../lib/store';
 import { useT } from '../lib/i18n';
-import { useIsMobile, ClayDots, useStickToBottom } from '../lib/ui';
+import { useIsMobile, ClayDots, useInputHistory, useStickToBottom } from '../lib/ui';
 import { md } from '../lib/md';
 import { IconGuide, IconX, IconSend, IconSparkle, IconTerminal, IconRotateCcw, IconCheck } from '../lib/icons';
 
@@ -55,6 +55,16 @@ function GuidePanel() {
   const [text, setText] = useState('');
   const { ref: bodyRef, onScroll, follow } = useStickToBottom<HTMLDivElement>();
   const taRef = useRef<HTMLTextAreaElement>(null);
+  // ↑/↓ recall what I asked the guide before
+  const histKey = useInputHistory(messages.filter((m) => m.role === 'user').map((m) => m.content?.text || ''), text, (v) => {
+    setText(v);
+    // this box grows by hand (no useAutoGrow here) — refit it once the recalled text is in the DOM
+    requestAnimationFrame(() => {
+      const ta = taRef.current; if (!ta) return;
+      ta.style.height = 'auto';
+      ta.style.height = `${Math.min(ta.scrollHeight, 112)}px`;
+    });
+  });
 
   // stick to the bottom as the answer streams in — unless the reader scrolled up to re-read
   useEffect(() => { follow(); }, [messages, live, follow]);
@@ -122,7 +132,10 @@ function GuidePanel() {
               e.currentTarget.style.height = `${Math.min(e.currentTarget.scrollHeight, 112)}px`;
             }}
             // isComposing guard: without it a Korean IME re-sends the last syllable on Enter
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); } }}
+            onKeyDown={(e) => {
+              if (histKey(e)) return;
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); }
+            }}
           />
           {busy ? (
             <button type="button" className="toolbtn shrink-0 text-danger" title={t('guide.stop')} aria-label={t('guide.stop')}

@@ -72,6 +72,21 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
+## Unreleased
+
+<details>
+<summary><b>feat(chat): ↑ and ↓ in the message box bring back what you sent before</b> — shell-style history in chat, DMs and the guide panel · <code>PENDING</code></summary>
+
+Retyping a long prompt to change one word meant scrolling up and copying it out of the transcript.
+
+Now, with the caret on the first line of the box, `↑` fills the box with the previous message **you** sent in that thread; press it again to keep going further back. `↓` walks the other way, and past the newest entry it puts back whatever you were typing before you started. The box still walks lines normally when the caret sits inside a multi-line draft, and while the `/` command or `@` file menu is open the arrows still move the selection there.
+
+Works in the chat composer, in direct messages and in the corner guide panel. The list is the thread's own messages — nothing new is stored, so it is there after a reload and never shows anyone else's text.
+
+</details>
+
+---
+
 ## v1.19.13 — 2026-08-19
 
 <sub>release commit `a1e8fcd`</sub>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useStore, type DmChannel } from '../lib/store';
-import { Avatar, avatarUrl, MobileMenuButton, useGuideInset, useStickToBottom } from '../lib/ui';
+import { Avatar, avatarUrl, MobileMenuButton, useGuideInset, useInputHistory, useStickToBottom } from '../lib/ui';
 import { SearchButton } from './SearchPalette';
 import { useT } from '../lib/i18n';
 import { IconUsers } from '../lib/icons';
@@ -22,6 +22,8 @@ export function DmView() {
   const [text, setText] = useState('');
   const { ref: scrollRef, onScroll, follow, stick } = useStickToBottom<HTMLDivElement>();
   const [rowRef, guideInset] = useGuideInset(guideEnabled);
+  // ↑/↓ recall what I sent in this channel, shell style
+  const histKey = useInputHistory(channelMessages.filter((m) => m.userId === user?.id).map((m) => m.text), text, setText);
   const ch = channels.find((c) => c.id === activeChannelId);
 
   // Stick to the bottom as messages arrive, unless the reader scrolled up. Opening a channel always
@@ -109,7 +111,10 @@ export function DmView() {
             className="input flex-1 resize-none max-h-40" rows={1} value={text} autoFocus
             placeholder={t('dm.composerPlaceholder', { name: label })}
             onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); } }} />
+            onKeyDown={(e) => {
+              if (histKey(e)) return;
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); }
+            }} />
           <button className="btn-primary shrink-0 !py-2" onClick={send} disabled={!text.trim()}>{t('dm.send')}</button>
         </div>
         <div className="text-[11px] text-txt3 mt-1">{t('dm.composerHint')}</div>

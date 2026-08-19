@@ -55,6 +55,7 @@ export const SHORTCUT_GROUPS: { label: string; rows: ShortcutRow[] }[] = [
       { keys: ['Enter'], label: 'sc.send' },
       { keys: ['Shift+Enter'], label: 'sc.newline' },
       { keys: ['Esc'], label: 'sc.interrupt' },
+      { keys: ['↑', '↓'], label: 'sc.history' },
       { keys: ['/'], label: 'sc.slash' },
       { keys: ['@'], label: 'sc.at' },
     ],

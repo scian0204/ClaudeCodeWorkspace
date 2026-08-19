@@ -19,7 +19,8 @@ Ctrl/Cmd+Shift+H home · Ctrl/Cmd+Shift+L theme · Alt+up/down previous/next con
 Ctrl/Cmd+Shift+E tasks panel · Ctrl/Cmd+Shift+G git panel · Ctrl/Cmd+Shift+F file explorer ·
 Ctrl/Cmd+Shift+\\ cycle chat → split → editor · Shift+Esc jump to the composer ·
 Esc interrupt the running turn · ? cheat sheet · Shift+right-click the browser's own menu.
-Chat: Enter send · Shift+Enter newline · Esc interrupt · / slash commands · @ file refs.
+Chat: Enter send · Shift+Enter newline · Esc interrupt · up/down recall your sent messages ·
+/ slash commands · @ file refs.
 Search palette: up/down move · Enter open · Esc close.
 On macOS these print as the symbol forms (command K, shift command O, and so on).
 `.trim();
@@ -44,6 +45,9 @@ the chat–split–editor switch. Bottom-right corner: this guide panel.
   the last one workspace-wide). For an Edit/Write the prompt shows the actual diff.
 - **Diff cards** — every Edit/Write tool call renders as a real diff: a +N −N badge collapsed,
   coloured lines expanded.
+- **Message history in the composer** — up/down from the first/last line of the box fills it with a
+  message you sent earlier in that thread (chat, DM and this guide panel); down again returns to what
+  you were typing.
 - **Attachments & @ file references** — drag, paste or attach files into the composer; \`@\` completes
   paths from the chat's project; \`/\` lists the slash commands and skills that chat has.
 - **Tasks panel** — what ran behind an answer: every subagent, background shell, workflow and MCP

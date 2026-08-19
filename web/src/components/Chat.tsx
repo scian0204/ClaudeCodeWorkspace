@@ -5,7 +5,7 @@ import { useStore, type Block, type Msg, type Attachment, type Project } from '.
 import { ProjectCreateForm } from './ProjectCreateForm';
 import { api, type UploadState } from '../lib/api';
 import { UploadProgress } from './UploadProgress';
-import { Avatar, timeAgo, useIsMobile, MobileMenuButton, ClayDots, ClaySpark, ClayWait, useGuideInset, useAutoGrow, useStickToBottom, MdMirror } from '../lib/ui';
+import { Avatar, timeAgo, useIsMobile, MobileMenuButton, ClayDots, ClaySpark, ClayWait, useGuideInset, useAutoGrow, useInputHistory, useStickToBottom, MdMirror } from '../lib/ui';
 import { copyToClipboard } from '../lib/clipboard';
 import { MembersDialog } from './MembersDialog';
 import { ExportSessionModal } from './ExportSessionModal';
@@ -1275,6 +1275,13 @@ function Composer() {
   const [atClosed, setAtClosed] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
   useAutoGrow(taRef, text);
+  // ↑/↓ recall: this thread's own messages, oldest first (someone else's turn in a room is not
+  // "what I typed", so it stays out).
+  const histKey = useInputHistory(
+    store.messages.filter((m) => m.role === 'user' && (!m.authorId || m.authorId === store.user?.id)).map((m) => m.content?.text || ''),
+    text,
+    (v) => { setText(v); setSel(0); setAtClosed(false); setCaret(v.length); },
+  );
   const [toolbarRef, guideInset] = useGuideInset(store.guideEnabled);
   const t = useT();
   const roomId = c?.kind === 'room' ? (c.roomId ?? null) : null;
@@ -1492,6 +1499,7 @@ function Composer() {
                   setSel((p) => up ? (p - 1 + menuMatches.length) % menuMatches.length : (p + 1) % menuMatches.length);
                   return;
                 }
+                if (histKey(e)) return; // ↑/↓ from the edge line walks past messages (menu arrows win above)
                 if (e.key === 'Escape') {
                   if (showAt) { e.preventDefault(); setAtClosed(true); return; }
                   if (showSlash) { e.preventDefault(); setText(''); return; }

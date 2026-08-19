@@ -96,6 +96,49 @@ export function useAutoGrow(ref: React.RefObject<HTMLTextAreaElement | null>, va
   }, [ref, value]);
 }
 
+// ↑/↓ in a composer walk your own past messages, the way a shell walks its command history. The
+// list is derived from the thread the caller already renders (oldest → newest), so nothing extra is
+// stored or persisted. Returns a keydown handler that reports whether it took the key.
+const HISTORY_MAX = 200;
+export function useInputHistory(history: string[], text: string, setText: (v: string) => void) {
+  const idx = React.useRef<number | null>(null); // 0 = newest entry, null = the live draft
+  const draft = React.useRef('');                // what was in the box before we started walking
+  const filled = React.useRef<string | null>(null); // last value we wrote — anything else means the user typed
+
+  return (e: React.KeyboardEvent<HTMLTextAreaElement>): boolean => {
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return false;
+    if (e.nativeEvent.isComposing || e.shiftKey || e.altKey || e.metaKey || e.ctrlKey) return false;
+    const ta = e.currentTarget;
+    const start = ta.selectionStart ?? 0, end = ta.selectionEnd ?? 0;
+    if (start !== end) return false; // a selection is being extended — leave the arrows alone
+    const up = e.key === 'ArrowUp';
+    // only from the edge line: inside a multi-line draft the arrows still move the caret
+    if (up ? text.slice(0, start).includes('\n') : text.slice(end).includes('\n')) return false;
+    if (text !== filled.current) idx.current = null; // edited since we filled it in → a fresh draft again
+    // newest last, consecutive repeats collapsed, capped so a long thread can't be walked forever
+    const h = history.filter((v, i, a) => v && v !== a[i - 1]).slice(-HISTORY_MAX);
+    if (!h.length) return false;
+
+    let next: number | null;
+    if (up) {
+      next = idx.current === null ? 0 : idx.current + 1;
+      if (next >= h.length) { e.preventDefault(); return true; } // oldest entry — stay on it
+      if (idx.current === null) draft.current = text;
+    } else {
+      if (idx.current === null) return false; // not walking history → ↓ is just a caret key
+      next = idx.current === 0 ? null : idx.current - 1;
+    }
+    e.preventDefault();
+    idx.current = next;
+    const v = next === null ? draft.current : h[h.length - 1 - next];
+    filled.current = v;
+    setText(v);
+    // after React has painted the recalled text, park the caret at its end
+    requestAnimationFrame(() => { ta.setSelectionRange(v.length, v.length); });
+    return true;
+  };
+}
+
 // Live-markdown mirror for a textarea: same box, same metrics, painted behind transparent text so
 // the textarea keeps the caret, the selection, IME composition and every menu wired to it. Styling
 // is width-preserving by construction (see mdHighlight / the .mdh-* rules).
