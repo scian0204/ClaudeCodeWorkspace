@@ -907,13 +907,16 @@ export function BlockList({ blocks, sources = [], nested = false }: { blocks: Bl
   const rows = useMemo(() => {
     const out: { key: string; text?: Extract<Block, { type: 'text' }>; run?: Extract<Block, { type: 'tool_use' }>[] }[] = [];
     let run: Extract<Block, { type: 'tool_use' }>[] = [];
-    const flush = (at: number) => { if (run.length) { out.push({ key: `r${at}`, run }); run = []; } };
+    // Key off the run's FIRST tool id, not the block index: while a turn streams the trailing run
+    // keeps growing, and an index-based key changed on every new tool — remounting the row and
+    // throwing away the open/closed state the user (or the fold) had just settled on.
+    const flush = () => { if (run.length) { out.push({ key: `r${run[0].id}`, run }); run = []; } };
     blocks.forEach((b, i) => {
       if (b.type === 'tool_use') { run.push(b); return; }
-      flush(i);
+      flush();
       out.push({ key: `t${i}`, text: b });
     });
-    flush(blocks.length);
+    flush();
     return out;
   }, [blocks]);
   return (
@@ -928,15 +931,17 @@ export function BlockList({ blocks, sources = [], nested = false }: { blocks: Bl
   );
 }
 
-// A collapsed run of consecutive tool calls. Stays open while anything in it is still running or
-// failed — a fold that hides the command you're waiting on (or the one that broke) is worse than
-// the noise it saves.
+// A collapsed run of consecutive tool calls. Stays shut while the turn streams — the header already
+// says how many ran, which tools, and whether one is still going — and only springs open on its own
+// when something failed, because a fold that hides the call that broke is worse than the noise it
+// saves. It used to open whenever any call was unfinished, which made the row flap open and shut
+// once per tool for the whole turn.
 function ToolRun({ run }: { run: Extract<Block, { type: 'tool_use' }>[] }) {
   const t = useT();
   const [manual, setManual] = useState<boolean | null>(null);
   const busy = run.some((b) => b.output == null);
   const failed = run.some((b) => b.isError);
-  const open = manual ?? (busy || failed);
+  const open = manual ?? failed;
   // "Bash ×3, Read ×2" — what the run actually did, without expanding it
   const summary = useMemo(() => {
     const n = new Map<string, number>();
