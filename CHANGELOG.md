@@ -76,6 +76,12 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
+## Unreleased
+
+- **`/hooks` goes back to being unmapped** — v1.21.0 pointed it at the admin settings, which was a mistake: the workspace has no hooks editor, so it dropped people on a page that could not do what they asked. It answers with the CLI's own "not available here" again, like the other commands with no counterpart (`/bug`, `/install-github-app`). `/privacy-settings` still opens the admin settings.
+
+---
+
 ## v1.21.0 — 2026-08-19
 
 <sub>release commit `86d1150`</sub>

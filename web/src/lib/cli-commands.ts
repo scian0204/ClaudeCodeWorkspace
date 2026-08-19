@@ -11,9 +11,9 @@
 // answers them itself: the text never reaches the CLI, the matching panel or control opens instead.
 // The same table feeds the "/" menu, so the commands are listed again rather than just failing.
 //
-// Deliberately partial. A command with no real counterpart here (/bug, /install-github-app …) is left
-// out, so the CLI's own "not available" answer still stands — better than a button that pretends.
-// Add an entry the day the workspace grows the thing it would open.
+// Deliberately partial. A command with no real counterpart here (/hooks, /bug, /install-github-app …)
+// is left out, so the CLI's own "not available" answer still stands — better than a button that
+// pretends. Add an entry the day the workspace grows the thing it would open.
 //
 // Pure data + one lookup, so it can be checked without React or the store (cli-commands.test.ts).
 
@@ -102,8 +102,10 @@ export const WORKSPACE_CMDS: WorkspaceCmd[] = [
   },
   { cmds: ['/login', '/logout', '/status'], label: 'cliCmd.account', run: (s) => { s.setPanel('me'); return true; } },
   {
-    // Both edit workspace-wide settings in the CLI; here that is the admin panel, so they land there.
-    cmds: ['/hooks', '/privacy-settings'], label: 'cliCmd.adminSettings',
+    // The privacy switches the CLI panel edits live in the admin settings here. /hooks is NOT in this
+    // list on purpose: the workspace has no hooks editor, so pointing it at the settings page would
+    // land people somewhere that cannot do what they asked for.
+    cmds: ['/privacy-settings'], label: 'cliCmd.adminSettings',
     run: (s) => { if (s.user?.role === 'admin') s.setPanel('admin'); return true; },
   },
   { cmds: ['/help'], label: 'cliCmd.help', run: (s) => { s.setShortcutsOpen(true); return true; } },

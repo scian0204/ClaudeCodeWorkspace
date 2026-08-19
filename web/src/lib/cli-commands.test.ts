@@ -88,7 +88,7 @@ eq(run('/ide', '', { dockerReady: false }), { handled: true, calls: [] }, 'no do
 eq(run('/export', '', { sessionExportEnabled: false }), { handled: true, calls: [] }, 'export switched off');
 eq(run('/privacy-settings').calls, [], 'a member gets no admin panel');
 eq(run('/privacy-settings', '', { user: { role: 'admin' } }).calls, ['setPanel:admin'], 'an admin does');
-eq(run('/hooks', '', { user: { role: 'admin' } }).calls, ['setPanel:admin'], '/hooks lands on the admin settings too');
+eq(findWorkspaceCmd('/hooks'), undefined, 'no hooks editor here — /hooks keeps the CLI answer');
 // search switched off: the sidebar is where the past chats are
 eq(run('/resume', '', { searchEnabled: false }).calls, ['setSidebarOpen:true'], '/resume without search');
 eq(run('/resume').calls, ['setSearchOpen:true'], '/resume with search');

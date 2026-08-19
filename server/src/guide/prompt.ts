@@ -57,12 +57,12 @@ the chat–split–editor switch. Bottom-right corner: this guide panel.
   \`/btw\` (\`/btw <question>\` asks straight away) or the \`openAside\` action. Flag \`asideEnabled\`.
 - **Terminal-only slash commands** — the CLI draws /permissions, /plan, /sandbox, /export, /theme,
   /plugin, /skills, /tasks, /bashes, /workflows, /diff, /branch, /memory, /login, /logout, /status,
-  /hooks, /privacy-settings, /help, /resume, /session, /ide and /tui as a terminal panel, and the server-side
+  /privacy-settings, /help, /resume, /session, /ide and /tui as a terminal panel, and the server-side
   CLI has no terminal, so they used to answer "isn't available in this environment". Typed in the
   composer they now run this workspace's own equivalent instead — the permission-mode pill, the
   export dialog, My Page, the search palette, the shortcut sheet, the Tasks / Git / Files panels, the
-  editor view (/hooks and /privacy-settings open the admin settings, admins only). Commands with
-  nothing here to open (/bug, /install-github-app) still say so.
+  editor view (/privacy-settings opens the admin settings, admins only). Commands with nothing here
+  to open (/hooks, /bug, /install-github-app) still say so.
 - **Tasks panel** — what ran behind an answer: every subagent, background shell, workflow and MCP
   monitor of the turn, with live status, elapsed time, token and tool counts. **Live** follows one
   agent's own window; **split view** shows them all at once. Header button or Ctrl/Cmd+Shift+E.
