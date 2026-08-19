@@ -74,6 +74,41 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
+## Unreleased
+
+<details>
+<summary><b>feat(chat): the CLI's terminal-only slash commands now do something here</b> — /permissions, /export, /login, /help and the rest open the workspace's own screen instead of refusing · <code>5c41b20</code></summary>
+
+**Symptom.** Typing `/permissions` in a chat answered `/permissions isn't available in this environment.` and nothing happened. Same for `/export`, `/login`, `/logout`, `/status`, `/resume`, `/help`, `/theme`, `/plan`, `/sandbox`, `/diff`, `/branch`, `/tasks`, `/bashes`, `/workflows`, `/memory`, `/plugin`, `/skills`, `/privacy-settings`, `/ide`. They were also missing from the `/` menu, so nothing hinted that they existed.
+
+**Cause.** Claude Code draws those commands as a panel inside a terminal window. This workspace runs the CLI through the Agent SDK, which has no terminal, so the CLI swaps them for that one sentence before they run. No option or environment variable turns them back on — the panel is terminal drawing code, and there is no terminal.
+
+**Fix.** Every one of them is something this workspace already does on a screen of its own, so the message box answers them itself and the text never reaches the CLI:
+
+| typed | what happens now |
+|---|---|
+| `/permissions <mode>` · `/plan` | switches the permission pill (`default`, `acceptEdits`, `bypassPermissions`, `plan`) |
+| `/export` | opens the transcript download dialog |
+| `/login` · `/logout` · `/status` | opens My Page (sign-in, token, usage) |
+| `/resume` · `/session` | opens search to find a past conversation |
+| `/help` | opens the keyboard-shortcut sheet |
+| `/theme [light\|dark]` | switches the colour theme |
+| `/sandbox [on\|off]` | turns this chat's build container on or off |
+| `/tasks` · `/bashes` · `/workflows` | opens the Tasks panel |
+| `/diff` · `/branch` | opens the Git panel |
+| `/memory` | opens the project file explorer (where CLAUDE.md lives) |
+| `/plugin` · `/plugins` · `/skills` | opens the plugins panel |
+| `/privacy-settings` | opens the admin settings (admins only) |
+| `/ide` · `/terminal-setup` · `/tui` | opens the editor view |
+
+They are listed in the `/` menu again, and the list is added after the CLI's real commands, so a genuine command of the same name still wins. `/permissions` with no mode after it fills the box and shows the four modes instead of picking one. A command whose screen is not there — no project, the feature switched off, a member asking for an admin page — is dropped rather than opening an empty panel. Commands with nothing here to open (`/hooks`, `/bug`, `/install-github-app`) are left out on purpose, so the CLI's own answer still stands.
+
+Also: the export dialog moved into the shared app state, so the corner guide can open it too (new `openExport` action), and a long argument hint now shortens in the menu instead of pushing the badge off a phone-width row.
+
+</details>
+
+---
+
 ## v1.20.1 — 2026-08-19
 
 <sub>release commit `66baeba`</sub>

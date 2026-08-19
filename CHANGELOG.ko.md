@@ -74,6 +74,41 @@
 
 ---
 
+## Unreleased
+
+<details>
+<summary><b>feat(chat): 터미널 화면으로만 되던 CLI 슬래시 명령이 워크스페이스에서도 동작</b> — /permissions·/export·/login·/help 등이 거절 대신 해당 화면을 엶 · <code>5c41b20</code></summary>
+
+**증상.** 채팅에서 `/permissions`를 입력하면 `/permissions isn't available in this environment.` 만 돌아오고 아무 일도 일어나지 않았다. `/export`·`/login`·`/logout`·`/status`·`/resume`·`/help`·`/theme`·`/plan`·`/sandbox`·`/diff`·`/branch`·`/tasks`·`/bashes`·`/workflows`·`/memory`·`/plugin`·`/skills`·`/privacy-settings`·`/ide` 도 마찬가지였다. `/` 메뉴에도 안 떠서 그런 명령이 있다는 것조차 알 수 없었다.
+
+**원인.** Claude Code는 이 명령들을 터미널 창 안에 패널로 그린다. 이 워크스페이스는 CLI를 Agent SDK로 돌리는데 거기엔 터미널이 없어서, CLI가 실행 전에 위 문장 한 줄로 바꿔 버린다. 다시 켜는 옵션이나 환경변수는 없다 — 패널 자체가 터미널에 그림을 그리는 코드인데 그릴 터미널이 없기 때문이다.
+
+**조치.** 하나같이 이 워크스페이스에 이미 있는 기능이라, 입력창이 직접 처리하고 CLI로는 아예 보내지 않는다:
+
+| 입력 | 이제 하는 일 |
+|---|---|
+| `/permissions <모드>` · `/plan` | 권한 모드 pill 전환 (`default`·`acceptEdits`·`bypassPermissions`·`plan`) |
+| `/export` | 대화 내보내기 창 열기 |
+| `/login` · `/logout` · `/status` | 내 페이지 열기 (로그인·토큰·사용량) |
+| `/resume` · `/session` | 지난 대화를 찾는 검색 열기 |
+| `/help` | 단축키 도움말 열기 |
+| `/theme [light\|dark]` | 테마 전환 |
+| `/sandbox [on\|off]` | 이 대화의 빌드 컨테이너 켜기/끄기 |
+| `/tasks` · `/bashes` · `/workflows` | 작업 패널 열기 |
+| `/diff` · `/branch` | Git 패널 열기 |
+| `/memory` | 프로젝트 파일 탐색기 열기 (CLAUDE.md가 있는 곳) |
+| `/plugin` · `/plugins` · `/skills` | 플러그인 패널 열기 |
+| `/privacy-settings` | 관리자 설정 열기 (관리자만) |
+| `/ide` · `/terminal-setup` · `/tui` | 에디터 뷰 열기 |
+
+`/` 메뉴에도 다시 나온다. 목록은 CLI의 진짜 명령 뒤에 붙이므로, 같은 이름의 진짜 명령이 있으면 그쪽이 이긴다. 모드 없이 `/permissions` 만 치면 임의로 고르지 않고 입력창에 명령을 채운 뒤 네 가지 모드를 보여 준다. 열 화면이 없는 경우(프로젝트 미지정, 해당 기능 꺼짐, 일반 멤버가 관리자 화면 요청)는 빈 패널을 여는 대신 그냥 무시한다. 여기에 대응 화면이 없는 명령(`/hooks`·`/bug`·`/install-github-app`)은 일부러 넣지 않아, CLI의 원래 답이 그대로 나온다.
+
+그 밖에: 내보내기 창 상태를 앱 공용 상태로 옮겨 구석 가이드도 열 수 있게 했고(새 `openExport` 액션), 인자 힌트가 길 때 메뉴에서 줄여 표시해 좁은 화면에서 배지가 밀려나지 않게 했다.
+
+</details>
+
+---
+
 ## v1.20.1 — 2026-08-19
 
 <sub>릴리스 커밋 `66baeba`</sub>
