@@ -118,6 +118,14 @@ interface State {
   guideLive: Live | null;        // in-flight answer (streamed blocks)
   guideBusy: boolean;
   guideUnread: boolean;          // an answer landed while the panel was closed → dot on the button
+  // ── side chat (the CLI's /btw): a floating window over the open chat ──
+  // Not persisted anywhere, on purpose: the whole promise is that it never joins the conversation,
+  // so it lives in this tab and dies with it. The server keeps only the forked CLI session id.
+  asideEnabled: boolean;         // admin feature flag (from /api/config) — off hides it entirely
+  asideOpen: boolean;
+  asideMessages: GuideMsg[];
+  asideLive: Live | null;
+  asideBusy: boolean;
   searchOpen: boolean;           // unified-search palette (Ctrl/Cmd+K)
   shortcutsOpen: boolean;        // keyboard-shortcut cheat sheet (?)
   highlightMsgId: string | null; // message a search hit jumped to (scroll target + ring)
@@ -171,6 +179,10 @@ interface State {
   sendGuide: (text: string) => Promise<void>;
   clearGuideThread: () => Promise<void>;
   interruptGuide: () => Promise<void>;
+  setAsideOpen: (open: boolean) => void;
+  sendAside: (text: string) => Promise<void>;
+  clearAsideThread: () => Promise<void>;
+  interruptAside: () => Promise<void>;
   setHighlightMsgId: (id: string | null) => void;
   openHit: (hit: SearchHit) => Promise<void>;
   sendDm: (text: string) => void;
@@ -250,6 +262,7 @@ export const useStore = create<State>((set, get) => ({
   control: { canApprove: true, canInterrupt: true, canSetMode: true, isOwner: true, delegable: [] },
   presence: [], congested: false, sessionImportEnabled: true, sessionExportEnabled: true, teamAgentsEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenuEnabled: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true, dockerReady: true, dockerReason: 'ok',
   guideEnabled: true, guideWriteEnabled: true, guideOpen: false, guideLoaded: false, guideMessages: [], guideLive: null, guideBusy: false, guideUnread: false,
+  asideEnabled: true, asideOpen: false, asideMessages: [], asideLive: null, asideBusy: false,
   resumes: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, toolFoldMin: 3, tokenPoolEnabled: false, sessionSandboxEnabled: false, pools: [], poolAllUsers: false, poolOptedOut: false, myPoolId: null, poolCanCreate: false, poolHasCredential: false, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, gitPanelOpen: false, explorerOpen: false, exportOpen: false, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
   channels: [], activeChannelId: null, channelMessages: [], titling: [],
   commands: [],
@@ -275,7 +288,8 @@ export const useStore = create<State>((set, get) => ({
   logout: async () => {
     await api.post('/api/auth/logout');
     set({ user: null, current: null, messages: [], sessions: [], rooms: [], wikiTopics: [], reviewRepos: [], reviewSessions: [], requests: [], pendingRequestCount: 0, channels: [], activeChannelId: null, channelMessages: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null,
-      guideOpen: false, guideLoaded: false, guideMessages: [], guideLive: null, guideBusy: false, guideUnread: false });
+      guideOpen: false, guideLoaded: false, guideMessages: [], guideLive: null, guideBusy: false, guideUnread: false,
+      asideOpen: false, asideMessages: [], asideLive: null, asideBusy: false });
   },
 
   toggleTheme: () => {
@@ -313,6 +327,7 @@ export const useStore = create<State>((set, get) => ({
       reviewWebhookEnabled: cf.reviewWebhookEnabled !== false,
       guideEnabled: cf.guideEnabled !== false,
       guideWriteEnabled: cf.guideWriteEnabled !== false,
+      asideEnabled: cf.asideEnabled !== false,
       taskPanelEnabled: cf.taskPanelEnabled !== false,
       channels: dmc.channels || [],
       processPollMs: cf.processPollMs || 5000,
@@ -507,6 +522,31 @@ export const useStore = create<State>((set, get) => ({
     await api.del('/api/guide/messages').catch(() => {});
   },
   interruptGuide: async () => { await api.post('/api/guide/interrupt').catch(() => {}); },
+
+  // ── side chat ──
+  // The question is echoed locally rather than waiting for the server, because the server never
+  // stores it: there is nothing to load back and nothing to reconcile with.
+  setAsideOpen: (open) => set({ asideOpen: open, ...(open ? { sidebarOpen: false } : {}) }),
+  sendAside: async (text) => {
+    const st = get();
+    const c = st.current; if (!c) return;
+    const t2 = text.trim(); if (!t2 || st.asideBusy) return;
+    set({
+      asideBusy: true,
+      asideMessages: [...st.asideMessages, { id: crypto.randomUUID(), role: 'user', content: { text: t2 }, createdAt: Date.now() }],
+    });
+    try { await api.post(`/api/sessions/${c.chatSessionId}/aside`, { text: t2 }); }
+    catch (e: any) { set({ asideBusy: false, error: e.message }); }
+  },
+  clearAsideThread: async () => {
+    const c = get().current;
+    set({ asideMessages: [], asideLive: null, asideBusy: false });
+    if (c) await api.del(`/api/sessions/${c.chatSessionId}/aside`).catch(() => {});
+  },
+  interruptAside: async () => {
+    const c = get().current; if (!c) return;
+    await api.post(`/api/sessions/${c.chatSessionId}/aside/interrupt`).catch(() => {});
+  },
 
   setSearchOpen: (open) => set({ searchOpen: open, sidebarOpen: false }),
   setShortcutsOpen: (open) => set({ shortcutsOpen: open, sidebarOpen: false }),
@@ -837,6 +877,7 @@ async function applyGuideAction(get: () => State, action: string, value: string 
     case 'openGit': if (projectPanels(s)) s.setGitPanelOpen(v !== 'off'); break;
     case 'openFiles': if (projectPanels(s)) s.setExplorerOpen(v !== 'off'); break;
     case 'openExport': if (s.sessionExportEnabled && s.current) s.setExportOpen(true); break;
+    case 'openAside': if (s.asideEnabled && s.current) s.setAsideOpen(v !== 'off'); break;
     case 'setView':
       if ((v === 'chat' || v === 'split' || v === 'editor') && projectPanels(s)
         && (v === 'chat' || (s.dockerReady && !window.matchMedia('(max-width: 767px)').matches))) s.setViewMode(v);
@@ -872,6 +913,7 @@ async function join(set: any, get: () => State, cur: Current, messages: Msg[]) {
     queue: { running: null, waiting: [] }, pending: [], presence: [],
     viewMode: 'chat', editorUrl: null, gitPanelOpen: false, explorerOpen: false, exportOpen: false, // a switched thread must not inherit a panel aimed at the previous project
     commands: [], sidebarOpen: false, // opening a thread closes the mobile drawer
+    asideOpen: false, asideMessages: [], asideLive: null, asideBusy: false, // the side chat belongs to the thread it was asked in
     highlightMsgId: null, // a plain thread switch drops any search-hit highlight
     activeChannelId: null, channelMessages: [], // opening a Claude thread hides any open DM view
   });
@@ -1160,6 +1202,30 @@ function wire(set: any, get: () => State) {
   });
   sock.on('guide:cleared', () => set({ guideMessages: [], guideLive: null, guideBusy: false }));
   sock.on('guide:action', (p: any) => { void applyGuideAction(get, p?.action, p?.value ?? null); });
+
+  // ── side chat — same shape as the guide's stream, scoped to the open thread ──
+  sock.on('aside:start', (p: any) => { if (isCur(p.sessionId)) set({ asideLive: emptyLive(), asideBusy: true, asideOpen: true }); });
+  sock.on('aside:delta', (p: any) => {
+    if (!isCur(p.sessionId)) return;
+    const live = get().asideLive || emptyLive();
+    const blocks = [...live.blocks];
+    const last = blocks[blocks.length - 1];
+    if (last?.type === 'text') blocks[blocks.length - 1] = { ...last, text: last.text + p.text };
+    else blocks.push({ type: 'text', text: p.text });
+    set({ asideLive: { ...live, blocks } });
+  });
+  sock.on('aside:end', (p: any) => {
+    if (!isCur(p.sessionId)) return;
+    const blocks: Block[] = p.blocks?.length ? p.blocks : (get().asideLive?.blocks || []);
+    set({
+      asideMessages: [...get().asideMessages, { id: crypto.randomUUID(), role: 'assistant', content: { blocks, interrupted: !!p.interrupted }, createdAt: Date.now() }],
+      asideLive: null, asideBusy: false,
+    });
+  });
+  sock.on('aside:error', (p: any) => {
+    if (!isCur(p.sessionId)) return;
+    set({ asideLive: null, asideBusy: false, error: p.aborted ? null : t('common.errorPrefix', { msg: p.error }) });
+  });
 
   sock.on('queue:update', (p: any) => { if (isCur(p.sessionId)) set({ queue: { running: p.running, waiting: p.waiting } }); });
   sock.on('presence:update', (p: any) => { if (isCur(p.sessionId)) set({ presence: p.users }); });

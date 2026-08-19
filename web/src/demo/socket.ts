@@ -245,6 +245,12 @@ function guideTool(input: any, output: string, blocks: any[], at: number): numbe
 function guidePlan(text: string): { steps: { input: any; output: string }[]; reply: string } {
   const q = text.toLowerCase();
   const url = /https?:\/\/\S+/.exec(text)?.[0];
+  if (/(btw|사이드 ?채팅|side chat|곁다리|따로 물어)/.test(q)) {
+    return {
+      steps: [{ input: { action: 'openAside' }, output: 'ok — dispatched openAside' }],
+      reply: '사이드 채팅을 열었습니다. 지금 대화를 그대로 이어받아 답하지만, 여기서 오간 내용은 대화 기록에 남지 않습니다 — 읽기 전용이라 파일을 고치거나 명령을 실행하지도 않아요.\n\n입력창에 `/btw 질문` 처럼 바로 물어봐도 됩니다.',
+    };
+  }
   if (url && /(skill|plugin|스킬|플러그인)/.test(q)) {
     const name = url.replace(/\.git$/, '').split('/').pop() || 'plugin';
     return {
@@ -330,6 +336,23 @@ export function runDemoGuide(text: string) {
 export function clearDemoGuide() {
   db.guideMessages.length = 0;
   deliver('guide:cleared', {});
+}
+
+// ── side chat (/btw) ────────────────────────────────────────────────────────
+// The real one forks the chat's CLI session and answers from it. Here the answer is canned, but the
+// event sequence is the server's (aside:start → deltas → aside:end) so the panel behaves the same.
+const ASIDE_REPLY = (q: string) => `\`${q}\` — 사이드 채팅이라 이 답은 대화 기록에 남지 않습니다.
+
+`
+  + '실제 워크스페이스에서는 지금 열려 있는 대화를 그대로 복사한 상태에서 답하므로, 지금까지 오간 내용을 모두 알고 있습니다. '
+  + '대신 읽기 전용이라 파일을 고치거나 명령을 실행하지는 않습니다 — 작업이 필요하면 메인 대화에서 요청하세요.';
+
+export function runDemoAside(sessionId: string, text: string) {
+  const reply = ASIDE_REPLY(text);
+  let at = 300;
+  later(at, () => deliver('aside:start', { sessionId }));
+  chunks(reply, 5).forEach((c) => later(at += 150, () => deliver('aside:delta', { sessionId, text: c })));
+  later(at + 300, () => deliver('aside:end', { sessionId, blocks: [{ type: 'text', text: reply }] }));
 }
 
 const sock = {

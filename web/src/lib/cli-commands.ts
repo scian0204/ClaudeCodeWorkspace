@@ -25,6 +25,7 @@ export interface CmdStore {
   user: { role: string } | null;
   sessionExportEnabled: boolean;
   searchEnabled: boolean;
+  asideEnabled: boolean;
   taskPanelEnabled: boolean;
   dockerReady: boolean;
   setMode: (mode: string) => Promise<void>;
@@ -38,6 +39,8 @@ export interface CmdStore {
   setSearchOpen: (open: boolean) => void;
   setSidebarOpen: (open: boolean) => void;
   setViewMode: (m: 'chat' | 'split' | 'editor') => void;
+  setAsideOpen: (open: boolean) => void;
+  sendAside: (text: string) => Promise<void>;
   toggleTheme: () => void;
 }
 
@@ -56,6 +59,17 @@ export const PERM_MODES = ['default', 'acceptEdits', 'bypassPermissions', 'plan'
 // A target that is not on screen (no project, feature switched off) drops the command instead of
 // leaving a panel open over nothing — the same rule applyGuideAction follows in store.ts.
 export const WORKSPACE_CMDS: WorkspaceCmd[] = [
+  {
+    // The one command here that is not a redirect: the workspace grew its own side-chat window for
+    // it (AsideChat.tsx). With a question after it, the window opens already asking.
+    cmds: ['/btw'], label: 'cliCmd.aside', hint: '[question]',
+    run: (s, arg) => {
+      if (!s.asideEnabled || !s.current) return true;
+      s.setAsideOpen(true);
+      if (arg) void s.sendAside(arg);
+      return true;
+    },
+  },
   {
     cmds: ['/permissions'], label: 'cliCmd.permissions', hint: PERM_MODES.join('|'),
     run: (s, arg) => { if (!PERM_MODES.includes(arg)) return false; void s.setMode(arg); return true; },
@@ -88,7 +102,8 @@ export const WORKSPACE_CMDS: WorkspaceCmd[] = [
   },
   { cmds: ['/login', '/logout', '/status'], label: 'cliCmd.account', run: (s) => { s.setPanel('me'); return true; } },
   {
-    cmds: ['/privacy-settings'], label: 'cliCmd.privacy',
+    // Both edit workspace-wide settings in the CLI; here that is the admin panel, so they land there.
+    cmds: ['/hooks', '/privacy-settings'], label: 'cliCmd.adminSettings',
     run: (s) => { if (s.user?.role === 'admin') s.setPanel('admin'); return true; },
   },
   { cmds: ['/help'], label: 'cliCmd.help', run: (s) => { s.setShortcutsOpen(true); return true; } },
