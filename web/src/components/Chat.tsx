@@ -1273,6 +1273,9 @@ function Composer() {
   const [caret, setCaret] = useState(0);
   const [refs, setRefs] = useState<Ref[] | null>(null);
   const [atClosed, setAtClosed] = useState(false);
+  // the box was filled by ↑/↓, not typed — the / and @ menus open on typing, and a recalled command
+  // ("/review …") would otherwise pop the command menu and swallow the next ↑
+  const [recalled, setRecalled] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
   useAutoGrow(taRef, text);
   // ↑/↓ recall: this thread's own messages, oldest first (someone else's turn in a room is not
@@ -1280,7 +1283,7 @@ function Composer() {
   const histKey = useInputHistory(
     store.messages.filter((m) => m.role === 'user' && (!m.authorId || m.authorId === store.user?.id)).map((m) => m.content?.text || ''),
     text,
-    (v) => { setText(v); setSel(0); setAtClosed(false); setCaret(v.length); },
+    (v, recalled) => { setText(v); setSel(0); setAtClosed(false); setRecalled(recalled); setCaret(v.length); },
   );
   const [toolbarRef, guideInset] = useGuideInset(store.guideEnabled);
   const t = useT();
@@ -1341,7 +1344,7 @@ function Composer() {
   ].filter((p) => (seen.has(p.cmd) ? false : seen.add(p.cmd)));
 
   const word = text.toLowerCase();
-  const showMenu = /^\/[^\s]*$/.test(text); // menu shows while typing the command token (no space yet)
+  const showMenu = !recalled && /^\/[^\s]*$/.test(text); // menu shows while typing the command token (no space yet)
   const matches = showMenu ? palette.filter((x) => x.cmd.toLowerCase().startsWith(word)).slice(0, 50) : [];
   const showSlash = matches.length > 0;
 
@@ -1353,7 +1356,7 @@ function Composer() {
 
   // @ file/folder reference picker — any session that has a project (not wiki knowledge queries)
   const canRef = !c.wikiTopicId && !!c.projectId;
-  const atTok = canRef && !atClosed ? atTokenAt(text, Math.min(caret, text.length)) : null;
+  const atTok = canRef && !atClosed && !recalled ? atTokenAt(text, Math.min(caret, text.length)) : null;
   useEffect(() => { setRefs(null); }, [c.projectId]); // project switched → drop cached tree
   useEffect(() => {
     if (canRef && atTok && refs === null && c.projectId)
@@ -1490,7 +1493,7 @@ function Composer() {
                 let v = e.target.value;
                 let pos = e.target.selectionStart ?? v.length;
                 if (isRoom) { const mm = v.match(/^@(\ud074\ub85c\ub4dc|claude)\s?/i); if (mm) { v = v.slice(mm[0].length); setMode('claude'); pos = Math.max(0, pos - mm[0].length); } }
-                setText(v); setSel(0); setAtClosed(false); setCaret(Math.min(pos, v.length));
+                setText(v); setSel(0); setAtClosed(false); setRecalled(false); setCaret(Math.min(pos, v.length));
               }}
               onKeyDown={(e) => {
                 if (menuOpen && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab')) {

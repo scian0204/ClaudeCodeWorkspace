@@ -73,6 +73,21 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
+## Unreleased
+
+<details>
+<summary><b>fix(chat): a recalled slash command no longer blocks ↑ from going further back</b> — the command menu was opening over it and taking the arrow keys · <code>PENDING</code></summary>
+
+**Symptom.** Walking back through sent messages with `↑` stopped the moment a message that is a slash command (`/compact`) came up. Further `↑` presses did nothing.
+
+**Cause.** The command menu opens whenever the box holds a bare `/word`, because that is what typing a command looks like. A recalled command looks identical, so the menu appeared — and while it is open the arrow keys move its selection instead of walking history.
+
+**Fix.** The box now knows the difference between text you typed and text `↑`/`↓` put there. Filling it from history keeps the `/` command and `@` file menus shut, so the arrows keep walking; the menus come back the moment you type. Pressing Enter on a recalled command sends it, as it would if you had typed it.
+
+</details>
+
+---
+
 ## v1.20.0 — 2026-08-19
 
 <sub>release commit `2de2162`</sub>

@@ -99,8 +99,10 @@ export function useAutoGrow(ref: React.RefObject<HTMLTextAreaElement | null>, va
 // ↑/↓ in a composer walk your own past messages, the way a shell walks its command history. The
 // list is derived from the thread the caller already renders (oldest → newest), so nothing extra is
 // stored or persisted. Returns a keydown handler that reports whether it took the key.
+// setText's second argument says whether the value is a recalled message (false = the draft coming
+// back), so a caller whose menus open on typing can keep them shut while the box is being walked.
 const HISTORY_MAX = 200;
-export function useInputHistory(history: string[], text: string, setText: (v: string) => void) {
+export function useInputHistory(history: string[], text: string, setText: (v: string, recalled: boolean) => void) {
   const idx = React.useRef<number | null>(null); // 0 = newest entry, null = the live draft
   const draft = React.useRef('');                // what was in the box before we started walking
   const filled = React.useRef<string | null>(null); // last value we wrote — anything else means the user typed
@@ -132,7 +134,7 @@ export function useInputHistory(history: string[], text: string, setText: (v: st
     idx.current = next;
     const v = next === null ? draft.current : h[h.length - 1 - next];
     filled.current = v;
-    setText(v);
+    setText(v, next !== null);
     // after React has painted the recalled text, park the caret at its end
     requestAnimationFrame(() => { ta.setSelectionRange(v.length, v.length); });
     return true;
