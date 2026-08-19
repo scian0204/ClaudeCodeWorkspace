@@ -31,6 +31,7 @@ export const UI_ACTIONS: UiAction[] = [
   { action: 'openTasks', value: 'on|off', note: 'show/hide the Tasks panel of the open chat (subagents, background shells, workflows). Needs a chat open.' },
   { action: 'openGit', value: 'on|off', note: 'show/hide the Git panel of the open chat (status, commit, push, history graph, diffs). Needs a chat with a project.' },
   { action: 'openFiles', value: 'on|off', note: "show/hide the file explorer of the open chat's project." },
+  { action: 'openExport', note: 'open the transcript-export dialog of the open chat (private chats only).' },
   { action: 'setView', value: 'chat|split|editor', note: 'chat only / chat + VS Code side by side / editor alone. Desktop only, and the chat needs a project.' },
   { action: 'setLanguage', value: 'ko|en', note: 'switch the interface language.' },
   { action: 'setTheme', value: 'light|dark', note: 'switch the colour theme.' },

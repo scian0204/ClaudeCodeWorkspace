@@ -140,6 +140,7 @@ interface State {
   editorUrl: string | null;
   gitPanelOpen: boolean;   // header Git panel (store-lifted so the Mod+Shift+G shortcut can drive it)
   explorerOpen: boolean;   // header project file explorer (same, Mod+Shift+F)
+  exportOpen: boolean;     // transcript export dialog (same, so /export can open it)
   panel: null | 'admin' | 'plugins' | 'agents' | 'me';
   sidebarOpen: boolean; // mobile off-canvas drawer (ignored ≥md, sidebar is a static column there)
   sidebarCollapsed: boolean; // ≥md only: hide the sidebar column (persisted; <md the drawer rules instead)
@@ -203,6 +204,7 @@ interface State {
   setTasksOpen: (open: boolean) => void;
   setGitPanelOpen: (open: boolean) => void;
   setExplorerOpen: (open: boolean) => void;
+  setExportOpen: (open: boolean) => void;
   setViewMode: (m: 'chat' | 'split' | 'editor') => void;
   openEditor: () => Promise<void>;
   setProject: (projectId: string | null) => Promise<void>;
@@ -248,7 +250,7 @@ export const useStore = create<State>((set, get) => ({
   control: { canApprove: true, canInterrupt: true, canSetMode: true, isOwner: true, delegable: [] },
   presence: [], congested: false, sessionImportEnabled: true, sessionExportEnabled: true, teamAgentsEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenuEnabled: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true, dockerReady: true, dockerReason: 'ok',
   guideEnabled: true, guideWriteEnabled: true, guideOpen: false, guideLoaded: false, guideMessages: [], guideLive: null, guideBusy: false, guideUnread: false,
-  resumes: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, toolFoldMin: 3, tokenPoolEnabled: false, sessionSandboxEnabled: false, pools: [], poolAllUsers: false, poolOptedOut: false, myPoolId: null, poolCanCreate: false, poolHasCredential: false, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, gitPanelOpen: false, explorerOpen: false, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
+  resumes: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, toolFoldMin: 3, tokenPoolEnabled: false, sessionSandboxEnabled: false, pools: [], poolAllUsers: false, poolOptedOut: false, myPoolId: null, poolCanCreate: false, poolHasCredential: false, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, gitPanelOpen: false, explorerOpen: false, exportOpen: false, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
   channels: [], activeChannelId: null, channelMessages: [], titling: [],
   commands: [],
 
@@ -479,7 +481,7 @@ export const useStore = create<State>((set, get) => ({
       current: null, messages: [], live: null, turnActive: false, tasks: [],
       queue: { running: null, waiting: [] }, pending: [], presence: [], commands: [],
       activeChannelId: null, channelMessages: [], highlightMsgId: null,
-      panel: null, viewMode: 'chat', editorUrl: null, gitPanelOpen: false, explorerOpen: false, sidebarOpen: false,
+      panel: null, viewMode: 'chat', editorUrl: null, gitPanelOpen: false, explorerOpen: false, exportOpen: false, sidebarOpen: false,
     });
   },
 
@@ -622,6 +624,7 @@ export const useStore = create<State>((set, get) => ({
   setTasksOpen: (open) => { localStorage.setItem('tasksOpen', open ? '1' : '0'); set({ tasksOpen: open, sidebarOpen: false }); },
   setGitPanelOpen: (open) => set({ gitPanelOpen: open }),
   setExplorerOpen: (open) => set({ explorerOpen: open }),
+  setExportOpen: (open) => set({ exportOpen: open }),
 
   setViewMode: (m) => {
     set({ viewMode: m });
@@ -833,6 +836,7 @@ async function applyGuideAction(get: () => State, action: string, value: string 
     case 'openTasks': if (s.taskPanelEnabled && s.current) s.setTasksOpen(v !== 'off'); break;
     case 'openGit': if (projectPanels(s)) s.setGitPanelOpen(v !== 'off'); break;
     case 'openFiles': if (projectPanels(s)) s.setExplorerOpen(v !== 'off'); break;
+    case 'openExport': if (s.sessionExportEnabled && s.current) s.setExportOpen(true); break;
     case 'setView':
       if ((v === 'chat' || v === 'split' || v === 'editor') && projectPanels(s)
         && (v === 'chat' || (s.dockerReady && !window.matchMedia('(max-width: 767px)').matches))) s.setViewMode(v);
@@ -866,7 +870,7 @@ async function join(set: any, get: () => State, cur: Current, messages: Msg[]) {
   set({
     current: cur, messages, live: null, turnActive: false, tasks: [],
     queue: { running: null, waiting: [] }, pending: [], presence: [],
-    viewMode: 'chat', editorUrl: null, gitPanelOpen: false, explorerOpen: false, // a switched thread must not inherit a panel aimed at the previous project
+    viewMode: 'chat', editorUrl: null, gitPanelOpen: false, explorerOpen: false, exportOpen: false, // a switched thread must not inherit a panel aimed at the previous project
     commands: [], sidebarOpen: false, // opening a thread closes the mobile drawer
     highlightMsgId: null, // a plain thread switch drops any search-hit highlight
     activeChannelId: null, channelMessages: [], // opening a Claude thread hides any open DM view

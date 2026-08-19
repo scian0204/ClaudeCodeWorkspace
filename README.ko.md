@@ -121,7 +121,7 @@ Claude는 위험한 툴을 쓰기 직전 멈추고 브라우저에 물어봅니�
 </tr>
 <tr>
 <td valign="top">채팅 헤더의 <b>사용량 미터</b> — 세션별 <b>컨텍스트 윈도우</b> 사용률과 <b>claude.ai 플랜 제한</b>(5시간·주간·모델별)을 리셋 카운트다운과 함께 CLI에서 그대로 표시합니다. 한도 조회는 추론 전용 붙여넣기 토큰보다 전체 스코프 브라우저 로그인을 우선 사용하므로 한도가 실제로 뜹니다. 헤더 pill로 <b>모델</b>·<b>추론 Effort</b>(low → max)·<b>권한 모드</b>도 전환합니다. 답변이 도는 동안에는 대기 표시 옆에 <b>실시간 토큰 수</b>가 입력·출력 양쪽으로 올라갑니다 — 입력은 Claude가 일을 시작하는 순간부터 반영되므로, 화면에 글이 나오기 전(생각 중·도구 실행 중)에도 숫자가 멈춰 있지 않습니다. 명령 실행이 연달아 나오면 <b>한 줄로 접히고</b>("명령 4개 · Bash ×2, Read, Edit"), 아직 실행 중이거나 실패한 명령이 있으면 펼친 채로 둡니다.</td>
-<td valign="top"><b>슬래시 명령 팔레트</b> — <code>/</code>를 입력하면 내장·플러그인·스킬 명령(및 <code>/split</code> 같은 클라이언트 뷰 액션)이 뜹니다. 퍼지 검색되며 <code>@</code> 메뉴와 같은 느낌.</td>
+<td valign="top"><b>슬래시 명령 팔레트</b> — <code>/</code>를 입력하면 내장·플러그인·스킬 명령(및 <code>/split</code> 같은 클라이언트 뷰 액션)이 뜹니다. 퍼지 검색되며 <code>@</code> 메뉴와 같은 느낌. CLI가 터미널 화면으로만 그리는 명령(<code>/permissions</code>·<code>/export</code>·<code>/login</code>·<code>/resume</code>·<code>/theme</code>·<code>/plan</code>·<code>/diff</code>·<code>/tasks</code>·<code>/help</code> 등)은 여기서 <i>"isn't available in this environment"</i>만 돌려주던 것을, 이제 워크스페이스의 같은 기능(권한 모드 pill·내보내기 창·내 페이지·검색 팔레트·단축키 도움말·작업/Git/파일 패널·에디터 뷰)으로 대신 실행합니다.</td>
 </tr>
 </table>
 

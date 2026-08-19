@@ -20,6 +20,7 @@ import { extractSources, markCitations, type WikiSource } from '../lib/wikiCite'
 import { md } from '../lib/md';
 import { useT } from '../lib/i18n';
 import { withKeys } from '../lib/shortcuts';
+import { WORKSPACE_CMDS, splitCommand } from '../lib/cli-commands';
 import {
   IconChevronDown, IconChevronRight, IconChevronUp, IconTheme, IconFolder, IconFile, IconTrash,
   IconGauge, IconEye, IconBook, IconArchive, IconSparkle, IconCopy, IconPencil, IconHelp,
@@ -146,13 +147,14 @@ function Header() {
   const { current: c, presence, toggleTheme, setViewMode, viewMode, dockerReady, dockerReason } = useStore();
   const naming = useStore((s) => (s.current ? s.titling.includes(s.current.chatSessionId) : false));
   const [showMembers, setShowMembers] = useState(false);
-  const [exporting, setExporting] = useState(false);
   const sessionExportEnabled = useStore((s) => s.sessionExportEnabled);
   // store-lifted (not useState) so the global shortcuts can toggle them (Mod+Shift+F / Mod+Shift+G)
   const explorer = useStore((s) => s.explorerOpen);
   const setExplorer = useStore((s) => s.setExplorerOpen);
   const gitOpen = useStore((s) => s.gitPanelOpen);
   const setGitOpen = useStore((s) => s.setGitPanelOpen);
+  const exporting = useStore((s) => s.exportOpen);
+  const setExporting = useStore((s) => s.setExportOpen);
   const t = useT();
   if (!c) return null;
   const isRoom = c.kind === 'room';
@@ -1104,15 +1106,18 @@ function CustomAnswer({ question, onSubmit }: { question: string; onSubmit: (tex
 }
 
 // Client-side UI actions (run immediately on select). Real Claude Code commands + skills
-// are fetched per session and merged in below.
-const CLIENT_CMDS: { cmd: string; label: string; kind: 'ui'; run: (s: any) => void }[] = [
-  { cmd: '/new', label: 'chat.cmdNew', kind: 'ui', run: (s) => s.newSession() },
-  { cmd: '/split', label: 'chat.cmdSplit', kind: 'ui', run: (s) => s.setViewMode('split') },
-  { cmd: '/editor', label: 'chat.cmdEditor', kind: 'ui', run: (s) => s.setViewMode('editor') },
-  { cmd: '/chat', label: 'chat.cmdChat', kind: 'ui', run: (s) => s.setViewMode('chat') },
-  { cmd: '/interrupt', label: 'chat.cmdInterrupt', kind: 'ui', run: (s) => s.interrupt() },
+// are fetched per session and merged in below, and the CLI's terminal-only commands are re-pointed
+// at their workspace counterpart (../lib/cli-commands) at the end of the palette.
+// `run` returns true when it handled the command; false means "this one still needs an argument",
+// and the composer fills the command in and ghosts the hint instead of sending anything.
+const CLIENT_CMDS: { cmd: string; label: string; kind: 'ui'; run: (s: any, arg: string) => boolean }[] = [
+  { cmd: '/new', label: 'chat.cmdNew', kind: 'ui', run: (s) => { void s.newSession(); return true; } },
+  { cmd: '/split', label: 'chat.cmdSplit', kind: 'ui', run: (s) => { s.setViewMode('split'); return true; } },
+  { cmd: '/editor', label: 'chat.cmdEditor', kind: 'ui', run: (s) => { s.setViewMode('editor'); return true; } },
+  { cmd: '/chat', label: 'chat.cmdChat', kind: 'ui', run: (s) => { s.setViewMode('chat'); return true; } },
+  { cmd: '/interrupt', label: 'chat.cmdInterrupt', kind: 'ui', run: (s) => { s.interrupt(); return true; } },
 ];
-type Cmd = { cmd: string; label: string; kind: 'ui' | 'cmd'; desc?: string; hint?: string; run?: (s: any) => void };
+type Cmd = { cmd: string; label: string; kind: 'ui' | 'cmd'; desc?: string; hint?: string; run?: (s: any, arg: string) => boolean };
 
 // callback ref for the highlighted menu row — keeps it in view on keyboard nav (slash + @ menus).
 // Module-scope so its identity is stable: React then only re-invokes it on the row entering/leaving
@@ -1341,6 +1346,13 @@ function Composer() {
   const palette: Cmd[] = [
     ...CLIENT_CMDS,
     ...commands.map((ci): Cmd => ({ cmd: '/' + ci.name, label: ci.description, kind: 'cmd', desc: ci.description, hint: ci.argumentHint })),
+    // Last on purpose: should the CLI really expose a command of the same name in this session, the
+    // real one wins and the stand-in never shadows it. Calling `w.run(store, …)` here instead of
+    // passing `run: w.run` along is also deliberate — this is the one spot that type-checks the store
+    // against the fields cli-commands.ts declares, so renaming one there cannot go unnoticed.
+    ...WORKSPACE_CMDS.flatMap((w): Cmd[] => w.cmds.map((cmd) => ({
+      cmd, label: w.label, kind: 'ui', hint: w.hint, run: (_s: unknown, arg: string) => w.run(store, arg),
+    }))),
   ].filter((p) => (seen.has(p.cmd) ? false : seen.add(p.cmd)));
 
   const word = text.toLowerCase();
@@ -1370,7 +1382,7 @@ function Composer() {
 
   const pickSlash = (i: number) => {
     const m = matches[i]; if (!m) return;
-    if (m.run) { m.run(store); setText(''); setSel(0); return; }
+    if (m.run?.(store, splitCommand(text).arg)) { setText(''); setCaret(0); setSel(0); return; }
     setText(m.cmd + ' '); setSel(0); taRef.current?.focus(); // fill for args; the hint ghosts in; Enter sends → CLI runs it
   };
   const pickAt = (i: number) => {
@@ -1387,6 +1399,10 @@ function Composer() {
     if (menuOpen) return pickMenu(Math.min(sel, menuMatches.length - 1));
     if (uploading) return; // an upload is still in flight — sending now would drop the pending file from the turn
     if (!text.trim() && !atts.length) return; // allow attachment-only sends
+    // Typed out in full ("/permissions plan") the menu is already closed, so the pick path above
+    // never runs — catch it here too or the CLI gets a command it cannot answer.
+    const { token, arg } = splitCommand(text);
+    if (palette.find((p) => p.cmd === token)?.run?.(store, arg)) { setText(''); setCaret(0); return; }
     const attachments = atts.length ? atts.map((a) => ({ name: a.name, isImage: a.isImage })) : undefined;
     // A slash command runs on the CLI, so it is never team chat — the room composer opens in chat
     // mode, and sending one there used to just post the text. (The server enforces this too.)
@@ -1439,7 +1455,8 @@ function Composer() {
                   <div key={m.cmd} ref={i === sel ? scrollSel : undefined} onMouseEnter={() => setSel(i)} onClick={() => pickSlash(i)}
                     className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer text-sm ${i === sel ? 'bg-line' : ''}`}>
                     <code className="font-mono text-clay text-xs shrink-0">{m.cmd}</code>
-                    {m.hint && <code className="font-mono text-txt3 text-[11px] shrink-0">{m.hint}</code>}
+                    {/* a long hint (the permission modes) must give way on a phone rather than push the badge out */}
+                    {m.hint && <code className="font-mono text-txt3 text-[11px] min-w-0 truncate">{m.hint}</code>}
                     <span className="text-txt2 text-xs truncate">{m.desc || (m.kind === 'ui' ? t(m.label) : '')}</span>
                     <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full shrink-0"
                       style={{ background: 'var(--claysoft)', color: 'var(--clay)' }}>
