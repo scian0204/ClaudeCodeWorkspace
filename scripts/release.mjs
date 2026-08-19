@@ -50,12 +50,17 @@ function ensureBuilder() {
 // it). Trimming to a ceiling rather than wiping keeps the next release's layer reuse.
 //
 // Best-effort by design: the image is already pushed by the time this runs, so a prune that fails
-// must not turn a successful release into a failed one. `--keep-storage` is the older flag name and
-// newer buildkit calls it `--max-used-space`; try both before giving up.
+// must not turn a successful release into a failed one.
+//
+// The flag for this got renamed twice. `--max-used-space` is the current one and says exactly what we
+// mean (a ceiling on the cache). `--reserved-space` is what the old `--keep-storage` became, and
+// `--keep-storage` itself still works but prints a deprecation notice — keep both as fallbacks for
+// older buildx, newest spelling first so we stop using a flag that is on its way out.
 function capBuilderCache() {
   const attempts = [
-    `docker buildx prune --builder ${builder} --keep-storage ${keepStorage} -f`,
     `docker buildx prune --builder ${builder} --max-used-space ${keepStorage} -f`,
+    `docker buildx prune --builder ${builder} --reserved-space ${keepStorage} -f`,
+    `docker buildx prune --builder ${builder} --keep-storage ${keepStorage} -f`,
   ];
   for (const cmd of attempts) {
     try { run(cmd); return; } catch { /* try the next flag spelling */ }
