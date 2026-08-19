@@ -72,7 +72,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ## Unreleased
 
-- **fix(release): use the current name for the cache-limit flag** — the previous release printed `Flag --keep-storage has been deprecated`; the cap now asks for `--max-used-space` first (which is also the flag that actually means "ceiling"), falling back to `--reserved-space` and then `--keep-storage` for older buildx · `HASH`
+- **fix(release): use the current name for the cache-limit flag** — the previous release printed `Flag --keep-storage has been deprecated`; the cap now asks for `--max-used-space` first (which is also the flag that actually means "ceiling"), falling back to `--reserved-space` and then `--keep-storage` for older buildx · `9955227`
 
 ---
 

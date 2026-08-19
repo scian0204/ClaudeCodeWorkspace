@@ -72,7 +72,7 @@
 
 ## Unreleased
 
-- **fix(release): 캐시 상한 플래그를 현재 이름으로** — 지난 릴리스에서 `Flag --keep-storage has been deprecated` 경고가 떴다. 이제 `--max-used-space`(의미상으로도 "상한"에 맞는 플래그)를 먼저 쓰고, 구버전 buildx를 위해 `--reserved-space` → `--keep-storage`로 물러난다 · `HASH`
+- **fix(release): 캐시 상한 플래그를 현재 이름으로** — 지난 릴리스에서 `Flag --keep-storage has been deprecated` 경고가 떴다. 이제 `--max-used-space`(의미상으로도 "상한"에 맞는 플래그)를 먼저 쓰고, 구버전 buildx를 위해 `--reserved-space` → `--keep-storage`로 물러난다 · `9955227`
 
 ---
 
