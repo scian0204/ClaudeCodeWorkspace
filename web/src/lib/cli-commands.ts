@@ -11,9 +11,9 @@
 // answers them itself: the text never reaches the CLI, the matching panel or control opens instead.
 // The same table feeds the "/" menu, so the commands are listed again rather than just failing.
 //
-// Deliberately partial. A command with no real counterpart here (/hooks, /bug, /install-github-app …)
-// is left out, so the CLI's own "not available" answer still stands — better than a button that
-// pretends. Add an entry the day the workspace grows the thing it would open.
+// Deliberately partial. A command with no real counterpart here (/bug, /install-github-app …) is left
+// out, so the CLI's own "not available" answer still stands — better than a button that pretends.
+// Add an entry the day the workspace grows the thing it would open.
 //
 // Pure data + one lookup, so it can be checked without React or the store (cli-commands.test.ts).
 

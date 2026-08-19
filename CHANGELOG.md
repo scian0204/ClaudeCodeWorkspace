@@ -95,6 +95,7 @@ New settings: `asideEnabled` (turn the whole thing off), `asideMaxTurns`, `aside
 
 </details>
 
+- **`/hooks` now opens the admin settings** — it was left out of the previous release because nothing here matched it; the workspace-wide settings page is the closest thing, so it and `/privacy-settings` both land there (admins only) · `77e30ad`
 - merge: `feat/side-chat` — `b9eafc3`
 
 ---

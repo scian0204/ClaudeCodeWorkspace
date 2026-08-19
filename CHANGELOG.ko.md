@@ -95,6 +95,7 @@
 
 </details>
 
+- **`/hooks` 도 관리자 설정으로 연결** — 직전 릴리스에서는 대응 화면이 없어 빼 뒀는데, 워크스페이스 전역 설정 페이지가 가장 가까워 `/privacy-settings` 와 함께 그쪽을 연다(관리자만) · `77e30ad`
 - merge: `feat/side-chat` — `b9eafc3`
 
 ---
