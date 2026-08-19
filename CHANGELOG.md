@@ -4,7 +4,7 @@
 
 # Update notes
 
-Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and **v1.20.2** (2026-08-19) — all **385 commits**.
+Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and **v1.21.0** (2026-08-19) — all **390 commits**.
 
 Each row shows only its **title and commit hash**; click the triangle for the detail (root cause, implementation, config keys).
 
@@ -16,7 +16,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 - [Timeline](#timeline)
 - [Unreleased](#unreleased) — commits not yet in a release
-- **1.x releases** — [v1.20.2](#v1202--2026-08-19) · [v1.20.1](#v1201--2026-08-19) · [v1.20.0](#v1200--2026-08-19) · [v1.19.13](#v11913--2026-08-19) · [v1.19.12](#v11912--2026-08-19) · [v1.19.11](#v11911--2026-08-19) · [v1.19.10](#v11910--2026-08-19) · [v1.19.9](#v1199--2026-08-18) · [v1.19.8](#v1198--2026-08-18) · [v1.19.7](#v1197--2026-08-18) · [v1.19.6](#v1196--2026-08-18) · [v1.19.5](#v1195--2026-08-14) · [v1.19.4](#v1194--2026-08-14) · [v1.19.3](#v1193--2026-08-14) · [v1.19.2](#v1192--2026-08-14) · [v1.19.1](#v1191--2026-08-14) · [v1.19.0](#v1190--2026-08-14) · [v1.18.0](#v1180--2026-08-14) · [v1.17.3](#v1173--2026-08-14) · [v1.17.2](#v1172--2026-08-14) · [v1.17.1](#v1171--2026-08-14) · [v1.17.0](#v1170--2026-08-14) · [v1.16.1](#v1161--2026-08-13) · [v1.16.0](#v1160--2026-08-13) · [v1.15.1](#v1151--2026-08-13) · [v1.15.0](#v1150--2026-08-13) · [v1.14.2](#v1142--2026-08-13) · [v1.14.1](#v1141--2026-08-13) · [v1.14.0](#v1140--2026-08-13) · [v1.13.0](#v1130--2026-08-13) · [v1.12.0](#v1120--2026-08-07) · [v1.11.0](#v1110--2026-08-06) · [v1.10.0](#v1100--2026-08-05) · [v1.9.1](#v191--2026-08-05) · [v1.9.0](#v190--2026-08-05) · [v1.8.0](#v180--2026-08-04) · [v1.7.0](#v170--2026-08-04) · [v1.6.0](#v160--2026-08-04) · [v1.5.0](#v150--2026-08-04) · [v1.4.0](#v140--2026-08-03) · [v1.3.1](#v131--2026-08-03) · [v1.3.0](#v130--2026-07-31) · [v1.2.0](#v120--2026-07-31) · [v1.1.1](#v111--2026-07-31) · [v1.1.0](#v110--2026-07-31)
+- **1.x releases** — [v1.21.0](#v1210--2026-08-19) · [v1.20.2](#v1202--2026-08-19) · [v1.20.1](#v1201--2026-08-19) · [v1.20.0](#v1200--2026-08-19) · [v1.19.13](#v11913--2026-08-19) · [v1.19.12](#v11912--2026-08-19) · [v1.19.11](#v11911--2026-08-19) · [v1.19.10](#v11910--2026-08-19) · [v1.19.9](#v1199--2026-08-18) · [v1.19.8](#v1198--2026-08-18) · [v1.19.7](#v1197--2026-08-18) · [v1.19.6](#v1196--2026-08-18) · [v1.19.5](#v1195--2026-08-14) · [v1.19.4](#v1194--2026-08-14) · [v1.19.3](#v1193--2026-08-14) · [v1.19.2](#v1192--2026-08-14) · [v1.19.1](#v1191--2026-08-14) · [v1.19.0](#v1190--2026-08-14) · [v1.18.0](#v1180--2026-08-14) · [v1.17.3](#v1173--2026-08-14) · [v1.17.2](#v1172--2026-08-14) · [v1.17.1](#v1171--2026-08-14) · [v1.17.0](#v1170--2026-08-14) · [v1.16.1](#v1161--2026-08-13) · [v1.16.0](#v1160--2026-08-13) · [v1.15.1](#v1151--2026-08-13) · [v1.15.0](#v1150--2026-08-13) · [v1.14.2](#v1142--2026-08-13) · [v1.14.1](#v1141--2026-08-13) · [v1.14.0](#v1140--2026-08-13) · [v1.13.0](#v1130--2026-08-13) · [v1.12.0](#v1120--2026-08-07) · [v1.11.0](#v1110--2026-08-06) · [v1.10.0](#v1100--2026-08-05) · [v1.9.1](#v191--2026-08-05) · [v1.9.0](#v190--2026-08-05) · [v1.8.0](#v180--2026-08-04) · [v1.7.0](#v170--2026-08-04) · [v1.6.0](#v160--2026-08-04) · [v1.5.0](#v150--2026-08-04) · [v1.4.0](#v140--2026-08-03) · [v1.3.1](#v131--2026-08-03) · [v1.3.0](#v130--2026-07-31) · [v1.2.0](#v120--2026-07-31) · [v1.1.1](#v111--2026-07-31) · [v1.1.0](#v110--2026-07-31)
 - [Early development (2026-07-20 → 07-31)](#early-development--2026-07-20--07-31)
 - [Where it diverged from the original design](#where-it-diverged-from-the-original-design)
 
@@ -26,6 +26,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 | Version | Date | Commits | Headline |
 |---|---|---|---|
+| [v1.21.0](#v1210--2026-08-19) | 2026-08-19 | 4 | Side chat: ask about the work without joining it |
 | [v1.20.2](#v1202--2026-08-19) | 2026-08-19 | 3 | Terminal-only slash commands work in the browser |
 | [v1.20.1](#v1201--2026-08-19) | 2026-08-19 | 3 | A recalled slash command stops blocking ↑ |
 | [v1.20.0](#v1200--2026-08-19) | 2026-08-19 | 3 | Up/down in the message box brings back what you sent |
@@ -75,7 +76,9 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
-## Unreleased
+## v1.21.0 — 2026-08-19
+
+<sub>release commit `86d1150`</sub>
 
 <details>
 <summary><b>feat(chat): side chat — the CLI's <code>/btw</code>, as a window over the conversation</b> — ask about the work in progress without putting the question into it · <code>77e30ad</code></summary>
@@ -91,6 +94,8 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 New settings: `asideEnabled` (turn the whole thing off), `asideMaxTurns`, `asideMaxInputChars`. New endpoints: `POST /api/sessions/:id/aside`, `POST /api/sessions/:id/aside/interrupt`, `DELETE /api/sessions/:id/aside` — each behind the same permission check as reading the chat, and the answer is streamed only to the tabs of the person who asked, even in a shared room.
 
 </details>
+
+- merge: `feat/side-chat` — `b9eafc3`
 
 ---
 
