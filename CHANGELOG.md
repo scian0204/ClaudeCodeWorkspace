@@ -71,6 +71,21 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
+## Unreleased
+
+<details>
+<summary><b>fix(chat): stop the folded command row from flapping open while an answer is still coming in</b> — it opened and shut once per command · <code>90d5406</code></summary>
+
+**Symptom.** When several commands run one after another, the chat folds them into a single row ("commands 4 — Bash ×2, Read, Edit"). While the answer was still being written, that row kept opening by itself and closing again — once for every new command.
+
+**Cause.** Two things. The row chose to be open whenever any command inside it had no result yet: a new command starts with no result, so the row opened; a moment later the result arrived and it closed. That repeated for the whole turn. Separately, the row was identified by its position in the message, and that position shifts every time a command is added — so the row was thrown away and rebuilt, losing whichever open or closed state you had picked by hand.
+
+**Fix.** The row now stays shut on its own and only opens by itself when a command failed. Nothing you need is hidden: the header already shows how many ran, which tools, and whether one is still going. The row is now identified by the first command in the group instead of by position, so it survives new commands arriving and keeps your choice until the answer is finished.
+
+</details>
+
+---
+
 ## v1.19.12 — 2026-08-19
 
 <sub>release commit `1d638d6`</sub>
