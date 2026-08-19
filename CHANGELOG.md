@@ -76,7 +76,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ## Unreleased
 
 <details>
-<summary><b>fix(chat): a recalled slash command no longer blocks ↑ from going further back</b> — the command menu was opening over it and taking the arrow keys · <code>PENDING</code></summary>
+<summary><b>fix(chat): a recalled slash command no longer blocks ↑ from going further back</b> — the command menu was opening over it and taking the arrow keys · <code>3a6ae31</code></summary>
 
 **Symptom.** Walking back through sent messages with `↑` stopped the moment a message that is a slash command (`/compact`) came up. Further `↑` presses did nothing.
 

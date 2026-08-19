@@ -76,7 +76,7 @@
 ## Unreleased
 
 <details>
-<summary><b>fix(chat): 불러온 메시지가 명령어일 때 ↑ 로 더 이전으로 못 가던 문제</b> — 명령어 메뉴가 열려 방향키를 가져가고 있었음 · <code>PENDING</code></summary>
+<summary><b>fix(chat): 불러온 메시지가 명령어일 때 ↑ 로 더 이전으로 못 가던 문제</b> — 명령어 메뉴가 열려 방향키를 가져가고 있었음 · <code>3a6ae31</code></summary>
 
 **증상.** `↑`로 보낸 메시지를 거슬러 올라가다 명령어 메시지(`/compact`)가 나오면 거기서 멈췄다. 더 눌러도 반응이 없었다.
 
