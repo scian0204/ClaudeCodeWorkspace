@@ -4,7 +4,7 @@
 
 # Update notes
 
-Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and now — **v1.23.0** (2026-08-20) plus what is not yet released — all **419 commits**.
+Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and now — **v1.23.0** (2026-08-20) plus what is not yet released — all **420 commits**.
 
 Each row shows only its **title and commit hash**; click the triangle for the detail (root cause, implementation, config keys).
 
@@ -26,7 +26,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 | Version | Date | Commits | Headline |
 |---|---|---|---|
-| [Unreleased](#unreleased) | — | 1 | A chat hears when its project is changed somewhere else |
+| [Unreleased](#unreleased) | — | 2 | A chat hears when its project is changed somewhere else |
 | [v1.23.0](#v1230--2026-08-20) | 2026-08-20 | 16 | Wikis that start from a chat or nothing, link to a session, and grow themselves |
 | [v1.22.0](#v1220--2026-08-20) | 2026-08-20 | 10 | Download a session's project folder, picking the files |
 | [v1.21.1](#v1211--2026-08-19) | 2026-08-19 | 2 | /hooks stops pointing at a page that cannot do it |
@@ -83,7 +83,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ## Unreleased
 
 <details>
-<summary><b>fix(watch): a created folder is no longer listed as a changed file</b> — <code>HASH</code></summary>
+<summary><b>fix(watch): a created folder is no longer listed as a changed file</b> — <code>51d1f76</code></summary>
 
 Making a directory reports the directory itself, so `src` sat in the notice next to the
 real files. Directories are dropped from the list now; a path that no longer exists is
