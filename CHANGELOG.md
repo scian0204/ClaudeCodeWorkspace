@@ -26,7 +26,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 | Version | Date | Commits | Headline |
 |---|---|---|---|
-| [Unreleased](#unreleased) | — | 4 | Wikis that start from a chat, a project or nothing — and grow from conversations |
+| [Unreleased](#unreleased) | — | 5 | Wikis that start from a chat, a project or nothing — and grow from conversations |
 | [v1.22.0](#v1220--2026-08-20) | 2026-08-20 | 10 | Download a session's project folder, picking the files |
 | [v1.21.1](#v1211--2026-08-19) | 2026-08-19 | 2 | /hooks stops pointing at a page that cannot do it |
 | [v1.21.0](#v1210--2026-08-19) | 2026-08-19 | 4 | Side chat: ask about the work without joining it |
@@ -80,6 +80,38 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ---
 
 ## Unreleased
+
+<details>
+<summary><b>fix(wiki): a wiki turn loads one dedicated plugin, not the workspace's</b> — plugin isolation for queries and compiles · <code>5d0377d</code></summary>
+
+**Symptom.** A wiki thread answered in a style nobody asked for, prefixed every
+answer with a checklist an unrelated plugin demanded, ran each file write twice,
+and dropped its notes in a folder the wiki does not use.
+
+**Cause.** A wiki query was built like any other chat: it inherited every plugin
+the workspace had enabled, the operator's personal settings layer
+(`settingSources` included `user`), and the team agent definitions. One of those
+plugins ships a hook that refuses a tool call until a preamble is printed — the
+refusal is what made every write happen twice — and another rewrites the answer's
+style. A knowledge lookup has nothing to do with the team's coding plugins.
+
+**Fix.** Wiki-bound runs — the query thread, the compile, and the short
+knowledge-check call — now load exactly one plugin: the `llm-wiki` skill bundled
+with the app under `server/plugins/llm-wiki`. It spells out how to answer from the
+base (read `wiki/_index.md` first, cite files, say when the base does not have it)
+and the only files an addition may write: `raw/conversations/<slug>.md`,
+`wiki/conversations/<slug>.md` and one line in the index. Everything else under
+`wiki/` belongs to the compile, which deletes and rebuilds it from `raw/`. The
+settings layer is narrowed to the topic's own `CLAUDE.md`, and team agents are not
+passed at all. The slash-command probe uses the same set, so a wiki thread no
+longer advertises skills its turns cannot reach.
+
+New config key `wikiPluginPath` swaps in a different plugin directory (an operator's
+own, or a third-party wiki plugin); a path with no plugin manifest resolves to no
+plugin rather than failing the turn, since the topic's `CLAUDE.md` still carries
+the grounding rules.
+
+</details>
 
 <details>
 <summary><b>feat(wiki): start a topic from a chat, a project or nothing — and let it grow from conversations</b> — server side · <code>e1aefbc</code></summary>
