@@ -4,7 +4,7 @@
 
 # Update notes
 
-Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and now — **v1.24.0** (2026-08-21) plus what is not yet released — all **425 commits**.
+Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and now — **v1.24.0** (2026-08-21) plus what is not yet released — all **427 commits**.
 
 Each row shows only its **title and commit hash**; click the triangle for the detail (root cause, implementation, config keys).
 
@@ -104,6 +104,8 @@ app, not only inside the container (where root forced that already). With real
 then the question cannot reach the browser however hard we try.
 
 </details>
+
+- **Picks made in the same instant all count** — building the next set of picks from the value the card was drawn with meant several clicks landing before the card redrew (a quick multi-pick) each started from the same old value, and only the last one stuck · `c974249`
 
 <details>
 <summary><b>fix(chat): a choice card with several questions waits for all of them</b> — and a multi-pick question takes more than one · <code>7f54080</code></summary>
