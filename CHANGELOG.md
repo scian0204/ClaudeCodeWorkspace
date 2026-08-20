@@ -80,6 +80,15 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ## Unreleased
 
 <details>
+<summary><b>fix(files): bring back Expand all, now that the trees load lazily</b> — big folders stay closed · <code>4b2ebd0</code></summary>
+
+Making every file tree load one folder at a time dropped the **Expand all** button — the download picker and the file explorers were left with Collapse all only. The old button just opened a tree that was already fully in memory, which no longer exists.
+
+Expand all now walks down from the root and fetches each folder once. The two things that made it risky are handled instead of forbidden: a folder with more entries than the warning setting is left closed (open that one yourself), and the walk stops after 300 folders. Either way a line under the tree says some folders were left closed.
+
+</details>
+
+<details>
 <summary><b>feat(export,files): pick the files for a project download; every file tree is lazy now</b> — one folder at a time, .gitignore already unticked · <code>5b6744b</code></summary>
 
 **Picking the files.** The project-folder download used to take the whole folder minus a fixed skip list. Now the dialog shows the session's working folder as a tree of checkboxes and the archive carries what is ticked. Anything your `.gitignore` covers starts unticked — a `.gitignore` deeper in the tree counts too — along with folders you can rebuild (`node_modules`, `dist`, …). Tick one of them and it comes back, folder and all; untick something inside a ticked folder and the deeper choice wins. The size line under the tree is the real selection and updates as you tick.
