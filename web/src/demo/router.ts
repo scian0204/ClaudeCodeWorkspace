@@ -605,7 +605,7 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
       id: genId('w'), name: b.name || 'New topic',
       description: [b.description || '', from].filter(Boolean).join(' · '),
       path: String(b.name || 'topic').toLowerCase(), createdBy: db.me.id, createdAt: Date.now(),
-      compileStatus: 'done', compiledAt: Date.now(), compileError: null, autoLearn: b.autoLearn || 'off',
+      compileStatus: 'done', compiledAt: Date.now(), compileError: null, autoLearn: b.autoLearn || 'off', kind: b.kind || 'wiki',
     };
     db.wikiTopics.push(t); db.messages[`cs_${t.id}`] = []; return ok({ topic: t });
   }

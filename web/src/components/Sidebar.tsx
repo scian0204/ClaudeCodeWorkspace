@@ -175,6 +175,7 @@ export function Sidebar() {
             menu={[{ label: t('ctx.open'), icon: <IconBook size={14} />, onSelect: () => { setPanel(null); openWiki(wt.id); } }]}>
             <span className="opacity-70">{wt.compileStatus === 'compiling' ? <IconClock size={15} /> : wt.compileStatus === 'error' ? <IconWarning size={15} className="text-warn" /> : <IconBook size={15} />}</span>
             <span className="flex-1 truncate text-[13px]">{wt.name}</span>
+            {wt.kind === 'minutes' && <span className="text-[10px] text-txt3 border border-line rounded px-1 shrink-0 group-hover:hidden">{t('wiki.minutesTag')}</span>}
             {wt.compileStatus === 'compiling' && <span className="text-[10px] text-txt3 group-hover:hidden">{t('sidebar.compiling')}</span>}
             {isAdmin && (
               // source manager: the same explorer the chat banner opens, reachable without switching threads
@@ -264,6 +265,7 @@ function WikiCreateModal({ onClose }: { onClose: () => void }) {
   const [sid] = useState(() => (crypto.randomUUID?.() || `${Date.now()}${Math.random()}`).replace(/[^a-zA-Z0-9]/g, '').slice(0, 32));
   const [name, setName] = useState('');
   const [desc, setDesc] = useState('');
+  const [kind, setKind] = useState<'wiki' | 'minutes'>('wiki');
   const [seed, setSeed] = useState<'upload' | 'session' | 'project' | 'blank'>('upload');
   const [seedSessionId, setSeedSessionId] = useState('');
   const [seedProjectId, setSeedProjectId] = useState('');
@@ -309,7 +311,7 @@ function WikiCreateModal({ onClose }: { onClose: () => void }) {
     setBusy(true);
     try {
       await newWikiTopic({
-        name: name.trim(), description: desc.trim(), seedType: seed, autoLearn,
+        name: name.trim(), description: desc.trim(), seedType: seed, autoLearn, kind,
         stagingId: seed === 'upload' ? sid : undefined,
         precompiled: seed === 'upload' && precompiled,
         seedSessionId: seed === 'session' ? seedSessionId : undefined,
@@ -332,6 +334,17 @@ function WikiCreateModal({ onClose }: { onClose: () => void }) {
       <input className="input mb-2" placeholder={t('sidebar.topicNamePlaceholder')} value={name} autoFocus onChange={(e) => setName(e.target.value)} />
       <textarea className="input mb-3 resize-none" rows={3} placeholder={t('sidebar.topicDescPlaceholder')}
         value={desc} onChange={(e) => setDesc(e.target.value)} />
+
+      {/* what this base IS: synthesized articles, or per-meeting minutes with decision/action registers */}
+      <div className="text-[11px] text-txt3 mb-1">{t('wiki.kindLabel')}</div>
+      <div className="seg w-full mb-1.5">
+        {(['wiki', 'minutes'] as const).map((k) => (
+          <button key={k} className={`flex-1 ${kind === k ? 'on' : ''}`} onClick={() => setKind(k)}>
+            {t(k === 'wiki' ? 'wiki.kindWiki' : 'wiki.kindMinutes')}
+          </button>
+        ))}
+      </div>
+      <div className="text-[11px] text-txt3 mb-3">{t(kind === 'minutes' ? 'wiki.kindMinutesHint' : 'wiki.kindWikiHint')}</div>
 
       {/* start-from picker: a 2-col grid rather than a segmented row, so four labels still fit on a phone */}
       <div className="text-[11px] text-txt3 mb-1">{t('wiki.seedLabel')}</div>

@@ -113,6 +113,7 @@ function existingIndex(topicDir: string): string {
 
 const PROMPT = (t: Topic, index: string, question: string, answer: string, maxChars: number) =>
 `You maintain the LLM-Wiki knowledge base "${t.name}".${t.description ? ` Topic guidance: ${t.description}` : ''}
+${t.kind === 'minutes' ? `This topic is a MEETING-MINUTES base. A pasted meeting record (notes, transcript, decisions) is exactly what to keep: write it up as structured minutes — start the title with the date (YYYY-MM-DD) when it is known or inferable, keep attendees, decisions and action items. Plain Q&A about the meetings counts only if it settled something the records do not already say.` : ''}
 
 Below is one exchange from a conversation held against this wiki. Decide whether it contains
 DURABLE knowledge that belongs in the base — a fact, decision, procedure, definition or correction
@@ -133,7 +134,7 @@ ${index}
 The exchange:
 [user]
 """
-${question.slice(0, 6000)}
+${question.slice(0, t.kind === 'minutes' ? 24000 : 6000)}
 """
 [assistant]
 """

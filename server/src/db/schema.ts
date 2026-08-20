@@ -156,6 +156,9 @@ export const wikiTopics = sqliteTable('wiki_topics', {
   // call decides whether the exchange holds durable knowledge. 'off' = never, 'ask' = propose and
   // wait for a human, 'auto' = write it straight into raw/ + wiki/.
   autoLearn: text('auto_learn').notNull().default('off'), // off|ask|auto
+  // 'wiki' = synthesized concept articles (merge/dedupe). 'minutes' = one document per meeting,
+  // preserved 1:1, plus decision/action registers — merging meetings would destroy the history.
+  kind: text('kind').notNull().default('wiki'),
 });
 
 // A knowledge addition the learner proposed but a human has not decided on yet ('ask' mode).

@@ -112,6 +112,10 @@ the chat–split–editor switch. Bottom-right corner: this guide panel.
 - **Linking a wiki to a chat** — an ordinary chat or room can point at a topic from the header pill;
   its turns then read that knowledge base before answering, without changing the chat's own project.
   Read-only: a linked chat never edits the wiki (\`wikiLinkEnabled\`).
+- **Meeting-minutes topics** — a topic created with kind 'minutes' keeps ONE document per meeting
+  (never merged), plus a decision register (what was decided when, superseded entries kept) and an
+  action-item register. Its answers always cite the meeting and date; meeting facts are never
+  guessed. Pick "회의록 전용" in the create dialog.
 - **Growing a wiki from conversations** — after a turn in a thread bound to a topic, Claude judges by
   itself whether anything durable came out of it. Each topic picks what happens next: nothing, a card
   above the composer to accept or skip, or written in straight away (\`wikiAutoLearnEnabled\`).

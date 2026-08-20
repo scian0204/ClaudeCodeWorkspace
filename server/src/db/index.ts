@@ -205,6 +205,8 @@ export function initDb() {
   try { sqlite.exec("ALTER TABLE chat_sessions ADD COLUMN wiki_ref_id TEXT"); } catch { /* already present */ }
   // per-topic conversation learning mode (off = the pre-existing behaviour)
   try { sqlite.exec("ALTER TABLE wiki_topics ADD COLUMN auto_learn TEXT NOT NULL DEFAULT 'off'"); } catch { /* already present */ }
+  // topic kind: 'wiki' (synthesized articles) | 'minutes' (per-meeting docs + registers)
+  try { sqlite.exec("ALTER TABLE wiki_topics ADD COLUMN kind TEXT NOT NULL DEFAULT 'wiki'"); } catch { /* already present */ }
   // project-scope team agents ('' for common/user rows). The unique index must include project_id,
   // so it is (re)created here — after the ALTER — instead of in the DDL block.
   try { sqlite.exec("ALTER TABLE team_agents ADD COLUMN project_id TEXT NOT NULL DEFAULT ''"); } catch { /* already present */ }

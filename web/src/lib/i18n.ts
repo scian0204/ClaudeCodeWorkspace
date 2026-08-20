@@ -1073,6 +1073,12 @@ const ko: Dict = {
   // wikiExplorer
   'wikiExplorer.title': 'LLM Wiki 파일 탐색기',
   // 위키 시작 방식 · 세션 연결 · 대화로 지식 쌓기
+  'wiki.kindLabel': '주제 종류',
+  'wiki.kindWiki': '일반 위키',
+  'wiki.kindMinutes': '회의록 전용',
+  'wiki.kindWikiHint': '원본을 합성해 개념별 아티클로 정리합니다.',
+  'wiki.kindMinutesHint': '회의 1건 = 문서 1개로 보존하고, 결정 사항과 액션 아이템 이력을 따로 정리합니다. 답변은 어느 회의에서 나온 내용인지 날짜와 함께 밝힙니다.',
+  'wiki.minutesTag': '회의록',
   'wiki.seedLabel': '시작 방식',
   'wiki.seedUpload': '파일 업로드',
   'wiki.seedSession': '기존 대화에서',
@@ -2403,6 +2409,12 @@ const en: Dict = {
   // wikiExplorer
   'wikiExplorer.title': 'LLM Wiki File Explorer',
   // starting a wiki - linking one to a session - growing it from conversations
+  'wiki.kindLabel': 'Kind of base',
+  'wiki.kindWiki': 'Knowledge wiki',
+  'wiki.kindMinutes': 'Meeting minutes',
+  'wiki.kindWikiHint': 'Synthesizes the sources into one article per concept.',
+  'wiki.kindMinutesHint': 'Keeps one document per meeting, plus decision and action-item registers across meetings. Answers always say which meeting (and date) something came from.',
+  'wiki.minutesTag': 'Minutes',
   'wiki.seedLabel': 'Start from',
   'wiki.seedUpload': 'Uploaded files',
   'wiki.seedSession': 'An existing chat',

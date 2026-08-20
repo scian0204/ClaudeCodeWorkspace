@@ -23,7 +23,7 @@ export interface Member { userId: string; displayName: string; avatarColor: stri
 export interface RoomSummary { id: string; name: string; ownerId: string; chatSessionId: string; permissionMode: string; members: Member[]; }
 export interface PrivateSession { id: string; title: string; updatedAt: number; projectId: string | null; model: string; effort: string; permissionMode: string; }
 export interface Project { id: string; scope: string; ownerId: string | null; name: string; path: string; }
-export interface WikiTopic { id: string; name: string; description: string; path: string; createdBy: string; createdAt: number; compileStatus?: string; compiledAt?: number | null; compileError?: string | null; autoLearn?: string; }
+export interface WikiTopic { id: string; name: string; description: string; path: string; createdBy: string; createdAt: number; compileStatus?: string; compiledAt?: number | null; compileError?: string | null; autoLearn?: string; kind?: string; }
 // A knowledge addition the learner parked for a human to accept ('ask' mode).
 export interface WikiProposal { id: string; topicId: string; topicName: string; sessionId: string; title: string; slug: string; content: string; createdAt: number; }
 export interface ReviewRepo { id: string; name: string; provider: string; host: string; slug: string; gitUrl: string; baseBranch: string | null; sandboxImage: string | null; polledAt: number | null; pollError: string | null; webhookSecret: string | null; pollEnabled: boolean; openCount: number; createdAt: number; }
@@ -209,7 +209,7 @@ interface State {
   newSession: (projectId?: string) => Promise<void>;
   importSessions: (payload: { sid: string; projectName?: string; sessionUuids: string[]; autoTitle: boolean; overwrite: string[]; projectOverwrite: boolean; projectWipe: boolean }) => Promise<{ project: any; sessions: any[] }>;
   newRoom: (name: string) => Promise<void>;
-  newWikiTopic: (payload: { name: string; description: string; stagingId?: string; precompiled?: boolean; seedType?: string; seedSessionId?: string; seedProjectId?: string; autoLearn?: string }) => Promise<void>;
+  newWikiTopic: (payload: { name: string; description: string; stagingId?: string; precompiled?: boolean; seedType?: string; seedSessionId?: string; seedProjectId?: string; autoLearn?: string; kind?: string }) => Promise<void>;
   updateWikiTopic: (id: string, patch: { name?: string; description?: string; autoLearn?: string }) => Promise<void>;
   setWikiRef: (topicId: string | null) => Promise<void>;
   decideWikiProposal: (id: string, accept: boolean) => Promise<void>;

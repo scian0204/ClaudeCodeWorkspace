@@ -102,6 +102,8 @@ function getTopic(id: string) {
   return db.select().from(schema.wikiTopics).where(eq(schema.wikiTopics.id, id)).get();
 }
 const LEARN_MODES = ['off', 'ask', 'auto'];
+const TOPIC_KINDS = ['wiki', 'minutes'];
+function topicKind(v: unknown): string { return TOPIC_KINDS.includes(String(v)) ? String(v) : 'wiki'; }
 function learnMode(v: unknown): string { return LEARN_MODES.includes(String(v)) ? String(v) : 'off'; }
 
 // May this user hand THIS chat's transcript to a wiki (which every member can then read)?
@@ -128,8 +130,42 @@ function loadMessages(sessionId: string) {
 //                to answer until the sources cover the question is a deadlock — an empty topic
 //                could never fill up. Answer anyway, mark clearly which part is not from the base,
 //                and let the post-turn learner decide what to keep (wiki/learn.ts).
-function groundingDoc(name: string, description: string, autoLearn = 'off') {
+export function groundingDoc(name: string, description: string, autoLearn = 'off', kind = 'wiki') {
   const growing = autoLearn === 'ask' || autoLearn === 'auto';
+  const tail =
+    `\n## 답변 형식\n` +
+    `- **사용자가 쓴 언어로 답해라.**\n` +
+    `- 사족 없이 결론부터 써라. "확인해 보겠습니다"류 진행 설명, 인사, 요약의 요약은 쓰지 마라.\n` +
+    `- **답변 맨 마지막 줄에 참조한 파일명을 나열해라** — \`wiki/...\`, \`raw/...\` 경로 그대로. 화면 오른쪽 출처 패널과 본문 하이라이트가 이 목록을 읽는다. 참조한 파일이 없으면 그 줄은 쓰지 마라.\n` +
+    `- 도표·스크린샷 등 시각 자료가 관련되면, 아티클이 인용한 \`raw/\`의 이미지(.png/.jpg 등)를 Read로 직접 열어(너는 멀티모달) 확인해서 답하라.\n` +
+    `- 사용자가 특정 문서를 써 달라고 명시적으로 요청하지 않는 한 파일을 수정/생성하지 마라.\n` +
+    `- 지식 추가를 명시적으로 요청받으면 \`llm-wiki\` 스킬을 읽고 거기 적힌 절차대로만 파일을 써라.\n` +
+    `  (이 스레드에는 워크스페이스 공통 플러그인이 적용되지 않는다 — 그 스킬 하나가 전부다.)\n`;
+
+  // A minutes base is grounded REGARDLESS of the learning mode: what was said in a meeting is not
+  // something a model can know on its own, so inventing it is worse than refusing. Growing mode
+  // only changes what happens to records the user pastes in (captured after the turn).
+  if (kind === 'minutes') {
+    const capture = growing
+      ? `- 사용자가 회의 내용(메모·전사·자료)을 붙여넣으면 따로 요청하지 않아도 턴이 끝난 뒤 워크스페이스가 알아서 기록한다. "추가할까요?"라고 되묻지 마라.\n`
+      : '';
+    return `# LLM Wiki — ${name} (회의록 전용)\n\n${description ? description + '\n\n' : ''}` +
+    `이 디렉터리는 "${name}" 회의록 기반입니다. **회의 1건 = 문서 1개**가 원칙입니다.\n\n` +
+    `## 구조\n` +
+    `- \`./wiki/meetings/\` — 회의별 정리본(파일명이 날짜로 시작). **답변의 1차 근거.**\n` +
+    `- \`./wiki/decisions.md\` — 결정 이력: 언제·무엇을·어느 회의에서. 뒤집힌 결정은 대체 관계까지.\n` +
+    `- \`./wiki/actions.md\` — 액션 아이템: 담당·기한·최근 상태.\n` +
+    `- \`./wiki/_index.md\` — 회의 목록(최신순) + 레지스터 링크.\n` +
+    `- \`./raw/\` — 원본(불변): 회의 메모·자료·정정.\n` +
+    `- \`./wiki/conversations/\` — 대화에서 추가된 기록(원본은 \`./raw/conversations/\`).\n\n` +
+    `## 답변 규칙 (회의록)\n` +
+    `- "지금 유효한 결정"을 물으면 \`./wiki/decisions.md\`부터, 특정 회의를 물으면 그 회의 문서를 봐라.\n` +
+    `- 항상 날짜를 함께 밝혀라 — 어느 회의에서 나온 내용인지가 핵심 정보다.\n` +
+    `- 회의끼리 어긋나면 나중 회의가 우선이지만, 양쪽 다 날짜와 함께 언급해라.\n` +
+    `- 기록에 없는 내용은 지어내지 마라. 회의에서 무슨 말이 나왔는지는 추측 대상이 아니다 — "기록에 없습니다"라고 답해라.\n` +
+      capture + tail;
+  }
+
   const head = `# LLM Wiki — ${name}\n\n${description ? description + '\n\n' : ''}` +
     `이 디렉터리는 "${name}" 주제의 지식 기반(knowledge base)입니다.\n\n` +
     `## 구조\n` +
@@ -151,31 +187,16 @@ function groundingDoc(name: string, description: string, autoLearn = 'off') {
     `- 위키에 아직 없는 내용을 위키가 말한 것처럼 쓰지는 마라. 구분만 하면 된다.\n` +
     `- **무엇을 위키에 남길지는 네가 판단하지 않아도 된다.** 턴이 끝나면 워크스페이스가 이 대화를 읽고 알아서 정한다(자동 추가면 바로 기록, 물어보고 추가면 사용자에게 카드로 묻는다). 그러니 "추가할까요?"라고 되묻거나 허락을 구하지 마라.\n`;
 
-  const tail =
-    `
-## 답변 형식
-` +
-    `- **사용자가 쓴 언어로 답해라.**
-` +
-    `- 사족 없이 결론부터 써라. "확인해 보겠습니다"류 진행 설명, 인사, 요약의 요약은 쓰지 마라.
-` +
-    `- **답변 맨 마지막 줄에 참조한 파일명을 나열해라** — \`wiki/...\`, \`raw/...\` 경로 그대로. 화면 오른쪽 출처 패널과 본문 하이라이트가 이 목록을 읽는다. 참조한 파일이 없으면 그 줄은 쓰지 마라.
-` +
-    `- 도표·스크린샷 등 시각 자료가 관련되면, 아티클이 인용한 \`raw/\`의 이미지(.png/.jpg 등)를 Read로 직접 열어(너는 멀티모달) 확인해서 답하라.\n` +
-    `- 사용자가 특정 문서를 써 달라고 명시적으로 요청하지 않는 한 파일을 수정/생성하지 마라.\n` +
-    `- 지식 추가를 명시적으로 요청받으면 \`llm-wiki\` 스킬을 읽고 거기 적힌 절차대로만 파일을 써라.\n` +
-    `  (이 스레드에는 워크스페이스 공통 플러그인이 적용되지 않는다 — 그 스킬 하나가 전부다.)\n`;
-
   return head + (growing ? growingRules : strict) + tail;
 }
 
 // The doc is generated, never hand-edited (the rules above say so), so it is safe to rewrite from
 // the row whenever the row changes — and once at boot, which is what upgrades topics created before
 // the answer rules became mode-dependent.
-export function writeGroundingDoc(t: { name: string; description: string; path: string; autoLearn?: string }) {
+export function writeGroundingDoc(t: { name: string; description: string; path: string; autoLearn?: string; kind?: string }) {
   try {
     ensure(t.path);
-    fs.writeFileSync(path.join(t.path, 'CLAUDE.md'), groundingDoc(t.name, t.description, t.autoLearn || 'off'));
+    fs.writeFileSync(path.join(t.path, 'CLAUDE.md'), groundingDoc(t.name, t.description, t.autoLearn || 'off', t.kind || 'wiki'));
   } catch { /* a topic dir that vanished is reaped elsewhere */ }
 }
 
@@ -186,7 +207,7 @@ export function refreshGroundingDocs() {
 // Create an empty wiki topic (no staged sources) and kick off compilation. Reused by the
 // member-request approval framework (admin/requests.ts `wiki_topic` action) — createdBy is the
 // requesting member, so an approved topic is attributed to whoever asked for it.
-export function createWikiTopic(opts: { name: string; description?: string; createdBy: string; autoLearn?: string }) {
+export function createWikiTopic(opts: { name: string; description?: string; createdBy: string; autoLearn?: string; kind?: string }) {
   const name = String(opts.name || '').trim() || '새 주제';
   const description = String(opts.description || '');
   const id = newId();
@@ -196,7 +217,7 @@ export function createWikiTopic(opts: { name: string; description?: string; crea
   const row = {
     id, name, description, path: dir, createdBy: opts.createdBy, createdAt: Date.now(),
     compileStatus: 'idle' as const, compiledAt: null, compileError: null,
-    autoLearn: learnMode(opts.autoLearn),
+    autoLearn: learnMode(opts.autoLearn), kind: topicKind(opts.kind),
   };
   writeGroundingDoc(row);
   db.insert(schema.wikiTopics).values(row).run();
@@ -302,7 +323,7 @@ export async function wikiRoutes(app: FastifyInstance) {
     const row = {
       id, name, description, path: dir, createdBy: u.id, createdAt: Date.now(),
       compileStatus, compiledAt: precompiled ? Date.now() : null, compileError: null,
-      autoLearn: learnMode(b.autoLearn),
+      autoLearn: learnMode(b.autoLearn), kind: topicKind(b.kind),
     };
     writeGroundingDoc(row);
     db.insert(schema.wikiTopics).values(row).run();

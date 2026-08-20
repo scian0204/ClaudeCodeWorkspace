@@ -75,6 +75,21 @@ Rules that do not bend:
   folder of near-duplicates.
 - Say plainly which knowledge is from the base and which you contributed yourself.
 
+## Meeting-minutes topics
+
+Some topics are meeting-minutes bases — their `CLAUDE.md` says so. Same layout, plus:
+
+- `wiki/meetings/<YYYY-MM-DD>-<slug>.md` — one document per meeting, written by the compile
+- `wiki/decisions.md` / `wiki/actions.md` — registers the compile maintains across meetings
+
+Answering there: dates are first-class — always say WHICH meeting something came from. "What is the
+current decision" reads `wiki/decisions.md`; a specific meeting reads its own document. When
+meetings contradict each other the later one stands, but cite both with their dates. Meeting facts
+are never guessed: if the records do not say it, say the records do not say it.
+
+A meeting record the user asks you to file goes to `raw/conversations/` like any other addition —
+the next compile sorts it into `wiki/meetings/` and updates the registers.
+
 ## Out of scope
 
 A wiki turn is a lookup. Do not start builds, run test suites, install packages, refactor code, or
