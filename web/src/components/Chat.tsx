@@ -1162,32 +1162,64 @@ function ToolApproval({ p, canApprove, respond }: { p: any; canApprove: boolean;
 
 // Claude asked the user to choose (AskUserQuestion). Render the real options as buttons;
 // the pick is fed back to Claude as the tool result via respond(..., 'answer', text).
-// ponytail: one pick resolves the whole request — for multi-question asks only the clicked
-// question is answered. Fine for the common single-question case; revisit if multi-question shows up.
+// One single-answer question resolves on the click itself. Several questions — or a multiSelect
+// one — collect the picks and wait for the send button: one click must not end the whole request
+// while the other questions (or the rest of a multi-pick) are still unanswered.
 function AskQuestion({ p, canApprove, respond }: { p: any; canApprove: boolean; respond: any }) {
   const qs: any[] = p.input?.questions || [];
   const t = useT();
+  const [picks, setPicks] = useState<Record<number, string[]>>({});
+  const instant = qs.length === 1 && !qs[0]?.multiSelect;
+  const send = (sel: Record<number, string[]>) => respond(p.requestId, 'answer', qs
+    .flatMap((q, i) => ((sel[i] || []).length
+      ? [t('chat.userChoiceAnswer', { question: q.question, label: (sel[i] || []).join(', ') })] : []))
+    .join('\n'));
+  const choose = (qi: number, value: string, multi: boolean) => {
+    const cur = picks[qi] || [];
+    const next = multi ? (cur.includes(value) ? cur.filter((v) => v !== value) : [...cur, value]) : [value];
+    const sel = { ...picks, [qi]: next };
+    if (instant) send(sel); else setPicks(sel);
+  };
+  const ready = qs.length > 0 && qs.every((_, i) => (picks[i] || []).length > 0);
   if (!canApprove) {
     return <div className="text-[11px] text-txt2">{t('chat.awaitingApprovalChoice')}</div>;
   }
   return (
     <div className="flex flex-col gap-3">
-      {qs.map((q, qi) => (
+      {qs.map((q, qi) => {
+        const sel = picks[qi] || [];
+        return (
         <div key={qi}>
           <div className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: 'var(--warn)' }}><IconHelp size={14} className="shrink-0" />{q.question}</div>
+          {q.multiSelect && <div className="text-[11px] text-txt2 mb-1.5">{t('chat.multiSelectHint')}</div>}
           <div className="flex flex-col gap-1.5">
-            {(q.options || []).map((o: any, oi: number) => (
-              <button key={oi} className="text-left border border-line rounded-md px-3 py-2 bg-card hover:bg-line transition"
-                onClick={() => respond(p.requestId, 'answer', t('chat.userChoiceAnswer', { question: q.question, label: o.label }) + (o.description ? ` (${o.description})` : ''))}>
-                <div className="font-semibold text-xs">{o.label}</div>
-                {o.description && <div className="text-[11px] text-txt2 mt-0.5">{o.description}</div>}
-              </button>
-            ))}
-            <CustomAnswer question={q.question} onSubmit={(text) => respond(p.requestId, 'answer', t('chat.userChoiceAnswer', { question: q.question, label: text }))} />
+            {(q.options || []).map((o: any, oi: number) => {
+              const value = o.label + (o.description ? ` (${o.description})` : '');
+              const on = sel.includes(value);
+              return (
+                <button key={oi} aria-pressed={on}
+                  className={`text-left border rounded-md px-3 py-2 transition flex items-start gap-2 ${on ? 'border-clay bg-claysoft' : 'border-line bg-card hover:bg-line'}`}
+                  onClick={() => choose(qi, value, !!q.multiSelect)}>
+                  {on && <span className="text-clay shrink-0 mt-0.5"><IconCheck size={13} /></span>}
+                  <span className="min-w-0">
+                    <span className="font-semibold text-xs block">{o.label}</span>
+                    {o.description && <span className="text-[11px] text-txt2 mt-0.5 block">{o.description}</span>}
+                  </span>
+                </button>
+              );
+            })}
+            <CustomAnswer question={q.question} onSubmit={(text) => choose(qi, text, false)} />
           </div>
         </div>
-      ))}
-      <button className="btn-ghost !py-1.5 !text-xs self-start" onClick={() => respond(p.requestId, 'deny')}>{t('common.cancel')}</button>
+        );
+      })}
+      <div className="flex gap-2">
+        {!instant && (
+          <button className="rounded-md px-3.5 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
+            style={{ background: 'var(--ok)' }} disabled={!ready} onClick={() => send(picks)}>{t('chat.sendAnswers')}</button>
+        )}
+        <button className="btn-ghost !py-1.5 !text-xs" onClick={() => respond(p.requestId, 'deny')}>{t('common.cancel')}</button>
+      </div>
     </div>
   );
 }

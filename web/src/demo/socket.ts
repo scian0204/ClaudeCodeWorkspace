@@ -194,12 +194,22 @@ function runAskQuestion(sessionId: string) {
   const intro = 'Before I scaffold this, one quick question.';
   chunks(intro).forEach((c) => later(d += 150, () => deliver('assistant:delta', { sessionId, text: c })));
   finalBlocks.push({ type: 'text', text: intro });
+  // two questions, the second multiSelect — so the demo exercises the collect-then-send path, not
+  // just the one-click single question (a click there must not answer for the rest of the card).
   const input = { questions: [{
     question: 'Which bundler should the new package use?',
     options: [
       { label: 'Vite', description: 'fast dev server, Rollup production build' },
       { label: 'esbuild', description: 'fastest builds, fewer plugins' },
       { label: 'Keep current setup', description: 'inherit the workspace default' },
+    ],
+  }, {
+    question: 'Anything to wire up while I am in there?',
+    multiSelect: true,
+    options: [
+      { label: 'Vitest', description: 'unit tests + coverage' },
+      { label: 'ESLint', description: 'lint on commit' },
+      { label: 'GitHub Actions', description: 'CI on push' },
     ],
   }] };
   later(d += 400, () => {
@@ -211,8 +221,11 @@ function runAskQuestion(sessionId: string) {
       const output = answer || 'Denied.';
       finalBlocks[finalBlocks.length - 1].output = output;
       deliver('tool:result', { sessionId, id: toolId, output, isError: false });
-      // the picked label (or the free text) sits after the arrow in chat.userChoiceAnswer
-      const chosen = /→ "([\s\S]*)"$/.exec(String(answer || ''))?.[1] || answer || '';
+      // the picked labels (or the free text) sit after the arrow in chat.userChoiceAnswer — one line
+      // per answered question, so read every line, not just the first
+      const chosen = String(answer || '').split('\n')
+        .map((line) => /→ "([\s\S]*)"$/.exec(line)?.[1] || '')
+        .filter(Boolean).join(' · ');
       const outro = chosen ? `Got it — going with **${chosen}**. I'll wire the scripts accordingly.` : 'Understood, leaving it as is.';
       let e = 150;
       chunks(outro).forEach((c) => later(e += 160, () => deliver('assistant:delta', { sessionId, text: c })));
