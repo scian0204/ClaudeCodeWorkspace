@@ -80,6 +80,19 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ## Unreleased
 
 <details>
+<summary><b>feat(export,files): pick the files for a project download; every file tree is lazy now</b> — one folder at a time, .gitignore already unticked · <code>5b6744b</code></summary>
+
+**Picking the files.** The project-folder download used to take the whole folder minus a fixed skip list. Now the dialog shows the session's working folder as a tree of checkboxes and the archive carries what is ticked. Anything your `.gitignore` covers starts unticked — a `.gitignore` deeper in the tree counts too — along with folders you can rebuild (`node_modules`, `dist`, …). Tick one of them and it comes back, folder and all; untick something inside a ticked folder and the deeper choice wins. The size line under the tree is the real selection and updates as you tick.
+
+The browser only sends what you changed, so a folder you never opened still behaves the same as if you had. The list of files is settled on the server, handed back under a one-time token, and the download quotes that token — which is what keeps the download a plain navigation that streams to disk instead of filling browser memory. `tar` now reads its member list from a file, so a selection of hundreds of thousands of files no longer has to fit in a command line.
+
+**Every file tree loads one folder at a time.** The project, plugin and wiki explorers used to fetch the entire directory up front (up to 5000 entries) and draw it expanded; the import picker drew every file of a picked repo at once. Both is what made a big repo freeze the tab. All of them — plus the new download picker — now start fully collapsed and fetch a folder's contents the first time you open it. Opening a folder with more entries than the warning threshold asks first, and a folder past the per-listing cap says so instead of silently showing part of itself.
+
+New endpoints `GET /api/sessions/:id/export/tree?path=`, `POST /api/sessions/:id/export/bundle/prepare`; `GET /api/sessions/:id/export/bundle` now takes `?token=`. The project / plugin / wiki `…/tree` endpoints answer `?path=` with one level. New settings: `sessionBundleMaxFiles`, `fileTreeWarnCount` (ask before opening a folder this big), `fileTreeMaxEntries` (per-listing cap).
+
+</details>
+
+<details>
 <summary><b>feat(export): download a session's whole project folder, not just the transcript</b> — one .tgz you can resume from · <code>bdc11a9</code></summary>
 
 The session download handed back the conversation record only. On a machine that never had the project files, that record is not enough to carry on — the code had to be fetched some other way first.
