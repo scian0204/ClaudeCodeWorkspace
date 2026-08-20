@@ -33,6 +33,12 @@ try {
   assert.ok(raw.includes('# 토큰 회전'));
   assert.ok(raw.includes('90일마다 회전한다.'));
 
+  // content that already opens with its own H1 must not end up with two stacked headings
+  applyKnowledge(topic, { title: '만료', slug: 'expiry-h1', content: '# 만료 처리\n\n재발급한다.', sessionId: 's1' });
+  const own = fs.readFileSync(path.join(dir, 'wiki', 'conversations', 'expiry-h1.md'), 'utf8');
+  assert.equal((own.match(/^# /gm) || []).length, 1, own);
+  assert.ok(own.startsWith('<sub>'), own);
+
   // the index is what a query reads first — a note nobody links is a note nobody finds
   const idx = () => fs.readFileSync(path.join(dir, 'wiki', '_index.md'), 'utf8');
   assert.ok(idx().includes('- [토큰 회전](./conversations/token-rotation.md)'));

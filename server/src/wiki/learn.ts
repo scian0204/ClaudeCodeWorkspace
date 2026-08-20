@@ -65,12 +65,15 @@ function linkInIndex(topicDir: string, title: string, file: string) {
 export function applyKnowledge(topic: Topic, note: Note): string {
   const stem = slugify(note.slug || note.title, 'note');
   const file = `${stem}.md`;
+  // the model usually opens the article with its own title heading, so drop ours rather than
+  // stacking two H1s on top of each other
+  const content = note.content.trim();
+  const ownTitle = /^#\s+\S/.test(content);
   const body = [
-    `# ${note.title}`,
-    '',
+    ...(ownTitle ? [] : [`# ${note.title}`, '']),
     `<sub>대화에서 추가됨 · ${new Date().toISOString().slice(0, 10)}</sub>`,
     '',
-    note.content.trim(),
+    content,
     '',
   ].join('\n');
   for (const dir of ['raw', 'wiki']) {
@@ -113,9 +116,14 @@ const PROMPT = (t: Topic, index: string, question: string, answer: string, maxCh
 
 Below is one exchange from a conversation held against this wiki. Decide whether it contains
 DURABLE knowledge that belongs in the base — a fact, decision, procedure, definition or correction
-that a future reader would benefit from. Do NOT add: small talk, questions with no answer, anything
-already covered by the index below, restatements of what the wiki already says, or transient
-chatter about the tool itself.
+that a future reader would benefit from.
+
+An answer the assistant gave from its OWN knowledge, because the base did not cover the question
+yet, absolutely counts: that is how a base which starts empty fills up. Carry any caveat the answer
+made (uncertainty, "not in the wiki yet") into the article you write.
+
+Do NOT add: small talk, questions with no answer, anything already covered by the index below,
+restatements of what the wiki already says, or transient chatter about the tool itself.
 
 Existing index of the base:
 """

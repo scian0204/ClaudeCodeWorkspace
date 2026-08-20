@@ -119,23 +119,59 @@ function loadMessages(sessionId: string) {
 }
 
 // Written into the topic dir as CLAUDE.md. Claude Code auto-loads it as project memory
-// (settingSources includes 'project'), which is how the "LLM Wiki skill" is applied here:
-// answers are grounded in the compiled knowledge base, read-only.
-function groundingDoc(name: string, description: string) {
-  return `# LLM Wiki — ${name}\n\n${description ? description + '\n\n' : ''}` +
+// (settingSources is ['project'] for a wiki turn), which is how the "LLM Wiki skill" is applied
+// here. The answer rules depend on what the topic is FOR, and that is what `autoLearn` says:
+//
+//   'off'        a curated base. Answer strictly from the sources; inventing content would
+//                quietly corrupt a knowledge base somebody assembled by hand.
+//   'ask'/'auto' a base that is meant to grow out of the conversations held against it. Refusing
+//                to answer until the sources cover the question is a deadlock — an empty topic
+//                could never fill up. Answer anyway, mark clearly which part is not from the base,
+//                and let the post-turn learner decide what to keep (wiki/learn.ts).
+function groundingDoc(name: string, description: string, autoLearn = 'off') {
+  const growing = autoLearn === 'ask' || autoLearn === 'auto';
+  const head = `# LLM Wiki — ${name}\n\n${description ? description + '\n\n' : ''}` +
     `이 디렉터리는 "${name}" 주제의 지식 기반(knowledge base)입니다.\n\n` +
     `## 구조\n` +
-    `- \`./wiki/\` — 컴파일된 합성 아티클 + \`_index.md\`(진입점 인덱스). **답변의 1차 근거.**\n` +
+    `- \`./wiki/\` — 컴파일된 합성 아티클 + \`_index.md\`(진입점 인덱스). **답변의 1차 근거.** 아직 없을 수도 있다(빈 주제면 정상).\n` +
     `- \`./raw/\` — 원본 소스(불변). wiki가 부족할 때만 보조로 참고.\n` +
-    `- \`./wiki/conversations/\` — 이 위키를 두고 오간 대화에서 추려 넣은 지식(원본은 \`./raw/conversations/\`).\n\n` +
-    `## 답변 규칙 (LLM-Wiki query mode)\n` +
+    `- \`./wiki/conversations/\` — 이 위키를 두고 오간 대화에서 추려 넣은 지식(원본은 \`./raw/conversations/\`).\n\n`;
+
+  const strict =
+    `## 답변 규칙 (근거 고정 모드)\n` +
     `- 먼저 \`./wiki/_index.md\`를 읽고, 관련 아티클로 이동해라.\n` +
     `- 그 내용에 **근거해서만** 답하고, 근거가 된 아티클/파일명(+신뢰도 표기가 있으면 함께)을 밝혀라.\n` +
-    `- 근거에 없는 내용은 추측하지 말고 "이 위키에는 해당 내용이 없습니다"라고 답하라.\n` +
+    `- 근거에 없는 내용은 추측하지 말고 "이 위키에는 해당 내용이 없습니다"라고 답하라.\n`;
+
+  const growingRules =
+    `## 답변 규칙 (대화로 자라는 위키)\n` +
+    `이 주제는 대화에서 지식을 쌓도록 설정돼 있다. 지식 기반이 비어 있거나 질문을 못 덮더라도 **되묻지 말고 바로 답해라.**\n` +
+    `- 먼저 \`./wiki/_index.md\`를 읽어라. 있으면 그 내용을 1차 근거로 삼고, 근거가 된 아티클/파일명을 밝혀라.\n` +
+    `- 없거나 부족하면 거기서 멈추지 말고 네 지식으로 이어서 답해라. 대신 그 부분은 "위키에 아직 없는 내용 — 내 지식으로 답함"처럼 출처를 분명히 구분하고, 확실하지 않으면 확실하지 않다고 적어라.\n` +
+    `- 위키에 아직 없는 내용을 위키가 말한 것처럼 쓰지는 마라. 구분만 하면 된다.\n` +
+    `- **무엇을 위키에 남길지는 네가 판단하지 않아도 된다.** 턴이 끝나면 워크스페이스가 이 대화를 읽고 알아서 정한다(자동 추가면 바로 기록, 물어보고 추가면 사용자에게 카드로 묻는다). 그러니 "추가할까요?"라고 되묻거나 허락을 구하지 마라.\n`;
+
+  const tail =
     `- 도표·스크린샷 등 시각 자료가 관련되면, 아티클이 인용한 \`raw/\`의 이미지(.png/.jpg 등)를 Read로 직접 열어(너는 멀티모달) 확인해서 답하라.\n` +
-    `- 사용자가 명시적으로 요청하지 않는 한 파일을 수정/생성하지 마라 (읽기 전용 질의).\n` +
-    `- 사용자가 지식 추가를 명시적으로 요청하면 \`llm-wiki\` 스킬을 읽고 거기 적힌 절차대로만 파일을 써라.\n` +
+    `- 사용자가 특정 문서를 써 달라고 명시적으로 요청하지 않는 한 파일을 수정/생성하지 마라.\n` +
+    `- 지식 추가를 명시적으로 요청받으면 \`llm-wiki\` 스킬을 읽고 거기 적힌 절차대로만 파일을 써라.\n` +
     `  (이 스레드에는 워크스페이스 공통 플러그인이 적용되지 않는다 — 그 스킬 하나가 전부다.)\n`;
+
+  return head + (growing ? growingRules : strict) + tail;
+}
+
+// The doc is generated, never hand-edited (the rules above say so), so it is safe to rewrite from
+// the row whenever the row changes — and once at boot, which is what upgrades topics created before
+// the answer rules became mode-dependent.
+export function writeGroundingDoc(t: { name: string; description: string; path: string; autoLearn?: string }) {
+  try {
+    ensure(t.path);
+    fs.writeFileSync(path.join(t.path, 'CLAUDE.md'), groundingDoc(t.name, t.description, t.autoLearn || 'off'));
+  } catch { /* a topic dir that vanished is reaped elsewhere */ }
+}
+
+export function refreshGroundingDocs() {
+  try { for (const t of db.select().from(schema.wikiTopics).all()) writeGroundingDoc(t); } catch { /* noop */ }
 }
 
 // Create an empty wiki topic (no staged sources) and kick off compilation. Reused by the
@@ -148,12 +184,12 @@ export function createWikiTopic(opts: { name: string; description?: string; crea
   const dir = paths.wikiTopic(id);
   const rawDir = path.join(dir, 'raw');
   ensure(dir); ensure(rawDir);
-  fs.writeFileSync(path.join(dir, 'CLAUDE.md'), groundingDoc(name, description));
   const row = {
     id, name, description, path: dir, createdBy: opts.createdBy, createdAt: Date.now(),
     compileStatus: 'idle' as const, compiledAt: null, compileError: null,
     autoLearn: learnMode(opts.autoLearn),
   };
+  writeGroundingDoc(row);
   db.insert(schema.wikiTopics).values(row).run();
   void compileTopic(id); // async; status via 'wiki:status' socket
   return row;
@@ -253,13 +289,13 @@ export async function wikiRoutes(app: FastifyInstance) {
     // seeding from a chat/project writes into the same raw/ the upload path fills, so the compile
     // below is unchanged — it just has sources it did not have to be uploaded
     if (seed.type === 'session' || seed.type === 'project') applySeed(dir, seed);
-    fs.writeFileSync(path.join(dir, 'CLAUDE.md'), groundingDoc(name, description));
     const compileStatus: 'done' | 'idle' = precompiled ? 'done' : 'idle';
     const row = {
       id, name, description, path: dir, createdBy: u.id, createdAt: Date.now(),
       compileStatus, compiledAt: precompiled ? Date.now() : null, compileError: null,
       autoLearn: learnMode(b.autoLearn),
     };
+    writeGroundingDoc(row);
     db.insert(schema.wikiTopics).values(row).run();
     if (!precompiled) void compileTopic(id); // auto-compile raw/ -> wiki/ (async; status via 'wiki:status' socket)
     return { topic: row };
@@ -279,11 +315,9 @@ export async function wikiRoutes(app: FastifyInstance) {
     if ('autoLearn' in b) patch.autoLearn = learnMode(b.autoLearn);
     if (!Object.keys(patch).length) return { topic: t };
     db.update(schema.wikiTopics).set(patch).where(eq(schema.wikiTopics.id, id)).run();
-    // the grounding doc carries the name/description, so keep it in step with the row
-    if (patch.name || 'description' in patch) {
-      const next = { ...t, ...patch };
-      try { fs.writeFileSync(path.join(t.path, 'CLAUDE.md'), groundingDoc(next.name, next.description)); } catch { /* noop */ }
-    }
+    // the grounding doc carries the name, the description AND the answer rules that follow from
+    // autoLearn, so keep it in step with the row
+    writeGroundingDoc({ ...t, ...patch });
     return { topic: { ...t, ...patch } };
   });
 

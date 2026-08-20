@@ -26,7 +26,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 | Version | Date | Commits | Headline |
 |---|---|---|---|
-| [Unreleased](#unreleased) | — | 5 | Wikis that start from a chat, a project or nothing — and grow from conversations |
+| [Unreleased](#unreleased) | — | 6 | Wikis that start from a chat, a project or nothing — and grow from conversations |
 | [v1.22.0](#v1220--2026-08-20) | 2026-08-20 | 10 | Download a session's project folder, picking the files |
 | [v1.21.1](#v1211--2026-08-19) | 2026-08-19 | 2 | /hooks stops pointing at a page that cannot do it |
 | [v1.21.0](#v1210--2026-08-19) | 2026-08-19 | 4 | Side chat: ask about the work without joining it |
@@ -80,6 +80,48 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ---
 
 ## Unreleased
+
+<details>
+<summary><b>fix(wiki): a growing wiki answers instead of refusing, and never asks permission to learn</b> — the empty-topic deadlock · <code>PLACEHOLDER</code></summary>
+
+**Symptom.** A brand-new empty topic set to add knowledge automatically was asked
+about AWS and replied "이 위키에는 해당 내용이 없습니다", then offered the user a
+menu of ways to fix it. Nothing was recorded, so the base stayed empty — and would
+have stayed empty forever, since it fills from exactly those answers.
+
+**Cause.** Two rules written for a curated base were applied to every topic: the
+generated `CLAUDE.md` said never to answer beyond the sources, and the `llm-wiki`
+skill said to wait to be asked before adding anything. Correct for a base somebody
+assembled by hand; a deadlock for one whose whole purpose is to grow.
+
+**Fix.** The answer rules now follow the topic's own mode, and the generated
+`CLAUDE.md` is written from it:
+
+- off — unchanged. Answer strictly from the sources, say so when they do not cover
+  the question.
+- ask / auto — answer anyway, from what the model knows, with that part marked as
+  not from the wiki (and marked uncertain when it is). Never present it as
+  something the base said.
+
+Deciding what to keep is no longer the answering turn's business at all: the
+post-turn capture pass owns it, so the skill tells the thread not to end an answer
+with "위키에 추가할까요?" and not to write files unless a specific document was
+asked for. The capture prompt was told the opposite of before — an answer the model
+gave from its own knowledge is exactly what a growing base is made of.
+
+Also: every topic's `CLAUDE.md` is regenerated at boot, so topics created before
+this change pick up the right rules without being touched; starting a topic empty
+in the create dialog no longer defaults to off (a combination that can neither
+answer nor fill); and a stored note stops carrying two stacked `#` headings when
+the model already wrote its own title.
+
+Verified on a real turn against an empty topic: the answer came back carrying the
+"위키에 아직 없는 내용 — 내 지식으로 답함" marker (plus a source cross-check the
+model chose to do itself), and the capture pass wrote
+`raw/conversations/s3-storage-classes-guide.md`, its `wiki/` mirror and the index
+line without being asked.
+
+</details>
 
 <details>
 <summary><b>fix(wiki): a wiki turn loads one dedicated plugin, not the workspace's</b> — plugin isolation for queries and compiles · <code>5d0377d</code></summary>

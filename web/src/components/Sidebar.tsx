@@ -337,7 +337,12 @@ function WikiCreateModal({ onClose }: { onClose: () => void }) {
       <div className="text-[11px] text-txt3 mb-1">{t('wiki.seedLabel')}</div>
       <div className="grid grid-cols-2 gap-1.5 mb-1.5">
         {SEEDS.map((o) => (
-          <button key={o.key} onClick={() => setSeed(o.key)}
+          <button key={o.key} onClick={() => {
+            setSeed(o.key);
+            // an empty base with learning off can neither answer nor fill up, so starting blank
+            // moves the mode off 'off' unless the admin has already chosen one deliberately
+            if (o.key === 'blank' && autoLearn === 'off') setAutoLearn('auto');
+          }}
             className={`text-xs rounded-md border px-2 py-1.5 text-left ${seed === o.key ? 'border-clay bg-claysoft text-clay font-semibold' : 'border-line hover:bg-line'}`}>
             {o.label}
           </button>

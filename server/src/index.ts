@@ -13,7 +13,7 @@ import { authRoutes } from './auth/routes.js';
 import { sessionRoutes } from './routes/sessions.js';
 import { roomRoutes } from './routes/rooms.js';
 import { projectRoutes } from './routes/projects.js';
-import { wikiRoutes, reapWikiStaging, reapWikiOrphans } from './routes/wiki.js';
+import { wikiRoutes, reapWikiStaging, reapWikiOrphans, refreshGroundingDocs } from './routes/wiki.js';
 import { importRoutes, reapImportStaging } from './routes/import.js';
 import { pluginRoutes } from './routes/plugins.js';
 import { agentRoutes } from './routes/agents.js';
@@ -47,6 +47,7 @@ async function main() {
   reapWikiStaging(); // clear any orphaned wiki upload staging from a prior run
   reapImportStaging(); // clear any orphaned session-import staging from a prior run
   reapWikiOrphans(); // remove wiki topic dirs on disk that no longer have a DB row
+  refreshGroundingDocs(); // regenerate each topic's CLAUDE.md from its row (picks up rule changes)
   reapReviewOrphans(); // remove review clone/worktree dirs on disk that no longer have a DB row
   reapBackupStaging(); // clear backup/restore staging left by a crash (.pre-restore is kept — it's the rollback)
 
