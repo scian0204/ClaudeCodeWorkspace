@@ -636,7 +636,8 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   if (seg[1] === 'wiki' && seg[2] === 'topics' && seg[4] === 'files') return ok({ files: WIKI_ARTICLES, source: 'compiled' });
   // flat file list — the citation layer drops sources with no file behind them
   if (seg[1] === 'wiki' && seg[2] === 'topics' && seg[4] === 'paths') {
-    return ok({ wiki: WIKI_TREE_ARTICLES.map((f: any) => f.name), raw: WIKI_RAW.map((f: any) => f.name) });
+    const rel = (n: string) => n.replace(/^(wiki|raw)\//, '');
+    return ok({ wiki: WIKI_TREE_ARTICLES.map((f: any) => rel(f.name)), raw: WIKI_RAW.map((f: any) => rel(f.name)) });
   }
   if (seg[1] === 'wiki' && seg[2] === 'topics' && seg[4] === 'tree') {
     const src = query.get('dir') === 'wiki' ? WIKI_TREE_ARTICLES : WIKI_RAW;

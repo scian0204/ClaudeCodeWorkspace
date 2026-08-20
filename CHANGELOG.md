@@ -26,7 +26,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 | Version | Date | Commits | Headline |
 |---|---|---|---|
-| [Unreleased](#unreleased) | — | 6 | Wikis that start from a chat, a project or nothing — and grow from conversations |
+| [Unreleased](#unreleased) | — | 7 | Wikis that start from a chat, a project or nothing — and grow from conversations |
 | [v1.22.0](#v1220--2026-08-20) | 2026-08-20 | 10 | Download a session's project folder, picking the files |
 | [v1.21.1](#v1211--2026-08-19) | 2026-08-19 | 2 | /hooks stops pointing at a page that cannot do it |
 | [v1.21.0](#v1210--2026-08-19) | 2026-08-19 | 4 | Side chat: ask about the work without joining it |
@@ -80,6 +80,36 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ---
 
 ## Unreleased
+
+<details>
+<summary><b>feat(wiki): answer-format rules, no tool cards in a wiki thread, and sources that actually exist</b> — <code>PLACEHOLDER</code></summary>
+
+Three rules were added to a topic's grounding doc and to the `llm-wiki` skill:
+answer in the language the user wrote in, lead with the conclusion and drop the
+filler, and end with the list of files referenced. That last one is load-bearing —
+the sources panel and the in-answer highlighting read exactly that list, so a path
+left out is a source the reader cannot open.
+
+A wiki thread no longer renders tool cards at all (`BlockList` gained `hideTools`,
+set for wiki threads only). The reader wants the answer and its sources, not the
+file reads that produced them. Ordinary chats, the guide and the task panel are
+untouched, and the tool calls are still stored — the sources panel is built from
+them.
+
+The sources panel now drops files that do not exist. It always meant to snap an
+approximate path onto the real one (the model normalizes whitespace, so a name with
+a double space never matched), but the resolver read `{raw, wiki}` from an endpoint
+that returns `{entries, truncated}` — so it silently did nothing, and a filename the
+model invented was listed like any other. New `GET /api/wiki/topics/:id/paths`
+returns the two flat lists, the citation store caches them per topic, and resolution
+became synchronous, which means the same filter now also applies to the in-text
+citation marks instead of only the panel.
+
+Verified on a real turn: the answer came back in Korean, opened with the conclusion,
+and ended with the one file it had read; the transcript rendered no tool cards, and
+the panel listed only files present on disk.
+
+</details>
 
 <details>
 <summary><b>fix(wiki): a growing wiki answers instead of refusing, and never asks permission to learn</b> — the empty-topic deadlock · <code>84bc203</code></summary>
