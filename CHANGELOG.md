@@ -26,7 +26,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 | Version | Date | Commits | Headline |
 |---|---|---|---|
-| [Unreleased](#unreleased) | — | 3 | Wikis that start from a chat, a project or nothing — and grow from conversations |
+| [Unreleased](#unreleased) | — | 4 | Wikis that start from a chat, a project or nothing — and grow from conversations |
 | [v1.22.0](#v1220--2026-08-20) | 2026-08-20 | 10 | Download a session's project folder, picking the files |
 | [v1.21.1](#v1211--2026-08-19) | 2026-08-19 | 2 | /hooks stops pointing at a page that cannot do it |
 | [v1.21.0](#v1210--2026-08-19) | 2026-08-19 | 4 | Side chat: ask about the work without joining it |
@@ -160,6 +160,8 @@ API reference gains wiki seeding, topic settings, the proposal decision and the
 session's `wikiRefId`, so it can carry them out rather than only explain them.
 
 </details>
+
+- **docs: the new wiki behaviour in both READMEs and these notes** — feature list, table rows and the LLM Wiki detail block, en/ko · `9f2444f`
 
 ---
 
