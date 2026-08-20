@@ -266,6 +266,9 @@ export const DEFS: ConfigDef[] = [
   { key: 'wikiEditMaxKB', group: 'wiki', type: 'int', default: '512', min: 1, max: 10240, unit: 'KB' },
   // Attaching a wiki topic to an ordinary chat/room session as reference knowledge.
   { key: 'wikiLinkEnabled', group: 'wiki', type: 'bool', default: '1' },
+  // The single plugin a wiki turn loads (query thread + compile). Empty = the bundled llm-wiki
+  // skill shipped with the app. Workspace-wide plugins are never applied to a wiki turn.
+  { key: 'wikiPluginPath', group: 'wiki', type: 'string', default: '' },
   // Growing a topic from conversations. The per-topic mode (off/ask/auto) still decides; this is the
   // workspace-wide master switch — off skips the learner entirely, whatever the topics say.
   { key: 'wikiAutoLearnEnabled', group: 'wiki', type: 'bool', default: '1' },

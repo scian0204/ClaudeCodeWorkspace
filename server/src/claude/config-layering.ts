@@ -26,6 +26,9 @@ export interface SessionContext {
   unattended?: boolean;             // review pipeline: auto-allow canUseTool, never prompts a human
   systemPromptAppend?: string;      // extra house rules appended to the CLI's own prompt (never shown in the transcript)
   extraRoots?: string[];            // dirs beyond the usual fence this turn may read (a linked wiki topic)
+  // Which settings layers the CLI loads. Default ['user','project','local']; a wiki turn narrows
+  // it to ['project'] so only the topic's own CLAUDE.md applies, not the operator's personal setup.
+  settingSources?: string[];
 }
 
 export function homeFor(ctx: SessionContext): string {
@@ -115,7 +118,7 @@ export function buildOptions(ctx: SessionContext, extra: {
     model: ctx.providerModel || ctx.model, // provider model id/ARN overrides the dropdown model
     permissionMode: sdkMode(ctx.permissionMode),
     effort: ctx.effort,
-    settingSources: ['user', 'project', 'local'],
+    settingSources: ctx.settingSources ?? ['user', 'project', 'local'],
     additionalDirectories,
     plugins: ctx.plugins.length ? ctx.plugins.map((p) => ({ type: 'local' as const, path: p })) : undefined,
     canUseTool: extra.canUseTool,

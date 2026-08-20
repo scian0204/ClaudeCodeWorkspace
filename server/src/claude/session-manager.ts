@@ -24,6 +24,7 @@ import { poolForSession, runOrder, markExhausted, markAvailable } from '../auth/
 import { cfg } from '../lib/config-registry.js';
 import { maybeAutoTitle } from './auto-title.js';
 import { maybeWikiLearn } from '../wiki/learn.js';
+import { wikiPluginPaths } from '../wiki/plugin.js';
 import { isUsageLimitError, resetAtFromError, eligible as autoResumeEligible, parkTurn } from './auto-resume.js';
 import { ingestTaskEvent, endRunningTasks } from './tasks.js';
 import { limitsSettled } from './usage-limits.js';
@@ -160,7 +161,9 @@ export async function probeCommands(chatSessionId: string, requesterId?: string 
   // Probe with the viewer's auth (or the owner's for a private session); none => nothing to probe.
   const prov = resolveProvider(requesterId ?? (kind === 'user' ? ownerId : null));
   if (prov.source === 'none') return [];
-  const plugins = resolvePluginPaths(kind, ownerId);
+  // a wiki thread runs with only the dedicated plugin, so probe with that same set — otherwise the
+  // command list advertises skills the turn cannot reach
+  const plugins = s.wikiTopicId ? wikiPluginPaths() : resolvePluginPaths(kind, ownerId);
   const key = `${chatSessionId}|${plugins.join(',')}`;
   const hit = cmdCache.get(key);
   if (hit) return hit;
@@ -168,6 +171,7 @@ export async function probeCommands(chatSessionId: string, requesterId?: string 
     kind, ownerId, cwd: await cwdFor(s), model: s.model || cfg.str('defaultModel'),
     effort: (s.effort || cfg.str('defaultEffort')) as SessionContext['effort'],
     permissionMode: clampMode((s.permissionMode as PermMode) || 'default', allowBypass()), plugins,
+    settingSources: s.wikiTopicId ? ['project'] : undefined,
     authToken: '', providerEnv: prov.env, providerModel: prov.model,
   };
   const abort = new AbortController();
@@ -464,12 +468,19 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
     }
   }
 
+  // A wiki query thread is a knowledge lookup, not the team's coding session, so it does NOT inherit
+  // the workspace's plugins, the operator's personal settings layer, or the team agent definitions —
+  // all three showed up in answers (another plugin's writing style, a hook that made every write run
+  // twice). It gets one plugin, its own topic's CLAUDE.md, and nothing else. See wiki/plugin.ts.
+  const isWikiThread = !!s.wikiTopicId;
+
   const ctx: SessionContext = {
     kind, ownerId, cwd, model: s.model || cfg.str('defaultModel'),
     effort: (s.effort || cfg.str('defaultEffort')) as SessionContext['effort'],
-    permissionMode: mode, plugins: resolvePluginPaths(kind, ownerId),
+    permissionMode: mode, plugins: isWikiThread ? wikiPluginPaths() : resolvePluginPaths(kind, ownerId),
+    settingSources: isWikiThread ? ['project'] : undefined,
     authToken: '', providerEnv: prov.env, providerModel: prov.model, gitEnv, mcpServers, disallowedTools, systemPromptAppend, extraRoots,
-    agents: resolveAgents(kind, ownerId, s.projectId), agentName: s.agent || undefined,
+    agents: isWikiThread ? undefined : resolveAgents(kind, ownerId, s.projectId), agentName: s.agent || undefined,
     unattended: s.kind === 'review', // review turns auto-allow (makeAutoAllow) — no human prompts
   };
 

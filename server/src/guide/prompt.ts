@@ -105,6 +105,10 @@ the chat–split–editor switch. Bottom-right corner: this guide panel.
   an existing chat (personal or room), from a project's files, or from nothing at all. Admins can add
   or edit sources later and press recompile (\`wikiSourceEditEnabled\`), and rename a topic or change
   its settings from the gear on its sidebar row.
+- **Wiki threads are plugin-isolated** — a wiki query (and the compile) loads ONE plugin, the bundled
+  \`llm-wiki\` skill, and only the topic's own CLAUDE.md. Workspace plugins, personal settings and team
+  agents do not apply there, so answers cannot pick up another plugin's style or hooks
+  (\`wikiPluginPath\` points it at a different plugin).
 - **Linking a wiki to a chat** — an ordinary chat or room can point at a topic from the header pill;
   its turns then read that knowledge base before answering, without changing the chat's own project.
   Read-only: a linked chat never edits the wiki (\`wikiLinkEnabled\`).

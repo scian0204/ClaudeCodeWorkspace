@@ -398,7 +398,11 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
     const s = { id: genId('s'), title: 'New chat', updatedAt: Date.now(), projectId: b.projectId ? String(b.projectId) : null, model: 'claude-opus-4-8', effort: 'high', permissionMode: 'default' };
     db.sessions.unshift(s); db.messages[s.id] = []; return ok({ session: s });
   }
-  if (seg[1] === 'sessions' && seg[3] === 'commands') return ok({ commands: COMMANDS });
+  // a wiki thread (id `cs_<topicId>`) loads only the bundled llm-wiki plugin, so its command list
+  // must not advertise the workspace's skills
+  if (seg[1] === 'sessions' && seg[3] === 'commands') {
+    return ok({ commands: idAt(2).startsWith('cs_') ? [] : COMMANDS });
+  }
   if (seg[1] === 'sessions' && seg[3] === 'usage') return ok({ usage: USAGE });
   if (seg[1] === 'sessions' && seg[3] === 'messages' && seg[5] === 'edit') {
     const list = msgs(idAt(2)); const i = list.findIndex((m) => m.id === idAt(4));

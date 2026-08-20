@@ -7,6 +7,7 @@ import { resolveProvider } from '../auth/provider.js';
 import { cfg } from '../lib/config-registry.js';
 import { recordUsage } from '../usage/tracker.js';
 import { io } from '../realtime/io.js';
+import { wikiPluginPaths } from './plugin.js';
 
 // One compile per topic at a time. Guards against overlapping auto-compile + recompile.
 const inflight = new Set<string>();
@@ -68,7 +69,9 @@ async function runCompile(t: NonNullable<ReturnType<typeof getTopic>>) {
     // acceptEdits (not bypassPermissions): the always-allow canUseTool below authorizes every
     // tool, and bypass maps to --dangerously-skip-permissions which the CLI refuses under root.
     permissionMode: 'acceptEdits',
-    plugins: [], // deterministic compile — no user plugins/skills in the loop
+    // deterministic compile: the bundled wiki plugin only, and only this topic's CLAUDE.md —
+    // no workspace plugins, no operator settings layer (see wiki/plugin.ts)
+    plugins: wikiPluginPaths(), settingSources: ['project'],
     authToken: '', providerEnv: prov.env, providerModel: prov.model,
   };
   const { query } = await import('@anthropic-ai/claude-agent-sdk');

@@ -156,7 +156,9 @@ async function decide(a: {
   const maxChars = cfg.int('wikiLearnMaxKB') * 1024;
   const ctx: SessionContext = {
     kind: 'user', ownerId: a.userId, cwd: a.topic.path, model: cfg.str('wikiLearnModel'),
-    permissionMode: 'default', plugins: [], authToken: '',
+    // one JSON answer with every tool denied: no plugin has anything to add, and the operator's
+    // settings layer could only distort the decision
+    permissionMode: 'default', plugins: [], settingSources: ['project'], authToken: '',
     providerEnv: a.providerEnv, providerModel: a.providerModel,
   };
   const abort = new AbortController();
