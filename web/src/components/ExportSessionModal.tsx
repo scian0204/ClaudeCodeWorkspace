@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../lib/store';
 import { api } from '../lib/api';
 import { useT } from '../lib/i18n';
-import { confirmBigFolder, fmtBytes, joinRel, type TreeEntry, type TreeLevel } from '../lib/filetree';
+import { confirmBigFolder, expandAllLazy, fmtBytes, joinRel, type TreeEntry, type TreeLevel } from '../lib/filetree';
 import { Modal } from './Modal';
 import { IconDownload, IconWarning, IconFolder, IconArchive, IconFile, IconChevronRight, IconChevronDown } from '../lib/icons';
 
@@ -40,18 +40,33 @@ export function ExportSessionModal({ sessionId, onClose }: { sessionId: string; 
   const [levels, setLevels] = useState<Record<string, TreeLevel>>({});
   const [open, setOpen] = useState<Record<string, boolean>>({});           // starts empty: all closed
   const [overrides, setOverrides] = useState<Record<string, boolean>>({}); // what the user changed by hand
+  const [expanding, setExpanding] = useState(false);
+  const [partial, setPartial] = useState(false);   // expand-all left something closed
   const [prep, setPrep] = useState<Prep | null>(null);
   const [preparing, setPreparing] = useState(false);
   const timer = useRef<number | null>(null);
 
   const slug = slugOf(cwd.trim());
 
+  const fetchLevel = async (rel: string): Promise<TreeLevel | null> => {
+    try {
+      return await api.get(`/api/sessions/${sessionId}/export/tree?path=${encodeURIComponent(rel)}`);
+    } catch (e: any) { setError(e.message); return null; }
+  };
   const loadLevel = async (rel: string) => {
     if (levels[rel]) return;
+    const lv = await fetchLevel(rel);
+    if (lv) setLevels((m) => ({ ...m, [rel]: lv }));
+  };
+  // Opens every folder, fetching the ones not seen yet. Folders over the warning size stay closed.
+  const expandAll = async () => {
+    setExpanding(true);
     try {
-      const lv: TreeLevel = await api.get(`/api/sessions/${sessionId}/export/tree?path=${encodeURIComponent(rel)}`);
-      setLevels((m) => ({ ...m, [rel]: lv }));
-    } catch (e: any) { setError(e.message); }
+      const r = await expandAllLazy(fetchLevel, levels);
+      setLevels(r.levels);
+      setOpen(r.open);
+      setPartial(r.partial);
+    } finally { setExpanding(false); }
   };
 
   // Ask the server what the current selection weighs, and take the download token with it. Debounced:
@@ -207,11 +222,17 @@ export function ExportSessionModal({ sessionId, onClose }: { sessionId: string; 
             <>
               <div className="flex items-center justify-between gap-2">
                 <div className="text-[11px] text-txt3 min-w-0 flex-1">{t('export.pickHint')}</div>
-                <button className="text-[11px] text-txt3 hover:text-clay shrink-0" onClick={() => setOpen({})}>{t('common.collapseAll')}</button>
+                <div className="flex gap-3 shrink-0 text-[11px]">
+                  <button className="text-txt3 hover:text-clay disabled:opacity-40" disabled={expanding} onClick={() => void expandAll()}>
+                    {expanding ? t('files.expanding') : t('common.expandAll')}
+                  </button>
+                  <button className="text-txt3 hover:text-clay" onClick={() => { setOpen({}); setPartial(false); }}>{t('common.collapseAll')}</button>
+                </div>
               </div>
               <div className="max-h-[38vh] overflow-auto scrolly border border-line rounded">
                 {!levels[''] ? <div className="text-xs text-txt3 px-2 py-1.5">{t('fileExplorer.loading')}</div> : renderLevel('', 0)}
               </div>
+              {partial && <div className="text-[11px]" style={{ color: 'var(--warn)' }}>{t('files.expandAllPartial')}</div>}
               <div className="text-[11px] flex flex-col gap-1">
                 {preparing && <span className="text-txt3">{t('export.bundleMeasuring')}</span>}
                 {!preparing && prep && !prep.over && !prep.tooMany && !!prep.files && (

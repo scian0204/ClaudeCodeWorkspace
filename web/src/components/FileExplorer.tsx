@@ -4,7 +4,7 @@ import { md } from '../lib/md';
 import { useT } from '../lib/i18n';
 import { type UploadState } from '../lib/api';
 import { collectDrop, collectPick, type Collected } from '../lib/dropfiles';
-import { confirmBigFolder, fmtBytes, joinRel, type TreeEntry, type TreeLevel } from '../lib/filetree';
+import { confirmBigFolder, expandAllLazy, fmtBytes, joinRel, type TreeEntry, type TreeLevel } from '../lib/filetree';
 import { Modal } from './Modal';
 import { UploadProgress } from './UploadProgress';
 import { IconChevronDown, IconChevronRight, IconFolder, IconFile, IconEye, IconTerminal, IconPencil, IconCheck, IconX } from '../lib/icons';
@@ -64,6 +64,8 @@ export function FileExplorer({
   const [levels, setLevels] = useState<Record<string, TreeLevel>>({});
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [busyPath, setBusyPath] = useState<string | null>(null);
+  const [expanding, setExpanding] = useState(false);
+  const [partial, setPartial] = useState(false);   // expand-all left something closed
   const [sel, setSel] = useState<string | null>(null);
   const [file, setFile] = useState<{ name: string; content: string } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -100,6 +102,20 @@ export function FileExplorer({
     if (!levels[k] && !confirmBigFolder(entry.name, entry.count)) return;
     setOpen((m) => ({ ...m, [k]: true }));
     if (!levels[k]) await fetchLevel(dir, rel);
+  };
+
+  // Opens every folder of the current source, fetching the ones not seen yet. Folders over the
+  // warning size stay closed — the walk works in plain rel space, so the keys are mapped in and out.
+  const expandAll = async () => {
+    setExpanding(true);
+    try {
+      const mine: Record<string, TreeLevel> = {};
+      for (const [k, v] of Object.entries(levels)) if (k.startsWith(`${dir}:`)) mine[k.slice(dir.length + 1)] = v;
+      const r = await expandAllLazy((rel) => loadDir(dir, rel).catch((e) => { useStore.getState().setError(e.message); return null; }), mine);
+      setLevels((m) => ({ ...m, ...Object.fromEntries(Object.entries(r.levels).map(([rel, v]) => [key(dir, rel), v])) }));
+      setOpen(Object.fromEntries(Object.entries(r.open).map(([rel, v]) => [key(dir, rel), v])));
+      setPartial(r.partial);
+    } finally { setExpanding(false); }
   };
 
   // Drop everything opened so far, so the next open re-reads from disk (after an upload or a save).
@@ -233,13 +249,17 @@ export function FileExplorer({
       <div className="grid gap-2 h-[68vh] md:h-[60vh] grid-cols-1 grid-rows-[38%_minmax(0,1fr)] md:grid-cols-[260px_minmax(0,1fr)] md:grid-rows-1">
         <div className="border border-line rounded flex flex-col min-h-0 overflow-hidden">
           <div className="flex gap-3 px-2 py-1 border-b border-line text-[11px] shrink-0">
-            <button className="text-txt3 hover:text-clay" onClick={() => setOpen({})}>{t('common.collapseAll')}</button>
+            <button className="text-txt3 hover:text-clay disabled:opacity-40" disabled={expanding} onClick={() => void expandAll()}>
+              {expanding ? t('files.expanding') : t('common.expandAll')}
+            </button>
+            <button className="text-txt3 hover:text-clay" onClick={() => { setOpen({}); setPartial(false); }}>{t('common.collapseAll')}</button>
             <button className="text-txt3 hover:text-clay" onClick={() => void refreshTree()}>{t('fileExplorer.refresh')}</button>
           </div>
           <div className="overflow-auto scrolly p-1 min-h-0 flex-1">
             {!rootLevel && <div className="text-txt3 text-xs p-2">{t('fileExplorer.loading')}</div>}
             {rootLevel && !rootLevel.entries.length && <div className="text-txt3 text-xs p-2">{t('fileExplorer.noFiles')}</div>}
             {renderLevel('', 0)}
+            {partial && <div className="text-[10px] text-warn px-2 py-1">{t('files.expandAllPartial')}</div>}
           </div>
         </div>
         <div className="border border-line rounded overflow-auto scrolly bg-bg min-w-0 min-h-0">
