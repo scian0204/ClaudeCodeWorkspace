@@ -4,7 +4,7 @@
 
 # Update notes
 
-Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and now — **v1.23.0** (2026-08-20) plus what is not yet released — all **423 commits**.
+Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and now — **v1.24.0** (2026-08-21) plus what is not yet released — all **425 commits**.
 
 Each row shows only its **title and commit hash**; click the triangle for the detail (root cause, implementation, config keys).
 
@@ -15,6 +15,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ## Contents
 
 - [Timeline](#timeline)
+- [Unreleased](#unreleased) — commits not yet in a release
 - **1.x releases** — [v1.24.0](#v1240--2026-08-21) · [v1.23.0](#v1230--2026-08-20) · [v1.22.0](#v1220--2026-08-20) · [v1.21.1](#v1211--2026-08-19) · [v1.21.0](#v1210--2026-08-19) · [v1.20.2](#v1202--2026-08-19) · [v1.20.1](#v1201--2026-08-19) · [v1.20.0](#v1200--2026-08-19) · [v1.19.13](#v11913--2026-08-19) · [v1.19.12](#v11912--2026-08-19) · [v1.19.11](#v11911--2026-08-19) · [v1.19.10](#v11910--2026-08-19) · [v1.19.9](#v1199--2026-08-18) · [v1.19.8](#v1198--2026-08-18) · [v1.19.7](#v1197--2026-08-18) · [v1.19.6](#v1196--2026-08-18) · [v1.19.5](#v1195--2026-08-14) · [v1.19.4](#v1194--2026-08-14) · [v1.19.3](#v1193--2026-08-14) · [v1.19.2](#v1192--2026-08-14) · [v1.19.1](#v1191--2026-08-14) · [v1.19.0](#v1190--2026-08-14) · [v1.18.0](#v1180--2026-08-14) · [v1.17.3](#v1173--2026-08-14) · [v1.17.2](#v1172--2026-08-14) · [v1.17.1](#v1171--2026-08-14) · [v1.17.0](#v1170--2026-08-14) · [v1.16.1](#v1161--2026-08-13) · [v1.16.0](#v1160--2026-08-13) · [v1.15.1](#v1151--2026-08-13) · [v1.15.0](#v1150--2026-08-13) · [v1.14.2](#v1142--2026-08-13) · [v1.14.1](#v1141--2026-08-13) · [v1.14.0](#v1140--2026-08-13) · [v1.13.0](#v1130--2026-08-13) · [v1.12.0](#v1120--2026-08-07) · [v1.11.0](#v1110--2026-08-06) · [v1.10.0](#v1100--2026-08-05) · [v1.9.1](#v191--2026-08-05) · [v1.9.0](#v190--2026-08-05) · [v1.8.0](#v180--2026-08-04) · [v1.7.0](#v170--2026-08-04) · [v1.6.0](#v160--2026-08-04) · [v1.5.0](#v150--2026-08-04) · [v1.4.0](#v140--2026-08-03) · [v1.3.1](#v131--2026-08-03) · [v1.3.0](#v130--2026-07-31) · [v1.2.0](#v120--2026-07-31) · [v1.1.1](#v111--2026-07-31) · [v1.1.0](#v110--2026-07-31)
 - [Early development (2026-07-20 → 07-31)](#early-development--2026-07-20--07-31)
 - [Where it diverged from the original design](#where-it-diverged-from-the-original-design)
@@ -78,6 +79,50 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 | [Early development](#early-development--2026-07-20--07-31) | 07-20 → 07-31 | 144 | P0–P5 skeleton · LLM Wiki · tokens · git · PR review · config · import · DM |
 
 ---
+
+## Unreleased
+
+<details>
+<summary><b>fix(permissions): the choice card really asks, in every mode</b> — bypass mode used to answer for you · <code>43a7a79</code></summary>
+
+**Symptom.** In a chat set to bypass (never ask for approval), Claude's multiple-choice
+question never showed up. The transcript recorded the answer as "The user did not answer
+the questions." and Claude carried on with a pick of its own.
+
+**Cause.** Bypass mode allows every tool without asking. But AskUserQuestion is not a
+permission — it is the tool that asks *you*. Allowing it handed the question back to the
+Claude Code CLI, which has no screen here to show it on, so it answered itself.
+
+**Fix.** AskUserQuestion is now on an always-ask list: it skips every automatic allow
+(bypass mode, and the per-chat "always allow" memory) and the card is shown. Two side
+notes: a bypass chat still never asks about anything else, and automatic PR-review turns
+are unchanged — they have no human to ask, so the question keeps answering itself there.
+
+Bypass sessions also always start the CLI in `acceptEdits` and do the allowing in the
+app, not only inside the container (where root forced that already). With real
+`--dangerously-skip-permissions` the CLI stops asking the app about tools at all, and
+then the question cannot reach the browser however hard we try.
+
+</details>
+
+<details>
+<summary><b>fix(chat): a choice card with several questions waits for all of them</b> — and a multi-pick question takes more than one · <code>7f54080</code></summary>
+
+**Symptom.** Claude can put up to four questions in one card, and a question can accept
+several answers at once. Clicking a single option sent that one answer and closed the
+card, so every other question went unanswered — and a multi-pick question could never
+take a second pick.
+
+**Fix.** The card collects picks and marks them. A **Send answers** button appears
+whenever there is more than one question, or the question accepts several answers, and
+turns on once every question has at least one pick; the answer sent to Claude carries one
+line per question. A single one-of question still sends on the click itself, as before.
+The typed "Other" row feeds the same collection.
+
+New keys `chat.multiSelectHint` / `chat.sendAnswers` (ko+en). The static demo's `!ask`
+gained a second, multi-pick question so the same path is clickable there.
+
+</details>
 
 ## v1.24.0 — 2026-08-21
 
