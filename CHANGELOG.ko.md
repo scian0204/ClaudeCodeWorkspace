@@ -82,7 +82,7 @@
 ## Unreleased
 
 <details>
-<summary><b>fix(wiki): 자라는 위키는 거부하지 않고 답한다, 지식 추가 허락도 안 구한다</b> — 빈 주제 교착 · <code>PLACEHOLDER</code></summary>
+<summary><b>fix(wiki): 자라는 위키는 거부하지 않고 답한다, 지식 추가 허락도 안 구한다</b> — 빈 주제 교착 · <code>84bc203</code></summary>
 
 **증상.** 자동 추가로 만든 빈 주제에 AWS를 물었더니 "이 위키에는 해당 내용이
 없습니다" 라고 답하고, 해결 방법 목록을 사용자에게 되물었다. 기록된 것도 없어서

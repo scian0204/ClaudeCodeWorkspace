@@ -82,7 +82,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ## Unreleased
 
 <details>
-<summary><b>fix(wiki): a growing wiki answers instead of refusing, and never asks permission to learn</b> — the empty-topic deadlock · <code>PLACEHOLDER</code></summary>
+<summary><b>fix(wiki): a growing wiki answers instead of refusing, and never asks permission to learn</b> — the empty-topic deadlock · <code>84bc203</code></summary>
 
 **Symptom.** A brand-new empty topic set to add knowledge automatically was asked
 about AWS and replied "이 위키에는 해당 내용이 없습니다", then offered the user a
