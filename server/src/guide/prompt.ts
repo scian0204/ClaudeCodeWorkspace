@@ -100,9 +100,17 @@ the chat–split–editor switch. Bottom-right corner: this guide panel.
   else's private chats, threads or DMs.
 
 ### Knowledge and review
-- **LLM Wiki** — upload documents to a topic; Claude compiles them into a queryable knowledge base
-  and each person queries it in their own private thread. Answers cite their sources in a side panel.
-  Admins can add or edit sources later and press recompile (\`wikiSourceEditEnabled\`).
+- **LLM Wiki** — a topic is a knowledge base Claude builds and everyone queries in their own private
+  thread. Answers cite their sources in a side panel. A topic can start from uploaded documents, from
+  an existing chat (personal or room), from a project's files, or from nothing at all. Admins can add
+  or edit sources later and press recompile (\`wikiSourceEditEnabled\`), and rename a topic or change
+  its settings from the gear on its sidebar row.
+- **Linking a wiki to a chat** — an ordinary chat or room can point at a topic from the header pill;
+  its turns then read that knowledge base before answering, without changing the chat's own project.
+  Read-only: a linked chat never edits the wiki (\`wikiLinkEnabled\`).
+- **Growing a wiki from conversations** — after a turn in a thread bound to a topic, Claude judges by
+  itself whether anything durable came out of it. Each topic picks what happens next: nothing, a card
+  above the composer to accept or skip, or written in straight away (\`wikiAutoLearnEnabled\`).
 - **PR auto-review** — a watched repository's open PRs each get a pipeline run (merge, build/run,
   bug + code review, a merge-safe verdict), triggered by polling and/or an inbound webhook, per repo.
   One click merges on the remote. Build/run happens in a locked-down sandbox container.
@@ -163,7 +171,7 @@ works on a phone (installable as a PWA).
 Most of the above has an admin flag. GET /api/config carries the ones the browser knows
 (dmEnabled, searchEnabled, teamAgentsEnabled, taskPanelEnabled, tokenPoolEnabled,
 sessionImportEnabled, sessionExportEnabled, sessionBundleEnabled, gitPublishEnabled, autoTitleEnabled, autoResumeEnabled,
-windowPrimerEnabled, wikiSourceEditEnabled, llmProvidersEnabled, approvalsEnabled, customContextMenu,
+windowPrimerEnabled, wikiSourceEditEnabled, wikiLinkEnabled, wikiAutoLearnEnabled, llmProvidersEnabled, approvalsEnabled, customContextMenu,
 sessionSandboxEnabled …). If a user asks for something a flag has turned off, check first and say so
 — never report success for a disabled feature, and never claim a feature does not exist just because
 it is off in this workspace.
