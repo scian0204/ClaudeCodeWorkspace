@@ -26,7 +26,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 | Version | Date | Commits | Headline |
 |---|---|---|---|
-| [Unreleased](#unreleased) | — | 7 | Wikis that start from a chat, a project or nothing — and grow from conversations |
+| [Unreleased](#unreleased) | — | 8 | Wikis that start from a chat, a project or nothing — and grow from conversations |
 | [v1.22.0](#v1220--2026-08-20) | 2026-08-20 | 10 | Download a session's project folder, picking the files |
 | [v1.21.1](#v1211--2026-08-19) | 2026-08-19 | 2 | /hooks stops pointing at a page that cannot do it |
 | [v1.21.0](#v1210--2026-08-19) | 2026-08-19 | 4 | Side chat: ask about the work without joining it |
@@ -82,7 +82,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ## Unreleased
 
 <details>
-<summary><b>feat(wiki): answer-format rules, no tool cards in a wiki thread, and sources that actually exist</b> — <code>PLACEHOLDER</code></summary>
+<summary><b>feat(wiki): answer-format rules, no tool cards in a wiki thread, and sources that actually exist</b> — <code>3dff1c9</code></summary>
 
 Three rules were added to a topic's grounding doc and to the `llm-wiki` skill:
 answer in the language the user wrote in, lead with the conclusion and drop the
@@ -264,6 +264,8 @@ API reference gains wiki seeding, topic settings, the proposal decision and the
 session's `wikiRefId`, so it can carry them out rather than only explain them.
 
 </details>
+
+- **fix(wiki): the demo's mocked path list dropped every source** — its seed names carry a `raw/` prefix the real endpoint does not · plus a runnable check for the citation filter · `584e1d3`
 
 - **docs: the new wiki behaviour in both READMEs and these notes** — feature list, table rows and the LLM Wiki detail block, en/ko · `9f2444f`
 
