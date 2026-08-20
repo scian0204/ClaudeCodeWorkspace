@@ -81,7 +81,7 @@
 
 ## v1.23.0 — 2026-08-20
 
-<sub>릴리스 커밋 `RELEASEHASH`</sub>
+<sub>릴리스 커밋 `378a6ef`</sub>
 
 <details>
 <summary><b>feat(wiki): 회의록 전용 주제 — 회의 1건 = 문서 1개, 결정·액션 레지스터</b> — <code>4909f1b</code></summary>

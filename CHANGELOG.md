@@ -81,7 +81,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ## v1.23.0 — 2026-08-20
 
-<sub>release commit `RELEASEHASH`</sub>
+<sub>release commit `378a6ef`</sub>
 
 <details>
 <summary><b>feat(wiki): meeting-minutes topics — one document per meeting, decision/action registers</b> — <code>4909f1b</code></summary>
