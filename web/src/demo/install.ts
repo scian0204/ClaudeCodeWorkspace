@@ -12,8 +12,11 @@ function patchFetch() {
     if (!path.startsWith('/api/')) return real(input, init);
     const method = init?.method || (typeof input === 'object' && !(input instanceof URL) ? input.method : 'GET') || 'GET';
     let body: any = init?.body;
-    const respond = (r: { status: number; data: any }) =>
-      new Response(JSON.stringify(r.data), { status: r.status, headers: { 'Content-Type': 'application/json' } });
+    const respond = (r: { status: number; data: any; headers?: Record<string, string> }) =>
+      // a file-download route answers with a Blob (carrying its own Content-Disposition); the rest is JSON
+      (r.data instanceof Blob
+        ? new Response(r.data, { status: r.status, headers: { 'Content-Type': r.data.type || 'application/octet-stream', ...(r.headers || {}) } })
+        : new Response(JSON.stringify(r.data), { status: r.status, headers: { 'Content-Type': 'application/json', ...(r.headers || {}) } }));
     if (body instanceof FormData) {
       // single-image uploads (avatar, brand logo): read the picked file into a data URL so the demo can
       // render it inline — there is no GET stream here.

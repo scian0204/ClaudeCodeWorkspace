@@ -8,7 +8,8 @@ import { newId } from '../lib/ids.js';
 import { probeCommands, probeUsage, cwdFor } from '../claude/session-manager.js';
 import { runAsideTurn, interruptAside, clearAside, forgetAsides, asideBusy } from '../claude/aside.js';
 import { resolveAgents } from '../claude/team-agents.js';
-import { encodeSlug, rewriteCwd } from '../lib/session-import.js';
+import { encodeSlug } from '../lib/session-import.js';
+import { transcriptLines, bundleExcludes, bundleStream, bundleFilename, measureDir } from '../lib/session-export.js';
 import { DEFAULT_TITLE, retitleSession } from '../claude/auto-title.js';
 import { emitToUser } from '../realtime/io.js';
 import { reviewRoleForChat } from '../review/manager.js';
@@ -188,36 +189,91 @@ export async function sessionRoutes(app: FastifyInstance) {
   });
 
   // ── session export: the reverse of /api/import/sessions ──
-  // Hands back the CLI's own transcript so the user can resume the session in a local Claude Code.
+  // Two shapes, both for "carry this session on in a local Claude Code":
+  //   GET .../export         → the CLI's own transcript (JSONL)
+  //   GET .../export/bundle  → that transcript AND the session's whole project folder, as one .tgz
   // ?cwd=<localAbsPath> rewrites each line's `cwd` to the user's local project path (the CLI matches
   // transcripts against the runtime cwd, so without it resume won't list the session). The value is
   // used ONLY as a string for rewriteCwd/encodeSlug — it never touches this server's filesystem.
+
+  // Shared gate + lookup. private-only, owner/admin: transcripts carry full tool output (terminal
+  // echoes and all), so this is deliberately tighter than canViewChat's room case. `file` is null
+  // when the session never ran the CLI (or the transcript was cleaned up).
+  async function exportTarget(u: AuthUser, id: string, reply: any): Promise<{ s: Chat; serverCwd: string; file: string | null } | null> {
+    if (!cfg.bool('sessionExportEnabled')) { reply.code(403).send({ error: 'session export is disabled' }); return null; }
+    const s = getChat(id);
+    if (!s) { reply.code(404).send({ error: 'not found' }); return null; }
+    if (s.kind !== 'private' || !(s.ownerId === u.id || u.role === 'admin')) { reply.code(403).send({ error: 'forbidden' }); return null; }
+    const serverCwd = path.resolve(await cwdFor(s));
+    const f = s.claudeSessionId
+      ? path.join(paths.userClaude(s.ownerId), 'projects', encodeSlug(serverCwd), `${s.claudeSessionId}.jsonl`)
+      : null;
+    return { s, serverCwd, file: f && fs.existsSync(f) ? f : null };
+  }
+  // the workspace title, when it is one a human (or the auto-titler) picked — carried into the CLI's
+  // resume picker as a `custom-title` line
+  const exportTitle = (s: Chat) => (s.title && s.title !== DEFAULT_TITLE ? s.title : null);
+
   app.get('/api/sessions/:id/export', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
-    if (!cfg.bool('sessionExportEnabled')) return reply.code(403).send({ error: 'session export is disabled' });
-    const { id } = req.params as any;
-    const s = getChat(id);
-    if (!s) return reply.code(404).send({ error: 'not found' });
-    // private-only, owner/admin: transcripts carry full tool output (terminal echoes and all), so the
-    // gate is deliberately tighter than canViewChat's room case.
-    if (s.kind !== 'private' || !(s.ownerId === u.id || u.role === 'admin')) return reply.code(403).send({ error: 'forbidden' });
+    const tgt = await exportTarget(u, (req.params as any).id, reply); if (!tgt) return;
+    const { s, serverCwd, file } = tgt;
     if (!s.claudeSessionId) return reply.code(400).send({ error: 'nothing to export — the session has no CLI transcript yet' });
-    const serverCwd = path.resolve(await cwdFor(s));
-    const file = path.join(paths.userClaude(s.ownerId), 'projects', encodeSlug(serverCwd), `${s.claudeSessionId}.jsonl`);
-    if (!fs.existsSync(file)) return reply.code(404).send({ error: 'transcript file not found (cleaned up or never written)' });
+    if (!file) return reply.code(404).send({ error: 'transcript file not found (cleaned up or never written)' });
     const localCwd = String((req.query as any)?.cwd || '').trim();
-    let lines = fs.readFileSync(file, 'utf8').split('\n');
-    if (localCwd) lines = lines.map((l) => rewriteCwd(l, localCwd));
-    // carry the workspace title into the CLI's resume picker (same line shape the importer accepts)
-    if (s.title && s.title !== DEFAULT_TITLE && !lines.some((l) => l.includes('"custom-title"'))) {
-      lines.unshift(JSON.stringify({ type: 'custom-title', customTitle: s.title, sessionId: s.claudeSessionId }));
-    }
-    const jsonl = lines.join('\n');
+    const lines = transcriptLines(file, s.claudeSessionId, localCwd, exportTitle(s));
     return {
-      uuid: s.claudeSessionId, title: s.title, jsonl,
+      uuid: s.claudeSessionId, title: s.title, jsonl: lines.join('\n'),
       slug: encodeSlug(localCwd || serverCwd),
       lineCount: lines.filter((l) => l.trim()).length,
     };
+  });
+
+  // Bundle preflight: what the .tgz would carry, so the modal can show the real size (and the exact
+  // resume steps) before anyone starts a multi-hundred-MB download. Same walk the download itself
+  // runs, so `over` here is exactly what the download refuses.
+  app.get('/api/sessions/:id/export/bundle/size', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    if (!cfg.bool('sessionBundleEnabled')) return reply.code(403).send({ error: 'project bundle is disabled' });
+    const tgt = await exportTarget(u, (req.params as any).id, reply); if (!tgt) return;
+    const { s, serverCwd, file } = tgt;
+    const capMB = cfg.int('sessionBundleMaxMB');
+    const excludes = bundleExcludes();
+    const localCwd = String((req.query as any)?.cwd || '').trim();
+    const m = measureDir(serverCwd, excludes, capMB * 1024 * 1024);
+    return {
+      ...m, capMB, excludes,
+      folder: path.basename(serverCwd),
+      hasTranscript: !!file,
+      uuid: s.claudeSessionId,
+      slug: encodeSlug(localCwd || serverCwd),
+      // no project attached → the session's cwd IS the user's projects root, so the bundle carries
+      // every project of theirs, not one
+      wholeProjectsDir: !s.projectId && !s.wikiTopicId,
+    };
+  });
+
+  // The bundle itself: streamed .tgz (system tar, constant memory) with `<projectFolder>/` and
+  // `.claude/projects/<slug>/<uuid>.jsonl` at the top level.
+  app.get('/api/sessions/:id/export/bundle', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    if (!cfg.bool('sessionBundleEnabled')) return reply.code(403).send({ error: 'project bundle is disabled' });
+    const tgt = await exportTarget(u, (req.params as any).id, reply); if (!tgt) return;
+    const { s, serverCwd, file } = tgt;
+    const capMB = cfg.int('sessionBundleMaxMB');
+    const excludes = bundleExcludes();
+    if (measureDir(serverCwd, excludes, capMB * 1024 * 1024).over) {
+      return reply.code(413).send({ error: `the project folder is over the ${capMB}MB bundle limit — raise sessionBundleMaxMB or trim it` });
+    }
+    const localCwd = String((req.query as any)?.cwd || '').trim();
+    const transcript = file && s.claudeSessionId
+      ? { slug: encodeSlug(localCwd || serverCwd), uuid: s.claudeSessionId, lines: transcriptLines(file, s.claudeSessionId, localCwd, exportTitle(s)) }
+      : null;
+    const { stream, kill } = bundleStream({ projectDir: serverCwd, excludes, transcript });
+    reply.raw.on('close', kill);   // browser cancelled the download — stop gzipping
+    reply.header('Content-Type', 'application/gzip');
+    reply.header('Content-Disposition', `attachment; filename="${bundleFilename(s.title)}"`);
+    return reply.send(stream);
   });
 
   // ── prompt attachments (uploaded files / pasted screenshots) ──

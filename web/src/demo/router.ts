@@ -6,7 +6,8 @@ import {
 } from './data';
 import { runDemoGuide, clearDemoGuide, runDemoAside } from './socket';
 
-type Res = { status: number; data: any };
+// `data` is normally JSON; a Blob (+ headers) is how the few binary downloads are mocked
+type Res = { status: number; data: any; headers?: Record<string, string> };
 const ok = (data: any = {}): Res => ({ status: 200, data });
 // A canned answer returns instantly, which hides whatever the UI shows while it waits. The few
 // routes that are a model call on the real server keep their round-trip so the wait stays visible.
@@ -254,7 +255,7 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   if (P === '/api/admin/restore/apply' && M === 'POST') { ADMIN.restoreStaged = null; return ok({ ok: true }); }
 
   // ---- client-facing config (model dropdown) ----
-  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, sessionExportEnabled: true, teamAgentsEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenu: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true, guideEnabled: true, guideWriteEnabled: true, asideEnabled: true, taskPanelEnabled: true, processPollMs: 5000, toolFoldMin: 3, tokenPoolEnabled: true, tokenPoolAllUsers: true, tokenPoolPartyCreate: true, sessionSandboxEnabled: true, dockerReady: ADMIN.docker.ok && ADMIN.docker.configured, dockerReason: ADMIN.docker.reason });
+  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, sessionExportEnabled: true, sessionBundleEnabled: true, teamAgentsEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenu: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true, guideEnabled: true, guideWriteEnabled: true, asideEnabled: true, taskPanelEnabled: true, processPollMs: 5000, toolFoldMin: 3, tokenPoolEnabled: true, tokenPoolAllUsers: true, tokenPoolPartyCreate: true, sessionSandboxEnabled: true, dockerReady: ADMIN.docker.ok && ADMIN.docker.configured, dockerReason: ADMIN.docker.reason });
 
   // ── shared-plan pools ("토큰 모아쓰기") ──
   if (P === '/api/pools' && M === 'GET') return ok({ pools: db.pools, allUsers: true, myPoolId: db.myPoolId, optedOut: db.poolOptedOut, hasCredential: true, canCreate: true });
@@ -398,6 +399,32 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
     const title = first.replace(/[?.!]+$/, '').slice(0, 40).trim();
     if (s) s.title = title;
     return slow(ok({ ok: true, title })); // one model round-trip on the real server → keep the wait
+  }
+  // ── project-folder bundle (mocked) ──────────────────────────────────────
+  // The real endpoint streams a .tgz built by the system tar; here the size probe is canned and the
+  // download hands back a short note file so the click still ends in a saved file.
+  if (seg[1] === 'sessions' && seg[3] === 'export' && seg[4] === 'bundle' && seg[5] === 'size' && M === 'GET') {
+    const localCwd = (query.get('cwd') || '').trim();
+    const sess = db.sessions.find((x: any) => x.id === idAt(2));
+    const proj = [...db.projects.mine, ...db.projects.common].find((p: any) => p.id === sess?.projectId);
+    const folder = proj ? proj.name : 'projects';
+    return ok({
+      bytes: 4_812_544, files: 214, over: false, capMB: 1024,
+      excludes: ['node_modules', '.venv', 'venv', '__pycache__', 'dist', 'build', '.next', 'target', '.cache', '.attachments'],
+      folder, hasTranscript: true, uuid: 'a1b2c3d4-demo-4efg-8hij-klmnopqrstuv',
+      slug: (localCwd || `/data/users/u_demo/projects/${folder}`).replace(/[^a-zA-Z0-9]/g, '-'),
+      wholeProjectsDir: !sess?.projectId,
+    });
+  }
+  if (seg[1] === 'sessions' && seg[3] === 'export' && seg[4] === 'bundle' && M === 'GET') {
+    const note = [
+      'ClaudeCode Workspace — static demo',
+      '',
+      'On a real server this download is a .tgz holding the session\'s whole project folder plus',
+      '.claude/projects/<slug>/<uuid>.jsonl, so `claude --resume <uuid>` picks the conversation up locally.',
+      '',
+    ].join('\n');
+    return { status: 200, data: new Blob([note], { type: 'text/plain' }), headers: { 'Content-Disposition': 'attachment; filename="ccw-demo-bundle.txt"' } };
   }
   // must sit ABOVE the generic GET /api/sessions/:id catch-all or the export modal gets a session object
   if (seg[1] === 'sessions' && seg[3] === 'export' && M === 'GET') {

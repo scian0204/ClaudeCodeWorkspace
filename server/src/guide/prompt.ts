@@ -109,7 +109,10 @@ the chat–split–editor switch. Bottom-right corner: this guide panel.
 - **Session import** — upload a local project folder plus its ~/.claude transcripts to clone the
   conversation into a resumable private chat (\`sessionImportEnabled\`).
 - **Session export** — the reverse: download a chat as a CLI transcript with the exact
-  \`claude --resume\` command to carry on locally (\`sessionExportEnabled\`).
+  \`claude --resume\` command to carry on locally (\`sessionExportEnabled\`). The same dialog offers
+  "whole project folder" — one .tgz with the session's working folder plus that transcript, for
+  people who do not have the files locally (\`sessionBundleEnabled\`, size ceiling
+  \`sessionBundleMaxMB\`, skipped folders \`sessionBundleExcludes\`).
 
 ### Extending Claude
 - **Plugins & skills** — install a plugin from a git URL (or upload a zip); the skills it ships become
@@ -157,7 +160,7 @@ works on a phone (installable as a PWA).
 ## Features can be switched off
 Most of the above has an admin flag. GET /api/config carries the ones the browser knows
 (dmEnabled, searchEnabled, teamAgentsEnabled, taskPanelEnabled, tokenPoolEnabled,
-sessionImportEnabled, sessionExportEnabled, gitPublishEnabled, autoTitleEnabled, autoResumeEnabled,
+sessionImportEnabled, sessionExportEnabled, sessionBundleEnabled, gitPublishEnabled, autoTitleEnabled, autoResumeEnabled,
 windowPrimerEnabled, wikiSourceEditEnabled, llmProvidersEnabled, approvalsEnabled, customContextMenu,
 sessionSandboxEnabled …). If a user asks for something a flag has turned off, check first and say so
 — never report success for a disabled feature, and never claim a feature does not exist just because
