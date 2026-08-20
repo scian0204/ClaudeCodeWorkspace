@@ -80,6 +80,19 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ## Unreleased
 
 <details>
+<summary><b>feat(export): download a session's whole project folder, not just the transcript</b> — one .tgz you can resume from · <code>bdc11a9</code></summary>
+
+The session download handed back the conversation record only. On a machine that never had the project files, that record is not enough to carry on — the code had to be fetched some other way first.
+
+The download dialog now offers a second choice: **whole project folder**. It is one `.tgz` holding the session's working folder plus the conversation record, already placed at `.claude/projects/<slug>/<uuid>.jsonl`. Unpack it, move the two folders into place, and `claude --resume <uuid>` continues the session locally. The dialog spells out those steps with the real folder name and id filled in.
+
+Before the download starts it shows what you are about to get — size and file count — and it leaves out folders you can rebuild (`node_modules`, `.venv`, `dist`, …), matched at any depth. A folder over the limit is refused, with the limit named.
+
+New endpoints `GET /api/sessions/:id/export/bundle` and `.../bundle/size`, gated exactly like the transcript download (private sessions, owner or admin). New settings: `sessionBundleEnabled` (the option itself), `sessionBundleMaxMB` (1024), `sessionBundleExcludes`. The archive is built by the system `tar` and streamed, so a big project never sits in memory on either end.
+
+</details>
+
+<details>
 <summary><b>docs: a Docker Hub release now waits to be asked for</b> — the local build stays automatic · <code>ac8ba8f</code></summary>
 
 Until now the working rules said to bump the version and push the image to `cian0204/claudecode-workspace` at the end of every feature, so a small change could send a new image out of the machine on its own. Rule 3 in `CLAUDE.md` now stops after the local `npm run compose:up` build and rerun. `npm run release:patch|minor` runs only when it is asked for. When a release looks due, it gets suggested in one line instead of run.

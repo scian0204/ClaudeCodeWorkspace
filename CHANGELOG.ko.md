@@ -80,6 +80,19 @@
 ## Unreleased
 
 <details>
+<summary><b>feat(export): 세션을 프로젝트 폴더째로 다운로드</b> — 압축 하나로 로컬에서 이어가기 · <code>bdc11a9</code></summary>
+
+세션 다운로드는 대화 기록만 내려줬다. 프로젝트 파일이 아예 없는 머신에서는 그것만으로 이어갈 수 없어서, 코드는 따로 받아와야 했다.
+
+이제 다운로드 창에 선택지가 하나 더 생겼다 — **프로젝트 폴더째로**. 세션의 작업 폴더 전체와 대화 기록을 담은 `.tgz` 한 개이고, 대화 기록은 `.claude/projects/<slug>/<uuid>.jsonl` 위치에 미리 넣어둔다. 압축을 풀고 두 폴더를 제자리로 옮긴 뒤 `claude --resume <uuid>` 를 실행하면 그대로 이어진다. 창에 이 순서가 실제 폴더 이름과 id가 채워진 상태로 나온다.
+
+받기 전에 무엇을 받는지 먼저 보여준다 — 크기와 파일 개수. 그리고 다시 만들 수 있는 폴더(`node_modules`, `.venv`, `dist` 등)는 하위 경로까지 모두 빼고 담는다. 한도를 넘는 폴더는 한도를 알려주며 거부한다.
+
+새 엔드포인트 `GET /api/sessions/:id/export/bundle` 와 `.../bundle/size`, 접근 조건은 기존 대화 기록 다운로드와 동일(개인 세션, 소유자 또는 관리자). 새 설정: `sessionBundleEnabled`(옵션 자체), `sessionBundleMaxMB`(1024), `sessionBundleExcludes`. 압축은 시스템 `tar` 로 만들어 흘려보내므로 큰 프로젝트도 서버·브라우저 메모리에 쌓이지 않는다.
+
+</details>
+
+<details>
 <summary><b>docs: Docker Hub 릴리즈는 요청이 있을 때만</b> — 로컬 빌드 반영은 그대로 자동 · <code>ac8ba8f</code></summary>
 
 지금까지 작업 규칙은 기능이 끝날 때마다 버전을 올리고 `cian0204/claudecode-workspace` 로 이미지를 push 하라고 되어 있었다. 작은 수정 하나에도 새 이미지가 알아서 밖으로 나가는 셈이었다. `CLAUDE.md` 규칙 3은 이제 로컬 `npm run compose:up` 빌드·재실행까지만 하고 멈춘다. `npm run release:patch|minor` 는 요청이 있을 때만 실행한다. 릴리즈할 때가 됐다고 보이면 실행하지 않고 한 줄로 제안만 한다.
