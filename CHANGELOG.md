@@ -26,7 +26,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 | Version | Date | Commits | Headline |
 |---|---|---|---|
-| [Unreleased](#unreleased) | — | 8 | Wikis that start from a chat, a project or nothing — and grow from conversations |
+| [Unreleased](#unreleased) | — | 9 | Wikis that start from a chat, a project or nothing — and grow from conversations |
 | [v1.22.0](#v1220--2026-08-20) | 2026-08-20 | 10 | Download a session's project folder, picking the files |
 | [v1.21.1](#v1211--2026-08-19) | 2026-08-19 | 2 | /hooks stops pointing at a page that cannot do it |
 | [v1.21.0](#v1210--2026-08-19) | 2026-08-19 | 4 | Side chat: ask about the work without joining it |
@@ -80,6 +80,43 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ---
 
 ## Unreleased
+
+<details>
+<summary><b>feat(wiki): meeting-minutes topics — one document per meeting, decision/action registers</b> — <code>4909f1b</code></summary>
+
+A knowledge wiki and meeting minutes want opposite compiles. The wiki merges and
+dedupes sources into concept articles — exactly what destroys minutes, where "what
+did we decide on the 15th and when did it change" is the whole point. So a topic
+now has a kind, picked at the top of the create dialog: 일반 위키 or **회의록
+전용** (`wiki_topics.kind`).
+
+A minutes compile writes one document per meeting under `wiki/meetings/`
+(date-prefixed; attendees, agenda, a cleaned-up discussion, decisions, action
+items, corrections folded in — meetings are never merged), plus two registers:
+`wiki/decisions.md` (every decision with its date and source meeting; a reversed
+decision keeps both entries, the earlier marked superseded) and `wiki/actions.md`
+(owner / due / latest status — a later meeting saying "done" updates the register
+while the original document stays as written), and an `_index.md` listing meetings
+newest-first.
+
+Minutes answers are grounded regardless of the learning mode: what was said in a
+meeting is not something a model can know on its own, so it answers from the
+records, always with the date, and says "기록에 없습니다" otherwise. The learning
+mode still governs capture — a meeting record pasted into the thread is written up
+as structured minutes after the turn (the capture call reads up to 24k characters
+of the user message on minutes topics, since transcripts are long), and the next
+compile files it under `wiki/meetings/`.
+
+Verified with a real compile over two toy meetings where the second reversed a
+decision from the first: both meeting documents came out 1:1, `decisions.md`
+showed MySQL as current with the PostgreSQL entry kept and marked superseded, and
+`actions.md` marked the schema-draft item done based on the later meeting.
+
+Sidebar rows of minutes topics wear a small "회의록" tag. `web/tsconfig.json` now
+excludes `*.test.ts` (their `node:assert` imports are for tsx runs, not the
+browser build).
+
+</details>
 
 <details>
 <summary><b>feat(wiki): answer-format rules, no tool cards in a wiki thread, and sources that actually exist</b> — <code>3dff1c9</code></summary>
