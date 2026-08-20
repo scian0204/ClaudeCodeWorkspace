@@ -4,7 +4,7 @@ import { api } from '../lib/api';
 import { md } from '../lib/md';
 import { useT } from '../lib/i18n';
 import { isImage, isMarkdown, resolveRelAsset } from './FileExplorer';
-import { citeId, extractSources, resolveRealPath, useCite, type WikiSource } from '../lib/wikiCite';
+import { citeId, extractSources, realPath, useCite, type WikiSource } from '../lib/wikiCite';
 import { IconPaperclip, IconChevronRight, IconImage, IconFile, IconArrowLeft, IconEye, IconTerminal } from '../lib/icons';
 
 // Toggles the `.on` class on every in-text citation mark matching the hovered source, so hovering
@@ -28,6 +28,10 @@ export function SourcesPanel({ topicId, open, onToggle, width, onResize }: { top
   const messages = useStore((s) => s.messages);
   const live = useStore((s) => s.live);
   const { hovered, preview, setHovered, openPreview } = useCite();
+  // the topic's real file list: sources the model named but that are not on disk get dropped
+  const tree = useCite((s) => s.trees[topicId] || null);
+  const loadTree = useCite((s) => s.loadTree);
+  useEffect(() => { loadTree(topicId); }, [topicId, loadTree]);
   const t = useT();
 
   // drag the left edge to widen/narrow the panel (delta-based; Chat clamps + persists)
@@ -52,10 +56,10 @@ export function SourcesPanel({ topicId, open, onToggle, width, onResize }: { top
     const seen = new Set<string>();
     const all: WikiSource[] = [];
     const add = (arr: WikiSource[]) => arr.forEach((s) => { const id = citeId(s); if (!seen.has(id)) { seen.add(id); all.push(s); } });
-    for (const m of messages) if (m.role === 'assistant') add(extractSources(m.content.blocks || [], topicId));
-    if (live) add(extractSources(live.blocks, topicId));
+    for (const m of messages) if (m.role === 'assistant') add(extractSources(m.content.blocks || [], topicId, tree));
+    if (live) add(extractSources(live.blocks, topicId, tree));
     return all;
-  }, [messages, live, topicId]);
+  }, [messages, live, topicId, tree]);
 
   if (!open) {
     return (
@@ -117,6 +121,7 @@ export function SourcesPanel({ topicId, open, onToggle, width, onResize }: { top
 }
 
 function CitePreview({ topicId, src, onBack }: { topicId: string; src: WikiSource; onBack: () => void }) {
+  const tree = useCite((s) => s.trees[topicId] || null);
   const [real, setReal] = useState<WikiSource>(src);
   const [file, setFile] = useState<{ name: string; content: string } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -129,8 +134,8 @@ function CitePreview({ topicId, src, onBack }: { topicId: string; src: WikiSourc
     let cancelled = false;
     setFile(null); setRaw(false); setNotFound(false); setLoading(true);
     (async () => {
-      // the model's written path is approximate — map it onto a real tree entry before fetching
-      const r = await resolveRealPath(topicId, src);
+      // the panel only lists sources that exist, so this is just the approximate-path snap
+      const r = realPath(tree, src) || src;
       if (cancelled) return;
       setReal(r);
       if (isImage(r.path)) { setLoading(false); return; } // rendered via <img>, no text fetch
@@ -141,7 +146,7 @@ function CitePreview({ topicId, src, onBack }: { topicId: string; src: WikiSourc
       finally { if (!cancelled) setLoading(false); }
     })();
     return () => { cancelled = true; };
-  }, [topicId, src.dir, src.path]);
+  }, [topicId, src.dir, src.path, tree]);
 
   return (
     <div className="flex-1 flex flex-col min-h-0">

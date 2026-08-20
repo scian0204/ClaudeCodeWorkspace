@@ -152,6 +152,15 @@ function groundingDoc(name: string, description: string, autoLearn = 'off') {
     `- **무엇을 위키에 남길지는 네가 판단하지 않아도 된다.** 턴이 끝나면 워크스페이스가 이 대화를 읽고 알아서 정한다(자동 추가면 바로 기록, 물어보고 추가면 사용자에게 카드로 묻는다). 그러니 "추가할까요?"라고 되묻거나 허락을 구하지 마라.\n`;
 
   const tail =
+    `
+## 답변 형식
+` +
+    `- **사용자가 쓴 언어로 답해라.**
+` +
+    `- 사족 없이 결론부터 써라. "확인해 보겠습니다"류 진행 설명, 인사, 요약의 요약은 쓰지 마라.
+` +
+    `- **답변 맨 마지막 줄에 참조한 파일명을 나열해라** — \`wiki/...\`, \`raw/...\` 경로 그대로. 화면 오른쪽 출처 패널과 본문 하이라이트가 이 목록을 읽는다. 참조한 파일이 없으면 그 줄은 쓰지 마라.
+` +
     `- 도표·스크린샷 등 시각 자료가 관련되면, 아티클이 인용한 \`raw/\`의 이미지(.png/.jpg 등)를 Read로 직접 열어(너는 멀티모달) 확인해서 답하라.\n` +
     `- 사용자가 특정 문서를 써 달라고 명시적으로 요청하지 않는 한 파일을 수정/생성하지 마라.\n` +
     `- 지식 추가를 명시적으로 요청받으면 \`llm-wiki\` 스킬을 읽고 거기 적힌 절차대로만 파일을 써라.\n` +
@@ -375,6 +384,19 @@ export async function wikiRoutes(app: FastifyInstance) {
       files, source: useWiki ? 'wiki' : 'raw',
       status: t.compileStatus, compiledAt: t.compiledAt, compileError: t.compileError,
       sources: walkFiles(rawDir).map((f) => f.name),
+    };
+  });
+
+  // Every file in a topic, flat (any user) — names + dirs only, no content. The client's citation
+  // layer needs this to drop sources the model named but that are not actually on disk, and to
+  // match an approximate path (the model normalizes whitespace) to the real one.
+  app.get('/api/wiki/topics/:id/paths', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    const { id } = req.params as any;
+    const t = getTopic(id); if (!t) return reply.code(404).send({ error: 'not found' });
+    return {
+      wiki: walkFiles(path.join(t.path, 'wiki')).map((f) => f.name),
+      raw: walkFiles(path.join(t.path, 'raw')).map((f) => f.name),
     };
   });
 

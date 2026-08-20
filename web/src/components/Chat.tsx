@@ -16,7 +16,7 @@ import { GitPanel } from './GitPanel';
 import { SearchButton } from './SearchPalette';
 import { SourcesPanel, CiteHighlighter } from './SourcesPanel';
 import { TasksPanel, isTaskLive } from './TasksPanel';
-import { extractSources, markCitations, type WikiSource } from '../lib/wikiCite';
+import { extractSources, markCitations, useCite, type WikiSource } from '../lib/wikiCite';
 import { md } from '../lib/md';
 import { useT } from '../lib/i18n';
 import { withKeys } from '../lib/shortcuts';
@@ -812,7 +812,8 @@ function MessageView({ m }: { m: Msg }) {
   const topicId = useStore((s) => s.current?.wikiTopicId);
   const sessionId = useStore((s) => s.current?.chatSessionId) || '';
   const isRoom = useStore((s) => s.current?.kind === 'room');
-  const sources = useMemo(() => (topicId && isClaude ? extractSources(blocks, topicId) : []), [blocks, topicId, isClaude]);
+  const tree = useCite((s) => (topicId ? s.trees[topicId] || null : null));
+  const sources = useMemo(() => (topicId && isClaude ? extractSources(blocks, topicId, tree) : []), [blocks, topicId, isClaude, tree]);
   const { deleteMessage, editMessage } = useStore();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(m.content.text || '');
@@ -879,7 +880,7 @@ function MessageView({ m }: { m: Msg }) {
             {!isClaude && Array.isArray(m.content.attachments) && m.content.attachments.length > 0 && (
               <AttachmentList atts={m.content.attachments} sessionId={sessionId} />
             )}
-            {isClaude && <BlockList blocks={blocks} sources={sources} />}
+            {isClaude && <BlockList blocks={blocks} sources={sources} hideTools={!!topicId} />}
             {isClaude && m.content.onPlanOf && (
               <div className="text-[11px] text-txt3 mt-1 inline-flex items-center gap-1" title={t('pool.ranOnTip')}>
                 <IconUsers size={12} />{t('pool.ranOn', { name: m.content.onPlanOf })}
@@ -962,6 +963,7 @@ const CHARS_PER_TOKEN = 3;
 
 function LiveView() {
   const live = useStore((s) => s.live)!;
+  const isWiki = useStore((s) => !!s.current?.wikiTopicId);
   const t = useT();
   const out = live.outTokens + Math.round(live.outChars / CHARS_PER_TOKEN);
   const approx = live.outChars > 0;
@@ -970,7 +972,7 @@ function LiveView() {
       <Avatar claude />
       <div className="flex-1 min-w-0">
         <div className="text-xs text-txt2 font-semibold mb-1">Claude</div>
-        <BlockList blocks={live.blocks} />
+        <BlockList blocks={live.blocks} hideTools={isWiki} />
         <div className="flex items-center gap-2.5 mt-1 flex-wrap">
           <ClayWait label={t(live.thinking ? 'chat.thinkingLive' : 'chat.working')} className="text-[13px] italic" />
           {live.credential && (
@@ -1003,7 +1005,10 @@ function MdText({ text, sources }: { text: string; sources: WikiSource[] }) {
 
 // `nested` = rendering a single subagent's own pane (task panel live view): show its text blocks.
 // In the main transcript nested text is skipped — it streams in the task panel, not the thread.
-export function BlockList({ blocks, sources = [], nested = false }: { blocks: Block[]; sources?: WikiSource[]; nested?: boolean }) {
+// `hideTools` drops the tool cards entirely: in an LLM Wiki thread the reader wants the answer and
+// its sources, not the file reads that produced it (that is what the sources panel is for).
+export function BlockList({ blocks: allBlocks, sources = [], nested = false, hideTools = false }: { blocks: Block[]; sources?: WikiSource[]; nested?: boolean; hideTools?: boolean }) {
+  const blocks = useMemo(() => (hideTools ? allBlocks.filter((b) => b.type !== 'tool_use') : allBlocks), [allBlocks, hideTools]);
   const foldMin = useStore((s) => s.toolFoldMin); // 0 = folding off
   // A long unbroken run of tool calls between two sentences is the noisiest thing in a transcript.
   // Collapse runs of `foldMin`+ into one row; anything shorter renders as before.
