@@ -4,7 +4,7 @@
 
 # Update notes
 
-Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and now — **v1.23.0** (2026-08-20) plus what is not yet released — all **420 commits**.
+Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and now — **v1.23.0** (2026-08-20) plus what is not yet released — all **421 commits**.
 
 Each row shows only its **title and commit hash**; click the triangle for the detail (root cause, implementation, config keys).
 
@@ -26,7 +26,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 | Version | Date | Commits | Headline |
 |---|---|---|---|
-| [Unreleased](#unreleased) | — | 2 | A chat hears when its project is changed somewhere else |
+| [Unreleased](#unreleased) | — | 3 | A chat hears when its project is changed somewhere else |
 | [v1.23.0](#v1230--2026-08-20) | 2026-08-20 | 16 | Wikis that start from a chat or nothing, link to a session, and grow themselves |
 | [v1.22.0](#v1220--2026-08-20) | 2026-08-20 | 10 | Download a session's project folder, picking the files |
 | [v1.21.1](#v1211--2026-08-19) | 2026-08-19 | 2 | /hooks stops pointing at a page that cannot do it |
@@ -81,6 +81,35 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ---
 
 ## Unreleased
+
+<details>
+<summary><b>fix(watch): every change is reported; only the auto-send waits for an idle chat</b> — added, edited, renamed, deleted · <code>8e4b876</code></summary>
+
+**Symptom.** Adding a file gave a notice and an auto-sent prompt. Editing or renaming one
+gave the notice only. Deleting gave nothing at all.
+
+**Cause, two of them.**
+
+1. A change that arrived while the session's own turn was running got thrown away —
+   notice and prompt both. That window is not short: the auto-sent prompt starts a turn
+   itself, so the turn fired by the file that was *added* was still running when the file
+   was deleted, and the delete was discarded. Changes somebody else made in that same
+   window were lost the same way.
+2. `projectWatchCooldownMs` defaulted to 10 minutes, so the change after the first prompt
+   could never send a second one. That is the "notice only" an edit produced.
+
+**Fix.** The notice now always goes out, for every kind of change, deletions included.
+When the chat happened to be working at that moment the card says so, because the files
+were most likely written by its own turn. Only the auto-send still waits for an idle chat,
+and it has to: queueing a prompt about the files a running turn is writing makes that turn
+write again, and so on without end. The cooldown default drops to **30s** — long enough to
+collapse one save into one prompt, short enough that editing a file twice in a row sends a
+second one.
+
+A separate slip is gone too: the card carried the "prompt was sent" mark over from the
+previous change, so a later notice could claim a prompt had gone out when none had.
+
+</details>
 
 <details>
 <summary><b>fix(watch): a created folder is no longer listed as a changed file</b> — <code>51d1f76</code></summary>
