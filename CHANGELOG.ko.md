@@ -80,7 +80,7 @@
 ## Unreleased
 
 <details>
-<summary><b>docs: Docker Hub 릴리즈는 요청이 있을 때만</b> — 로컬 빌드 반영은 그대로 자동 · <code>HASH</code></summary>
+<summary><b>docs: Docker Hub 릴리즈는 요청이 있을 때만</b> — 로컬 빌드 반영은 그대로 자동 · <code>ac8ba8f</code></summary>
 
 지금까지 작업 규칙은 기능이 끝날 때마다 버전을 올리고 `cian0204/claudecode-workspace` 로 이미지를 push 하라고 되어 있었다. 작은 수정 하나에도 새 이미지가 알아서 밖으로 나가는 셈이었다. `CLAUDE.md` 규칙 3은 이제 로컬 `npm run compose:up` 빌드·재실행까지만 하고 멈춘다. `npm run release:patch|minor` 는 요청이 있을 때만 실행한다. 릴리즈할 때가 됐다고 보이면 실행하지 않고 한 줄로 제안만 한다.
 
