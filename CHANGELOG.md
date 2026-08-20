@@ -4,7 +4,7 @@
 
 # Update notes
 
-Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and now — **v1.24.0** (2026-08-21) plus what is not yet released — all **426 commits**.
+Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and now — **v1.24.0** (2026-08-21) plus what is not yet released — all **428 commits**.
 
 Each row shows only its **title and commit hash**; click the triangle for the detail (root cause, implementation, config keys).
 
@@ -81,6 +81,31 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ---
 
 ## Unreleased
+
+<details>
+<summary><b>feat(chat): a /btw button under the message box</b> — the side chat had no visible way in · <code>69aab42</code></summary>
+
+The side chat could only be opened by knowing the `/btw` command. There is now a pill next to the
+attachment button that toggles it, highlighted while the window is open, switched off by the same
+`asideEnabled` flag the command respects. New key `aside.openTip` (ko+en); the guide's feature list
+and both READMEs name the button.
+
+</details>
+
+<details>
+<summary><b>feat(admin): a published update says so on every panel tab</b> — it used to be a dot · <code>b2e11cb</code></summary>
+
+**Problem.** When a newer image was published, the admin panel said so with a 1.5px dot on the
+Update tab and a small link on Overview. Easy to miss for weeks.
+
+**What it does.** A highlighted banner sits above the tab body on every tab but Update (which
+already spells it out): it names the published version and the one running now, and clicking it
+opens the Update tab. `/api/admin/overview` now also returns `updateLatest` and
+`updateNewerVersion`, taken from the same cached check as before — the endpoint still never goes out
+to the registry itself — so the banner can name the version and tell a version bump from a rebuilt
+image on the same tag. New keys `admin.upd.banner*` (ko+en); the static demo mirrors the new fields.
+
+</details>
 
 <details>
 <summary><b>fix(permissions): the choice card really asks, in every mode</b> — bypass mode used to answer for you · <code>43a7a79</code></summary>
