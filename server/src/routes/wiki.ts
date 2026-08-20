@@ -7,6 +7,10 @@ import { requireAuth, requireAdmin } from '../auth/index.js';
 import { paths, ensure } from '../lib/paths.js';
 import { newId } from '../lib/ids.js';
 import { compileTopic } from '../wiki/compile.js';
+import { applySeed, type Seed, type SeedType } from '../wiki/seed.js';
+import { pendingProposals, decideProposal, getProposal } from '../wiki/learn.js';
+import { canAccessProject, getProject } from './projects.js';
+import * as rooms from '../rooms/manager.js';
 import { cfg } from '../lib/config-registry.js';
 import { listDir } from '../lib/filetree.js';
 
@@ -97,6 +101,18 @@ export function reapWikiOrphans() {
 function getTopic(id: string) {
   return db.select().from(schema.wikiTopics).where(eq(schema.wikiTopics.id, id)).get();
 }
+const LEARN_MODES = ['off', 'ask', 'auto'];
+function learnMode(v: unknown): string { return LEARN_MODES.includes(String(v)) ? String(v) : 'off'; }
+
+// May this user hand THIS chat's transcript to a wiki (which every member can then read)?
+// Deliberately stricter than routes/sessions canViewChat, for the same reason search.ts is: an
+// admin being able to open one private thread is not the same permission as copying it into a
+// shared knowledge base. Own private chats, or a room the caller belongs to.
+function canSeedFromChat(u: { id: string; role: string }, s: typeof schema.chatSessions.$inferSelect): boolean {
+  if (s.kind === 'room') return u.role === 'admin' || rooms.isMember(s.roomId!, u.id);
+  if (s.kind === 'private') return s.ownerId === u.id;
+  return false; // review threads carry PR content — not a knowledge source
+}
 function loadMessages(sessionId: string) {
   return db.select().from(schema.messages).where(eq(schema.messages.sessionId, sessionId))
     .orderBy(schema.messages.createdAt).all().map((m) => ({ ...m, content: JSON.parse(m.content) }));
@@ -110,7 +126,8 @@ function groundingDoc(name: string, description: string) {
     `이 디렉터리는 "${name}" 주제의 지식 기반(knowledge base)입니다.\n\n` +
     `## 구조\n` +
     `- \`./wiki/\` — 컴파일된 합성 아티클 + \`_index.md\`(진입점 인덱스). **답변의 1차 근거.**\n` +
-    `- \`./raw/\` — 원본 소스(불변). wiki가 부족할 때만 보조로 참고.\n\n` +
+    `- \`./raw/\` — 원본 소스(불변). wiki가 부족할 때만 보조로 참고.\n` +
+    `- \`./wiki/conversations/\` — 이 위키를 두고 오간 대화에서 추려 넣은 지식(원본은 \`./raw/conversations/\`).\n\n` +
     `## 답변 규칙 (LLM-Wiki query mode)\n` +
     `- 먼저 \`./wiki/_index.md\`를 읽고, 관련 아티클로 이동해라.\n` +
     `- 그 내용에 **근거해서만** 답하고, 근거가 된 아티클/파일명(+신뢰도 표기가 있으면 함께)을 밝혀라.\n` +
@@ -122,7 +139,7 @@ function groundingDoc(name: string, description: string) {
 // Create an empty wiki topic (no staged sources) and kick off compilation. Reused by the
 // member-request approval framework (admin/requests.ts `wiki_topic` action) — createdBy is the
 // requesting member, so an approved topic is attributed to whoever asked for it.
-export function createWikiTopic(opts: { name: string; description?: string; createdBy: string }) {
+export function createWikiTopic(opts: { name: string; description?: string; createdBy: string; autoLearn?: string }) {
   const name = String(opts.name || '').trim() || '새 주제';
   const description = String(opts.description || '');
   const id = newId();
@@ -133,6 +150,7 @@ export function createWikiTopic(opts: { name: string; description?: string; crea
   const row = {
     id, name, description, path: dir, createdBy: opts.createdBy, createdAt: Date.now(),
     compileStatus: 'idle' as const, compiledAt: null, compileError: null,
+    autoLearn: learnMode(opts.autoLearn),
   };
   db.insert(schema.wikiTopics).values(row).run();
   void compileTopic(id); // async; status via 'wiki:status' socket
@@ -200,6 +218,21 @@ export async function wikiRoutes(app: FastifyInstance) {
     const sid = b.stagingId ? String(b.stagingId) : '';
     // precompiled: the upload IS an already-compiled wiki — skip Claude compile, use it as-is
     const precompiled = b.precompiled === true || b.precompiled === 'true';
+    // Where the first sources come from: an upload (staging, the original flow), an existing chat
+    // or project already in the workspace, or nothing at all (제로베이스).
+    const seed: Seed = { type: (String(b.seedType || 'upload') as SeedType), sessionId: b.seedSessionId, projectId: b.seedProjectId };
+    if (!['upload', 'session', 'project', 'blank'].includes(seed.type)) return reply.code(400).send({ error: 'bad seed type' });
+    if (seed.type === 'session') {
+      const src = seed.sessionId
+        ? db.select().from(schema.chatSessions).where(eq(schema.chatSessions.id, String(seed.sessionId))).get() : undefined;
+      if (!src) return reply.code(404).send({ error: 'seed session not found' });
+      if (!canSeedFromChat(u, src)) return reply.code(403).send({ error: 'forbidden' });
+    }
+    if (seed.type === 'project') {
+      const src = seed.projectId ? getProject(String(seed.projectId)) : undefined;
+      if (!src) return reply.code(404).send({ error: 'seed project not found' });
+      if (!canAccessProject(u, src)) return reply.code(403).send({ error: 'forbidden' });
+    }
     const id = newId();
     const dir = paths.wikiTopic(id);
     const rawDir = path.join(dir, 'raw');
@@ -215,15 +248,71 @@ export async function wikiRoutes(app: FastifyInstance) {
     } else {
       ensure(rawDir);
     }
+    // seeding from a chat/project writes into the same raw/ the upload path fills, so the compile
+    // below is unchanged — it just has sources it did not have to be uploaded
+    if (seed.type === 'session' || seed.type === 'project') applySeed(dir, seed);
     fs.writeFileSync(path.join(dir, 'CLAUDE.md'), groundingDoc(name, description));
     const compileStatus: 'done' | 'idle' = precompiled ? 'done' : 'idle';
     const row = {
       id, name, description, path: dir, createdBy: u.id, createdAt: Date.now(),
       compileStatus, compiledAt: precompiled ? Date.now() : null, compileError: null,
+      autoLearn: learnMode(b.autoLearn),
     };
     db.insert(schema.wikiTopics).values(row).run();
     if (!precompiled) void compileTopic(id); // auto-compile raw/ -> wiki/ (async; status via 'wiki:status' socket)
     return { topic: row };
+  });
+
+  // edit a topic's own settings (admin) — JSON { name?, description?, autoLearn? }. autoLearn is the
+  // only one with behaviour behind it: it decides what a finished turn does with new knowledge.
+  app.patch('/api/wiki/topics/:id', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    if (!requireAdmin(req, reply)) return;
+    const { id } = req.params as any;
+    const t = getTopic(id); if (!t) return reply.code(404).send({ error: 'not found' });
+    const b = (req.body || {}) as any;
+    const patch: any = {};
+    if ('name' in b) { const n = String(b.name || '').trim(); if (n) patch.name = n; }
+    if ('description' in b) patch.description = String(b.description || '');
+    if ('autoLearn' in b) patch.autoLearn = learnMode(b.autoLearn);
+    if (!Object.keys(patch).length) return { topic: t };
+    db.update(schema.wikiTopics).set(patch).where(eq(schema.wikiTopics.id, id)).run();
+    // the grounding doc carries the name/description, so keep it in step with the row
+    if (patch.name || 'description' in patch) {
+      const next = { ...t, ...patch };
+      try { fs.writeFileSync(path.join(t.path, 'CLAUDE.md'), groundingDoc(next.name, next.description)); } catch { /* noop */ }
+    }
+    return { topic: { ...t, ...patch } };
+  });
+
+  // knowledge additions the learner parked for this session ('ask' mode) — the chat shows a card
+  // per pending one. Scoped to a session the caller may actually read.
+  app.get('/api/wiki/proposals', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    const sessionId = String((req.query as any)?.sessionId || '');
+    if (!sessionId) return { proposals: [] };
+    const s = db.select().from(schema.chatSessions).where(eq(schema.chatSessions.id, sessionId)).get();
+    if (!s) return { proposals: [] };
+    if (!(s.kind === 'room' ? (u.role === 'admin' || rooms.isMember(s.roomId!, u.id)) : (s.ownerId === u.id || u.role === 'admin'))) {
+      return reply.code(403).send({ error: 'forbidden' });
+    }
+    return { proposals: pendingProposals(sessionId) };
+  });
+
+  // accept / discard one parked addition — JSON { accept: boolean }. Whoever can send a turn in the
+  // originating session can decide it: they are the person who was just told about it.
+  app.post('/api/wiki/proposals/:pid/decide', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    const { pid } = req.params as any;
+    const row = getProposal(String(pid));
+    if (!row) return reply.code(404).send({ error: 'not found' });
+    const s = db.select().from(schema.chatSessions).where(eq(schema.chatSessions.id, row.sessionId)).get();
+    const allowed = !!s && (s.kind === 'room' ? (u.role === 'admin' || rooms.isMember(s.roomId!, u.id)) : (s.ownerId === u.id || u.role === 'admin'));
+    if (!allowed) return reply.code(403).send({ error: 'forbidden' });
+    const accept = (req.body as any)?.accept !== false;
+    const r = decideProposal(String(pid), accept);
+    if (!r.ok) return reply.code(409).send({ error: 'already decided' });
+    return { ok: true, accepted: accept };
   });
 
   // knowledge files of a topic (any user) — compiled wiki/ articles (fallback to raw/ sources)
@@ -370,6 +459,10 @@ export async function wikiRoutes(app: FastifyInstance) {
       db.delete(schema.messages).where(eq(schema.messages.sessionId, th.id)).run();
       db.delete(schema.chatSessions).where(eq(schema.chatSessions.id, th.id)).run();
     }
+    // ordinary sessions that had linked this topic lose the link (a dangling id would silently
+    // resolve to nothing on every later turn), and its parked additions go with it
+    db.update(schema.chatSessions).set({ wikiRefId: null }).where(eq(schema.chatSessions.wikiRefId, id)).run();
+    db.delete(schema.wikiProposals).where(eq(schema.wikiProposals.topicId, id)).run();
     db.delete(schema.wikiTopics).where(eq(schema.wikiTopics.id, id)).run();
     try { fs.rmSync(t.path, { recursive: true, force: true }); } catch { /* noop */ } // remove raw/ + wiki/ from disk
     return { ok: true };

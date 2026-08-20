@@ -25,6 +25,7 @@ export interface SessionContext {
   agentName?: string;               // main-thread agent (SDK options.agent) — must be a key of `agents`
   unattended?: boolean;             // review pipeline: auto-allow canUseTool, never prompts a human
   systemPromptAppend?: string;      // extra house rules appended to the CLI's own prompt (never shown in the transcript)
+  extraRoots?: string[];            // dirs beyond the usual fence this turn may read (a linked wiki topic)
 }
 
 export function homeFor(ctx: SessionContext): string {
@@ -48,7 +49,11 @@ export function sdkMode(mode: PermMode, asRoot = RUNNING_AS_ROOT): PermMode {
 }
 
 export function rootsFor(ctx: SessionContext): string[] {
-  return allowedRootsFor(ctx.kind, ctx.ownerId, ctx.cwd);
+  const roots = allowedRootsFor(ctx.kind, ctx.ownerId, ctx.cwd);
+  // A linked wiki topic lives outside the session's own tree, so it has to be named here or the
+  // agent can neither see it (additionalDirectories) nor read it (the class-1 path fence).
+  for (const r of ctx.extraRoots || []) { const p = path.resolve(r); if (!roots.includes(p)) roots.push(p); }
+  return roots;
 }
 
 // Build the per-call Agent SDK Options. Everything here is per-session.

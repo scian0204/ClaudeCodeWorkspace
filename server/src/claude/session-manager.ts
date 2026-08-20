@@ -23,6 +23,7 @@ import { ensureSessionSandbox, sandboxMcp, sandboxHint, sessionSandboxAvailable 
 import { poolForSession, runOrder, markExhausted, markAvailable } from '../auth/token-pool.js';
 import { cfg } from '../lib/config-registry.js';
 import { maybeAutoTitle } from './auto-title.js';
+import { maybeWikiLearn } from '../wiki/learn.js';
 import { isUsageLimitError, resetAtFromError, eligible as autoResumeEligible, parkTurn } from './auto-resume.js';
 import { ingestTaskEvent, endRunningTasks } from './tasks.js';
 import { limitsSettled } from './usage-limits.js';
@@ -77,6 +78,19 @@ function getProject(id: string) {
 }
 function getWikiTopic(id: string) {
   return db.select().from(schema.wikiTopics).where(eq(schema.wikiTopics.id, id)).get();
+}
+
+// House rules for a session that LINKED a wiki topic (as opposed to a wiki query thread, which runs
+// inside the topic and gets its CLAUDE.md). Read-only on purpose: the linked base belongs to the
+// topic, and the only thing allowed to write into it is the learner (wiki/learn.ts).
+function wikiRefHint(name: string, dir: string): string {
+  return [
+    `## 연결된 LLM Wiki — "${name}"`,
+    `이 세션에는 지식 기반이 연결되어 있다: \`${dir}\``,
+    `- 주제와 관련된 질문을 받으면 먼저 \`${dir}/wiki/_index.md\`를 읽고 해당 아티클을 확인해라.`,
+    `- 그 내용을 근거로 답할 때는 어떤 아티클에서 온 것인지 밝혀라.`,
+    `- 이 디렉터리는 읽기 전용이다. 절대 수정·생성·삭제하지 마라.`,
+  ].join('\n');
 }
 
 // Exported: the session-export route resolves the transcript slug from the same cwd a turn runs with.
@@ -438,11 +452,23 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
     }
   }
 
+  // Linked LLM Wiki: an ordinary session may name a topic as reference knowledge. The topic dir is
+  // added to the turn's readable roots and the agent is told where it is and how to use it — the
+  // session keeps its own cwd/project, the wiki is just a second place to look things up.
+  let extraRoots: string[] | undefined;
+  if (s.wikiRefId && cfg.bool('wikiLinkEnabled')) {
+    const wt = getWikiTopic(s.wikiRefId);
+    if (wt && fs.existsSync(wt.path)) {
+      extraRoots = [wt.path];
+      systemPromptAppend = [systemPromptAppend, wikiRefHint(wt.name, wt.path)].filter(Boolean).join('\n\n');
+    }
+  }
+
   const ctx: SessionContext = {
     kind, ownerId, cwd, model: s.model || cfg.str('defaultModel'),
     effort: (s.effort || cfg.str('defaultEffort')) as SessionContext['effort'],
     permissionMode: mode, plugins: resolvePluginPaths(kind, ownerId),
-    authToken: '', providerEnv: prov.env, providerModel: prov.model, gitEnv, mcpServers, disallowedTools, systemPromptAppend,
+    authToken: '', providerEnv: prov.env, providerModel: prov.model, gitEnv, mcpServers, disallowedTools, systemPromptAppend, extraRoots,
     agents: resolveAgents(kind, ownerId, s.projectId), agentName: s.agent || undefined,
     unattended: s.kind === 'review', // review turns auto-allow (makeAutoAllow) — no human prompts
   };
@@ -602,6 +628,12 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
       sessionId: s.id, cwd, hasAuth: prov.source !== 'none', emit: p.emit,
       providerEnv: prov.env, providerModel: prov.model,
     }).catch(() => { /* titling is cosmetic — never surface it as a turn failure */ });
+    // a thread bound to a wiki topic (its own, or one it linked) offers the exchange to the topic —
+    // the model decides whether anything durable came out of it (wiki/learn.ts)
+    void maybeWikiLearn({
+      sessionId: s.id, author: p.author, emit: p.emit, hasAuth: prov.source !== 'none',
+      providerEnv: prov.env, providerModel: prov.model,
+    }).catch(() => { /* learning is opportunistic — never surface it as a turn failure */ });
   } catch (e: any) {
     const aborted = abort.signal.aborted;
     const errMsg = aborted ? 'interrupted' : String(e?.message || e);
