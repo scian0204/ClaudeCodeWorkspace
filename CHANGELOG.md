@@ -26,6 +26,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 | Version | Date | Commits | Headline |
 |---|---|---|---|
+| [Unreleased](#unreleased) | — | 9 | Wikis that start from a chat, a project or nothing — and grow from conversations |
 | [v1.22.0](#v1220--2026-08-20) | 2026-08-20 | 10 | Download a session's project folder, picking the files |
 | [v1.21.1](#v1211--2026-08-19) | 2026-08-19 | 2 | /hooks stops pointing at a page that cannot do it |
 | [v1.21.0](#v1210--2026-08-19) | 2026-08-19 | 4 | Side chat: ask about the work without joining it |
@@ -75,6 +76,235 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 | [v1.1.1](#v111--2026-07-31) | 2026-07-31 | 3 | Multi-arch build, Docker Hub overview |
 | [v1.1.0](#v110--2026-07-31) | 2026-07-31 | 4 | Release pipeline + Hub publishing |
 | [Early development](#early-development--2026-07-20--07-31) | 07-20 → 07-31 | 144 | P0–P5 skeleton · LLM Wiki · tokens · git · PR review · config · import · DM |
+
+---
+
+## Unreleased
+
+<details>
+<summary><b>feat(wiki): meeting-minutes topics — one document per meeting, decision/action registers</b> — <code>4909f1b</code></summary>
+
+A knowledge wiki and meeting minutes want opposite compiles. The wiki merges and
+dedupes sources into concept articles — exactly what destroys minutes, where "what
+did we decide on the 15th and when did it change" is the whole point. So a topic
+now has a kind, picked at the top of the create dialog: 일반 위키 or **회의록
+전용** (`wiki_topics.kind`).
+
+A minutes compile writes one document per meeting under `wiki/meetings/`
+(date-prefixed; attendees, agenda, a cleaned-up discussion, decisions, action
+items, corrections folded in — meetings are never merged), plus two registers:
+`wiki/decisions.md` (every decision with its date and source meeting; a reversed
+decision keeps both entries, the earlier marked superseded) and `wiki/actions.md`
+(owner / due / latest status — a later meeting saying "done" updates the register
+while the original document stays as written), and an `_index.md` listing meetings
+newest-first.
+
+Minutes answers are grounded regardless of the learning mode: what was said in a
+meeting is not something a model can know on its own, so it answers from the
+records, always with the date, and says "기록에 없습니다" otherwise. The learning
+mode still governs capture — a meeting record pasted into the thread is written up
+as structured minutes after the turn (the capture call reads up to 24k characters
+of the user message on minutes topics, since transcripts are long), and the next
+compile files it under `wiki/meetings/`.
+
+Verified with a real compile over two toy meetings where the second reversed a
+decision from the first: both meeting documents came out 1:1, `decisions.md`
+showed MySQL as current with the PostgreSQL entry kept and marked superseded, and
+`actions.md` marked the schema-draft item done based on the later meeting.
+
+Sidebar rows of minutes topics wear a small "회의록" tag. `web/tsconfig.json` now
+excludes `*.test.ts` (their `node:assert` imports are for tsx runs, not the
+browser build).
+
+</details>
+
+<details>
+<summary><b>feat(wiki): answer-format rules, no tool cards in a wiki thread, and sources that actually exist</b> — <code>3dff1c9</code></summary>
+
+Three rules were added to a topic's grounding doc and to the `llm-wiki` skill:
+answer in the language the user wrote in, lead with the conclusion and drop the
+filler, and end with the list of files referenced. That last one is load-bearing —
+the sources panel and the in-answer highlighting read exactly that list, so a path
+left out is a source the reader cannot open.
+
+A wiki thread no longer renders tool cards at all (`BlockList` gained `hideTools`,
+set for wiki threads only). The reader wants the answer and its sources, not the
+file reads that produced them. Ordinary chats, the guide and the task panel are
+untouched, and the tool calls are still stored — the sources panel is built from
+them.
+
+The sources panel now drops files that do not exist. It always meant to snap an
+approximate path onto the real one (the model normalizes whitespace, so a name with
+a double space never matched), but the resolver read `{raw, wiki}` from an endpoint
+that returns `{entries, truncated}` — so it silently did nothing, and a filename the
+model invented was listed like any other. New `GET /api/wiki/topics/:id/paths`
+returns the two flat lists, the citation store caches them per topic, and resolution
+became synchronous, which means the same filter now also applies to the in-text
+citation marks instead of only the panel.
+
+Verified on a real turn: the answer came back in Korean, opened with the conclusion,
+and ended with the one file it had read; the transcript rendered no tool cards, and
+the panel listed only files present on disk.
+
+</details>
+
+<details>
+<summary><b>fix(wiki): a growing wiki answers instead of refusing, and never asks permission to learn</b> — the empty-topic deadlock · <code>84bc203</code></summary>
+
+**Symptom.** A brand-new empty topic set to add knowledge automatically was asked
+about AWS and replied "이 위키에는 해당 내용이 없습니다", then offered the user a
+menu of ways to fix it. Nothing was recorded, so the base stayed empty — and would
+have stayed empty forever, since it fills from exactly those answers.
+
+**Cause.** Two rules written for a curated base were applied to every topic: the
+generated `CLAUDE.md` said never to answer beyond the sources, and the `llm-wiki`
+skill said to wait to be asked before adding anything. Correct for a base somebody
+assembled by hand; a deadlock for one whose whole purpose is to grow.
+
+**Fix.** The answer rules now follow the topic's own mode, and the generated
+`CLAUDE.md` is written from it:
+
+- off — unchanged. Answer strictly from the sources, say so when they do not cover
+  the question.
+- ask / auto — answer anyway, from what the model knows, with that part marked as
+  not from the wiki (and marked uncertain when it is). Never present it as
+  something the base said.
+
+Deciding what to keep is no longer the answering turn's business at all: the
+post-turn capture pass owns it, so the skill tells the thread not to end an answer
+with "위키에 추가할까요?" and not to write files unless a specific document was
+asked for. The capture prompt was told the opposite of before — an answer the model
+gave from its own knowledge is exactly what a growing base is made of.
+
+Also: every topic's `CLAUDE.md` is regenerated at boot, so topics created before
+this change pick up the right rules without being touched; starting a topic empty
+in the create dialog no longer defaults to off (a combination that can neither
+answer nor fill); and a stored note stops carrying two stacked `#` headings when
+the model already wrote its own title.
+
+Verified on a real turn against an empty topic: the answer came back carrying the
+"위키에 아직 없는 내용 — 내 지식으로 답함" marker (plus a source cross-check the
+model chose to do itself), and the capture pass wrote
+`raw/conversations/s3-storage-classes-guide.md`, its `wiki/` mirror and the index
+line without being asked.
+
+</details>
+
+<details>
+<summary><b>fix(wiki): a wiki turn loads one dedicated plugin, not the workspace's</b> — plugin isolation for queries and compiles · <code>5d0377d</code></summary>
+
+**Symptom.** A wiki thread answered in a style nobody asked for, prefixed every
+answer with a checklist an unrelated plugin demanded, ran each file write twice,
+and dropped its notes in a folder the wiki does not use.
+
+**Cause.** A wiki query was built like any other chat: it inherited every plugin
+the workspace had enabled, the operator's personal settings layer
+(`settingSources` included `user`), and the team agent definitions. One of those
+plugins ships a hook that refuses a tool call until a preamble is printed — the
+refusal is what made every write happen twice — and another rewrites the answer's
+style. A knowledge lookup has nothing to do with the team's coding plugins.
+
+**Fix.** Wiki-bound runs — the query thread, the compile, and the short
+knowledge-check call — now load exactly one plugin: the `llm-wiki` skill bundled
+with the app under `server/plugins/llm-wiki`. It spells out how to answer from the
+base (read `wiki/_index.md` first, cite files, say when the base does not have it)
+and the only files an addition may write: `raw/conversations/<slug>.md`,
+`wiki/conversations/<slug>.md` and one line in the index. Everything else under
+`wiki/` belongs to the compile, which deletes and rebuilds it from `raw/`. The
+settings layer is narrowed to the topic's own `CLAUDE.md`, and team agents are not
+passed at all. The slash-command probe uses the same set, so a wiki thread no
+longer advertises skills its turns cannot reach.
+
+New config key `wikiPluginPath` swaps in a different plugin directory (an operator's
+own, or a third-party wiki plugin); a path with no plugin manifest resolves to no
+plugin rather than failing the turn, since the topic's `CLAUDE.md` still carries
+the grounding rules.
+
+</details>
+
+<details>
+<summary><b>feat(wiki): start a topic from a chat, a project or nothing — and let it grow from conversations</b> — server side · <code>e1aefbc</code></summary>
+
+An LLM Wiki topic used to have exactly one way in: upload files. Three more were
+added, all landing in the same `raw/` folder the upload path fills, so the compile
+step that turns sources into articles is unchanged.
+
+- **From a chat** — a personal chat or a room is written out as one markdown
+  transcript. Who may do this is deliberately stricter than who may *open* the
+  chat: your own private chats, or a room you belong to. Copying a conversation
+  into a base every member can read is not the same permission as opening one
+  thread, so an admin cannot hand somebody else's private chat to a wiki.
+- **From a project** — the project's files are copied in, skipping whatever
+  `.gitignore` covers and stopping at `wikiSeedMaxFiles` / `wikiSeedMaxKB`.
+- **Empty** — nothing at all, for a base that is meant to fill up as people talk.
+
+The reverse direction also works: an ordinary chat or room can name a topic as
+reference knowledge (`chat_sessions.wiki_ref_id`). That turn gets the topic
+directory added to the folders it is allowed to read, plus house rules telling it
+to look the base up first and never write to it (`wikiLinkEnabled`).
+
+Finally, a topic can grow from the conversations held against it. After a turn in
+a thread bound to a topic — its own query thread, or one that linked it — a short
+model call with no tools reads the exchange and decides whether it holds anything
+durable. The model makes that call; the topic's own setting only decides what
+happens to a yes: `off` never runs, `ask` parks the finished article as a proposal
+for a person to accept, `auto` writes it in. Notes are written twice on purpose —
+to `raw/conversations/` and `wiki/conversations/`, linked from `_index.md`. Every
+compile wipes `wiki/` and rebuilds it from `raw/`, so a note that lived only in
+`wiki/` would vanish at the next recompile; the copy under `raw/` survives and is
+folded into the proper articles instead.
+
+New config keys: `wikiLinkEnabled`, `wikiAutoLearnEnabled`, `wikiLearnModel`,
+`wikiLearnTimeoutMs`, `wikiLearnMaxKB`, `wikiSeedMaxFiles`, `wikiSeedMaxKB`.
+New endpoints: `PATCH /api/wiki/topics/:id`, `GET /api/wiki/proposals`,
+`POST /api/wiki/proposals/:id/decide`; `PATCH /api/sessions/:id` takes `wikiRefId`.
+Existing topics migrate to `off`, so nothing starts running on its own.
+
+</details>
+
+<details>
+<summary><b>feat(web): pick how a wiki starts, link one to a session, decide what it learns</b> — the UI for the above · <code>34349a5</code></summary>
+
+The new-topic dialog leads with a "start from" choice — uploaded files, an
+existing chat, a project, or an empty wiki — and the file dropzone only appears
+for the upload case. Chats are grouped as personal chats and rooms, projects as
+common and personal, so the list matches how they are named everywhere else.
+Below that sits the topic's learning mode: off, ask first, add automatically.
+
+The same mode can be changed later from a settings dialog behind a new button on
+each sidebar row, which also renames and re-describes the topic.
+
+Ordinary chats and rooms get a header button that links a topic; when one is
+linked the button wears its name. And above the composer, the outcome of a
+conversation shows up: a card per parked addition, with the article one click
+away and add / skip next to it, or a dismissible line when one was added
+automatically. Cards are fetched when a thread is opened, so closing the tab does
+not lose an addition nobody decided on yet.
+
+Checked at 375px as well as desktop: the start-from choice is a two-column grid
+rather than a segmented row so four labels still fit, and the cards stay inside
+the page.
+
+</details>
+
+<details>
+<summary><b>feat(demo,guide): the new wiki behaviour in the static demo and the guide agent</b> — <code>30cdcb9</code></summary>
+
+Demo: the start-from choice is recorded on the mock topic, topic settings and the
+accept/skip endpoints answer, and a turn in a thread bound to a topic leaves a
+card (ask) or a note (auto) — the demo has no model, so it uses the question
+itself in place of the judgement. Asking the guide to link a wiki now works there
+too.
+
+Guide agent: the three new behaviours are described in its feature list, and its
+API reference gains wiki seeding, topic settings, the proposal decision and the
+session's `wikiRefId`, so it can carry them out rather than only explain them.
+
+</details>
+
+- **fix(wiki): the demo's mocked path list dropped every source** — its seed names carry a `raw/` prefix the real endpoint does not · plus a runnable check for the citation filter · `584e1d3`
+
+- **docs: the new wiki behaviour in both READMEs and these notes** — feature list, table rows and the LLM Wiki detail block, en/ko · `9f2444f`
 
 ---
 

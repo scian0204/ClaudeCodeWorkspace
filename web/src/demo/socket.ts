@@ -94,6 +94,38 @@ function autoTitle(sessionId: string, text: string) {
   });
 }
 
+// After a turn in a thread bound to a wiki topic, the real server asks a small model whether the
+// exchange is worth keeping. The demo has no model, so it uses the question itself: anything that
+// reads like a real question about the topic becomes an addition. The topic's own mode decides
+// whether that arrives as a card to accept ('ask') or as a note that it already went in ('auto').
+function topicForSession(sessionId: string) {
+  const own = db.wikiTopics.find((t: any) => `cs_${t.id}` === sessionId);
+  if (own) return own;
+  const s = db.sessions.find((x: any) => x.id === sessionId) as any;
+  const linked = s?.wikiRefId || (db.rooms.find((r: any) => r.chatSessionId === sessionId) as any)?.wikiRefId;
+  return linked ? db.wikiTopics.find((t: any) => t.id === linked) : undefined;
+}
+
+function maybeLearn(sessionId: string, question: string) {
+  const topic: any = topicForSession(sessionId);
+  if (!topic || !topic.autoLearn || topic.autoLearn === 'off') return;
+  const q = question.trim();
+  if (q.length < 12 || q.startsWith('/')) return; // small talk and slash commands are not knowledge
+  const title = q.replace(/[?？.!]+$/, '').slice(0, 60);
+  const content = title + '\n\n이 대화에서 정리된 내용입니다. 실제 서버에서는 모델이 답변을 읽고 남길 만한 지식인지 판단해 이 글을 씁니다.';
+  if (topic.autoLearn === 'auto') {
+    topic.compiledAt = Date.now();
+    later(600, () => deliver('wiki:learned', { sessionId, topicId: topic.id, topicName: topic.name, title }));
+    return;
+  }
+  const proposal = {
+    id: `wp_${rid()}`, topicId: topic.id, topicName: topic.name, sessionId,
+    title, slug: 'from-conversation', content, status: 'pending', createdBy: db.me.id, createdAt: Date.now(),
+  };
+  db.wikiProposals.push(proposal);
+  later(600, () => deliver('wiki:proposal', { sessionId, proposal }));
+}
+
 function runTurn(sessionId: string, text: string, nAtt = 0) {
   const firstText = text;
   runDemoTasks(sessionId); // subagent + background shell alongside the answer (task panel)
@@ -112,6 +144,7 @@ function runTurn(sessionId: string, text: string, nAtt = 0) {
       appendMsg(sessionId, msg);
       deliver('turn:end', { sessionId, message: msg });
       autoTitle(sessionId, firstText);
+      maybeLearn(sessionId, firstText);
     });
   };
 
@@ -249,6 +282,18 @@ function guidePlan(text: string): { steps: { input: any; output: string }[]; rep
     return {
       steps: [{ input: { action: 'openAside' }, output: 'ok — dispatched openAside' }],
       reply: '사이드 채팅을 열었습니다. 지금 대화를 그대로 이어받아 답하지만, 여기서 오간 내용은 대화 기록에 남지 않습니다 — 읽기 전용이라 파일을 고치거나 명령을 실행하지도 않아요.\n\n입력창에 `/btw 질문` 처럼 바로 물어봐도 됩니다.',
+    };
+  }
+  if (/(위키|wiki)/.test(q) && /(연결|link|붙|참고)/.test(q)) {
+    const topic = db.wikiTopics[0];
+    const sid = db.sessions[0]?.id || '';
+    (db.sessions[0] as any).wikiRefId = topic?.id;
+    return {
+      steps: [
+        { input: { method: 'PATCH', path: `/api/sessions/${sid}`, body: { wikiRefId: topic?.id } }, output: 'status=200\n{"ok":true}' },
+        { input: { action: 'refresh' }, output: 'ok — dispatched refresh' },
+      ],
+      reply: `이 대화에 \`${topic?.name}\` 위키를 연결했습니다. 앞으로 이 대화의 질문은 그 지식 기반을 먼저 찾아본 뒤 답합니다(위키 자체는 건드리지 않아요).\n\n상단 위키 버튼에서 다른 주제로 바꾸거나 연결을 끊을 수 있습니다.`,
     };
   }
   if (url && /(skill|plugin|스킬|플러그인)/.test(q)) {

@@ -220,9 +220,12 @@ export const db = {
     { id: 'r_design', name: 'Design Review', ownerId: ME.id, chatSessionId: 'cs_design', permissionMode: 'plan', members: [member(ME, true), member(U_SAM, false, ['approve'])] },
   ],
   wikiTopics: [
-    { id: 'w_pay', name: 'Payments Domain', description: 'How captures, refunds and the ledger work', path: 'payments', createdBy: ME.id, createdAt: ago(60 * 24 * 5), compileStatus: 'done', compiledAt: ago(60 * 24 * 3), compileError: null },
-    { id: 'w_onboard', name: 'Onboarding Guide', description: 'New engineer setup + team conventions', path: 'onboarding', createdBy: ME.id, createdAt: ago(60 * 24 * 12), compileStatus: 'done', compiledAt: ago(60 * 24 * 10), compileError: null },
+    // autoLearn: what a finished conversation may add to the base — off | ask | auto
+    { id: 'w_pay', name: 'Payments Domain', description: 'How captures, refunds and the ledger work', path: 'payments', createdBy: ME.id, createdAt: ago(60 * 24 * 5), compileStatus: 'done', compiledAt: ago(60 * 24 * 3), compileError: null, autoLearn: 'ask' },
+    { id: 'w_onboard', name: 'Onboarding Guide', description: 'New engineer setup + team conventions', path: 'onboarding', createdBy: ME.id, createdAt: ago(60 * 24 * 12), compileStatus: 'done', compiledAt: ago(60 * 24 * 10), compileError: null, autoLearn: 'off' },
   ],
+  // knowledge the learner parked for a thread, waiting on 추가/무시 (filled in by the fake socket)
+  wikiProposals: [] as any[],
   projects: {
     common: [{ id: 'p_shared', scope: 'common', ownerId: null, name: 'shared-infra', path: '/workspace/shared/infra' }] as any[],
     mine: [

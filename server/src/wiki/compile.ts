@@ -7,6 +7,7 @@ import { resolveProvider } from '../auth/provider.js';
 import { cfg } from '../lib/config-registry.js';
 import { recordUsage } from '../usage/tracker.js';
 import { io } from '../realtime/io.js';
+import { wikiPluginPaths } from './plugin.js';
 
 // One compile per topic at a time. Guards against overlapping auto-compile + recompile.
 const inflight = new Set<string>();
@@ -45,7 +46,26 @@ function briefInput(input: any): string {
   return JSON.stringify(input).slice(0, 60);
 }
 
-function compilePrompt(name: string, description: string) {
+// Two compile shapes. 'wiki' synthesizes: merge, dedupe, one article per concept. 'minutes' does
+// the OPPOSITE on purpose — one document per meeting, never merged, because "what did we decide on
+// the 15th and when did it change" is the whole point of a minutes base; merging destroys history.
+function compilePrompt(t: { name: string; description: string; kind: string }) {
+  const { name, description } = t;
+  if (t.kind === 'minutes') {
+    return [
+      `You are compiling MEETING MINUTES for the topic "${name}".`,
+      description ? `Topic guidance from the admin: ${description}` : '',
+      ``,
+      `Sources live in ./raw/ — meeting notes (possibly messy, rambling and unordered), supporting material (slides, whiteboard photos — you are multimodal, open images with Read), and corrections. Your job:`,
+      `1. Identify each distinct meeting: its date and title, from folder/file names (raw/meetings/2026-08-20*/, "0820 주간회의.md") or from the content itself. Notes + slides + corrections for the same meeting are ONE meeting.`,
+      `2. Write ONE document per meeting at ./wiki/meetings/<YYYY-MM-DD>-<slug>.md: attendees (if known), agenda, a cleaned-up summary of the discussion (dedupe the rambling; keep who said what where it matters), decisions, and action items (owner + due date when stated). Fold corrections in and note that a correction was applied. NEVER merge two meetings into one document — per-meeting history is the point of this base.`,
+      `3. Write ./wiki/decisions.md — the decision register: every decision with its date and a link to the meeting document it came from. When a later meeting reverses or changes an earlier decision, keep BOTH entries and mark the earlier one as superseded (say by which meeting).`,
+      `4. Write ./wiki/actions.md — the action-item register: owner, due date, latest known status. A later meeting saying something got done updates the status HERE; the original meeting document stays as written.`,
+      `5. Generate ./wiki/_index.md: meetings newest-first with a one-line summary each, plus links to the two registers.`,
+      `6. Do NOT modify or delete anything in ./raw/ (immutable sources). Do NOT touch ./CLAUDE.md.`,
+      `Write all files directly to disk. Keep going until ./wiki/ is complete, then output a one-line summary of what you produced.`,
+    ].filter(Boolean).join('\n');
+  }
   return [
     `You are compiling an LLM-Wiki knowledge base on the topic "${name}".`,
     description ? `Topic guidance from the admin: ${description}` : '',
@@ -68,7 +88,9 @@ async function runCompile(t: NonNullable<ReturnType<typeof getTopic>>) {
     // acceptEdits (not bypassPermissions): the always-allow canUseTool below authorizes every
     // tool, and bypass maps to --dangerously-skip-permissions which the CLI refuses under root.
     permissionMode: 'acceptEdits',
-    plugins: [], // deterministic compile — no user plugins/skills in the loop
+    // deterministic compile: the bundled wiki plugin only, and only this topic's CLAUDE.md —
+    // no workspace plugins, no operator settings layer (see wiki/plugin.ts)
+    plugins: wikiPluginPaths(), settingSources: ['project'],
     authToken: '', providerEnv: prov.env, providerModel: prov.model,
   };
   const { query } = await import('@anthropic-ai/claude-agent-sdk');
@@ -90,7 +112,7 @@ async function runCompile(t: NonNullable<ReturnType<typeof getTopic>>) {
     },
     abortController: abort,
   });
-  const q = query({ prompt: compilePrompt(t.name, t.description), options });
+  const q = query({ prompt: compilePrompt(t), options });
   let inTok = 0, outTok = 0, cost = 0;
   for await (const msg of q as any) {
     // live progress so a compile never looks hung — each tool call / text line is a heartbeat

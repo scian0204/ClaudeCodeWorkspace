@@ -50,6 +50,7 @@ export const chatSessions = sqliteTable('chat_sessions', {
   title: text('title').notNull(),
   projectId: text('project_id'),
   wikiTopicId: text('wiki_topic_id'), // set => this is a user's private thread under a wiki topic
+  wikiRefId: text('wiki_ref_id'),     // an ORDINARY session reading a wiki topic as reference knowledge
   claudeSessionId: text('claude_session_id'), // SDK resume id
   model: text('model').notNull().default('claude-opus-4-8'),
   effort: text('effort').notNull().default('high'), // SDK effort level: low|medium|high|xhigh|max
@@ -151,6 +152,27 @@ export const wikiTopics = sqliteTable('wiki_topics', {
   compileStatus: text('compile_status').notNull().default('idle'), // idle|compiling|done|error
   compiledAt: integer('compiled_at'),
   compileError: text('compile_error'),
+  // Grow the base from conversations: after a turn in a thread bound to this topic, a short model
+  // call decides whether the exchange holds durable knowledge. 'off' = never, 'ask' = propose and
+  // wait for a human, 'auto' = write it straight into raw/ + wiki/.
+  autoLearn: text('auto_learn').notNull().default('off'), // off|ask|auto
+  // 'wiki' = synthesized concept articles (merge/dedupe). 'minutes' = one document per meeting,
+  // preserved 1:1, plus decision/action registers — merging meetings would destroy the history.
+  kind: text('kind').notNull().default('wiki'),
+});
+
+// A knowledge addition the learner proposed but a human has not decided on yet ('ask' mode).
+// Content is the finished article body — applying it is a pure file write, no second model call.
+export const wikiProposals = sqliteTable('wiki_proposals', {
+  id: text('id').primaryKey(),
+  topicId: text('topic_id').notNull(),
+  sessionId: text('session_id').notNull(), // the chat the knowledge came out of
+  title: text('title').notNull(),
+  slug: text('slug').notNull(),            // file stem under raw/conversations/ + wiki/conversations/
+  content: text('content').notNull(),      // markdown article body
+  status: text('status').notNull().default('pending'), // pending|applied|rejected
+  createdBy: text('created_by').notNull(), // whoever's turn produced it (decides who sees the card)
+  createdAt: integer('created_at').notNull(),
 });
 
 export const marketplaces = sqliteTable('marketplaces', {

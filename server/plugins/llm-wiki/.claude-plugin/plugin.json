@@ -1,0 +1,6 @@
+{
+  "name": "llm-wiki",
+  "description": "The only plugin an LLM Wiki thread loads: how to answer from a compiled knowledge base, and how to add to it. Ships with ClaudeCode Workspace; nothing else from the workspace is in scope for a wiki turn.",
+  "version": "1.0.0",
+  "author": { "name": "ClaudeCode Workspace" }
+}

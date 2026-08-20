@@ -25,6 +25,10 @@ export interface SessionContext {
   agentName?: string;               // main-thread agent (SDK options.agent) — must be a key of `agents`
   unattended?: boolean;             // review pipeline: auto-allow canUseTool, never prompts a human
   systemPromptAppend?: string;      // extra house rules appended to the CLI's own prompt (never shown in the transcript)
+  extraRoots?: string[];            // dirs beyond the usual fence this turn may read (a linked wiki topic)
+  // Which settings layers the CLI loads. Default ['user','project','local']; a wiki turn narrows
+  // it to ['project'] so only the topic's own CLAUDE.md applies, not the operator's personal setup.
+  settingSources?: string[];
 }
 
 export function homeFor(ctx: SessionContext): string {
@@ -48,7 +52,11 @@ export function sdkMode(mode: PermMode, asRoot = RUNNING_AS_ROOT): PermMode {
 }
 
 export function rootsFor(ctx: SessionContext): string[] {
-  return allowedRootsFor(ctx.kind, ctx.ownerId, ctx.cwd);
+  const roots = allowedRootsFor(ctx.kind, ctx.ownerId, ctx.cwd);
+  // A linked wiki topic lives outside the session's own tree, so it has to be named here or the
+  // agent can neither see it (additionalDirectories) nor read it (the class-1 path fence).
+  for (const r of ctx.extraRoots || []) { const p = path.resolve(r); if (!roots.includes(p)) roots.push(p); }
+  return roots;
 }
 
 // Build the per-call Agent SDK Options. Everything here is per-session.
@@ -110,7 +118,7 @@ export function buildOptions(ctx: SessionContext, extra: {
     model: ctx.providerModel || ctx.model, // provider model id/ARN overrides the dropdown model
     permissionMode: sdkMode(ctx.permissionMode),
     effort: ctx.effort,
-    settingSources: ['user', 'project', 'local'],
+    settingSources: ctx.settingSources ?? ['user', 'project', 'local'],
     additionalDirectories,
     plugins: ctx.plugins.length ? ctx.plugins.map((p) => ({ type: 'local' as const, path: p })) : undefined,
     canUseTool: extra.canUseTool,

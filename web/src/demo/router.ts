@@ -45,9 +45,10 @@ function syncAuth() {
 
 function sessionFor(id: string) {
   const s = db.sessions.find((x) => x.id === id);
-  if (s) return { id: s.id, title: s.title, projectId: s.projectId, model: s.model, effort: s.effort || 'high', permissionMode: s.permissionMode };
+  // wikiRefId rides along: a chat that linked a wiki must still show it after being reopened
+  if (s) return { id: s.id, title: s.title, projectId: s.projectId, model: s.model, effort: s.effort || 'high', permissionMode: s.permissionMode, wikiRefId: (s as any).wikiRefId ?? null };
   const room = db.rooms.find((r) => r.chatSessionId === id);
-  if (room) return { id, title: room.name, projectId: null, model: 'claude-opus-4-8', effort: 'high', permissionMode: room.permissionMode };
+  if (room) return { id, title: room.name, projectId: null, model: 'claude-opus-4-8', effort: 'high', permissionMode: room.permissionMode, wikiRefId: (room as any).wikiRefId ?? null };
   const w = db.wikiTopics.find((t) => `cs_${t.id}` === id);
   if (w) return { id, title: w.name, projectId: null, model: 'claude-opus-4-8', effort: 'high', permissionMode: 'default' };
   const rv = db.reviewSessions.find((x: any) => x.chatSessionId === id);
@@ -279,7 +280,7 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   if (P === '/api/admin/restore/apply' && M === 'POST') { ADMIN.restoreStaged = null; return ok({ ok: true }); }
 
   // ---- client-facing config (model dropdown) ----
-  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, sessionExportEnabled: true, sessionBundleEnabled: true, fileTreeWarnCount: 300, teamAgentsEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenu: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true, guideEnabled: true, guideWriteEnabled: true, asideEnabled: true, taskPanelEnabled: true, processPollMs: 5000, toolFoldMin: 3, tokenPoolEnabled: true, tokenPoolAllUsers: true, tokenPoolPartyCreate: true, sessionSandboxEnabled: true, dockerReady: ADMIN.docker.ok && ADMIN.docker.configured, dockerReason: ADMIN.docker.reason });
+  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, sessionExportEnabled: true, sessionBundleEnabled: true, fileTreeWarnCount: 300, teamAgentsEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenu: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, wikiLinkEnabled: true, wikiAutoLearnEnabled: true, reviewWebhookEnabled: true, guideEnabled: true, guideWriteEnabled: true, asideEnabled: true, taskPanelEnabled: true, processPollMs: 5000, toolFoldMin: 3, tokenPoolEnabled: true, tokenPoolAllUsers: true, tokenPoolPartyCreate: true, sessionSandboxEnabled: true, dockerReady: ADMIN.docker.ok && ADMIN.docker.configured, dockerReason: ADMIN.docker.reason });
 
   // ── shared-plan pools ("토큰 모아쓰기") ──
   if (P === '/api/pools' && M === 'GET') return ok({ pools: db.pools, allUsers: true, myPoolId: db.myPoolId, optedOut: db.poolOptedOut, hasCredential: true, canCreate: true });
@@ -397,7 +398,11 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
     const s = { id: genId('s'), title: 'New chat', updatedAt: Date.now(), projectId: b.projectId ? String(b.projectId) : null, model: 'claude-opus-4-8', effort: 'high', permissionMode: 'default' };
     db.sessions.unshift(s); db.messages[s.id] = []; return ok({ session: s });
   }
-  if (seg[1] === 'sessions' && seg[3] === 'commands') return ok({ commands: COMMANDS });
+  // a wiki thread (id `cs_<topicId>`) loads only the bundled llm-wiki plugin, so its command list
+  // must not advertise the workspace's skills
+  if (seg[1] === 'sessions' && seg[3] === 'commands') {
+    return ok({ commands: idAt(2).startsWith('cs_') ? [] : COMMANDS });
+  }
   if (seg[1] === 'sessions' && seg[3] === 'usage') return ok({ usage: USAGE });
   if (seg[1] === 'sessions' && seg[3] === 'messages' && seg[5] === 'edit') {
     const list = msgs(idAt(2)); const i = list.findIndex((m) => m.id === idAt(4));
@@ -471,7 +476,10 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   }
   if (seg[1] === 'sessions' && seg[2] && M === 'GET') return ok({ session: sessionFor(idAt(2)), messages: msgs(idAt(2)) });
   if (seg[1] === 'sessions' && seg[2] && M === 'PATCH') {
-    const s = db.sessions.find((x) => x.id === idAt(2)); if (s) Object.assign(s, b); return ok({});
+    // a room's shared chat row lives on the room itself, so patch whichever one owns this id
+    const s = db.sessions.find((x) => x.id === idAt(2)) || db.rooms.find((r) => r.chatSessionId === idAt(2));
+    if (s) Object.assign(s, b);
+    return ok({});
   }
   if (seg[1] === 'sessions' && seg[2] && M === 'DELETE') {
     db.sessions = db.sessions.filter((x) => x.id !== idAt(2)); delete db.messages[idAt(2)]; return ok({});
@@ -584,14 +592,53 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   // ---- wiki ----
   if (P === '/api/wiki/topics' && M === 'GET') return ok({ topics: db.wikiTopics });
   if (P === '/api/wiki/topics' && M === 'POST') {
-    const t = { id: genId('w'), name: b.name || 'New topic', description: b.description || '', path: String(b.name || 'topic').toLowerCase(), createdBy: db.me.id, createdAt: Date.now(), compileStatus: 'done', compiledAt: Date.now(), compileError: null };
+    // seedType picks where the first sources come from. The demo has no filesystem, so it records
+    // the choice in the topic blurb and reports the base as already built.
+    const seeded = b.seedType === 'session'
+      ? (db.sessions.find((x: any) => x.id === b.seedSessionId)?.title
+         || db.rooms.find((r: any) => r.chatSessionId === b.seedSessionId)?.name || '')
+      : b.seedType === 'project'
+        ? ([...db.projects.common, ...db.projects.mine].find((x: any) => x.id === b.seedProjectId)?.name || '')
+        : '';
+    const from = b.seedType === 'blank' ? 'started empty' : seeded ? `started from ${seeded}` : '';
+    const t = {
+      id: genId('w'), name: b.name || 'New topic',
+      description: [b.description || '', from].filter(Boolean).join(' · '),
+      path: String(b.name || 'topic').toLowerCase(), createdBy: db.me.id, createdAt: Date.now(),
+      compileStatus: 'done', compiledAt: Date.now(), compileError: null, autoLearn: b.autoLearn || 'off', kind: b.kind || 'wiki',
+    };
     db.wikiTopics.push(t); db.messages[`cs_${t.id}`] = []; return ok({ topic: t });
+  }
+  // topic settings (name / description / what a conversation may add)
+  if (seg[1] === 'wiki' && seg[2] === 'topics' && seg[3] && !seg[4] && M === 'PATCH') {
+    const t = db.wikiTopics.find((x) => x.id === idAt(3));
+    if (t) Object.assign(t, b);
+    return ok({ topic: t });
+  }
+  // knowledge the learner parked for a thread ('ask' mode) + the accept/skip decision
+  if (P === '/api/wiki/proposals' && M === 'GET') {
+    const sid = query.get('sessionId') || '';
+    return ok({ proposals: db.wikiProposals.filter((x: any) => x.sessionId === sid) });
+  }
+  if (seg[1] === 'wiki' && seg[2] === 'proposals' && seg[4] === 'decide' && M === 'POST') {
+    const pr = db.wikiProposals.find((x: any) => x.id === idAt(3));
+    db.wikiProposals = db.wikiProposals.filter((x: any) => x.id !== idAt(3));
+    if (pr && b.accept !== false) {
+      const t = db.wikiTopics.find((x) => x.id === pr.topicId);
+      if (t) t.compiledAt = Date.now();
+    }
+    return ok({ ok: true, accepted: b.accept !== false });
   }
   if (seg[1] === 'wiki' && seg[2] === 'topics' && seg[4] === 'thread') {
     const w = db.wikiTopics.find((x) => x.id === idAt(3)); const cs = `cs_${idAt(3)}`;
     return ok({ session: { id: cs, title: w?.name || 'Wiki', model: 'claude-opus-4-8', permissionMode: 'default' }, messages: msgs(cs) });
   }
   if (seg[1] === 'wiki' && seg[2] === 'topics' && seg[4] === 'files') return ok({ files: WIKI_ARTICLES, source: 'compiled' });
+  // flat file list — the citation layer drops sources with no file behind them
+  if (seg[1] === 'wiki' && seg[2] === 'topics' && seg[4] === 'paths') {
+    const rel = (n: string) => n.replace(/^(wiki|raw)\//, '');
+    return ok({ wiki: WIKI_TREE_ARTICLES.map((f: any) => rel(f.name)), raw: WIKI_RAW.map((f: any) => rel(f.name)) });
+  }
   if (seg[1] === 'wiki' && seg[2] === 'topics' && seg[4] === 'tree') {
     const src = query.get('dir') === 'wiki' ? WIKI_TREE_ARTICLES : WIKI_RAW;
     return ok(levelFrom(src as any, query.get('path') || ''));

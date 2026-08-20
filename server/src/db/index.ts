@@ -24,6 +24,12 @@ CREATE TABLE IF NOT EXISTS wiki_topics (
   path TEXT NOT NULL, created_by TEXT NOT NULL, created_at INTEGER NOT NULL,
   compile_status TEXT NOT NULL DEFAULT 'idle', compiled_at INTEGER, compile_error TEXT
 );
+CREATE TABLE IF NOT EXISTS wiki_proposals (
+  id TEXT PRIMARY KEY, topic_id TEXT NOT NULL, session_id TEXT NOT NULL, title TEXT NOT NULL,
+  slug TEXT NOT NULL, content TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending',
+  created_by TEXT NOT NULL, created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_wiki_proposals_session ON wiki_proposals(session_id, created_at);
 CREATE TABLE IF NOT EXISTS messages (
   id TEXT PRIMARY KEY, session_id TEXT NOT NULL, role TEXT NOT NULL, author_id TEXT,
   author_name TEXT, content TEXT NOT NULL, chat INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL
@@ -195,6 +201,12 @@ export function initDb() {
   try { sqlite.exec("ALTER TABLE chat_sessions ADD COLUMN pool_id TEXT"); } catch { /* already present */ }
   // per-session build container (0 = build/run in the app container, as before)
   try { sqlite.exec("ALTER TABLE chat_sessions ADD COLUMN sandbox INTEGER NOT NULL DEFAULT 0"); } catch { /* already present */ }
+  // an ordinary session reading a wiki topic as reference knowledge (null = none)
+  try { sqlite.exec("ALTER TABLE chat_sessions ADD COLUMN wiki_ref_id TEXT"); } catch { /* already present */ }
+  // per-topic conversation learning mode (off = the pre-existing behaviour)
+  try { sqlite.exec("ALTER TABLE wiki_topics ADD COLUMN auto_learn TEXT NOT NULL DEFAULT 'off'"); } catch { /* already present */ }
+  // topic kind: 'wiki' (synthesized articles) | 'minutes' (per-meeting docs + registers)
+  try { sqlite.exec("ALTER TABLE wiki_topics ADD COLUMN kind TEXT NOT NULL DEFAULT 'wiki'"); } catch { /* already present */ }
   // project-scope team agents ('' for common/user rows). The unique index must include project_id,
   // so it is (re)created here — after the ALTER — instead of in the DDL block.
   try { sqlite.exec("ALTER TABLE team_agents ADD COLUMN project_id TEXT NOT NULL DEFAULT ''"); } catch { /* already present */ }

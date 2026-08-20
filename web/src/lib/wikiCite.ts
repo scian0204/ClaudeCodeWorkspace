@@ -47,10 +47,12 @@ function textSources(text: string): WikiSource[] {
 
 // Sources an assistant turn cited: files it opened via Read (reliable) plus wiki//raw/ paths it
 // named in the answer text (deduped, Read-first order).
-export function extractSources(blocks: Block[], topicId: string): WikiSource[] {
+export function extractSources(blocks: Block[], topicId: string, tree: TopicTree | null = null): WikiSource[] {
   const seen = new Set<string>();
   const out: WikiSource[] = [];
-  const push = (s: WikiSource | null) => {
+  const push = (found: WikiSource | null) => {
+    if (!found) return;
+    const s = realPath(tree, found); // snapped to the real path, or dropped when no file backs it
     if (!s) return;
     const id = citeId(s);
     if (seen.has(id)) return;
@@ -64,41 +66,46 @@ export function extractSources(blocks: Block[], topicId: string): WikiSource[] {
 }
 
 // Paths the model wrote in prose are approximate — it normalizes whitespace, so a filename with a
-// double space won't match on disk. Resolve a cited source to a real tree entry (exact, then by
-// normalized full path, then by normalized basename); returns the source unchanged if nothing fits.
-const treeCache = new Map<string, Promise<{ raw: string[]; wiki: string[] }>>();
-function loadTree(topicId: string) {
-  let p = treeCache.get(topicId);
-  if (!p) {
-    p = api.get(`/api/wiki/topics/${topicId}/tree`)
-      .then((r: any) => ({ raw: (r.raw || []).map((f: any) => f.name), wiki: (r.wiki || []).map((f: any) => f.name) }))
-      .catch(() => { treeCache.delete(topicId); return { raw: [], wiki: [] }; });
-    treeCache.set(topicId, p);
-  }
-  return p;
-}
+// double space won't match on disk, and it can name a file that does not exist at all. Both are
+// resolved against the topic's real file list: an approximate path is snapped to the real one, and
+// anything with no file behind it is dropped rather than listed as a source nobody can open.
+export interface TopicTree { raw: string[]; wiki: string[] }
 const normPath = (s: string) => s.normalize('NFC').replace(/\s+/g, ' ').trim();
-export async function resolveRealPath(topicId: string, src: WikiSource): Promise<WikiSource> {
-  const tree = await loadTree(topicId);
+
+export function realPath(tree: TopicTree | null, src: WikiSource): WikiSource | null {
+  if (!tree) return src; // list not loaded yet — show it; the filter re-runs when it lands
   const list = src.dir === 'wiki' ? tree.wiki : tree.raw;
   if (list.includes(src.path)) return src;
   const nP = normPath(src.path);
   const nB = normPath(citeBase(src.path));
   const hit = list.find((x) => normPath(x) === nP) || list.find((x) => normPath(citeBase(x)) === nB);
-  return hit ? { dir: src.dir, path: hit } : src;
+  return hit ? { dir: src.dir, path: hit } : null;
 }
 
 // Shared UI state: which citation is highlighted (hover sync) and which is previewed (click).
 interface CiteUI {
   hovered: string | null;
   preview: WikiSource | null;
+  trees: Record<string, TopicTree>;   // topicId -> every file the topic actually has
   setHovered: (id: string | null) => void;
   openPreview: (s: WikiSource | null) => void;
+  loadTree: (topicId: string) => void;
 }
-export const useCite = create<CiteUI>((set) => ({
-  hovered: null, preview: null,
+const loading = new Set<string>();
+export const useCite = create<CiteUI>((set, get) => ({
+  hovered: null, preview: null, trees: {},
   setHovered: (id) => set({ hovered: id }),
   openPreview: (s) => set({ preview: s }),
+  // Fetched once per topic per page load, and again whenever the sources panel mounts — a compile
+  // or a captured note changes the list rarely enough that this is plenty.
+  loadTree: (topicId) => {
+    if (!topicId || loading.has(topicId)) return;
+    loading.add(topicId);
+    api.get(`/api/wiki/topics/${topicId}/paths`)
+      .then((r: any) => set({ trees: { ...get().trees, [topicId]: { raw: r.raw || [], wiki: r.wiki || [] } } }))
+      .catch(() => { /* leave it unset — sources render unfiltered rather than vanishing */ })
+      .finally(() => loading.delete(topicId));
+  },
 }));
 
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

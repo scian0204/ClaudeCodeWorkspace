@@ -408,6 +408,17 @@ export async function sessionRoutes(app: FastifyInstance) {
     }
     // per-session build container (only meaningful while the admin flag is on; the turn re-checks)
     if ('sandbox' in b) patch.sandbox = b.sandbox ? 1 : 0;
+    // LLM Wiki linked to this session as reference knowledge ('' / null clears it). Every member can
+    // read a topic already, so no extra gate — but an unknown id would silently resolve to nothing
+    // on every later turn, so it is rejected instead of stored.
+    if ('wikiRefId' in b) {
+      if (!cfg.bool('wikiLinkEnabled')) return reply.code(403).send({ error: 'wiki linking is disabled' });
+      const wid = String(b.wikiRefId || '');
+      if (wid && !db.select().from(schema.wikiTopics).where(eq(schema.wikiTopics.id, wid)).get()) {
+        return reply.code(400).send({ error: 'unknown wiki topic' });
+      }
+      patch.wikiRefId = wid || null;
+    }
     // Changing the project changes the turn's cwd. The CLI stores each conversation's
     // transcript under the cwd it was created in, so the old resume id can't be found
     // in the new cwd. Reset the SDK conversation when the project actually changes.
