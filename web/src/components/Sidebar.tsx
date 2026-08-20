@@ -28,6 +28,7 @@ export function Sidebar() {
   const [importOpen, setImportOpen] = useState(false);
   const brand = useBrand();
   const [srcTopic, setSrcTopic] = useState<string | null>(null); // wiki topic whose sources are open in the explorer
+  const [cfgTopic, setCfgTopic] = useState<string | null>(null); // wiki topic whose settings dialog is open
   // collapsed session groups (project ids, '' = unassigned) — same localStorage habit as sidebarCollapsed
   const [closedGroups, setClosedGroups] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('sidebarGroups') || '[]'); } catch { return []; }
@@ -181,6 +182,10 @@ export function Sidebar() {
                 onClick={(e) => { e.stopPropagation(); setSrcTopic(wt.id); }}><IconFolder size={14} /></button>
             )}
             {isAdmin && (
+              <button className="hidden group-hover:block text-txt3 hover:text-clay px-1" title={t('wiki.topicSettings')} aria-label={t('wiki.topicSettings')}
+                onClick={(e) => { e.stopPropagation(); setCfgTopic(wt.id); }}><IconSliders size={14} /></button>
+            )}
+            {isAdmin && (
               <button className="hidden group-hover:block text-txt3 hover:text-danger px-1" title={t('sidebar.deleteTopicTitle')} aria-label={t('sidebar.deleteTopicTitle')}
                 onClick={(e) => { e.stopPropagation(); removeTopic(wt); }}><IconTrash size={14} /></button>
             )}
@@ -236,6 +241,7 @@ export function Sidebar() {
 
       {showWiki && <WikiCreateModal onClose={() => setShowWiki(false)} />}
       {srcTopic && <WikiExplorer topicId={srcTopic} onClose={() => setSrcTopic(null)} />}
+      {cfgTopic && <WikiSettingsModal topicId={cfgTopic} onClose={() => setCfgTopic(null)} />}
       {showDm && <NewChannelModal onClose={() => setShowDm(false)} />}
       {importOpen && sessionImportEnabled && <ImportSessionModal onClose={() => setImportOpen(false)} />}
     </aside>
@@ -244,15 +250,24 @@ export function Sidebar() {
 
 function fmtSize(n: number) { return n >= 1024 ? `${(n / 1024).toFixed(1)}KB` : `${n}B`; }
 
-// Bulk-upload flow: drop whole folders (recursed to any depth) or pick files/a folder → each file
-// streams to a server staging area (real progress), the confirmed list shows relative paths with
-// per-file delete, then 확인 finalizes the topic (moves staged tree in) / 취소 discards.
+// Starting a topic. Four ways in, picked at the top of the dialog: upload files (the original
+// flow - drop whole folders, each file streams to a server staging area with real progress), pull
+// in an existing chat or project, or start empty and let the conversations fill it. The topic's
+// "grow from conversations" mode is chosen here too, since it decides what happens from turn one.
 function WikiCreateModal({ onClose }: { onClose: () => void }) {
   const newWikiTopic = useStore((s) => s.newWikiTopic);
   const setError = useStore((s) => s.setError);
+  const sessions = useStore((s) => s.sessions);
+  const rooms = useStore((s) => s.rooms);
+  const projects = useStore((s) => s.projects);
+  const learnEnabled = useStore((s) => s.wikiAutoLearnEnabled);
   const [sid] = useState(() => (crypto.randomUUID?.() || `${Date.now()}${Math.random()}`).replace(/[^a-zA-Z0-9]/g, '').slice(0, 32));
   const [name, setName] = useState('');
   const [desc, setDesc] = useState('');
+  const [seed, setSeed] = useState<'upload' | 'session' | 'project' | 'blank'>('upload');
+  const [seedSessionId, setSeedSessionId] = useState('');
+  const [seedProjectId, setSeedProjectId] = useState('');
+  const [autoLearn, setAutoLearn] = useState('ask');
   const [precompiled, setPrecompiled] = useState(false); // upload IS an already-compiled wiki
   const [files, setFiles] = useState<{ name: string; size: number }[]>([]);
   const [progress, setProgress] = useState<UploadState | null>(null);
@@ -283,67 +298,180 @@ function WikiCreateModal({ onClose }: { onClose: () => void }) {
     catch (e: any) { setError(e.message); }
   };
 
+  // staged bytes are only ever wanted by an upload-seeded topic - drop them whichever way we leave
   const cancel = () => { api.del(`/api/wiki/staging/${sid}`).catch(() => {}); onClose(); };
 
   const confirm = async () => {
     if (!name.trim()) { setError(t('sidebar.topicNameRequired')); return; }
+    if ((seed === 'session' && !seedSessionId) || (seed === 'project' && !seedProjectId)) {
+      setError(t('wiki.seedRequired')); return;
+    }
     setBusy(true);
-    try { await newWikiTopic({ name: name.trim(), description: desc.trim(), stagingId: sid, precompiled }); onClose(); }
-    catch (e: any) { setError(e.message); setBusy(false); }
+    try {
+      await newWikiTopic({
+        name: name.trim(), description: desc.trim(), seedType: seed, autoLearn,
+        stagingId: seed === 'upload' ? sid : undefined,
+        precompiled: seed === 'upload' && precompiled,
+        seedSessionId: seed === 'session' ? seedSessionId : undefined,
+        seedProjectId: seed === 'project' ? seedProjectId : undefined,
+      });
+      if (seed !== 'upload') api.del(`/api/wiki/staging/${sid}`).catch(() => {});
+      onClose();
+    } catch (e: any) { setError(e.message); setBusy(false); }
   };
+
+  const SEEDS = [
+    { key: 'upload', label: t('wiki.seedUpload'), hint: t('wiki.seedUploadHint') },
+    { key: 'session', label: t('wiki.seedSession'), hint: t('wiki.seedSessionHint') },
+    { key: 'project', label: t('wiki.seedProject'), hint: t('wiki.seedProjectHint') },
+    { key: 'blank', label: t('wiki.seedBlank'), hint: t('wiki.seedBlankHint') },
+  ] as const;
 
   return (
     <Modal open onOpenChange={(o) => { if (!o) cancel(); }} title={t('sidebar.newWikiTopicTitle')} width={480}>
       <input className="input mb-2" placeholder={t('sidebar.topicNamePlaceholder')} value={name} autoFocus onChange={(e) => setName(e.target.value)} />
-      <textarea className="input mb-2 resize-none" rows={3} placeholder={t('sidebar.topicDescPlaceholder')}
+      <textarea className="input mb-3 resize-none" rows={3} placeholder={t('sidebar.topicDescPlaceholder')}
         value={desc} onChange={(e) => setDesc(e.target.value)} />
 
-      <label className="flex items-start gap-2 mb-2 text-xs text-txt2 cursor-pointer select-none">
-        <input type="checkbox" className="mt-0.5" checked={precompiled} onChange={(e) => setPrecompiled(e.target.checked)} />
-        <span>
-          {t('sidebar.precompiledLabel')} <span className="text-txt3">{t('sidebar.precompiledSkip')}</span>
-          <span className="block text-[11px] text-txt3">{t('sidebar.precompiledHint')}</span>
-        </span>
-      </label>
-
-      <div
-        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={onDrop}
-        className={`border-2 border-dashed rounded-lg px-3 py-4 text-center mb-2 transition-colors ${dragOver ? 'border-clay bg-claysoft' : 'border-line'}`}>
-        <div className="text-xs text-txt2 mb-2 inline-flex items-center gap-1"><IconFolder size={14} />{t(precompiled ? 'sidebar.dropZonePrecompiled' : 'sidebar.dropZone')}</div>
-        <div className="flex justify-center gap-2">
-          <button className="btn-ghost !py-1 !text-xs" disabled={progress !== null} onClick={() => fileRef.current?.click()}>{t('sidebar.chooseFiles')}</button>
-          <button className="btn-ghost !py-1 !text-xs" disabled={progress !== null} onClick={() => dirRef.current?.click()}>{t('sidebar.chooseFolder')}</button>
-        </div>
-        <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => pick(e.target.files)} />
-        <input ref={dirRef} type="file" multiple className="hidden"
-          {...{ webkitdirectory: '', directory: '' } as any} onChange={(e) => pick(e.target.files)} />
-      </div>
-
-      {progress && <UploadProgress s={progress} />}
-
-      <div className="max-h-44 overflow-auto scrolly mb-3 border border-line rounded divide-y divide-line">
-        {files.length === 0 && <div className="text-[11px] text-txt3 px-2 py-1.5">{t('sidebar.noFilesUploaded')}</div>}
-        {files.map((f) => (
-          <div key={f.name} className="flex items-center gap-2 px-2 py-1.5 text-xs">
-            <IconFile size={14} className="text-txt3 shrink-0" />
-            <span className="flex-1 truncate" title={f.name}>{f.name}</span>
-            <span className="text-txt3 text-[11px]">{fmtSize(f.size)}</span>
-            <button className="text-txt3 hover:text-danger" title={t('common.delete')} aria-label={t('common.delete')} onClick={() => removeFile(f.name)}><IconTrash size={14} /></button>
-          </div>
+      {/* start-from picker: a 2-col grid rather than a segmented row, so four labels still fit on a phone */}
+      <div className="text-[11px] text-txt3 mb-1">{t('wiki.seedLabel')}</div>
+      <div className="grid grid-cols-2 gap-1.5 mb-1.5">
+        {SEEDS.map((o) => (
+          <button key={o.key} onClick={() => setSeed(o.key)}
+            className={`text-xs rounded-md border px-2 py-1.5 text-left ${seed === o.key ? 'border-clay bg-claysoft text-clay font-semibold' : 'border-line hover:bg-line'}`}>
+            {o.label}
+          </button>
         ))}
       </div>
+      <div className="text-[11px] text-txt3 mb-3">{SEEDS.find((o) => o.key === seed)?.hint}</div>
+
+      {seed === 'session' && (
+        <select className="input mb-3" value={seedSessionId} onChange={(e) => setSeedSessionId(e.target.value)}>
+          <option value="">{t('wiki.seedNone')}</option>
+          <optgroup label={t('wiki.seedGroupPersonal')}>
+            {sessions.map((x) => <option key={x.id} value={x.id}>{x.title}</option>)}
+          </optgroup>
+          <optgroup label={t('wiki.seedGroupRoom')}>
+            {rooms.map((r) => <option key={r.id} value={r.chatSessionId}>{r.name}</option>)}
+          </optgroup>
+        </select>
+      )}
+
+      {seed === 'project' && (
+        <select className="input mb-3" value={seedProjectId} onChange={(e) => setSeedProjectId(e.target.value)}>
+          <option value="">{t('wiki.seedNone')}</option>
+          <optgroup label={t('wiki.seedGroupCommon')}>
+            {projects.common.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+          </optgroup>
+          <optgroup label={t('wiki.seedGroupMine')}>
+            {projects.mine.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+          </optgroup>
+        </select>
+      )}
+
+      {seed === 'upload' && <>
+        <label className="flex items-start gap-2 mb-2 text-xs text-txt2 cursor-pointer select-none">
+          <input type="checkbox" className="mt-0.5" checked={precompiled} onChange={(e) => setPrecompiled(e.target.checked)} />
+          <span>
+            {t('sidebar.precompiledLabel')} <span className="text-txt3">{t('sidebar.precompiledSkip')}</span>
+            <span className="block text-[11px] text-txt3">{t('sidebar.precompiledHint')}</span>
+          </span>
+        </label>
+
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={onDrop}
+          className={`border-2 border-dashed rounded-lg px-3 py-4 text-center mb-2 transition-colors ${dragOver ? 'border-clay bg-claysoft' : 'border-line'}`}>
+          <div className="text-xs text-txt2 mb-2 inline-flex items-center gap-1"><IconFolder size={14} />{t(precompiled ? 'sidebar.dropZonePrecompiled' : 'sidebar.dropZone')}</div>
+          <div className="flex justify-center gap-2">
+            <button className="btn-ghost !py-1 !text-xs" disabled={progress !== null} onClick={() => fileRef.current?.click()}>{t('sidebar.chooseFiles')}</button>
+            <button className="btn-ghost !py-1 !text-xs" disabled={progress !== null} onClick={() => dirRef.current?.click()}>{t('sidebar.chooseFolder')}</button>
+          </div>
+          <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => pick(e.target.files)} />
+          <input ref={dirRef} type="file" multiple className="hidden"
+            {...{ webkitdirectory: '', directory: '' } as any} onChange={(e) => pick(e.target.files)} />
+        </div>
+
+        {progress && <UploadProgress s={progress} />}
+
+        <div className="max-h-44 overflow-auto scrolly mb-3 border border-line rounded divide-y divide-line">
+          {files.length === 0 && <div className="text-[11px] text-txt3 px-2 py-1.5">{t('sidebar.noFilesUploaded')}</div>}
+          {files.map((f) => (
+            <div key={f.name} className="flex items-center gap-2 px-2 py-1.5 text-xs">
+              <IconFile size={14} className="text-txt3 shrink-0" />
+              <span className="flex-1 truncate" title={f.name}>{f.name}</span>
+              <span className="text-txt3 text-[11px]">{fmtSize(f.size)}</span>
+              <button className="text-txt3 hover:text-danger" title={t('common.delete')} aria-label={t('common.delete')} onClick={() => removeFile(f.name)}><IconTrash size={14} /></button>
+            </div>
+          ))}
+        </div>
+      </>}
+
+      <LearnModePicker value={autoLearn} onChange={setAutoLearn} enabled={learnEnabled} />
 
       <div className="flex items-center justify-between mb-3">
         <span className="text-[11px] text-txt3">{t('sidebar.queryOnlyHint')}</span>
-        {files.length > 0 && <span className="text-[11px] text-txt3">{t('sidebar.fileCount', { count: files.length })}</span>}
+        {seed === 'upload' && files.length > 0 && <span className="text-[11px] text-txt3">{t('sidebar.fileCount', { count: files.length })}</span>}
       </div>
       <div className="flex justify-end gap-2">
         <button className="btn-ghost" onClick={cancel} disabled={busy}>{t('common.cancel')}</button>
         <button className="btn-primary" onClick={confirm} disabled={busy || progress !== null}>
-          {busy ? t('common.creating') : files.length ? t('sidebar.confirmWithCount', { count: files.length }) : t('common.confirm')}
+          {busy ? t('common.creating') : seed === 'upload' && files.length ? t('sidebar.confirmWithCount', { count: files.length }) : t('common.confirm')}
         </button>
+      </div>
+    </Modal>
+  );
+}
+
+// off / ask first / add automatically. Shared by the create dialog and the per-topic settings, so
+// the wording a user picked from is the same in both places.
+function LearnModePicker({ value, onChange, enabled }: { value: string; onChange: (v: string) => void; enabled: boolean }) {
+  const t = useT();
+  return (
+    <div className="mb-3">
+      <div className="text-[11px] text-txt3 mb-1">{t('wiki.learnLabel')}</div>
+      <div className="seg w-full">
+        {(['off', 'ask', 'auto'] as const).map((m) => (
+          <button key={m} className={`flex-1 ${value === m ? 'on' : ''}`} onClick={() => onChange(m)}>
+            {t(m === 'off' ? 'wiki.learnOff' : m === 'ask' ? 'wiki.learnAsk' : 'wiki.learnAuto')}
+          </button>
+        ))}
+      </div>
+      <div className="text-[11px] text-txt3 mt-1">{enabled ? t('wiki.learnHint') : t('wiki.learnDisabled')}</div>
+    </div>
+  );
+}
+
+// Per-topic settings an admin can change after the fact: what it is called, what it is for, and
+// what a finished conversation is allowed to add to it.
+function WikiSettingsModal({ topicId, onClose }: { topicId: string; onClose: () => void }) {
+  const topic = useStore((s) => s.wikiTopics.find((x) => x.id === topicId));
+  const updateWikiTopic = useStore((s) => s.updateWikiTopic);
+  const setError = useStore((s) => s.setError);
+  const learnEnabled = useStore((s) => s.wikiAutoLearnEnabled);
+  const [name, setName] = useState(topic?.name || '');
+  const [desc, setDesc] = useState(topic?.description || '');
+  const [autoLearn, setAutoLearn] = useState(topic?.autoLearn || 'off');
+  const [busy, setBusy] = useState(false);
+  const t = useT();
+  if (!topic) return null;
+
+  const save = async () => {
+    if (!name.trim()) { setError(t('sidebar.topicNameRequired')); return; }
+    setBusy(true);
+    try { await updateWikiTopic(topicId, { name: name.trim(), description: desc.trim(), autoLearn }); onClose(); }
+    catch (e: any) { setError(e.message); setBusy(false); }
+  };
+
+  return (
+    <Modal open onOpenChange={(o) => { if (!o) onClose(); }} title={t('wiki.topicSettings')} width={420}>
+      <input className="input mb-2" value={name} autoFocus onChange={(e) => setName(e.target.value)} placeholder={t('sidebar.topicNamePlaceholder')} />
+      <textarea className="input mb-3 resize-none" rows={3} value={desc} onChange={(e) => setDesc(e.target.value)} placeholder={t('sidebar.topicDescPlaceholder')} />
+      <LearnModePicker value={autoLearn} onChange={setAutoLearn} enabled={learnEnabled} />
+      <div className="flex justify-end gap-2">
+        <button className="btn-ghost" onClick={onClose} disabled={busy}>{t('common.cancel')}</button>
+        <button className="btn-primary" onClick={save} disabled={busy}>{t('common.save')}</button>
       </div>
     </Modal>
   );

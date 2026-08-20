@@ -201,6 +201,7 @@ function Header() {
       {isReview && c.review && <ReviewControls />}
 
       {!c.wikiTopicId && !isReview && <ProjectMenu />}
+      {!c.wikiTopicId && !isReview && <WikiLinkMenu />}
       {!c.wikiTopicId && c.projectId && <button className="pill inline-flex items-center gap-1" title={withKeys(t('chat.projectFileExplorer'), 'Mod+Shift+F')} onClick={() => setExplorer(true)}><IconFolder size={13} />{t('chat.filesBtn')}</button>}
       {!c.wikiTopicId && c.projectId && <button className="pill inline-flex items-center gap-1" title={withKeys(t('git.title'), 'Mod+Shift+G')} onClick={() => setGitOpen(true)}><IconGitBranch size={13} />{t('git.pill')}</button>}
 
@@ -551,6 +552,102 @@ function ReviewControls() {
   );
 }
 
+// The reverse of opening a wiki topic: an ordinary chat or room names one as reference knowledge,
+// and its turns look the base up before answering. Rooms share the row, so one member linking a
+// topic links it for everyone in that room - which is the point of a shared session.
+function WikiLinkMenu() {
+  const c = useStore((s) => s.current);
+  const topics = useStore((s) => s.wikiTopics);
+  const enabled = useStore((s) => s.wikiLinkEnabled);
+  const setWikiRef = useStore((s) => s.setWikiRef);
+  const setError = useStore((s) => s.setError);
+  const [open, setOpen] = useState(false);
+  const t = useT();
+  if (!c || !enabled) return null;
+  const cur = topics.find((x) => x.id === c.wikiRefId);
+
+  const pick = async (id: string | null) => {
+    setOpen(false);
+    try { await setWikiRef(id); } catch (e: any) { setError(e.message); }
+  };
+
+  return (
+    <DM.Root open={open} onOpenChange={setOpen}>
+      <DM.Trigger asChild>
+        <button className={`pill ${cur ? 'text-clay' : ''}`} title={t('wiki.linkTitle')}>
+          <IconBook size={14} />{cur ? cur.name : t('wiki.linkPill')}<IconChevronDown size={14} />
+        </button>
+      </DM.Trigger>
+      <Menu>
+        <div className="px-2 py-1 text-[11px] text-txt3">{t('wiki.linkHint')}</div>
+        <button className="w-full text-left px-2 py-1.5 text-sm rounded hover:bg-line" onClick={() => pick(null)}>
+          {t('wiki.linkNone')}
+        </button>
+        {topics.length === 0 && <div className="px-2 py-1 text-[11px] text-txt3">{t('wiki.linkEmpty')}</div>}
+        {topics.map((w) => (
+          <button key={w.id} className={`w-full flex items-center gap-1.5 px-2 py-1.5 text-sm rounded hover:bg-line ${w.id === c.wikiRefId ? 'text-clay font-semibold' : ''}`}
+            onClick={() => pick(w.id)}>
+            <IconBook size={13} className="shrink-0" /><span className="flex-1 truncate text-left">{w.name}</span>
+            {w.id === c.wikiRefId && <IconCheck size={13} />}
+          </button>
+        ))}
+      </Menu>
+    </DM.Root>
+  );
+}
+
+// What the learner did with the conversation, right above the composer. 'ask' mode leaves a card
+// per parked addition (add / skip, with the article itself one click away); 'auto' mode leaves a
+// one-line note that it already went in, dismissible.
+function WikiKnowledgeCards() {
+  const proposals = useStore((s) => s.wikiProposals);
+  const learned = useStore((s) => s.wikiLearned);
+  const decide = useStore((s) => s.decideWikiProposal);
+  const dismiss = useStore((s) => s.dismissWikiLearned);
+  const setError = useStore((s) => s.setError);
+  const [shown, setShown] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const t = useT();
+  if (!proposals.length && !learned.length) return null;
+
+  const act = async (id: string, accept: boolean) => {
+    setBusy(id);
+    try { await decide(id, accept); } catch (e: any) { setError(e.message); }
+    finally { setBusy(null); }
+  };
+
+  return (
+    <div className="px-3 md:px-5 pb-2 space-y-2">
+      {proposals.map((pr) => (
+        <div key={pr.id} className="max-w-[760px] mx-auto rounded-lg border border-line bg-claysoft px-3 py-2.5 text-xs">
+          <div className="flex items-center gap-2 flex-wrap">
+            <IconBook size={14} className="text-clay shrink-0" />
+            <span className="font-semibold">{t('wiki.proposalTitle')}</span>
+            <span className="text-txt3">{t('wiki.proposalTo', { topic: pr.topicName })}</span>
+          </div>
+          <div className="mt-1.5 font-medium truncate" title={pr.title}>{pr.title}</div>
+          {shown === pr.id && (
+            <pre className="mt-1.5 max-h-52 overflow-auto scrolly whitespace-pre-wrap break-words text-[11px] text-txt2 bg-card border border-line rounded p-2">{pr.content}</pre>
+          )}
+          <div className="mt-2 flex items-center gap-2 flex-wrap">
+            <button className="pill" onClick={() => setShown(shown === pr.id ? null : pr.id)}>{t('wiki.proposalPreview')}</button>
+            <div className="flex-1" />
+            <button className="pill" disabled={busy === pr.id} onClick={() => act(pr.id, false)}>{t('wiki.proposalSkip')}</button>
+            <button className="btn-primary !py-1 !text-xs" disabled={busy === pr.id} onClick={() => act(pr.id, true)}>{t('wiki.proposalAdd')}</button>
+          </div>
+        </div>
+      ))}
+      {learned.map((l) => (
+        <div key={l.id} className="max-w-[760px] mx-auto rounded-lg border border-line bg-card px-3 py-2 text-xs flex items-center gap-2">
+          <IconBook size={14} className="text-clay shrink-0" />
+          <span className="flex-1 min-w-0 truncate">{t('wiki.learnedNotice', { topic: l.topicName, title: l.title })}</span>
+          <button className="text-txt3 hover:text-txt shrink-0" aria-label={t('common.close')} onClick={() => dismiss(l.id)}><IconX size={13} /></button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function WikiBanner() {
   const c = useStore((s) => s.current);
   const topicId = c?.wikiTopicId;
@@ -669,6 +766,7 @@ function ChatPane() {
           {live && <LiveView />}
         </div>
       </div>
+      <WikiKnowledgeCards />
       <PermissionArea />
       <Composer />
     </div>

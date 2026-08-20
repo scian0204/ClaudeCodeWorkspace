@@ -23,7 +23,9 @@ export interface Member { userId: string; displayName: string; avatarColor: stri
 export interface RoomSummary { id: string; name: string; ownerId: string; chatSessionId: string; permissionMode: string; members: Member[]; }
 export interface PrivateSession { id: string; title: string; updatedAt: number; projectId: string | null; model: string; effort: string; permissionMode: string; }
 export interface Project { id: string; scope: string; ownerId: string | null; name: string; path: string; }
-export interface WikiTopic { id: string; name: string; description: string; path: string; createdBy: string; createdAt: number; compileStatus?: string; compiledAt?: number | null; compileError?: string | null; }
+export interface WikiTopic { id: string; name: string; description: string; path: string; createdBy: string; createdAt: number; compileStatus?: string; compiledAt?: number | null; compileError?: string | null; autoLearn?: string; }
+// A knowledge addition the learner parked for a human to accept ('ask' mode).
+export interface WikiProposal { id: string; topicId: string; topicName: string; sessionId: string; title: string; slug: string; content: string; createdAt: number; }
 export interface ReviewRepo { id: string; name: string; provider: string; host: string; slug: string; gitUrl: string; baseBranch: string | null; sandboxImage: string | null; polledAt: number | null; pollError: string | null; webhookSecret: string | null; pollEnabled: boolean; openCount: number; createdAt: number; }
 export interface ReviewSessionSummary { id: string; chatSessionId: string; repoId: string; repoName: string; prNumber: number; prTitle: string; prUrl: string; prState: string; authorLogin: string; mergeState: string; verdict: string; verdictSummary: string | null; readOnly: boolean; updatedAt: number; }
 export interface ReviewMeta { reviewId: string; prNumber: number; prTitle: string; prUrl: string; prState: string; authorLogin: string; baseRef: string; headRef: string; mergeState: string; verdict: string; verdictSummary: string | null; repoName: string; provider: string; }
@@ -58,7 +60,7 @@ export interface QueueState { running: { id: string; author: { id: string; name:
 export interface PendingResume { id: string; sessionId: string; author: { id: string; name: string }; text: string; attempts: number; resumeAt: number; }
 export interface Control { canApprove: boolean; canInterrupt: boolean; canSetMode: boolean; isOwner: boolean; delegable: string[]; }
 export interface PermReq { requestId: string; tool: string; input: any; }
-export interface Current { chatSessionId: string; kind: 'private' | 'room' | 'review'; roomId?: string; wikiTopicId?: string; reviewId?: string; review?: ReviewMeta; readOnly?: boolean; title: string; projectId: string | null; model: string; effort: string; permissionMode: string; agent?: string | null; poolId?: string | null; sandbox?: number; room?: RoomSummary; }
+export interface Current { chatSessionId: string; kind: 'private' | 'room' | 'review'; roomId?: string; wikiTopicId?: string; wikiRefId?: string | null; reviewId?: string; review?: ReviewMeta; readOnly?: boolean; title: string; projectId: string | null; model: string; effort: string; permissionMode: string; agent?: string | null; poolId?: string | null; sandbox?: number; room?: RoomSummary; }
 
 // A shared-plan pool ("토큰 모아쓰기") and its members, as /api/pools reports them.
 export interface PoolMember { userId: string; name: string; priority: number; hasCredential: boolean; cooldownUntil: number; }
@@ -78,6 +80,8 @@ interface State {
   reviewRepos: ReviewRepo[];
   reviewSessions: ReviewSessionSummary[];
   wikiProgress: Record<string, string>; // topicId -> latest compile step (transient)
+  wikiProposals: WikiProposal[]; // knowledge the learner parked for the open thread ('ask' mode)
+  wikiLearned: { id: string; topicName: string; title: string }[]; // 'auto' mode additions, announced once
   projects: { common: Project[]; mine: Project[] };
   current: Current | null;
   messages: Msg[];
@@ -110,6 +114,8 @@ interface State {
   resumes: PendingResume[];      // open session's turns parked for a claude.ai window reset
   windowPrimerEnabled: boolean;  // admin feature flag (from /api/config) — gates the 5h-window primer toggle
   wikiSourceEditEnabled: boolean; // admin feature flag (from /api/config) — gates wiki raw/ source add+edit
+  wikiLinkEnabled: boolean;       // admin feature flag — gates linking a topic to an ordinary session
+  wikiAutoLearnEnabled: boolean;  // admin feature flag — gates growing a topic from conversations
   reviewWebhookEnabled: boolean;  // admin feature flag (from /api/config) — gates the PR-review webhook UI
   // ── guide assistant (floating corner panel) ──
   guideEnabled: boolean;         // admin feature flag (from /api/config) — off hides the button entirely
@@ -203,7 +209,11 @@ interface State {
   newSession: (projectId?: string) => Promise<void>;
   importSessions: (payload: { sid: string; projectName?: string; sessionUuids: string[]; autoTitle: boolean; overwrite: string[]; projectOverwrite: boolean; projectWipe: boolean }) => Promise<{ project: any; sessions: any[] }>;
   newRoom: (name: string) => Promise<void>;
-  newWikiTopic: (payload: { name: string; description: string; stagingId?: string; precompiled?: boolean }) => Promise<void>;
+  newWikiTopic: (payload: { name: string; description: string; stagingId?: string; precompiled?: boolean; seedType?: string; seedSessionId?: string; seedProjectId?: string; autoLearn?: string }) => Promise<void>;
+  updateWikiTopic: (id: string, patch: { name?: string; description?: string; autoLearn?: string }) => Promise<void>;
+  setWikiRef: (topicId: string | null) => Promise<void>;
+  decideWikiProposal: (id: string, accept: boolean) => Promise<void>;
+  dismissWikiLearned: (id: string) => void;
   deleteSession: (id: string) => Promise<void>;
   renameSession: (id: string, title: string) => Promise<void>;
   retitleSession: (id: string) => Promise<void>;
@@ -257,12 +267,12 @@ export const useStore = create<State>((set, get) => ({
   user: null,
   brand: { title: '', logo: null },
   theme: (localStorage.getItem('theme') as any) || null,
-  sessions: [], rooms: [], wikiTopics: [], reviewRepos: [], reviewSessions: [], wikiProgress: {}, projects: { common: [], mine: [] },
+  sessions: [], rooms: [], wikiTopics: [], reviewRepos: [], reviewSessions: [], wikiProgress: {}, wikiProposals: [], wikiLearned: [], projects: { common: [], mine: [] },
   current: null, messages: [], live: null, turnActive: false,
   tasks: [], taskPanelEnabled: true, tasksOpen: localStorage.getItem('tasksOpen') === '1',
   queue: { running: null, waiting: [] }, pending: [],
   control: { canApprove: true, canInterrupt: true, canSetMode: true, isOwner: true, delegable: [] },
-  presence: [], congested: false, sessionImportEnabled: true, sessionExportEnabled: true, sessionBundleEnabled: true, fileTreeWarnCount: 300, teamAgentsEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenuEnabled: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true, dockerReady: true, dockerReason: 'ok',
+  presence: [], congested: false, sessionImportEnabled: true, sessionExportEnabled: true, sessionBundleEnabled: true, fileTreeWarnCount: 300, teamAgentsEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenuEnabled: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, wikiLinkEnabled: true, wikiAutoLearnEnabled: true, reviewWebhookEnabled: true, dockerReady: true, dockerReason: 'ok',
   guideEnabled: true, guideWriteEnabled: true, guideOpen: false, guideLoaded: false, guideMessages: [], guideLive: null, guideBusy: false, guideUnread: false,
   asideEnabled: true, asideOpen: false, asideMessages: [], asideLive: null, asideBusy: false,
   resumes: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, toolFoldMin: 3, tokenPoolEnabled: false, sessionSandboxEnabled: false, pools: [], poolAllUsers: false, poolOptedOut: false, myPoolId: null, poolCanCreate: false, poolHasCredential: false, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, gitPanelOpen: false, explorerOpen: false, exportOpen: false, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
@@ -289,7 +299,7 @@ export const useStore = create<State>((set, get) => ({
 
   logout: async () => {
     await api.post('/api/auth/logout');
-    set({ user: null, current: null, messages: [], sessions: [], rooms: [], wikiTopics: [], reviewRepos: [], reviewSessions: [], requests: [], pendingRequestCount: 0, channels: [], activeChannelId: null, channelMessages: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null,
+    set({ user: null, current: null, messages: [], sessions: [], rooms: [], wikiTopics: [], wikiProposals: [], wikiLearned: [], reviewRepos: [], reviewSessions: [], requests: [], pendingRequestCount: 0, channels: [], activeChannelId: null, channelMessages: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null,
       guideOpen: false, guideLoaded: false, guideMessages: [], guideLive: null, guideBusy: false, guideUnread: false,
       asideOpen: false, asideMessages: [], asideLive: null, asideBusy: false });
   },
@@ -328,6 +338,8 @@ export const useStore = create<State>((set, get) => ({
       autoResumeEnabled: cf.autoResumeEnabled !== false,
       windowPrimerEnabled: cf.windowPrimerEnabled !== false,
       wikiSourceEditEnabled: cf.wikiSourceEditEnabled !== false,
+      wikiLinkEnabled: cf.wikiLinkEnabled !== false,
+      wikiAutoLearnEnabled: cf.wikiAutoLearnEnabled !== false,
       reviewWebhookEnabled: cf.reviewWebhookEnabled !== false,
       guideEnabled: cf.guideEnabled !== false,
       guideWriteEnabled: cf.guideWriteEnabled !== false,
@@ -369,6 +381,7 @@ export const useStore = create<State>((set, get) => ({
       chatSessionId: session.id, kind: 'private', title: session.title,
       projectId: session.projectId, model: session.model, effort: session.effort || 'high', permissionMode: session.permissionMode,
       agent: session.agent ?? null, poolId: session.poolId ?? null, sandbox: session.sandbox ?? 0,
+      wikiRefId: session.wikiRefId ?? null,
     }, messages);
   },
 
@@ -379,7 +392,8 @@ export const useStore = create<State>((set, get) => ({
       chatSessionId: room.chatSessionId, kind: 'room', roomId: room.id, title: room.name,
       projectId: chat?.session?.projectId ?? null, model: chat?.session?.model || 'claude-opus-4-8',
       effort: chat?.session?.effort || 'high', permissionMode: room.permissionMode, agent: chat?.session?.agent ?? null,
-      poolId: chat?.session?.poolId ?? null, sandbox: chat?.session?.sandbox ?? 0, room,
+      poolId: chat?.session?.poolId ?? null, sandbox: chat?.session?.sandbox ?? 0,
+      wikiRefId: chat?.session?.wikiRefId ?? null, room,
     }, messages);
   },
 
@@ -585,6 +599,22 @@ export const useStore = create<State>((set, get) => ({
     return r;
   },
 
+  updateWikiTopic: async (id, patch) => {
+    const { topic } = await api.patch(`/api/wiki/topics/${id}`, patch);
+    set({ wikiTopics: get().wikiTopics.map((t) => (t.id === id ? { ...t, ...topic } : t)) });
+  },
+  // Link (or unlink) a wiki topic to the OPEN session — the reverse of opening the topic itself.
+  // A room's shared chat row carries it too, so every member's turns see the same knowledge.
+  setWikiRef: async (topicId) => {
+    const c = get().current; if (!c) return;
+    await api.patch(`/api/sessions/${c.chatSessionId}`, { wikiRefId: topicId });
+    set({ current: { ...c, wikiRefId: topicId } });
+  },
+  decideWikiProposal: async (id, accept) => {
+    await api.post(`/api/wiki/proposals/${id}/decide`, { accept });
+    set({ wikiProposals: get().wikiProposals.filter((p) => p.id !== id) });
+  },
+  dismissWikiLearned: (id) => set({ wikiLearned: get().wikiLearned.filter((x) => x.id !== id) }),
   newWikiTopic: async (payload) => {
     const { topic } = await api.post('/api/wiki/topics', payload);
     await get().refreshLists();
@@ -919,8 +949,15 @@ async function join(set: any, get: () => State, cur: Current, messages: Msg[]) {
     commands: [], sidebarOpen: false, // opening a thread closes the mobile drawer
     asideOpen: false, asideMessages: [], asideLive: null, asideBusy: false, // the side chat belongs to the thread it was asked in
     highlightMsgId: null, // a plain thread switch drops any search-hit highlight
+    wikiProposals: [], wikiLearned: [], // parked knowledge belongs to the thread it came out of
     activeChannelId: null, channelMessages: [], // opening a Claude thread hides any open DM view
   });
+  // knowledge the learner parked for this thread while it was closed ('ask' mode) — non-blocking
+  if (get().wikiAutoLearnEnabled) {
+    api.get(`/api/wiki/proposals?sessionId=${cur.chatSessionId}`)
+      .then((r) => { if (get().current?.chatSessionId === cur.chatSessionId) set({ wikiProposals: r.proposals || [] }); })
+      .catch(() => {});
+  }
   // fetch the real slash commands (built-in + plugin + skill) the CLI exposes (non-blocking)
   api.get(`/api/sessions/${cur.chatSessionId}/commands`)
     .then((r) => { if (get().current?.chatSessionId === cur.chatSessionId) set({ commands: r.commands || [] }); })
@@ -1121,6 +1158,17 @@ function wire(set: any, get: () => State) {
     });
   });
   // live compile heartbeat — latest step per topic (proves it's progressing, not hung)
+  // the learner parked an addition for this thread ('ask' mode) — the chat shows a card
+  sock.on('wiki:proposal', (p: any) => {
+    if (!p?.proposal || get().current?.chatSessionId !== p.sessionId) return;
+    if (get().wikiProposals.some((x) => x.id === p.proposal.id)) return;
+    set({ wikiProposals: [...get().wikiProposals, p.proposal] });
+  });
+  // 'auto' mode wrote one straight in — say so once, without asking for anything
+  sock.on('wiki:learned', (p: any) => {
+    if (get().current?.chatSessionId !== p?.sessionId) return;
+    set({ wikiLearned: [...get().wikiLearned, { id: `${p.topicId}:${Date.now()}`, topicName: p.topicName || '', title: p.title || '' }] });
+  });
   sock.on('wiki:progress', (p: any) => {
     set({ wikiProgress: { ...get().wikiProgress, [p.topicId]: p.step } });
   });
