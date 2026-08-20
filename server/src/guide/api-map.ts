@@ -57,6 +57,7 @@ export const API_ROUTES: ApiRoute[] = [
   r('GET', '/api/projects/:id/git/diff', 'one patch from a project. Query: ?commit=<sha> (that commit, stat + patch) or ?path=<repo-relative file> (uncommitted changes vs HEAD; add &untracked=1 for a file git does not track yet).'),
   r('GET', '/api/projects/:id/git/branches', 'branches of a project (local + remote, current one flagged). Remote refs are fetched first, so branches made upstream show up.'),
   r('GET', '/api/projects/:id/git/remotes', 'the remotes of a project (name + url).'),
+  r('GET', '/api/projects/:id/watch', "whether this project's file watch is actually running: { enabled, scope, watching, since, error }. The switch itself is per chat (PATCH /api/sessions/:id watchMode)."),
   r('GET', '/api/projects/room/:roomId', 'the projects a shared room may be pointed at.'),
   r('GET', '/api/projects/:id/tree', 'the file tree of a project (paths + sizes, no content).'),
   r('GET', '/api/projects/:id/file', 'one file of a project as text. Query: ?path=<project-relative path>. Big or binary files come back as a placeholder.'),
@@ -91,7 +92,7 @@ export const API_ROUTES: ApiRoute[] = [
 
   // ── write: the user's own things ──
   r('POST', '/api/sessions', 'create a private chat. Body: { title?, projectId? }. Returns { session }. Follow it with a ui action openSession so the user lands in it.'),
-  r('PATCH', '/api/sessions/:id', 'change a chat: { title?, projectId?, model?, effort? (low|medium|high|xhigh|max), permissionMode? (default|acceptEdits|plan|bypassPermissions), wikiRefId? }. wikiRefId links an LLM Wiki topic to this chat as reference knowledge (null unlinks); ids come from GET /api/wiki/topics.'),
+  r('PATCH', '/api/sessions/:id', 'change a chat: { title?, projectId?, model?, effort? (low|medium|high|xhigh|max), permissionMode? (default|acceptEdits|plan|bypassPermissions), wikiRefId?, watchMode?, watchPrompt? }. wikiRefId links an LLM Wiki topic to this chat as reference knowledge (null unlinks); ids come from GET /api/wiki/topics. watchMode (off|notify|prompt) watches the project this chat points at for changes made elsewhere; the prompt mode also needs watchPrompt, the text sent as a turn on each change ({files} / {count} / {project} are filled in).'),
   r('POST', '/api/sessions/:id/retitle', 'name a chat from its conversation (no body).'),
   r('POST', '/api/projects', 'create a project. Body: { name?, gitUrl?, branch?, credentialId? }. With gitUrl the repository is CLONED (a private repo needs a git credential already stored for that host). Omit `scope` for a personal project; scope:"common" is admin-only — a member must file a request instead.'),
   r('POST', '/api/projects/:id/git/pull', 'pull a project working dir (no body, or { rebase: true }). Fetches every remote (--all), so branches created upstream arrive too. The current branch is fast-forward only by default — if local commits diverged it fails, and rebase:true replays them on top instead.'),

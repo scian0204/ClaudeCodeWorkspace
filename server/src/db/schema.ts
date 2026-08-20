@@ -58,6 +58,11 @@ export const chatSessions = sqliteTable('chat_sessions', {
   agent: text('agent'), // team-agent name driving the MAIN thread (SDK options.agent); null = default Claude
   poolId: text('pool_id'),   // shared-plan pool this session's turns draw from; null = the global pool (if any)
   sandbox: integer('sandbox').notNull().default(0), // 1 = build/run in this session's own container
+  // Watch this session's project for file changes made OUTSIDE it (another chat, the editor, a pull).
+  // 'off' = never look; 'notify' = tell the session; 'prompt' = also send watchPrompt as a turn.
+  // See server/src/lib/project-watch.ts.
+  watchMode: text('watch_mode').notNull().default('off'), // off|notify|prompt
+  watchPrompt: text('watch_prompt').notNull().default(''), // the turn text 'prompt' mode sends ({files} / {count} / {project})
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
 });

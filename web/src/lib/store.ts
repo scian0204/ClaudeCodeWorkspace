@@ -60,7 +60,10 @@ export interface QueueState { running: { id: string; author: { id: string; name:
 export interface PendingResume { id: string; sessionId: string; author: { id: string; name: string }; text: string; attempts: number; resumeAt: number; }
 export interface Control { canApprove: boolean; canInterrupt: boolean; canSetMode: boolean; isOwner: boolean; delegable: string[]; }
 export interface PermReq { requestId: string; tool: string; input: any; }
-export interface Current { chatSessionId: string; kind: 'private' | 'room' | 'review'; roomId?: string; wikiTopicId?: string; wikiRefId?: string | null; reviewId?: string; review?: ReviewMeta; readOnly?: boolean; title: string; projectId: string | null; model: string; effort: string; permissionMode: string; agent?: string | null; poolId?: string | null; sandbox?: number; room?: RoomSummary; }
+export interface Current { chatSessionId: string; kind: 'private' | 'room' | 'review'; roomId?: string; wikiTopicId?: string; wikiRefId?: string | null; reviewId?: string; review?: ReviewMeta; readOnly?: boolean; title: string; projectId: string | null; model: string; effort: string; permissionMode: string; agent?: string | null; poolId?: string | null; sandbox?: number; watchMode?: string; watchPrompt?: string; room?: RoomSummary; }
+// A file change in the project a session watches, as `project:changed` reports it. `fired` = the
+// session's stored prompt went out as a turn ('prompt' mode).
+export interface ProjectChange { sessionId: string; projectId: string; projectName: string; files: string[]; count: number; at: number; mode?: string; self?: boolean; fired?: boolean; }
 
 // A shared-plan pool ("토큰 모아쓰기") and its members, as /api/pools reports them.
 export interface PoolMember { userId: string; name: string; priority: number; hasCredential: boolean; cooldownUntil: number; }
@@ -147,6 +150,10 @@ interface State {
   poolHasCredential: boolean;    // this user has a Claude plan to contribute
   tokenPoolEnabled: boolean;     // admin feature flag (from /api/config) — gates the shared-plan pool UI
   sessionSandboxEnabled: boolean; // admin feature flag (from /api/config) — gates the per-session build container
+  projectWatchEnabled: boolean;   // admin feature flag (from /api/config) — gates the project file-change watch
+  projectWatchPromptEnabled: boolean; // same, for the auto-sent prompt mode on top of it
+  projectWatchPromptMax: number;  // admin setting — length cap on that stored prompt
+  projectChanges: Record<string, ProjectChange>; // sessionId -> its latest unseen project change
   channels: DmChannel[];         // DM + group chat channels the user belongs to
   activeChannelId: string | null; // open DM/group channel (main panel shows DmView when set)
   channelMessages: DmMessage[];  // messages of the open channel
@@ -238,6 +245,8 @@ interface State {
   setEffort: (effort: string) => Promise<void>;
   setPool: (poolId: string | null) => Promise<void>;
   setSandbox: (on: boolean) => Promise<void>;
+  setWatch: (mode: string, prompt?: string) => Promise<void>;
+  dismissProjectChange: (sessionId: string) => void;
   setMyPool: (poolId: string | null) => Promise<void>;
   setPoolOptOut: (optOut: boolean) => Promise<void>;
   refreshPools: () => Promise<void>;
@@ -267,7 +276,7 @@ export const useStore = create<State>((set, get) => ({
   user: null,
   brand: { title: '', logo: null },
   theme: (localStorage.getItem('theme') as any) || null,
-  sessions: [], rooms: [], wikiTopics: [], reviewRepos: [], reviewSessions: [], wikiProgress: {}, wikiProposals: [], wikiLearned: [], projects: { common: [], mine: [] },
+  sessions: [], rooms: [], wikiTopics: [], reviewRepos: [], reviewSessions: [], wikiProgress: {}, wikiProposals: [], wikiLearned: [], projectChanges: {}, projects: { common: [], mine: [] },
   current: null, messages: [], live: null, turnActive: false,
   tasks: [], taskPanelEnabled: true, tasksOpen: localStorage.getItem('tasksOpen') === '1',
   queue: { running: null, waiting: [] }, pending: [],
@@ -275,7 +284,7 @@ export const useStore = create<State>((set, get) => ({
   presence: [], congested: false, sessionImportEnabled: true, sessionExportEnabled: true, sessionBundleEnabled: true, fileTreeWarnCount: 300, teamAgentsEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenuEnabled: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, wikiLinkEnabled: true, wikiAutoLearnEnabled: true, reviewWebhookEnabled: true, dockerReady: true, dockerReason: 'ok',
   guideEnabled: true, guideWriteEnabled: true, guideOpen: false, guideLoaded: false, guideMessages: [], guideLive: null, guideBusy: false, guideUnread: false,
   asideEnabled: true, asideOpen: false, asideMessages: [], asideLive: null, asideBusy: false,
-  resumes: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, toolFoldMin: 3, tokenPoolEnabled: false, sessionSandboxEnabled: false, pools: [], poolAllUsers: false, poolOptedOut: false, myPoolId: null, poolCanCreate: false, poolHasCredential: false, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, gitPanelOpen: false, explorerOpen: false, exportOpen: false, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
+  resumes: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, toolFoldMin: 3, tokenPoolEnabled: false, sessionSandboxEnabled: false, projectWatchEnabled: true, projectWatchPromptEnabled: true, projectWatchPromptMax: 2000, pools: [], poolAllUsers: false, poolOptedOut: false, myPoolId: null, poolCanCreate: false, poolHasCredential: false, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, gitPanelOpen: false, explorerOpen: false, exportOpen: false, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
   channels: [], activeChannelId: null, channelMessages: [], titling: [],
   commands: [],
 
@@ -299,7 +308,7 @@ export const useStore = create<State>((set, get) => ({
 
   logout: async () => {
     await api.post('/api/auth/logout');
-    set({ user: null, current: null, messages: [], sessions: [], rooms: [], wikiTopics: [], wikiProposals: [], wikiLearned: [], reviewRepos: [], reviewSessions: [], requests: [], pendingRequestCount: 0, channels: [], activeChannelId: null, channelMessages: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null,
+    set({ user: null, current: null, messages: [], sessions: [], rooms: [], wikiTopics: [], wikiProposals: [], wikiLearned: [], projectChanges: {}, reviewRepos: [], reviewSessions: [], requests: [], pendingRequestCount: 0, channels: [], activeChannelId: null, channelMessages: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null,
       guideOpen: false, guideLoaded: false, guideMessages: [], guideLive: null, guideBusy: false, guideUnread: false,
       asideOpen: false, asideMessages: [], asideLive: null, asideBusy: false });
   },
@@ -350,6 +359,9 @@ export const useStore = create<State>((set, get) => ({
       toolFoldMin: cf.toolFoldMin ?? 3,
       tokenPoolEnabled: cf.tokenPoolEnabled === true,
       sessionSandboxEnabled: cf.sessionSandboxEnabled === true,
+      projectWatchEnabled: cf.projectWatchEnabled !== false,
+      projectWatchPromptEnabled: cf.projectWatchPromptEnabled !== false,
+      projectWatchPromptMax: cf.projectWatchPromptMaxChars || 2000,
       dockerReady: cf.dockerReady !== false,
       dockerReason: cf.dockerReason || 'ok',
     });
@@ -382,6 +394,7 @@ export const useStore = create<State>((set, get) => ({
       projectId: session.projectId, model: session.model, effort: session.effort || 'high', permissionMode: session.permissionMode,
       agent: session.agent ?? null, poolId: session.poolId ?? null, sandbox: session.sandbox ?? 0,
       wikiRefId: session.wikiRefId ?? null,
+      watchMode: session.watchMode || 'off', watchPrompt: session.watchPrompt || '',
     }, messages);
   },
 
@@ -393,7 +406,8 @@ export const useStore = create<State>((set, get) => ({
       projectId: chat?.session?.projectId ?? null, model: chat?.session?.model || 'claude-opus-4-8',
       effort: chat?.session?.effort || 'high', permissionMode: room.permissionMode, agent: chat?.session?.agent ?? null,
       poolId: chat?.session?.poolId ?? null, sandbox: chat?.session?.sandbox ?? 0,
-      wikiRefId: chat?.session?.wikiRefId ?? null, room,
+      wikiRefId: chat?.session?.wikiRefId ?? null,
+      watchMode: chat?.session?.watchMode || 'off', watchPrompt: chat?.session?.watchPrompt || '', room,
     }, messages);
   },
 
@@ -759,6 +773,20 @@ export const useStore = create<State>((set, get) => ({
     const c = get().current; if (!c) return;
     await api.patch(`/api/sessions/${c.chatSessionId}`, { sandbox: on ? 1 : 0 });
     set({ current: { ...c, sandbox: on ? 1 : 0 } });
+  },
+  // Watch this session's project for changes made outside it. 'prompt' mode also needs the text to
+  // send, so both fields go in one PATCH — the server refuses 'prompt' with an empty prompt.
+  setWatch: async (mode, prompt) => {
+    const c = get().current; if (!c) return;
+    const body: any = { watchMode: mode };
+    if (prompt !== undefined) body.watchPrompt = prompt;
+    await api.patch(`/api/sessions/${c.chatSessionId}`, body);
+    set({ current: { ...c, watchMode: mode, watchPrompt: prompt !== undefined ? prompt : c.watchPrompt } });
+  },
+  dismissProjectChange: (sessionId) => {
+    const next = { ...get().projectChanges };
+    delete next[sessionId];
+    set({ projectChanges: next });
   },
   // this user's own default pool — sits under a session's explicit choice, over the workspace one
   setMyPool: async (poolId) => {
@@ -1168,6 +1196,20 @@ function wire(set: any, get: () => State) {
   sock.on('wiki:learned', (p: any) => {
     if (get().current?.chatSessionId !== p?.sessionId) return;
     set({ wikiLearned: [...get().wikiLearned, { id: `${p.topicId}:${Date.now()}`, topicName: p.topicName || '', title: p.title || '' }] });
+  });
+  // A file changed in the project a session watches. The same payload arrives twice for the open
+  // chat (its session room + the owner's user room), so it is stored keyed by session, not appended.
+  sock.on('project:changed', (p: any) => {
+    if (!p?.sessionId) return;
+    // `fired` belongs to THIS change, not the previous one — carrying it over made a later card
+    // claim a prompt had gone out when none had. project:watchFired sets it right after.
+    set({ projectChanges: { ...get().projectChanges, [p.sessionId]: { ...p, fired: false } } });
+  });
+  // 'prompt' mode sent its stored prompt as a turn — the card says so instead of looking idle
+  sock.on('project:watchFired', (p: any) => {
+    if (!p?.sessionId) return;
+    const prev = get().projectChanges[p.sessionId];
+    if (prev) set({ projectChanges: { ...get().projectChanges, [p.sessionId]: { ...prev, fired: true } } });
   });
   sock.on('wiki:progress', (p: any) => {
     set({ wikiProgress: { ...get().wikiProgress, [p.topicId]: p.step } });

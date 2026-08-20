@@ -44,8 +44,12 @@ interface ActiveTurn {
   query?: { interrupt: () => Promise<unknown> }; // live SDK handle for immediate turn-stop
 }
 const active = new Map<string, ActiveTurn>();
+// When each session's last turn finished. The project watcher needs it: the files a turn writes land
+// slightly after the turn ends, and a session must never be told about its own writes.
+const endedAt = new Map<string, number>();
 
 export function isTurnActive(sessionId: string) { return active.has(sessionId); }
+export function lastTurnEndAt(sessionId: string) { return endedAt.get(sessionId) || 0; }
 // Live snapshot of every running turn (admin "activity/processes" panel).
 export function listActiveTurns(): { sessionId: string; author: { id: string; name: string }; startedAt: number }[] {
   return [...active.entries()].map(([sessionId, t]) => ({ sessionId, author: t.author, startedAt: t.startedAt }));
@@ -664,6 +668,7 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
     if (blocks.length) saveMessage({ sessionId: s.id, role: 'assistant', authorName: 'Claude', content: { blocks, interrupted: aborted } });
   } finally {
     active.delete(s.id);
+    endedAt.set(s.id, Date.now());
     release();
     const done = Date.now();
     console.log(`[turn] ${s.id} slot=${tStarted - tEnqueued}ms ttft=${tFirstOut ? tFirstOut - tStarted : -1}ms total=${done - tEnqueued}ms in=${inTok} out=${outTok} cap=${turnLimiter.inUse}/${turnLimiter.max}`);

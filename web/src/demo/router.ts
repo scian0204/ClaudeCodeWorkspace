@@ -5,7 +5,7 @@ import {
   DOWNLOAD_IGNORED, DOWNLOAD_BIG_DIRS, WIKI_ARTICLES, WIKI_RAW, WIKI_TREE_ARTICLES,
   REQUEST_ACTIONS, IMPORT_SESSIONS, fileContent, wikiFileContent, WIKI_RAW_EDITS, pluginDetail, EDITOR_URL, genId,
 } from './data';
-import { runDemoGuide, clearDemoGuide, runDemoAside } from './socket';
+import { runDemoGuide, clearDemoGuide, runDemoAside, simulateProjectChange } from './socket';
 
 // `data` is normally JSON; a Blob (+ headers) is how the few binary downloads are mocked
 type Res = { status: number; data: any; headers?: Record<string, string> };
@@ -46,9 +46,9 @@ function syncAuth() {
 function sessionFor(id: string) {
   const s = db.sessions.find((x) => x.id === id);
   // wikiRefId rides along: a chat that linked a wiki must still show it after being reopened
-  if (s) return { id: s.id, title: s.title, projectId: s.projectId, model: s.model, effort: s.effort || 'high', permissionMode: s.permissionMode, wikiRefId: (s as any).wikiRefId ?? null };
+  if (s) return { id: s.id, title: s.title, projectId: s.projectId, model: s.model, effort: s.effort || 'high', permissionMode: s.permissionMode, wikiRefId: (s as any).wikiRefId ?? null, watchMode: (s as any).watchMode || 'off', watchPrompt: (s as any).watchPrompt || '' };
   const room = db.rooms.find((r) => r.chatSessionId === id);
-  if (room) return { id, title: room.name, projectId: null, model: 'claude-opus-4-8', effort: 'high', permissionMode: room.permissionMode, wikiRefId: (room as any).wikiRefId ?? null };
+  if (room) return { id, title: room.name, projectId: null, model: 'claude-opus-4-8', effort: 'high', permissionMode: room.permissionMode, wikiRefId: (room as any).wikiRefId ?? null, watchMode: (room as any).watchMode || 'off', watchPrompt: (room as any).watchPrompt || '' };
   const w = db.wikiTopics.find((t) => `cs_${t.id}` === id);
   if (w) return { id, title: w.name, projectId: null, model: 'claude-opus-4-8', effort: 'high', permissionMode: 'default' };
   const rv = db.reviewSessions.find((x: any) => x.chatSessionId === id);
@@ -280,7 +280,7 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   if (P === '/api/admin/restore/apply' && M === 'POST') { ADMIN.restoreStaged = null; return ok({ ok: true }); }
 
   // ---- client-facing config (model dropdown) ----
-  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, sessionExportEnabled: true, sessionBundleEnabled: true, fileTreeWarnCount: 300, teamAgentsEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenu: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, wikiLinkEnabled: true, wikiAutoLearnEnabled: true, reviewWebhookEnabled: true, guideEnabled: true, guideWriteEnabled: true, asideEnabled: true, taskPanelEnabled: true, processPollMs: 5000, toolFoldMin: 3, tokenPoolEnabled: true, tokenPoolAllUsers: true, tokenPoolPartyCreate: true, sessionSandboxEnabled: true, dockerReady: ADMIN.docker.ok && ADMIN.docker.configured, dockerReason: ADMIN.docker.reason });
+  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, sessionExportEnabled: true, sessionBundleEnabled: true, fileTreeWarnCount: 300, teamAgentsEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenu: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, wikiLinkEnabled: true, wikiAutoLearnEnabled: true, reviewWebhookEnabled: true, guideEnabled: true, guideWriteEnabled: true, asideEnabled: true, taskPanelEnabled: true, processPollMs: 5000, toolFoldMin: 3, tokenPoolEnabled: true, tokenPoolAllUsers: true, tokenPoolPartyCreate: true, sessionSandboxEnabled: true, projectWatchEnabled: true, projectWatchPromptEnabled: true, projectWatchPromptMaxChars: 2000, dockerReady: ADMIN.docker.ok && ADMIN.docker.configured, dockerReason: ADMIN.docker.reason });
 
   // ── shared-plan pools ("토큰 모아쓰기") ──
   if (P === '/api/pools' && M === 'GET') return ok({ pools: db.pools, allUsers: true, myPoolId: db.myPoolId, optedOut: db.poolOptedOut, hasCredential: true, canCreate: true });
@@ -479,6 +479,12 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
     // a room's shared chat row lives on the room itself, so patch whichever one owns this id
     const s = db.sessions.find((x) => x.id === idAt(2)) || db.rooms.find((r) => r.chatSessionId === idAt(2));
     if (s) Object.assign(s, b);
+    // Nothing writes files in the static demo, so switching the watch on stands in for it: a change
+    // is synthesized a few seconds later, and 'prompt' mode then runs its stored prompt as a turn.
+    if (s && b.watchMode && b.watchMode !== 'off') {
+      const proj = [...db.projects.common, ...db.projects.mine].find((x: any) => x.id === (s as any).projectId);
+      simulateProjectChange(idAt(2), proj?.name || 'project', String(b.watchMode), String((s as any).watchPrompt || ''));
+    }
     return ok({});
   }
   if (seg[1] === 'sessions' && seg[2] && M === 'DELETE') {
@@ -514,6 +520,11 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
     db.projects.mine = db.projects.mine.filter((p: any) => p.id !== id);
     for (const k of Object.keys(db.roomProjects)) db.roomProjects[k] = db.roomProjects[k].filter((p: any) => p.id !== id);
     return ok({ ok: true });
+  }
+  // the file watch is always live in the demo (no OS watch to fail)
+  if (seg[1] === 'projects' && seg[3] === 'watch') {
+    const proj = [...db.projects.common, ...db.projects.mine].find((x: any) => x.id === idAt(2));
+    return ok({ enabled: true, scope: proj?.scope || 'user', watching: true, since: Date.now() - 60_000, error: null });
   }
   if (seg[1] === 'projects' && seg[3] === 'tree') return ok(levelFrom(TREE_PROJECT, query.get('path') || ''));
   if (seg[1] === 'projects' && seg[3] === 'open-editor') return ok({ url: EDITOR_URL });

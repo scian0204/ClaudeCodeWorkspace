@@ -20,6 +20,7 @@ import {
 } from '../lib/git-ops.js';
 import { createRemoteRepo, safeRepoName } from '../lib/git-publish.js';
 import { cfg } from '../lib/config-registry.js';
+import { syncWatchers, watchStatus } from '../watch/manager.js';
 import {
   resolveGitCred, resolveGitCredById, resolveGitCredMeta, getGitCredRow, gitIdentity, askpassEnv, identityEnv, hostFromGitUrl,
 } from '../auth/git-cred.js';
@@ -250,7 +251,18 @@ export async function projectRoutes(app: FastifyInstance) {
       try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort: keep going, still unindex */ }
     }
     db.delete(schema.projects).where(eq(schema.projects.id, id)).run();
+    syncWatchers(); // its directory is gone — drop the file watch with it
     return { ok: true };
+  });
+
+  // Is this project's file watch actually running? The switch lives on the session, but whether the
+  // OS accepted the watch is a per-project fact (platform limits, a directory that vanished).
+  app.get('/api/projects/:id/watch', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    const p = getProject((req.params as any).id);
+    if (!p) return reply.code(404).send({ error: 'not found' });
+    if (!canAccess(u, p)) return reply.code(403).send({ error: 'forbidden' });
+    return { enabled: cfg.bool('projectWatchEnabled'), scope: p.scope, ...watchStatus(p.id) };
   });
 
   // ── git: status / commit / push on the project's working dir ──

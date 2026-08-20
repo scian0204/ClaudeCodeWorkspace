@@ -86,6 +86,16 @@ the chat–split–editor switch. Bottom-right corner: this guide panel.
   side by side with the chat (the chat / split / editor switch).
 - **Per-session build container** — a locked-down sibling container a chat can build and run in
   (\`sessionSandboxEnabled\`).
+- **Project file-change watch** — a chat can watch the project it points at and hear when the files
+  are changed somewhere else: another chat's turn, an edit in the VS Code view, a git pull. The
+  **Watch** pill in the chat header has three settings — off, notify only, or notify plus sending a
+  prompt you stored beforehand as a turn (write \`{files}\`, \`{count}\` or \`{project}\` in it and they
+  are filled in). The notice appears as a card above the composer plus a dot on the sidebar row, for
+  every change including deletions; while that chat is itself working the card is marked as its own
+  work and no prompt is auto-sent (a prompt about the files a turn just wrote would loop). Flags
+  \`projectWatchEnabled\`,
+  \`projectWatchPromptEnabled\`; \`projectWatchScope\` decides which projects may be watched (shared
+  ones by default).
 
 ### Working together
 - **Shared room** — several people drive one Claude together; a FIFO queue orders the turns. The

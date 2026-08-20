@@ -16,6 +16,7 @@ import { DEFAULT_TITLE, retitleSession } from '../claude/auto-title.js';
 import { emitToUser } from '../realtime/io.js';
 import { reviewRoleForChat } from '../review/manager.js';
 import { cfg } from '../lib/config-registry.js';
+import { syncWatchers, WATCH_MODES } from '../watch/manager.js';
 import { paths, ensure } from '../lib/paths.js';
 import { safeBase, isBareBasename, contentTypeFor, IMAGE_MIME } from '../lib/attachments.js';
 import * as rooms from '../rooms/manager.js';
@@ -408,6 +409,28 @@ export async function sessionRoutes(app: FastifyInstance) {
     }
     // per-session build container (only meaningful while the admin flag is on; the turn re-checks)
     if ('sandbox' in b) patch.sandbox = b.sandbox ? 1 : 0;
+    // Project file-change watch. 'prompt' mode SENDS TURNS on its own, so it needs the same
+    // authority as sending one — canEditChat alone leans on chatSessionId obscurity, which is fine
+    // for a title but not for something that spends a plan unattended.
+    if ('watchMode' in b || 'watchPrompt' in b) {
+      if (!cfg.bool('projectWatchEnabled')) return reply.code(403).send({ error: 'project watch is disabled' });
+      if (!canWriteSession(u, s)) return reply.code(403).send({ error: 'forbidden' });
+      if ('watchMode' in b) {
+        const m = String(b.watchMode || 'off');
+        if (!(WATCH_MODES as readonly string[]).includes(m)) return reply.code(400).send({ error: 'invalid watchMode' });
+        if (m === 'prompt' && !cfg.bool('projectWatchPromptEnabled')) return reply.code(403).send({ error: 'auto prompt is disabled' });
+        patch.watchMode = m;
+      }
+      if ('watchPrompt' in b) {
+        const txt = String(b.watchPrompt || '');
+        if (txt.length > cfg.int('projectWatchPromptMaxChars')) return reply.code(400).send({ error: 'watchPrompt too long' });
+        patch.watchPrompt = txt;
+      }
+      // 'prompt' with nothing to send would be a switch that silently does nothing
+      const mode = patch.watchMode ?? s.watchMode;
+      const prompt = String(patch.watchPrompt ?? s.watchPrompt);
+      if (mode === 'prompt' && !prompt.trim()) return reply.code(400).send({ error: 'watchPrompt required' });
+    }
     // LLM Wiki linked to this session as reference knowledge ('' / null clears it). Every member can
     // read a topic already, so no extra gate — but an unknown id would silently resolve to nothing
     // on every later turn, so it is rejected instead of stored.
@@ -424,6 +447,9 @@ export async function sessionRoutes(app: FastifyInstance) {
     // in the new cwd. Reset the SDK conversation when the project actually changes.
     if ('projectId' in b && (b.projectId || null) !== (s.projectId || null)) patch.claudeSessionId = null;
     db.update(schema.chatSessions).set(patch).where(eq(schema.chatSessions.id, id)).run();
+    // The watcher set is derived from (watch mode, project) pairs — re-arm it the moment either moves,
+    // instead of making the user wait for the periodic re-scan.
+    if ('watchMode' in b || 'watchPrompt' in b || 'projectId' in b) syncWatchers();
     return { ok: true };
   });
 
@@ -453,6 +479,7 @@ export async function sessionRoutes(app: FastifyInstance) {
     db.delete(schema.messages).where(eq(schema.messages.sessionId, id)).run();
     db.delete(schema.chatSessions).where(eq(schema.chatSessions.id, id)).run();
     forgetAsides(id); // no side thread may outlive the chat it branched from
+    syncWatchers();   // its project may have lost its last watcher
     return { ok: true };
   });
 
