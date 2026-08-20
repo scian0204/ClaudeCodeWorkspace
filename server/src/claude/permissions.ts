@@ -40,6 +40,11 @@ export function respondPermission(requestId: string, decision: Decision, answer?
 }
 
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
+// AskUserQuestion is not a permission — it IS the channel that asks the human. Letting any
+// auto-allow path through (bypass mode, a stale "always allow") hands the call back to the CLI,
+// which runs the tool with nobody attached: it answers itself with "The user did not answer the
+// questions." and the turn walks on past the choice. These tools always prompt, whatever the mode.
+const ALWAYS_PROMPT = new Set(['AskUserQuestion']);
 function autoAllows(mode: PermMode, tool: string): boolean {
   // bypass: the SDK normally never calls canUseTool, but under root it gets acceptEdits instead
   // (see sdkMode) and then DOES ask us about non-edit tools — allow everything to keep bypass's
@@ -79,8 +84,10 @@ export function makeCanUseTool(opts: {
     const v = fenceViolation(toolName, input, opts.roots);
     if (v) return { behavior: 'deny', message: v } as const;
 
-    if (always.has(toolName)) return { behavior: 'allow', updatedInput: input } as const;
-    if (autoAllows(opts.mode, toolName)) return { behavior: 'allow', updatedInput: input } as const;
+    if (!ALWAYS_PROMPT.has(toolName)) {
+      if (always.has(toolName)) return { behavior: 'allow', updatedInput: input } as const;
+      if (autoAllows(opts.mode, toolName)) return { behavior: 'allow', updatedInput: input } as const;
+    }
 
     const requestId = newId();
     const r = await new Promise<Resolution>((resolve) => {

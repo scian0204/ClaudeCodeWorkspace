@@ -41,14 +41,16 @@ export function clampMode(requested: PermMode, allowBypass: boolean): PermMode {
   return requested;
 }
 
-const RUNNING_AS_ROOT = typeof process.getuid === 'function' && process.getuid() === 0;
-
 // bypassPermissions maps to the CLI's --dangerously-skip-permissions, which the CLI refuses when the
 // process is root ("cannot be used with root/sudo privileges") → the subprocess exits 1 and the whole
-// turn fails. This container runs as root (Docker socket + /data), so hand the SDK acceptEdits
+// turn fails. This container runs as root (Docker socket + /data), so the SDK gets acceptEdits
 // instead; makeCanUseTool auto-allows every tool in bypass mode, so the mode's behavior is unchanged.
-export function sdkMode(mode: PermMode, asRoot = RUNNING_AS_ROOT): PermMode {
-  return mode === 'bypassPermissions' && asRoot ? 'acceptEdits' : mode;
+// The swap is unconditional (not just as root): real --dangerously-skip-permissions makes the SDK
+// stop calling canUseTool at all, and then AskUserQuestion never reaches a human — the CLI answers
+// its own question ("The user did not answer the questions.") and the turn skips the choice. Keeping
+// canUseTool in the loop everywhere is what lets ALWAYS_PROMPT tools still ask.
+export function sdkMode(mode: PermMode): PermMode {
+  return mode === 'bypassPermissions' ? 'acceptEdits' : mode;
 }
 
 export function rootsFor(ctx: SessionContext): string[] {
