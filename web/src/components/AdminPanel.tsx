@@ -94,6 +94,21 @@ export function AdminPanel() {
         </div>
       </div>
       <div className="max-w-[860px] mx-auto p-4 md:p-5 space-y-6">
+        {/* A published update is easy to miss as a dot on one tab, so say it once, loudly, on every
+            tab but the one that already spells it out. */}
+        {ov?.updateAvailable && tab !== 'update' && (
+          <button onClick={() => setTab('update')}
+            className="w-full text-left border border-clay bg-claysoft rounded-lg px-3 py-2.5 flex items-center gap-2 flex-wrap transition hover:border-txt2">
+            <span className="text-clay shrink-0"><IconDownload size={16} /></span>
+            <span className="text-sm font-semibold text-clay">
+              {ov.updateNewerVersion && ov.updateLatest
+                ? t('admin.upd.bannerNew', { v: `v${ov.updateLatest}` })
+                : t('admin.upd.bannerImage')}
+            </span>
+            <span className="text-xs text-txt2">{t('admin.upd.bannerFrom', { v: `v${ov.version}` })}</span>
+            <span className="ml-auto text-xs text-clay underline shrink-0">{t('admin.upd.bannerCta')}</span>
+          </button>
+        )}
         {tab === 'overview' && (
           <>
             {ov && (

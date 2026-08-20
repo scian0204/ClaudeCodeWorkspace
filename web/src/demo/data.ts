@@ -327,6 +327,8 @@ export const ADMIN = {
     commonLogin: db.commonLogin.meta,
     version: ADMIN.update.status().current,
     updateAvailable: ADMIN.update.status().updateAvailable,
+    updateLatest: ADMIN.update.status().latest,
+    updateNewerVersion: ADMIN.update.status().newerVersion,
     docker: ADMIN.docker,
   }),
   // healthy daemon in the demo, so the warning banner stays hidden and the editor views stay enabled

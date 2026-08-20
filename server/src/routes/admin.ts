@@ -26,9 +26,13 @@ export async function adminRoutes(app: FastifyInstance) {
       forceMock: cfg.bool('forceMock'),
       commonToken: commonTokenMeta(), // shared fallback status (admin-set DB token or env)
       commonLogin: loginMeta(COMMON_LOGIN), // the other shared fallback: an admin's signed-in account
-      // version + "newer image published" badge, from the LAST check only (never a fetch here)
+      // version + "newer image published" banner, from the LAST check only (never a fetch here).
+      // latest/newerVersion ride along so the panel's banner can name the target version and tell a
+      // version bump from a rebuilt image on the same tag.
       version: appVersion(),
       updateAvailable: !!cachedStatus()?.updateAvailable,
+      updateLatest: cachedStatus()?.latest || null,
+      updateNewerVersion: !!cachedStatus()?.newerVersion,
       // daemon reachability: editors, review sandboxes and self-update all hang off it, so the panel
       // warns up front with the real reason instead of letting each feature fail on use
       docker: dockerStatus(),
