@@ -26,6 +26,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 | Version | Date | Commits | Headline |
 |---|---|---|---|
+| [Unreleased](#unreleased) | — | 3 | Wikis that start from a chat, a project or nothing — and grow from conversations |
 | [v1.22.0](#v1220--2026-08-20) | 2026-08-20 | 10 | Download a session's project folder, picking the files |
 | [v1.21.1](#v1211--2026-08-19) | 2026-08-19 | 2 | /hooks stops pointing at a page that cannot do it |
 | [v1.21.0](#v1210--2026-08-19) | 2026-08-19 | 4 | Side chat: ask about the work without joining it |
@@ -75,6 +76,90 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 | [v1.1.1](#v111--2026-07-31) | 2026-07-31 | 3 | Multi-arch build, Docker Hub overview |
 | [v1.1.0](#v110--2026-07-31) | 2026-07-31 | 4 | Release pipeline + Hub publishing |
 | [Early development](#early-development--2026-07-20--07-31) | 07-20 → 07-31 | 144 | P0–P5 skeleton · LLM Wiki · tokens · git · PR review · config · import · DM |
+
+---
+
+## Unreleased
+
+<details>
+<summary><b>feat(wiki): start a topic from a chat, a project or nothing — and let it grow from conversations</b> — server side · <code>e1aefbc</code></summary>
+
+An LLM Wiki topic used to have exactly one way in: upload files. Three more were
+added, all landing in the same `raw/` folder the upload path fills, so the compile
+step that turns sources into articles is unchanged.
+
+- **From a chat** — a personal chat or a room is written out as one markdown
+  transcript. Who may do this is deliberately stricter than who may *open* the
+  chat: your own private chats, or a room you belong to. Copying a conversation
+  into a base every member can read is not the same permission as opening one
+  thread, so an admin cannot hand somebody else's private chat to a wiki.
+- **From a project** — the project's files are copied in, skipping whatever
+  `.gitignore` covers and stopping at `wikiSeedMaxFiles` / `wikiSeedMaxKB`.
+- **Empty** — nothing at all, for a base that is meant to fill up as people talk.
+
+The reverse direction also works: an ordinary chat or room can name a topic as
+reference knowledge (`chat_sessions.wiki_ref_id`). That turn gets the topic
+directory added to the folders it is allowed to read, plus house rules telling it
+to look the base up first and never write to it (`wikiLinkEnabled`).
+
+Finally, a topic can grow from the conversations held against it. After a turn in
+a thread bound to a topic — its own query thread, or one that linked it — a short
+model call with no tools reads the exchange and decides whether it holds anything
+durable. The model makes that call; the topic's own setting only decides what
+happens to a yes: `off` never runs, `ask` parks the finished article as a proposal
+for a person to accept, `auto` writes it in. Notes are written twice on purpose —
+to `raw/conversations/` and `wiki/conversations/`, linked from `_index.md`. Every
+compile wipes `wiki/` and rebuilds it from `raw/`, so a note that lived only in
+`wiki/` would vanish at the next recompile; the copy under `raw/` survives and is
+folded into the proper articles instead.
+
+New config keys: `wikiLinkEnabled`, `wikiAutoLearnEnabled`, `wikiLearnModel`,
+`wikiLearnTimeoutMs`, `wikiLearnMaxKB`, `wikiSeedMaxFiles`, `wikiSeedMaxKB`.
+New endpoints: `PATCH /api/wiki/topics/:id`, `GET /api/wiki/proposals`,
+`POST /api/wiki/proposals/:id/decide`; `PATCH /api/sessions/:id` takes `wikiRefId`.
+Existing topics migrate to `off`, so nothing starts running on its own.
+
+</details>
+
+<details>
+<summary><b>feat(web): pick how a wiki starts, link one to a session, decide what it learns</b> — the UI for the above · <code>34349a5</code></summary>
+
+The new-topic dialog leads with a "start from" choice — uploaded files, an
+existing chat, a project, or an empty wiki — and the file dropzone only appears
+for the upload case. Chats are grouped as personal chats and rooms, projects as
+common and personal, so the list matches how they are named everywhere else.
+Below that sits the topic's learning mode: off, ask first, add automatically.
+
+The same mode can be changed later from a settings dialog behind a new button on
+each sidebar row, which also renames and re-describes the topic.
+
+Ordinary chats and rooms get a header button that links a topic; when one is
+linked the button wears its name. And above the composer, the outcome of a
+conversation shows up: a card per parked addition, with the article one click
+away and add / skip next to it, or a dismissible line when one was added
+automatically. Cards are fetched when a thread is opened, so closing the tab does
+not lose an addition nobody decided on yet.
+
+Checked at 375px as well as desktop: the start-from choice is a two-column grid
+rather than a segmented row so four labels still fit, and the cards stay inside
+the page.
+
+</details>
+
+<details>
+<summary><b>feat(demo,guide): the new wiki behaviour in the static demo and the guide agent</b> — <code>30cdcb9</code></summary>
+
+Demo: the start-from choice is recorded on the mock topic, topic settings and the
+accept/skip endpoints answer, and a turn in a thread bound to a topic leaves a
+card (ask) or a note (auto) — the demo has no model, so it uses the question
+itself in place of the judgement. Asking the guide to link a wiki now works there
+too.
+
+Guide agent: the three new behaviours are described in its feature list, and its
+API reference gains wiki seeding, topic settings, the proposal decision and the
+session's `wikiRefId`, so it can carry them out rather than only explain them.
+
+</details>
 
 ---
 
