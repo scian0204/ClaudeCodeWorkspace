@@ -237,7 +237,7 @@ function Header() {
         <FileExplorer
           title={t('chat.fileExplorerTitle', { title: c.title })}
           sources={[{ key: 'files', label: t('chat.filesSource') }]}
-          loadTree={() => api.get(`/api/projects/${c.projectId}/tree`).then((r) => ({ files: r.files }))}
+          loadDir={(_src, rel) => api.get(`/api/projects/${c.projectId}/tree?path=${encodeURIComponent(rel)}`)}
           fileUrl={(_dir, p) => `/api/projects/${c.projectId}/file?path=${encodeURIComponent(p)}`}
           blobUrl={(_dir, p) => `/api/projects/${c.projectId}/blob?path=${encodeURIComponent(p)}`}
           onClose={() => setExplorer(false)}

@@ -111,8 +111,10 @@ the chat–split–editor switch. Bottom-right corner: this guide panel.
 - **Session export** — the reverse: download a chat as a CLI transcript with the exact
   \`claude --resume\` command to carry on locally (\`sessionExportEnabled\`). The same dialog offers
   "whole project folder" — one .tgz with the session's working folder plus that transcript, for
-  people who do not have the files locally (\`sessionBundleEnabled\`, size ceiling
-  \`sessionBundleMaxMB\`, skipped folders \`sessionBundleExcludes\`).
+  people who do not have the files locally. Files are picked in a tree that opens one folder at a
+  time, with anything a \`.gitignore\` covers already unticked (\`sessionBundleEnabled\`, size ceiling
+  \`sessionBundleMaxMB\`, file ceiling \`sessionBundleMaxFiles\`, always-skipped names
+  \`sessionBundleExcludes\`).
 
 ### Extending Claude
 - **Plugins & skills** — install a plugin from a git URL (or upload a zip); the skills it ships become

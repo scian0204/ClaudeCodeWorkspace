@@ -8,6 +8,7 @@ import { paths, ensure } from '../lib/paths.js';
 import { newId } from '../lib/ids.js';
 import { compileTopic } from '../wiki/compile.js';
 import { cfg } from '../lib/config-registry.js';
+import { listDir } from '../lib/filetree.js';
 
 // Sanitize ONE path segment. Keep unicode filenames (Korean, Japanese, etc.); only strip path
 // separators + control chars and normalize NFD->NFC. macOS sends decomposed Hangul (U+1100 jamo),
@@ -252,16 +253,17 @@ export async function wikiRoutes(app: FastifyInstance) {
     };
   });
 
-  // full file tree of a topic (any user) — paths + sizes only (no content), for the explorer
+  // ONE directory level of a topic (any user) — ?dir=raw|wiki & ?path=<relative>. The explorer walks
+  // down folder by folder instead of pulling a whole tree it may never show.
   app.get('/api/wiki/topics/:id/tree', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
     const { id } = req.params as any;
     const t = getTopic(id); if (!t) return reply.code(404).send({ error: 'not found' });
-    return {
-      raw: walkFiles(path.join(t.path, 'raw')),
-      wiki: walkFiles(path.join(t.path, 'wiki')),
-      status: t.compileStatus, compiledAt: t.compiledAt,
-    };
+    const q = req.query as any;
+    const dir = q?.dir === 'wiki' ? 'wiki' : 'raw';
+    const rel = String(q?.path || '').trim();
+    if (rel.split('/').includes('..')) return reply.code(400).send({ error: 'bad path' });
+    return { ...listDir(path.join(t.path, dir), rel, { limit: cfg.int('fileTreeMaxEntries') }), status: t.compileStatus, compiledAt: t.compiledAt };
   });
 
   // one file's content (any user) — ?dir=raw|wiki & ?path=<relative>, text only

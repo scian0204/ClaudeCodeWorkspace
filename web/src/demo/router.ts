@@ -1,7 +1,8 @@
 // Routes every /api/* request to canned data / in-memory mutations for the static demo.
 // Called by the fetch + XHR interceptors in ./install. Returns a plain {status, data}.
 import {
-  db, ME, ADMIN, ATTACHMENTS, GIT, PROVIDERS, COMMANDS, USAGE, TREE_PROJECT, TREE_PLUGIN, WIKI_ARTICLES, WIKI_RAW, WIKI_TREE_ARTICLES,
+  db, ME, ADMIN, ATTACHMENTS, GIT, PROVIDERS, COMMANDS, USAGE, TREE_PROJECT, TREE_PLUGIN, TREE_DOWNLOAD,
+  DOWNLOAD_IGNORED, DOWNLOAD_BIG_DIRS, WIKI_ARTICLES, WIKI_RAW, WIKI_TREE_ARTICLES,
   REQUEST_ACTIONS, IMPORT_SESSIONS, fileContent, wikiFileContent, WIKI_RAW_EDITS, pluginDetail, EDITOR_URL, genId,
 } from './data';
 import { runDemoGuide, clearDemoGuide, runDemoAside } from './socket';
@@ -54,6 +55,29 @@ function sessionFor(id: string) {
   return { id, title: 'New chat', projectId: null, model: 'claude-opus-4-8', effort: 'high', permissionMode: 'default' };
 }
 const msgs = (id: string) => (db.messages[id] || (db.messages[id] = []));
+
+// ── lazy one-level listing (demo) ──────────────────────────────────────────
+// The real endpoints hand back ONE folder at a time (server/src/lib/filetree.ts listDir). Here the
+// same shape is derived from the flat seed lists, so the explorers and the download picker behave
+// the way they do against a real server.
+function levelFrom(files: { name: string; size: number }[], rel: string, opts: { ignored?: string[]; bigDirs?: Record<string, number> } = {}) {
+  const prefix = rel ? `${rel}/` : '';
+  const isOff = (p: string) => (opts.ignored || []).some((x) => p === x || p.startsWith(`${x}/`));
+  const dirs = new Map<string, number>();
+  const plain: any[] = [];
+  for (const f of files) {
+    if (!f.name.startsWith(prefix)) continue;
+    const rest = f.name.slice(prefix.length);
+    const cut = rest.indexOf('/');
+    if (cut < 0) plain.push({ name: rest, dir: false, size: f.size, count: 0, ignored: isOff(prefix + rest) });
+    else { const d = rest.slice(0, cut); dirs.set(d, (dirs.get(d) || 0) + 1); }
+  }
+  const folders = [...dirs].map(([name, count]) => ({
+    name, dir: true, size: 0, count: (opts.bigDirs || {})[prefix + name] ?? count, ignored: isOff(prefix + name),
+  }));
+  const byName = (a: any, b: any) => a.name.localeCompare(b.name);
+  return { entries: [...folders.sort(byName), ...plain.sort(byName)], truncated: false };
+}
 
 // ── unified search (demo) ──────────────────────────────────────────────────
 // Same hit shape + group order as the real endpoint; visibility is trivial here (the demo user is
@@ -255,7 +279,7 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   if (P === '/api/admin/restore/apply' && M === 'POST') { ADMIN.restoreStaged = null; return ok({ ok: true }); }
 
   // ---- client-facing config (model dropdown) ----
-  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, sessionExportEnabled: true, sessionBundleEnabled: true, teamAgentsEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenu: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true, guideEnabled: true, guideWriteEnabled: true, asideEnabled: true, taskPanelEnabled: true, processPollMs: 5000, toolFoldMin: 3, tokenPoolEnabled: true, tokenPoolAllUsers: true, tokenPoolPartyCreate: true, sessionSandboxEnabled: true, dockerReady: ADMIN.docker.ok && ADMIN.docker.configured, dockerReason: ADMIN.docker.reason });
+  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, sessionExportEnabled: true, sessionBundleEnabled: true, fileTreeWarnCount: 300, teamAgentsEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenu: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true, guideEnabled: true, guideWriteEnabled: true, asideEnabled: true, taskPanelEnabled: true, processPollMs: 5000, toolFoldMin: 3, tokenPoolEnabled: true, tokenPoolAllUsers: true, tokenPoolPartyCreate: true, sessionSandboxEnabled: true, dockerReady: ADMIN.docker.ok && ADMIN.docker.configured, dockerReason: ADMIN.docker.reason });
 
   // ── shared-plan pools ("토큰 모아쓰기") ──
   if (P === '/api/pools' && M === 'GET') return ok({ pools: db.pools, allUsers: true, myPoolId: db.myPoolId, optedOut: db.poolOptedOut, hasCredential: true, canCreate: true });
@@ -403,17 +427,23 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   // ── project-folder bundle (mocked) ──────────────────────────────────────
   // The real endpoint streams a .tgz built by the system tar; here the size probe is canned and the
   // download hands back a short note file so the click still ends in a saved file.
-  if (seg[1] === 'sessions' && seg[3] === 'export' && seg[4] === 'bundle' && seg[5] === 'size' && M === 'GET') {
-    const localCwd = (query.get('cwd') || '').trim();
+  if (seg[1] === 'sessions' && seg[3] === 'export' && seg[4] === 'tree' && M === 'GET') {
+    return ok(levelFrom(TREE_DOWNLOAD, query.get('path') || '', { ignored: DOWNLOAD_IGNORED, bigDirs: DOWNLOAD_BIG_DIRS }));
+  }
+  if (seg[1] === 'sessions' && seg[3] === 'export' && seg[4] === 'bundle' && seg[5] === 'prepare' && M === 'POST') {
     const sess = db.sessions.find((x: any) => x.id === idAt(2));
     const proj = [...db.projects.mine, ...db.projects.common].find((p: any) => p.id === sess?.projectId);
     const folder = proj ? proj.name : 'projects';
+    const off = [...DOWNLOAD_IGNORED, ...((b?.exclude || []) as string[])].filter((x) => !((b?.include || []) as string[]).includes(x));
+    const picked = TREE_DOWNLOAD.filter((f) => !off.some((x) => f.name === x || f.name.startsWith(`${x}/`)));
+    const localCwd = String(b?.cwd || '').trim();
     return ok({
-      bytes: 4_812_544, files: 214, over: false, capMB: 1024,
-      excludes: ['node_modules', '.venv', 'venv', '__pycache__', 'dist', 'build', '.next', 'target', '.cache', '.attachments'],
-      folder, hasTranscript: true, uuid: 'a1b2c3d4-demo-4efg-8hij-klmnopqrstuv',
+      bytes: picked.reduce((a, f) => a + f.size, 0), files: picked.length, over: false, tooMany: false,
+      capMB: 1024, capFiles: 200000, folder, hasTranscript: true,
+      uuid: 'a1b2c3d4-demo-4efg-8hij-klmnopqrstuv',
       slug: (localCwd || `/data/users/u_demo/projects/${folder}`).replace(/[^a-zA-Z0-9]/g, '-'),
       wholeProjectsDir: !sess?.projectId,
+      token: picked.length ? 'demo-ticket' : null,
     });
   }
   if (seg[1] === 'sessions' && seg[3] === 'export' && seg[4] === 'bundle' && M === 'GET') {
@@ -477,7 +507,7 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
     for (const k of Object.keys(db.roomProjects)) db.roomProjects[k] = db.roomProjects[k].filter((p: any) => p.id !== id);
     return ok({ ok: true });
   }
-  if (seg[1] === 'projects' && seg[3] === 'tree') return ok({ files: TREE_PROJECT });
+  if (seg[1] === 'projects' && seg[3] === 'tree') return ok(levelFrom(TREE_PROJECT, query.get('path') || ''));
   if (seg[1] === 'projects' && seg[3] === 'open-editor') return ok({ url: EDITOR_URL });
   if (seg[1] === 'projects' && seg[3] === 'file') { const path = query.get('path') || ''; return ok({ name: path.split('/').pop(), content: fileContent(path) }); }
   if (seg[1] === 'projects' && seg[3] === 'git' && seg[4] === 'status') return ok(GIT.status(idAt(2)));
@@ -562,7 +592,10 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
     return ok({ session: { id: cs, title: w?.name || 'Wiki', model: 'claude-opus-4-8', permissionMode: 'default' }, messages: msgs(cs) });
   }
   if (seg[1] === 'wiki' && seg[2] === 'topics' && seg[4] === 'files') return ok({ files: WIKI_ARTICLES, source: 'compiled' });
-  if (seg[1] === 'wiki' && seg[2] === 'topics' && seg[4] === 'tree') return ok({ raw: WIKI_RAW, wiki: WIKI_TREE_ARTICLES });
+  if (seg[1] === 'wiki' && seg[2] === 'topics' && seg[4] === 'tree') {
+    const src = query.get('dir') === 'wiki' ? WIKI_TREE_ARTICLES : WIKI_RAW;
+    return ok(levelFrom(src as any, query.get('path') || ''));
+  }
   // in-place source edit (admin) — mirrors the real PUT: raw/ text files only, no auto-recompile
   if (seg[1] === 'wiki' && seg[2] === 'topics' && seg[4] === 'file' && M === 'PUT') {
     const rel = String(b.path || '');
@@ -603,7 +636,7 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   if (P === '/api/plugins/install' && M === 'POST') { const arr = b.scope === 'common' ? db.plugins.common : db.plugins.mine; arr.push({ id: genId('pl'), name: b.name, source: 'marketplace', enabled: 1, forced: 0, repo: b.repo || null }); return ok({}); }
   if (P === '/api/plugins/upload' && M === 'POST') { const arr = (b.scope === 'common') ? db.plugins.common : db.plugins.mine; arr.push({ id: genId('pl'), name: b.name || 'uploaded', source: 'local', enabled: 1, forced: 0, repo: null }); return ok({}); }
   if (seg[1] === 'plugins' && seg[3] === 'detail') return ok(pluginDetail(idAt(2)));
-  if (seg[1] === 'plugins' && seg[3] === 'tree') return ok({ files: TREE_PLUGIN });
+  if (seg[1] === 'plugins' && seg[3] === 'tree') return ok(levelFrom(TREE_PLUGIN, query.get('path') || ''));
   if (seg[1] === 'plugins' && seg[3] === 'file') { const path = query.get('path') || ''; return ok({ name: path.split('/').pop(), content: fileContent(path) }); }
   if (seg[1] === 'plugins' && seg[3] === 'update') return ok({});
   if (seg[1] === 'plugins' && (seg[3] === 'enabled' || seg[3] === 'forced' || seg[3] === 'pref')) {

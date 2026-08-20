@@ -25,7 +25,7 @@ export function WikiExplorer({ topicId, onClose }: { topicId: string; onClose: (
     <FileExplorer
       title={t('wikiExplorer.title')}
       sources={[{ key: 'raw', label: t('wikiExplorer.sourceRaw') }, { key: 'wiki', label: t('wikiExplorer.sourceWiki') }]}
-      loadTree={() => api.get(`/api/wiki/topics/${topicId}/tree`)}
+      loadDir={(src, rel) => api.get(`/api/wiki/topics/${topicId}/tree?dir=${src}&path=${encodeURIComponent(rel)}`)}
       fileUrl={(dir, p) => `/api/wiki/topics/${topicId}/file?dir=${dir}&path=${encodeURIComponent(p)}`}
       blobUrl={(dir, p) => `/api/wiki/topics/${topicId}/blob?dir=${dir}&path=${encodeURIComponent(p)}`}
       onClose={onClose}

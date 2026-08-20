@@ -94,6 +94,7 @@ interface State {
   sessionImportEnabled: boolean; // admin feature flag (from /api/config)
   sessionExportEnabled: boolean; // admin feature flag (from /api/config) — gates the session-download UI
   sessionBundleEnabled: boolean; // same, for the heavier "whole project folder" download option
+  fileTreeWarnCount: number;     // admin setting — folders with more entries ask before opening
   teamAgentsEnabled: boolean;    // admin feature flag (from /api/config) — gates the team-agents UI
   llmProvidersEnabled: boolean;  // admin feature flag (from /api/config) — gates the LLM provider UI
   approvalsEnabled: boolean;     // admin feature flag (from /api/config) — gates the member-request UI
@@ -261,7 +262,7 @@ export const useStore = create<State>((set, get) => ({
   tasks: [], taskPanelEnabled: true, tasksOpen: localStorage.getItem('tasksOpen') === '1',
   queue: { running: null, waiting: [] }, pending: [],
   control: { canApprove: true, canInterrupt: true, canSetMode: true, isOwner: true, delegable: [] },
-  presence: [], congested: false, sessionImportEnabled: true, sessionExportEnabled: true, sessionBundleEnabled: true, teamAgentsEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenuEnabled: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true, dockerReady: true, dockerReason: 'ok',
+  presence: [], congested: false, sessionImportEnabled: true, sessionExportEnabled: true, sessionBundleEnabled: true, fileTreeWarnCount: 300, teamAgentsEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenuEnabled: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, reviewWebhookEnabled: true, dockerReady: true, dockerReason: 'ok',
   guideEnabled: true, guideWriteEnabled: true, guideOpen: false, guideLoaded: false, guideMessages: [], guideLive: null, guideBusy: false, guideUnread: false,
   asideEnabled: true, asideOpen: false, asideMessages: [], asideLive: null, asideBusy: false,
   resumes: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, toolFoldMin: 3, tokenPoolEnabled: false, sessionSandboxEnabled: false, pools: [], poolAllUsers: false, poolOptedOut: false, myPoolId: null, poolCanCreate: false, poolHasCredential: false, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, gitPanelOpen: false, explorerOpen: false, exportOpen: false, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
@@ -315,6 +316,7 @@ export const useStore = create<State>((set, get) => ({
       sessionImportEnabled: cf.sessionImportEnabled !== false,
       sessionExportEnabled: cf.sessionExportEnabled !== false,
       sessionBundleEnabled: cf.sessionBundleEnabled !== false,
+      fileTreeWarnCount: typeof cf.fileTreeWarnCount === 'number' ? cf.fileTreeWarnCount : 300,
       teamAgentsEnabled: cf.teamAgentsEnabled !== false,
       llmProvidersEnabled: cf.llmProvidersEnabled !== false,
       approvalsEnabled: cf.approvalsEnabled !== false,

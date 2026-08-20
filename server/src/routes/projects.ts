@@ -8,7 +8,7 @@ import { db, schema } from '../db/index.js';
 import { requireAuth, requireAdmin, type AuthUser } from '../auth/index.js';
 import { paths, ensure } from '../lib/paths.js';
 import { newId } from '../lib/ids.js';
-import { walkFiles, resolveUnder, IMG_CT } from '../lib/filetree.js';
+import { walkFiles, listDir, resolveUnder, IMG_CT } from '../lib/filetree.js';
 import * as rooms from '../rooms/manager.js';
 import * as cs from '../codeserver/manager.js';
 import { dockerStatus, dockerReady } from '../lib/docker-status.js';
@@ -190,13 +190,16 @@ export async function projectRoutes(app: FastifyInstance) {
     }
   });
 
-  // file tree of a project (paths + sizes only) — for the chat file explorer
+  // ONE directory level of a project — the explorer asks per folder as the user opens them, so a
+  // repo with thousands of files costs nothing until someone actually looks inside. ?path=<relative>
   app.get('/api/projects/:id/tree', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
     const p = getProject((req.params as any).id);
     if (!p) return reply.code(404).send({ error: 'not found' });
     if (!canAccess(u, p)) return reply.code(403).send({ error: 'forbidden' });
-    return { files: walkFiles(path.resolve(p.path)) };
+    const rel = String((req.query as any)?.path || '').trim();
+    if (rel.split('/').includes('..')) return reply.code(400).send({ error: 'bad path' });
+    return listDir(path.resolve(p.path), rel, { limit: cfg.int('fileTreeMaxEntries') });
   });
 
   // one file's text content — ?path=<relative>

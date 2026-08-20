@@ -181,7 +181,7 @@ export function SearchPalette() {
         <FileExplorer
           title={t('chat.fileExplorerTitle', { title: explorer.title })}
           sources={[{ key: 'files', label: t('chat.filesSource') }]}
-          loadTree={() => api.get(`/api/projects/${explorer.projectId}/tree`).then((r) => ({ files: r.files }))}
+          loadDir={(_src, rel) => api.get(`/api/projects/${explorer.projectId}/tree?path=${encodeURIComponent(rel)}`)}
           fileUrl={(_dir, p) => `/api/projects/${explorer.projectId}/file?path=${encodeURIComponent(p)}`}
           blobUrl={(_dir, p) => `/api/projects/${explorer.projectId}/blob?path=${encodeURIComponent(p)}`}
           onClose={() => setExplorer(null)}
@@ -191,7 +191,7 @@ export function SearchPalette() {
         <FileExplorer
           title={t('chat.fileExplorerTitle', { title: explorer.title })}
           sources={[{ key: 'raw', label: t('wikiExplorer.sourceRaw') }, { key: 'wiki', label: t('wikiExplorer.sourceWiki') }]}
-          loadTree={() => api.get(`/api/wiki/topics/${explorer.topicId}/tree`)}
+          loadDir={(src, rel) => api.get(`/api/wiki/topics/${explorer.topicId}/tree?dir=${src}&path=${encodeURIComponent(rel)}`)}
           fileUrl={(dir, p) => `/api/wiki/topics/${explorer.topicId}/file?dir=${dir}&path=${encodeURIComponent(p)}`}
           blobUrl={(dir, p) => `/api/wiki/topics/${explorer.topicId}/blob?dir=${dir}&path=${encodeURIComponent(p)}`}
           initialDir={explorer.dir}

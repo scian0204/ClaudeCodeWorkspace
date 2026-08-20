@@ -9,7 +9,9 @@ import { probeCommands, probeUsage, cwdFor } from '../claude/session-manager.js'
 import { runAsideTurn, interruptAside, clearAside, forgetAsides, asideBusy } from '../claude/aside.js';
 import { resolveAgents } from '../claude/team-agents.js';
 import { encodeSlug } from '../lib/session-import.js';
-import { transcriptLines, bundleExcludes, bundleStream, bundleFilename, measureDir } from '../lib/session-export.js';
+import {
+  transcriptLines, bundleStream, bundleFilename, walkBundle, listExportDir, putTicket, takeTicket,
+} from '../lib/session-export.js';
 import { DEFAULT_TITLE, retitleSession } from '../claude/auto-title.js';
 import { emitToUser } from '../realtime/io.js';
 import { reviewRoleForChat } from '../review/manager.js';
@@ -21,6 +23,10 @@ import type { AuthUser } from '../auth/index.js';
 import { POOL_OWN, POOL_ALL, getPool } from '../auth/token-pool.js';
 
 const EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'];
+
+// how many hand-picked overrides one bundle-prepare call may carry. The picker sends only what the
+// user actually ticked against the defaults, so this bounds abuse, not real use.
+const MAX_OVERRIDES = 5000;
 
 function loadMessages(sessionId: string) {
   return db.select().from(schema.messages).where(eq(schema.messages.sessionId, sessionId))
@@ -229,51 +235,72 @@ export async function sessionRoutes(app: FastifyInstance) {
     };
   });
 
-  // Bundle preflight: what the .tgz would carry, so the modal can show the real size (and the exact
-  // resume steps) before anyone starts a multi-hundred-MB download. Same walk the download itself
-  // runs, so `over` here is exactly what the download refuses.
-  app.get('/api/sessions/:id/export/bundle/size', async (req, reply) => {
+  // Bundle preflight: walk the picked selection, report what the .tgz would carry, and hand back a
+  // one-time token the download quotes. Doubles as the size preview — the modal re-runs it as the
+  // user ticks folders, so the number on screen is exactly what the archive will hold.
+  app.post('/api/sessions/:id/export/bundle/prepare', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
     if (!cfg.bool('sessionBundleEnabled')) return reply.code(403).send({ error: 'project bundle is disabled' });
     const tgt = await exportTarget(u, (req.params as any).id, reply); if (!tgt) return;
     const { s, serverCwd, file } = tgt;
+    const b = (req.body || {}) as any;
+    const relList = (v: any): Set<string> => new Set(
+      (Array.isArray(v) ? v : []).slice(0, MAX_OVERRIDES).map((x) => String(x))
+        .filter((x) => x && !x.startsWith('/') && !x.split('/').includes('..')),
+    );
+    const sel = { exclude: relList(b.exclude), include: relList(b.include) };
     const capMB = cfg.int('sessionBundleMaxMB');
-    const excludes = bundleExcludes();
-    const localCwd = String((req.query as any)?.cwd || '').trim();
-    const m = measureDir(serverCwd, excludes, capMB * 1024 * 1024);
+    const capFiles = cfg.int('sessionBundleMaxFiles');
+    const walk = walkBundle(serverCwd, sel, capMB * 1024 * 1024, capFiles);
+    const localCwd = String(b.cwd || '').trim();
+    const transcript = file && s.claudeSessionId
+      ? { slug: encodeSlug(localCwd || serverCwd), uuid: s.claudeSessionId, lines: transcriptLines(file, s.claudeSessionId, localCwd, exportTitle(s)) }
+      : null;
+    const blocked = walk.over || walk.tooMany || !walk.files.length;
     return {
-      ...m, capMB, excludes,
+      bytes: walk.bytes, files: walk.files.length, over: walk.over, tooMany: walk.tooMany,
+      capMB, capFiles,
       folder: path.basename(serverCwd),
       hasTranscript: !!file,
       uuid: s.claudeSessionId,
       slug: encodeSlug(localCwd || serverCwd),
-      // no project attached → the session's cwd IS the user's projects root, so the bundle carries
-      // every project of theirs, not one
+      // no project attached → the session's cwd IS the user's projects root, so the bundle would
+      // carry every project of theirs, not one
       wholeProjectsDir: !s.projectId && !s.wikiTopicId,
+      token: blocked ? null : putTicket({
+        userId: u.id, sessionId: s.id, projectDir: serverCwd, fileRels: walk.files, transcript, title: s.title,
+      }),
     };
   });
 
   // The bundle itself: streamed .tgz (system tar, constant memory) with `<projectFolder>/` and
-  // `.claude/projects/<slug>/<uuid>.jsonl` at the top level.
+  // `.claude/projects/<slug>/<uuid>.jsonl` at the top level. ?token= comes from prepare above and is
+  // spent here, which is what lets the download be a plain navigation (it streams straight to disk).
   app.get('/api/sessions/:id/export/bundle', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
     if (!cfg.bool('sessionBundleEnabled')) return reply.code(403).send({ error: 'project bundle is disabled' });
     const tgt = await exportTarget(u, (req.params as any).id, reply); if (!tgt) return;
-    const { s, serverCwd, file } = tgt;
-    const capMB = cfg.int('sessionBundleMaxMB');
-    const excludes = bundleExcludes();
-    if (measureDir(serverCwd, excludes, capMB * 1024 * 1024).over) {
-      return reply.code(413).send({ error: `the project folder is over the ${capMB}MB bundle limit — raise sessionBundleMaxMB or trim it` });
+    const ticket = takeTicket(String((req.query as any)?.token || ''), u.id);
+    if (!ticket || ticket.sessionId !== tgt.s.id) {
+      return reply.code(410).send({ error: 'this download link is spent or expired — pick the files again' });
     }
-    const localCwd = String((req.query as any)?.cwd || '').trim();
-    const transcript = file && s.claudeSessionId
-      ? { slug: encodeSlug(localCwd || serverCwd), uuid: s.claudeSessionId, lines: transcriptLines(file, s.claudeSessionId, localCwd, exportTitle(s)) }
-      : null;
-    const { stream, kill } = bundleStream({ projectDir: serverCwd, excludes, transcript });
+    const { stream, kill } = bundleStream({ projectDir: ticket.projectDir, fileRels: ticket.fileRels, transcript: ticket.transcript });
     reply.raw.on('close', kill);   // browser cancelled the download — stop gzipping
     reply.header('Content-Type', 'application/gzip');
-    reply.header('Content-Disposition', `attachment; filename="${bundleFilename(s.title)}"`);
+    reply.header('Content-Disposition', `attachment; filename="${bundleFilename(ticket.title)}"`);
     return reply.send(stream);
+  });
+
+  // One directory level of the session's project folder, for the picker's lazy tree. `ignored` is the
+  // default-off verdict (an excluded name, or a .gitignore match) and `count` lets the browser warn
+  // before opening a folder with thousands of entries.
+  app.get('/api/sessions/:id/export/tree', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    if (!cfg.bool('sessionBundleEnabled')) return reply.code(403).send({ error: 'project bundle is disabled' });
+    const tgt = await exportTarget(u, (req.params as any).id, reply); if (!tgt) return;
+    const rel = String((req.query as any)?.path || '').trim();
+    if (rel.split('/').includes('..')) return reply.code(400).send({ error: 'bad path' });
+    return listExportDir(tgt.serverCwd, rel, cfg.int('fileTreeMaxEntries'));
   });
 
   // ── prompt attachments (uploaded files / pasted screenshots) ──

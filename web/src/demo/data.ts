@@ -99,6 +99,18 @@ export const TREE_PROJECT = [
   { name: 'tests/auth.test.ts', size: 1980 }, { name: 'tests/routes.test.ts', size: 1520 },
   { name: 'README.md', size: 640 }, { name: 'package.json', size: 410 }, { name: 'tsconfig.json', size: 320 },
 ];
+// what the session-download picker sees: the same project plus the noisy folders a real checkout has
+// (off by default, and node_modules is big enough to trip the "this folder is huge" warning)
+export const TREE_DOWNLOAD = [
+  ...TREE_PROJECT,
+  { name: '.gitignore', size: 96 }, { name: '.env', size: 180 },
+  { name: 'dist/bundle.js', size: 284_120 }, { name: 'coverage/index.html', size: 41_200 },
+  { name: 'node_modules/.package-lock.json', size: 91_400 },
+];
+// paths the picker starts unticked: an excluded name, or something a .gitignore would match
+export const DOWNLOAD_IGNORED = ['node_modules', 'dist', 'coverage', '.env'];
+export const DOWNLOAD_BIG_DIRS: Record<string, number> = { node_modules: 4213 };
+
 export const TREE_PLUGIN = [
   { name: 'plugin.json', size: 210 }, { name: 'skills/review/SKILL.md', size: 1180 },
   { name: 'skills/summarize/SKILL.md', size: 940 }, { name: 'README.md', size: 720 },

@@ -4,6 +4,7 @@ import { md } from '../lib/md';
 import { useT } from '../lib/i18n';
 import { type UploadState } from '../lib/api';
 import { collectDrop, collectPick, type Collected } from '../lib/dropfiles';
+import { confirmBigFolder, fmtBytes, joinRel, type TreeEntry, type TreeLevel } from '../lib/filetree';
 import { Modal } from './Modal';
 import { UploadProgress } from './UploadProgress';
 import { IconChevronDown, IconChevronRight, IconFolder, IconFile, IconEye, IconTerminal, IconPencil, IconCheck, IconX } from '../lib/icons';
@@ -22,87 +23,29 @@ export function resolveRelAsset(baseDir: string, rawSrc: string): string {
   return baseDir ? `${baseDir}/${rel}` : rel;
 }
 const dirOf = (p: string) => p.split('/').slice(0, -1).join('/');
-
-export type FileItem = { name: string; size: number };
-type Node = { name: string; path: string; dir: boolean; size: number; children: Node[] };
-
-// build a nested tree from flat relative paths (docs/api/x.md -> docs > api > x.md)
-export function buildTree(files: FileItem[]): Node[] {
-  const root: Node = { name: '', path: '', dir: true, size: 0, children: [] };
-  for (const f of files) {
-    const parts = f.name.split('/');
-    let cur = root;
-    parts.forEach((part, i) => {
-      const isLeaf = i === parts.length - 1;
-      const p = parts.slice(0, i + 1).join('/');
-      let child = cur.children.find((c) => c.name === part && c.dir === !isLeaf);
-      if (!child) { child = { name: part, path: p, dir: !isLeaf, size: isLeaf ? f.size : 0, children: [] }; cur.children.push(child); }
-      cur = child;
-    });
-  }
-  const sort = (n: Node) => {
-    n.children.sort((a, b) => (a.dir === b.dir ? a.name.localeCompare(b.name) : a.dir ? -1 : 1));
-    n.children.forEach(sort);
-  };
-  sort(root);
-  return root.children;
-}
-
-function fmtSize(n: number) { return n >= 1024 ? `${(n / 1024).toFixed(1)}KB` : `${n}B`; }
-
-// Collect every directory path in the tree (for expand-all / collapse-all).
-export function allDirPaths(nodes: Node[]): string[] {
-  const out: string[] = [];
-  const walk = (n: Node) => { if (n.dir) { out.push(n.path); n.children.forEach(walk); } };
-  nodes.forEach(walk);
-  return out;
-}
-
-// Open state is controlled by the parent (a path->bool map) so expand-all/collapse-all can drive
-// every node at once; an unset path falls back to the default (top level open, deeper closed).
-function TreeNode({ node, depth, onOpen, selected, openMap, setOpenMap }: {
-  node: Node; depth: number; onOpen: (p: string) => void; selected: string | null;
-  openMap: Record<string, boolean>; setOpenMap: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
-}) {
-  if (node.dir) {
-    const open = openMap[node.path] ?? (depth < 1); // top level expanded by default
-    return (
-      <div>
-        <div className="flex items-center gap-1 py-0.5 cursor-pointer hover:bg-line rounded text-xs"
-          style={{ paddingLeft: depth * 12 + 4 }} onClick={() => setOpenMap((m) => ({ ...m, [node.path]: !(m[node.path] ?? (depth < 1)) }))}>
-          <span className="text-txt3 w-3 inline-flex">{open ? <IconChevronDown size={13} /> : <IconChevronRight size={13} />}</span><IconFolder size={14} className="text-txt3 shrink-0" />
-          <span className="truncate">{node.name}</span>
-          <span className="text-txt3 text-[10px] ml-1">{node.children.length}</span>
-        </div>
-        {open && node.children.map((c) => <TreeNode key={c.path} node={c} depth={depth + 1} onOpen={onOpen} selected={selected} openMap={openMap} setOpenMap={setOpenMap} />)}
-      </div>
-    );
-  }
-  return (
-    <div className={`flex items-center gap-1 py-0.5 cursor-pointer rounded text-xs ${selected === node.path ? 'bg-claysoft text-clay' : 'hover:bg-line'}`}
-      style={{ paddingLeft: depth * 12 + 18 }} onClick={() => onOpen(node.path)} title={node.path}>
-      <IconFile size={14} className="text-txt3 shrink-0" /><span className="truncate flex-1">{node.name}</span>
-      <span className="text-txt3 text-[10px]">{fmtSize(node.size)}</span>
-    </div>
-  );
-}
+// every ancestor folder of a path, outermost first: a/b/c.md → ['a', 'a/b']
+const parentsOf = (p: string) => {
+  const parts = p.split('/').slice(0, -1);
+  return parts.map((_, i) => parts.slice(0, i + 1).join('/'));
+};
 
 export type Source = { key: string; label: string };
 
 // Generic file-explorer modal: a tree pane + a preview pane (image / markdown / text).
-// `loadTree` returns a map keyed by each source.key; single source hides the tab bar.
-// `initialDir`/`initialPath` open straight onto one file (a search hit jumping to a wiki article).
+// `loadDir` returns ONE folder level, so opening a repo costs one listing instead of a whole-tree
+// walk, and every folder starts closed. `initialDir`/`initialPath` open straight onto one file (a
+// search hit jumping to a wiki article) — the ancestors are fetched on the way down.
 // Optional write mode (admin surfaces): `uploadDir`+`onUpload` add a dropzone to that source's tab,
 // `editDir`+`onSave` put an inline text editor in the preview. Both refresh the tree afterwards and
 // report through `onChanged` so the owner can offer a follow-up action via `notice`.
 export function FileExplorer({
-  title, width = 780, sources, loadTree, fileUrl, blobUrl, onClose, initialDir, initialPath,
+  title, width = 780, sources, loadDir, fileUrl, blobUrl, onClose, initialDir, initialPath,
   uploadDir, onUpload, editDir, onSave, onChanged, notice,
 }: {
   title: string;
   width?: number;
   sources: Source[];
-  loadTree: () => Promise<Record<string, FileItem[]>>;
+  loadDir: (source: string, rel: string) => Promise<TreeLevel>;
   fileUrl: (dir: string, path: string) => string;
   blobUrl: (dir: string, path: string) => string;
   onClose: () => void;
@@ -117,12 +60,14 @@ export function FileExplorer({
 }) {
   const t = useT();
   const [dir, setDir] = useState(initialDir && sources.some((s) => s.key === initialDir) ? initialDir : sources[0].key);
-  const [tree, setTree] = useState<Record<string, FileItem[]> | null>(null);
+  // one entry per folder the user has actually opened, keyed `<source>:<relPath>` ('' = the root)
+  const [levels, setLevels] = useState<Record<string, TreeLevel>>({});
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [busyPath, setBusyPath] = useState<string | null>(null);
   const [sel, setSel] = useState<string | null>(null);
   const [file, setFile] = useState<{ name: string; content: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [mdRaw, setMdRaw] = useState(false); // markdown: false=rendered, true=source
-  const [openMap, setOpenMap] = useState<Record<string, boolean>>({}); // dir path -> open (expand/collapse-all)
   const [draft, setDraft] = useState<string | null>(null); // non-null = editing the open file
   const [saving, setSaving] = useState(false);
   const [progress, setProgress] = useState<UploadState | null>(null);
@@ -130,8 +75,39 @@ export function FileExplorer({
   const fileRef = useRef<HTMLInputElement>(null);
   const dirRef = useRef<HTMLInputElement>(null);
 
-  const refreshTree = () => loadTree().then(setTree).catch((e) => useStore.getState().setError(e.message));
-  useEffect(() => { void refreshTree(); }, []);
+  const key = (source: string, rel: string) => `${source}:${rel}`;
+
+  // Fetch one level (cached unless `force`). Returns the level so a caller can walk further down.
+  const fetchLevel = async (source: string, rel: string, force = false): Promise<TreeLevel | null> => {
+    const k = key(source, rel);
+    if (!force && levels[k]) return levels[k];
+    setBusyPath(rel);
+    try {
+      const lv = await loadDir(source, rel);
+      setLevels((m) => ({ ...m, [k]: lv }));
+      return lv;
+    } catch (e: any) { useStore.getState().setError(e.message); return null; }
+    finally { setBusyPath(null); }
+  };
+
+  // the root of whichever source tab is showing
+  useEffect(() => { void fetchLevel(dir, ''); }, [dir]);
+
+  // A folder the user just clicked: warn before painting thousands of rows, then load it once.
+  const toggleDir = async (rel: string, entry: TreeEntry) => {
+    const k = key(dir, rel);
+    if (open[k]) { setOpen((m) => ({ ...m, [k]: false })); return; }
+    if (!levels[k] && !confirmBigFolder(entry.name, entry.count)) return;
+    setOpen((m) => ({ ...m, [k]: true }));
+    if (!levels[k]) await fetchLevel(dir, rel);
+  };
+
+  // Drop everything opened so far, so the next open re-reads from disk (after an upload or a save).
+  const refreshTree = async () => {
+    setLevels({});
+    setOpen({});
+    await fetchLevel(dir, '', true);
+  };
 
   const openFile = async (p: string) => {
     setSel(p); setFile(null); setMdRaw(false); setDraft(null);
@@ -172,16 +148,59 @@ export function FileExplorer({
     finally { setSaving(false); }
   };
 
-  // Search hit: once the tree lands, expand the file's folders and preview it right away.
+  // Search hit: walk down to the file's folder one listing at a time, open those folders, preview it.
   useEffect(() => {
-    if (!initialPath || !tree) return;
-    const parts = initialPath.split('/').slice(0, -1);
-    setOpenMap((m) => ({ ...m, ...Object.fromEntries(parts.map((_, i) => [parts.slice(0, i + 1).join('/'), true])) }));
-    void openFile(initialPath);
-  }, [tree, initialPath]);
+    if (!initialPath) return;
+    let live = true;
+    void (async () => {
+      for (const p of parentsOf(initialPath)) {
+        if (!live) return;
+        await fetchLevel(dir, p);
+        setOpen((m) => ({ ...m, [key(dir, p)]: true }));
+      }
+      if (live) await openFile(initialPath);
+    })();
+    return () => { live = false; };
+  }, [initialPath]);
 
-  const list = tree ? tree[dir] || [] : [];
-  const nodes = buildTree(list);
+  const rootLevel = levels[key(dir, '')];
+
+  const renderLevel = (rel: string, depth: number): React.ReactNode => {
+    const lv = levels[key(dir, rel)];
+    if (!lv) return null;
+    return (
+      <>
+        {lv.entries.map((e) => {
+          const p = joinRel(rel, e.name);
+          const k = key(dir, p);
+          if (!e.dir) {
+            return (
+              <div key={p} className={`flex items-center gap-1 py-0.5 cursor-pointer rounded text-xs ${sel === p ? 'bg-claysoft text-clay' : 'hover:bg-line'}`}
+                style={{ paddingLeft: depth * 12 + 18 }} onClick={() => void openFile(p)} title={p}>
+                <IconFile size={14} className="text-txt3 shrink-0" /><span className="truncate flex-1">{e.name}</span>
+                <span className="text-txt3 text-[10px]">{fmtBytes(e.size)}</span>
+              </div>
+            );
+          }
+          return (
+            <div key={p}>
+              <div className="flex items-center gap-1 py-0.5 cursor-pointer hover:bg-line rounded text-xs"
+                style={{ paddingLeft: depth * 12 + 4 }} onClick={() => void toggleDir(p, e)}>
+                <span className="text-txt3 w-3 inline-flex">{open[k] ? <IconChevronDown size={13} /> : <IconChevronRight size={13} />}</span>
+                <IconFolder size={14} className="text-txt3 shrink-0" />
+                <span className="truncate">{e.name}</span>
+                <span className="text-txt3 text-[10px] ml-1">{busyPath === p ? '…' : e.count}</span>
+              </div>
+              {open[k] && renderLevel(p, depth + 1)}
+            </div>
+          );
+        })}
+        {lv.truncated && (
+          <div className="text-[10px] text-warn px-2 py-0.5" style={{ paddingLeft: depth * 12 + 18 }}>{t('files.truncated')}</div>
+        )}
+      </>
+    );
+  };
 
   return (
     <Modal open onOpenChange={(o) => { if (!o) onClose(); }} title={title} width={width}>
@@ -190,7 +209,7 @@ export function FileExplorer({
           {sources.map((s) => (
             <button key={s.key} className={`px-2.5 py-1 rounded ${dir === s.key ? 'bg-clay text-white' : 'bg-line text-txt2'}`}
               onClick={() => { setDir(s.key); setSel(null); setFile(null); }}>
-              {s.label} ({tree ? (tree[s.key]?.length ?? 0) : '…'})
+              {s.label}
             </button>
           ))}
         </div>
@@ -213,16 +232,14 @@ export function FileExplorer({
       {notice && <div className="mb-2">{notice}</div>}
       <div className="grid gap-2 h-[68vh] md:h-[60vh] grid-cols-1 grid-rows-[38%_minmax(0,1fr)] md:grid-cols-[260px_minmax(0,1fr)] md:grid-rows-1">
         <div className="border border-line rounded flex flex-col min-h-0 overflow-hidden">
-          {nodes.length > 0 && (
-            <div className="flex gap-3 px-2 py-1 border-b border-line text-[11px] shrink-0">
-              <button className="text-txt3 hover:text-clay" onClick={() => setOpenMap(Object.fromEntries(allDirPaths(nodes).map((p) => [p, true])))}>{t('common.expandAll')}</button>
-              <button className="text-txt3 hover:text-clay" onClick={() => setOpenMap(Object.fromEntries(allDirPaths(nodes).map((p) => [p, false])))}>{t('common.collapseAll')}</button>
-            </div>
-          )}
+          <div className="flex gap-3 px-2 py-1 border-b border-line text-[11px] shrink-0">
+            <button className="text-txt3 hover:text-clay" onClick={() => setOpen({})}>{t('common.collapseAll')}</button>
+            <button className="text-txt3 hover:text-clay" onClick={() => void refreshTree()}>{t('fileExplorer.refresh')}</button>
+          </div>
           <div className="overflow-auto scrolly p-1 min-h-0 flex-1">
-            {!tree && <div className="text-txt3 text-xs p-2">{t('fileExplorer.loading')}</div>}
-            {tree && list.length === 0 && <div className="text-txt3 text-xs p-2">{t('fileExplorer.noFiles')}</div>}
-            {nodes.map((n) => <TreeNode key={n.path} node={n} depth={0} onOpen={openFile} selected={sel} openMap={openMap} setOpenMap={setOpenMap} />)}
+            {!rootLevel && <div className="text-txt3 text-xs p-2">{t('fileExplorer.loading')}</div>}
+            {rootLevel && !rootLevel.entries.length && <div className="text-txt3 text-xs p-2">{t('fileExplorer.noFiles')}</div>}
+            {renderLevel('', 0)}
           </div>
         </div>
         <div className="border border-line rounded overflow-auto scrolly bg-bg min-w-0 min-h-0">

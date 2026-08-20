@@ -7,7 +7,7 @@ import { eq } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { requireAuth, requireAdmin, type AuthUser } from '../auth/index.js';
 import { newId } from '../lib/ids.js';
-import { walkFiles, resolveUnder, IMG_CT } from '../lib/filetree.js';
+import { listDir, resolveUnder, IMG_CT } from '../lib/filetree.js';
 import * as pm from '../plugins/manager.js';
 import { skillUsageRows } from '../usage/tracker.js';
 import { cfg } from '../lib/config-registry.js';
@@ -157,12 +157,14 @@ export async function pluginRoutes(app: FastifyInstance) {
     };
   });
 
-  // file tree of a plugin dir (paths + sizes) — reuses the shared explorer
+  // ONE directory level of a plugin dir — same lazy contract as the project tree. ?path=<relative>
   app.get('/api/plugins/:id/tree', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
     const p = pluginScope((req.params as any).id); if (!p) return reply.code(404).send({ error: 'not found' });
     if (!canViewPlugin(u, p)) return reply.code(403).send({ error: 'forbidden' });
-    return { files: walkFiles(path.resolve(p.path)) };
+    const rel = String((req.query as any)?.path || '').trim();
+    if (rel.split('/').includes('..')) return reply.code(400).send({ error: 'bad path' });
+    return listDir(path.resolve(p.path), rel, { limit: cfg.int('fileTreeMaxEntries') });
   });
 
   // one file's text content — ?path=<relative>

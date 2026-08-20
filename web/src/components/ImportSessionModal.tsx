@@ -3,6 +3,7 @@ import ignore from 'ignore';
 import { useStore } from '../lib/store';
 import { api, type UploadState } from '../lib/api';
 import { collectDrop, collectPick, type Collected } from '../lib/dropfiles';
+import { confirmBigFolder } from '../lib/filetree';
 import { useT } from '../lib/i18n';
 import { Modal } from './Modal';
 import { UploadProgress } from './UploadProgress';
@@ -70,7 +71,9 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
   const [step, setStep] = useState<'project' | 'tree' | 'claude' | 'sessions'>('project');
   const [collected, setCollected] = useState<Collected[]>([]);
   const [checked, setChecked] = useState<Record<string, boolean>>({});
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  // folders start CLOSED and their rows are only built when opened — a picked repo can hold tens
+  // of thousands of files, and painting them all is what freezes the tab
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [progress, setProgress] = useState<UploadState | null>(null);
   const [busy, setBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -192,21 +195,25 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
     const files = fileRels(node);
     const all = files.length > 0 && files.every((r) => checked[r]);
     const some = files.some((r) => checked[r]);
-    const isCollapsed = !!collapsed[node.rel];
-    const toggleCollapse = () => setCollapsed((p) => ({ ...p, [node.rel]: !p[node.rel] }));
+    const isOpen = !!expanded[node.rel];
+    // opening a folder with thousands of entries is the expensive click — ask first
+    const toggleOpen = () => {
+      if (!isOpen && !confirmBigFolder(node.name, node.children.length)) return;
+      setExpanded((p) => ({ ...p, [node.rel]: !p[node.rel] }));
+    };
     return (
       <div key={node.rel}>
         <div style={pad} className="flex items-center gap-2 px-2 py-1 text-xs font-medium hover:bg-line/50">
-          <button type="button" className="shrink-0 w-3 text-txt3 leading-none inline-flex" onClick={toggleCollapse}
-            aria-label={isCollapsed ? t('common.expand') : t('common.collapse')}>{isCollapsed ? <IconChevronRight size={13} /> : <IconChevronDown size={13} />}</button>
+          <button type="button" className="shrink-0 w-3 text-txt3 leading-none inline-flex" onClick={toggleOpen}
+            aria-label={isOpen ? t('common.collapse') : t('common.expand')}>{isOpen ? <IconChevronDown size={13} /> : <IconChevronRight size={13} />}</button>
           <input type="checkbox" checked={all} ref={(el) => { if (el) el.indeterminate = some && !all; }}
             onChange={(e) => toggleDir(node, e.target.checked)} />
-          <span className="flex-1 flex items-center gap-2 min-w-0 cursor-pointer" onClick={toggleCollapse}>
+          <span className="flex-1 flex items-center gap-2 min-w-0 cursor-pointer" onClick={toggleOpen}>
             <span className="opacity-70"><IconFolder size={14} /></span>
             <span className="flex-1 truncate" title={node.rel}>{node.name}</span>
           </span>
         </div>
-        {!isCollapsed && sortChildren(node.children).map((c) => renderNode(c, depth + 1))}
+        {isOpen && sortChildren(node.children).map((c) => renderNode(c, depth + 1))}
       </div>
     );
   };
@@ -272,8 +279,9 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
           <div className="flex items-center justify-between gap-2 mb-2">
             <div className="text-[11px] text-txt3 min-w-0 flex-1">{t('import.gitignoreHint')}</div>
             <div className="flex gap-3 text-[11px] shrink-0">
-              <button className="text-txt3 hover:text-clay" onClick={() => setCollapsed({})}>{t('common.expandAll')}</button>
-              <button className="text-txt3 hover:text-clay" onClick={() => setCollapsed(Object.fromEntries(allDirRels(tree).map((r) => [r, true])))}>{t('common.collapseAll')}</button>
+              <button className="text-txt3 hover:text-clay"
+                onClick={() => { if (confirmBigFolder(projectName || '/', collected.length)) setExpanded(Object.fromEntries(allDirRels(tree).map((r) => [r, true]))); }}>{t('common.expandAll')}</button>
+              <button className="text-txt3 hover:text-clay" onClick={() => setExpanded({})}>{t('common.collapseAll')}</button>
             </div>
           </div>
           {progressBar}

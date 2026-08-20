@@ -44,7 +44,7 @@ export function PluginDetail({ pluginId, canUpdate, onClose, onChanged }: {
       <FileExplorer
         title={t('pluginDetail.filesTitle', { name: d?.plugin.name || t('pluginDetail.fallbackPlugin') })}
         sources={[{ key: 'files', label: t('pluginDetail.files') }]}
-        loadTree={() => api.get(`/api/plugins/${pluginId}/tree`).then((r) => ({ files: r.files }))}
+        loadDir={(_src, rel) => api.get(`/api/plugins/${pluginId}/tree?path=${encodeURIComponent(rel)}`)}
         fileUrl={(_dir, p) => `/api/plugins/${pluginId}/file?path=${encodeURIComponent(p)}`}
         blobUrl={(_dir, p) => `/api/plugins/${pluginId}/blob?path=${encodeURIComponent(p)}`}
         onClose={() => setShowFiles(false)}
