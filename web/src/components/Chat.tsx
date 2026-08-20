@@ -1685,6 +1685,14 @@ function Composer() {
               {canAttach && (
                 <button type="button" className="ctl" disabled={!!uploading} title={t('chat.attach')} aria-label={t('chat.attach')} onClick={() => fileRef.current?.click()}><IconPlus size={15} /></button>
               )}
+              {/* the side chat, one click instead of typing /btw — same toggle the command runs */}
+              {store.asideEnabled && (
+                <button type="button" aria-pressed={store.asideOpen} title={t('aside.openTip')}
+                  className={`text-xs px-2 py-0.5 rounded-full border inline-flex items-center gap-1 shrink-0 ${store.asideOpen ? 'bg-clay text-white border-clay' : 'border-line text-txt2 hover:border-clay'}`}
+                  onClick={() => store.setAsideOpen(!store.asideOpen)}>
+                  <IconSparkle size={12} />/btw
+                </button>
+              )}
               {isRoom && (
                 <div className="flex items-center gap-1 shrink-0">
                   <button type="button" onClick={() => setMode('chat')} className={`text-xs px-2 py-0.5 rounded-full border inline-flex items-center gap-1 ${mode === 'chat' ? 'bg-clay text-white border-clay' : 'border-line text-txt2 hover:border-clay'}`}><IconMessage size={12} />{t('chat.modeChat')}</button>

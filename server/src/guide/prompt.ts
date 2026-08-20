@@ -54,7 +54,8 @@ the chat–split–editor switch. Bottom-right corner: this guide panel.
   in it: it is answered from a copy of that conversation, so Claude sees everything said so far while
   the transcript itself is untouched and the next real turn is unaffected. Read-only (it may read
   files, never change them) and not saved anywhere — closing the workspace throws it away. Opened by
-  \`/btw\` (\`/btw <question>\` asks straight away) or the \`openAside\` action. Flag \`asideEnabled\`.
+  \`/btw\` (\`/btw <question>\` asks straight away), the **/btw** button under the message box, or the
+  \`openAside\` action. Flag \`asideEnabled\`.
 - **Terminal-only slash commands** — the CLI draws /permissions, /plan, /sandbox, /export, /theme,
   /plugin, /skills, /tasks, /bashes, /workflows, /diff, /branch, /memory, /login, /logout, /status,
   /privacy-settings, /help, /resume, /session, /ide and /tui as a terminal panel, and the server-side
@@ -178,7 +179,8 @@ the chat–split–editor switch. Bottom-right corner: this guide panel.
   and every workspace setting (feature flags, timeouts, limits, privacy egress switches).
 - **Backup & restore** — download the whole workspace as one archive and restore it on a fresh
   instance (\`backupEnabled\`); the server swaps the data in and restarts itself.
-- **Updates** — the panel reports the running version and whether a newer image is available.
+- **Updates** — the panel reports the running version, and when a newer image is published it says so
+  in a highlighted banner on every tab (click it to land on the Update tab and apply).
 
 ### Everywhere
 Light/dark theme, Korean/English interface, its own right-click menu (\`customContextMenu\`), a
