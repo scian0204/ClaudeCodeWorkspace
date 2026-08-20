@@ -4,7 +4,7 @@
 
 # Update notes
 
-Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and **v1.23.0** (2026-08-20) — all **418 commits**.
+Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and now — **v1.23.0** (2026-08-20) plus what is not yet released — all **419 commits**.
 
 Each row shows only its **title and commit hash**; click the triangle for the detail (root cause, implementation, config keys).
 
@@ -26,6 +26,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 | Version | Date | Commits | Headline |
 |---|---|---|---|
+| [Unreleased](#unreleased) | — | 1 | A chat hears when its project is changed somewhere else |
 | [v1.23.0](#v1230--2026-08-20) | 2026-08-20 | 16 | Wikis that start from a chat or nothing, link to a session, and grow themselves |
 | [v1.22.0](#v1220--2026-08-20) | 2026-08-20 | 10 | Download a session's project folder, picking the files |
 | [v1.21.1](#v1211--2026-08-19) | 2026-08-19 | 2 | /hooks stops pointing at a page that cannot do it |
@@ -76,6 +77,54 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 | [v1.1.1](#v111--2026-07-31) | 2026-07-31 | 3 | Multi-arch build, Docker Hub overview |
 | [v1.1.0](#v110--2026-07-31) | 2026-07-31 | 4 | Release pipeline + Hub publishing |
 | [Early development](#early-development--2026-07-20--07-31) | 07-20 → 07-31 | 144 | P0–P5 skeleton · LLM Wiki · tokens · git · PR review · config · import · DM |
+
+---
+
+## Unreleased
+
+<details>
+<summary><b>feat(watch): per-session project file-change notices + auto-sent prompt</b> — a chat hears when its project is changed somewhere else · <code>42d4e9d</code></summary>
+
+**Problem.** A project directory is shared. Another chat's turn writes to it, someone
+edits it in the VS Code view, a `git pull` rewrites half of it — and a chat pointed at
+that project had no way to hear about any of it. Common projects are the worst case:
+several people work in one directory and nobody's chat notices.
+
+**What it does.** Each session opts in for itself, from a **Watch** pill in the chat
+header. Three settings:
+
+- **off** — as before.
+- **notify** — a card above the composer lists the files that changed, and the chat's
+  row in the sidebar gets a dot so it is visible from another chat.
+- **notify + auto-send a prompt** — the same notice, plus a prompt saved beforehand is
+  sent as an ordinary turn. Write `{files}`, `{count}` or `{project}` in it and they are
+  filled in.
+
+Only projects that at least one session subscribes to are watched, so nothing is spent
+until someone turns it on. `projectWatchScope` decides which projects may be watched at
+all — shared ones (common + room) by default.
+
+**Not answering itself.** A session is never told about the files its own turn wrote:
+those land slightly after the turn ends, so changes are ignored while the turn runs and
+for `projectWatchGraceMs` afterwards. Two *different* chats watching one project could
+still take turns reacting to each other, so an auto-sent prompt also honours
+`projectWatchCooldownMs`, and it is skipped entirely while that chat already has
+something running or waiting.
+
+**New settings** (admin panel, group "Project file watch"): `projectWatchEnabled`,
+`projectWatchScope` (common|shared|all), `projectWatchPromptEnabled`,
+`projectWatchPromptMaxChars`, `projectWatchDebounceMs`, `projectWatchGraceMs`,
+`projectWatchCooldownMs`, `projectWatchMaxFiles`, `projectWatchMaxProjects`,
+`projectWatchSyncMs`. Auto-sending is separately switchable because it runs a turn
+without anyone pressing send.
+
+**Access.** `PATCH /api/sessions/:id` accepts `watchMode` / `watchPrompt` but requires
+the same authority as sending a turn — the looser edit check that covers the title would
+let anyone with the chat id spend a plan unattended. New read-only
+`GET /api/projects/:id/watch` reports whether the watch is actually running, so a
+platform limit or a directory that vanished is visible instead of silent.
+
+</details>
 
 ---
 
