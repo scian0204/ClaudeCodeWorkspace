@@ -134,7 +134,11 @@ function flush(projectId: string) {
   const w = watched.get(projectId);
   if (!w) return;
   if (w.timer) { clearTimeout(w.timer); w.timer = null; }
-  const changed = [...w.pending];
+  // Creating a directory reports the directory itself; listing "src" next to real files reads as
+  // noise. A path that no longer exists is KEPT — that is a deletion, which is worth reporting.
+  const changed = [...w.pending].filter((rel) => {
+    try { return !fs.statSync(path.join(w.dir, rel)).isDirectory(); } catch { return true; }
+  });
   w.pending.clear();
   if (!changed.length) return;
 

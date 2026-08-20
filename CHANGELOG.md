@@ -83,6 +83,15 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ## Unreleased
 
 <details>
+<summary><b>fix(watch): a created folder is no longer listed as a changed file</b> — <code>HASH</code></summary>
+
+Making a directory reports the directory itself, so `src` sat in the notice next to the
+real files. Directories are dropped from the list now; a path that no longer exists is
+kept, because that is a deletion and worth reporting.
+
+</details>
+
+<details>
 <summary><b>feat(watch): per-session project file-change notices + auto-sent prompt</b> — a chat hears when its project is changed somewhere else · <code>42d4e9d</code></summary>
 
 **Problem.** A project directory is shared. Another chat's turn writes to it, someone
