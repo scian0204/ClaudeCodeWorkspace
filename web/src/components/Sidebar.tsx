@@ -20,7 +20,7 @@ import {
 } from '../lib/icons';
 
 export function Sidebar() {
-  const { user, sessions, rooms, projects, wikiTopics, current, openPrivate, openRoom, openWiki, newSession, newRoom, logout, setPanel, panel, deleteSession, deleteRoom, deleteWikiTopic, renameSession, retitleSession, autoTitleEnabled, setError, sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed, sessionImportEnabled, teamAgentsEnabled, pendingRequestCount, channels, activeChannelId, openChannel, dmEnabled, goHome, setShortcutsOpen, titling } = useStore();
+  const { user, sessions, rooms, projects, wikiTopics, current, openPrivate, openRoom, openWiki, newSession, newRoom, logout, setPanel, panel, deleteSession, deleteRoom, deleteWikiTopic, renameSession, retitleSession, autoTitleEnabled, setError, sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed, sessionImportEnabled, teamAgentsEnabled, pendingRequestCount, channels, activeChannelId, openChannel, dmEnabled, goHome, setShortcutsOpen, titling, projectChanges } = useStore();
   const [showRoom, setShowRoom] = useState(false);
   const [roomName, setRoomName] = useState('');
   const [showWiki, setShowWiki] = useState(false);
@@ -116,6 +116,8 @@ export function Sidebar() {
             <span className="opacity-70"><IconMessage size={15} /></span>
             {/* while the model is picking a name, the row title itself waits with the clay glint */}
             <span className={`flex-1 truncate text-[13px] ${isNaming(s.id) ? 'clay-shimmer' : ''}`}>{s.title}</span>
+            {/* its project changed somewhere else and nobody has looked yet */}
+            {projectChanges[s.id] && <span className="w-[7px] h-[7px] rounded-full bg-clay shrink-0" title={t('watch.dot')} />}
             <span className="text-[11px] text-txt3 group-hover:hidden">{timeAgo(s.updatedAt)}</span>
             {autoTitleEnabled && (
               <button className={`${isNaming(s.id) ? 'block' : 'hidden group-hover:block'} text-txt3 hover:text-clay px-1`}
@@ -140,6 +142,7 @@ export function Sidebar() {
             menu={[{ label: t('ctx.open'), icon: <IconMessage size={14} />, onSelect: () => { setPanel(null); openRoom(r.id); } }]}>
             <span className="w-[7px] h-[7px] rounded-full bg-ok shrink-0" />
             <span className="flex-1 truncate text-[13px]">{r.name}</span>
+            {projectChanges[r.chatSessionId] && <span className="w-[7px] h-[7px] rounded-full bg-clay shrink-0" title={t('watch.dot')} />}
             <span className="flex group-hover:hidden">
               {r.members.slice(0, 3).map((m) => (
                 <span key={m.userId} className="w-[17px] h-[17px] rounded-full grid place-items-center text-[9px] text-white font-semibold -ml-1.5 border-[1.5px]"

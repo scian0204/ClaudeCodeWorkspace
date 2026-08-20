@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { requireAuth, getUserById } from '../auth/index.js';
 import * as rooms from '../rooms/manager.js';
+import { syncWatchers } from '../watch/manager.js';
 
 function messagesFor(chatSessionId: string) {
   return db.select().from(schema.messages).where(eq(schema.messages.sessionId, chatSessionId))
@@ -90,6 +91,7 @@ export async function roomRoutes(app: FastifyInstance) {
     const room = rooms.getRoom(id); if (!room) return reply.code(404).send({ error: 'not found' });
     const { projectId } = (req.body || {}) as any;
     db.update(schema.chatSessions).set({ projectId: projectId || null }).where(eq(schema.chatSessions.id, room.chatSessionId)).run();
+    syncWatchers(); // the room's file watch follows its project
     return { ok: true };
   });
 

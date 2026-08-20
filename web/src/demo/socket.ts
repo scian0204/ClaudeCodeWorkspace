@@ -284,6 +284,20 @@ function guidePlan(text: string): { steps: { input: any; output: string }[]; rep
       reply: '사이드 채팅을 열었습니다. 지금 대화를 그대로 이어받아 답하지만, 여기서 오간 내용은 대화 기록에 남지 않습니다 — 읽기 전용이라 파일을 고치거나 명령을 실행하지도 않아요.\n\n입력창에 `/btw 질문` 처럼 바로 물어봐도 됩니다.',
     };
   }
+  if (/(파일 ?변경|변경 ?감지|watch|감시)/.test(q)) {
+    const sid = db.sessions[0]?.id || '';
+    const prompt = '{files} 가 바뀌었습니다. 어떤 영향이 있는지 확인해 주세요.';
+    (db.sessions[0] as any).watchMode = 'prompt';
+    (db.sessions[0] as any).watchPrompt = prompt;
+    simulateProjectChange(sid, 'shared-infra', 'prompt', prompt);
+    return {
+      steps: [
+        { input: { method: 'PATCH', path: `/api/sessions/${sid}`, body: { watchMode: 'prompt', watchPrompt: prompt } }, output: 'status=200\n{"ok":true}' },
+        { input: { action: 'refresh' }, output: 'ok — dispatched refresh' },
+      ],
+      reply: '이 대화가 보고 있는 프로젝트의 파일 변경을 감지하도록 켰습니다. 다른 대화·에디터·git pull이 파일을 바꾸면 목록이 담긴 알림이 뜨고, 저장해 둔 프롬프트가 자동으로 발신됩니다.\n\n상단 변경 감지 버튼에서 알림만 받도록 바꾸거나 끌 수 있습니다.',
+    };
+  }
   if (/(위키|wiki)/.test(q) && /(연결|link|붙|참고)/.test(q)) {
     const topic = db.wikiTopics[0];
     const sid = db.sessions[0]?.id || '';
@@ -479,5 +493,30 @@ const sock = {
     return sock; // session:leave and anything else → no-op
   },
 };
+
+// ── project file-change watch (demo) ──
+// Nothing writes files in the static demo, so turning the switch on synthesizes one change a few
+// seconds later. In 'prompt' mode the stored prompt then runs as a real (mock) turn, so the whole
+// chain — notice card, "the saved prompt was sent", the answer — is clickable.
+export function simulateProjectChange(sessionId: string, projectName: string, mode: string, prompt: string) {
+  const files = ['src/api/orders.ts', 'src/api/orders.test.ts', 'docs/schema.md'];
+  later(3500, () => {
+    deliver('project:changed', { sessionId, projectId: 'p_demo', projectName, files, count: files.length, at: Date.now(), mode });
+    if (mode !== 'prompt') return;
+    const text = (prompt || '')
+      .replace(/\{files\}/g, files.join('\n'))
+      .replace(/\{count\}/g, String(files.length))
+      .replace(/\{project\}/g, projectName)
+      .trim();
+    if (!text) return;
+    later(400, () => {
+      deliver('project:watchFired', { sessionId, projectId: 'p_demo', at: Date.now() });
+      appendMsg(sessionId, { id: `m_${rid()}`, role: 'user', authorId: db.me.id, authorName: db.me.displayName, content: { text }, createdAt: Date.now() });
+      deliver('message', { sessionId, message: db.messages[sessionId][db.messages[sessionId].length - 1] });
+      deliver('turn:start', { sessionId });
+      runTurn(sessionId, text);
+    });
+  });
+}
 
 export function getDemoSocket() { return sock as any; }

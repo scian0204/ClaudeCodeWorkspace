@@ -22,6 +22,7 @@ import { useT } from '../lib/i18n';
 import { withKeys } from '../lib/shortcuts';
 import { WORKSPACE_CMDS, splitCommand } from '../lib/cli-commands';
 import { AsideChat } from './AsideChat';
+import { WatchMenu, ProjectChangeCard } from './ProjectWatch';
 import {
   IconChevronDown, IconChevronRight, IconChevronUp, IconTheme, IconFolder, IconFile, IconTrash,
   IconGauge, IconEye, IconBook, IconArchive, IconSparkle, IconCopy, IconPencil, IconHelp,
@@ -204,6 +205,7 @@ function Header() {
       {!c.wikiTopicId && !isReview && <WikiLinkMenu />}
       {!c.wikiTopicId && c.projectId && <button className="pill inline-flex items-center gap-1" title={withKeys(t('chat.projectFileExplorer'), 'Mod+Shift+F')} onClick={() => setExplorer(true)}><IconFolder size={13} />{t('chat.filesBtn')}</button>}
       {!c.wikiTopicId && c.projectId && <button className="pill inline-flex items-center gap-1" title={withKeys(t('git.title'), 'Mod+Shift+G')} onClick={() => setGitOpen(true)}><IconGitBranch size={13} />{t('git.pill')}</button>}
+      {!c.wikiTopicId && !isReview && c.projectId && <WatchMenu />}
 
       {/* model · effort · permission mode · usage now live under the composer (TurnControls) —
           the header row had outgrown one line and wrapped */}
@@ -766,6 +768,7 @@ function ChatPane() {
           {live && <LiveView />}
         </div>
       </div>
+      <ProjectChangeCard />
       <WikiKnowledgeCards />
       <PermissionArea />
       <Composer />

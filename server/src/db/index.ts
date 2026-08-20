@@ -201,6 +201,9 @@ export function initDb() {
   try { sqlite.exec("ALTER TABLE chat_sessions ADD COLUMN pool_id TEXT"); } catch { /* already present */ }
   // per-session build container (0 = build/run in the app container, as before)
   try { sqlite.exec("ALTER TABLE chat_sessions ADD COLUMN sandbox INTEGER NOT NULL DEFAULT 0"); } catch { /* already present */ }
+  // per-session project file-change watch (off = the pre-existing behaviour)
+  try { sqlite.exec("ALTER TABLE chat_sessions ADD COLUMN watch_mode TEXT NOT NULL DEFAULT 'off'"); } catch { /* already present */ }
+  try { sqlite.exec("ALTER TABLE chat_sessions ADD COLUMN watch_prompt TEXT NOT NULL DEFAULT ''"); } catch { /* already present */ }
   // an ordinary session reading a wiki topic as reference knowledge (null = none)
   try { sqlite.exec("ALTER TABLE chat_sessions ADD COLUMN wiki_ref_id TEXT"); } catch { /* already present */ }
   // per-topic conversation learning mode (off = the pre-existing behaviour)
