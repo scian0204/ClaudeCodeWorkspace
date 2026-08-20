@@ -501,7 +501,7 @@ const sock = {
 export function simulateProjectChange(sessionId: string, projectName: string, mode: string, prompt: string) {
   const files = ['src/api/orders.ts', 'src/api/orders.test.ts', 'docs/schema.md'];
   later(3500, () => {
-    deliver('project:changed', { sessionId, projectId: 'p_demo', projectName, files, count: files.length, at: Date.now(), mode });
+    deliver('project:changed', { sessionId, projectId: 'p_demo', projectName, files, count: files.length, at: Date.now(), mode, self: false });
     if (mode !== 'prompt') return;
     const text = (prompt || '')
       .replace(/\{files\}/g, files.join('\n'))

@@ -150,17 +150,20 @@ function flush(projectId: string) {
   const name = projectName(projectId);
 
   for (const sub of subs) {
-    // A session's own turn wrote these — nothing to report to it. The notice is dropped, not parked:
-    // a busy session hears about the NEXT change instead.
-    if (isTurnActive(sub.sessionId) || now - lastTurnEndAt(sub.sessionId) < grace) continue;
+    // Was this session working while the files moved? Then the change is probably its OWN turn's
+    // writing. It still gets the notice (marked `self`, so the card can say so) — a change made by
+    // someone else at that same moment must not be thrown away, which is what dropping it did.
+    const own = isTurnActive(sub.sessionId) || now - lastTurnEndAt(sub.sessionId) < grace;
     const payload = {
       sessionId: sub.sessionId, projectId, projectName: name,
-      files, count: changed.length, at: now, mode: sub.mode,
+      files, count: changed.length, at: now, mode: sub.mode, self: own,
     };
     emitToSession(sub.sessionId, 'project:changed', payload);
     // Also reaches the tabs that are looking at a DIFFERENT chat, so the sidebar can mark the row.
     for (const uid of recipients(sub.sessionId)) emitToUser(uid, 'project:changed', payload);
-    if (sub.mode === 'prompt') maybePrompt(sub, files, changed.length, name, now);
+    // Auto-sending is the part that must stay guarded: queueing a prompt about the files a running
+    // turn is writing would make that turn write again, forever. So it waits for an idle session.
+    if (sub.mode === 'prompt' && !own) maybePrompt(sub, files, changed.length, name, now);
   }
 }
 

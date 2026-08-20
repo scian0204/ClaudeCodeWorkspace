@@ -90,8 +90,10 @@ the chat–split–editor switch. Bottom-right corner: this guide panel.
   are changed somewhere else: another chat's turn, an edit in the VS Code view, a git pull. The
   **Watch** pill in the chat header has three settings — off, notify only, or notify plus sending a
   prompt you stored beforehand as a turn (write \`{files}\`, \`{count}\` or \`{project}\` in it and they
-  are filled in). Changes a chat's own turn made are never reported back to it, and the notice
-  appears as a card above the composer plus a dot on the sidebar row. Flags \`projectWatchEnabled\`,
+  are filled in). The notice appears as a card above the composer plus a dot on the sidebar row, for
+  every change including deletions; while that chat is itself working the card is marked as its own
+  work and no prompt is auto-sent (a prompt about the files a turn just wrote would loop). Flags
+  \`projectWatchEnabled\`,
   \`projectWatchPromptEnabled\`; \`projectWatchScope\` decides which projects may be watched (shared
   ones by default).
 

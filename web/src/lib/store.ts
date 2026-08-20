@@ -63,7 +63,7 @@ export interface PermReq { requestId: string; tool: string; input: any; }
 export interface Current { chatSessionId: string; kind: 'private' | 'room' | 'review'; roomId?: string; wikiTopicId?: string; wikiRefId?: string | null; reviewId?: string; review?: ReviewMeta; readOnly?: boolean; title: string; projectId: string | null; model: string; effort: string; permissionMode: string; agent?: string | null; poolId?: string | null; sandbox?: number; watchMode?: string; watchPrompt?: string; room?: RoomSummary; }
 // A file change in the project a session watches, as `project:changed` reports it. `fired` = the
 // session's stored prompt went out as a turn ('prompt' mode).
-export interface ProjectChange { sessionId: string; projectId: string; projectName: string; files: string[]; count: number; at: number; mode?: string; fired?: boolean; }
+export interface ProjectChange { sessionId: string; projectId: string; projectName: string; files: string[]; count: number; at: number; mode?: string; self?: boolean; fired?: boolean; }
 
 // A shared-plan pool ("토큰 모아쓰기") and its members, as /api/pools reports them.
 export interface PoolMember { userId: string; name: string; priority: number; hasCredential: boolean; cooldownUntil: number; }
@@ -1201,8 +1201,9 @@ function wire(set: any, get: () => State) {
   // chat (its session room + the owner's user room), so it is stored keyed by session, not appended.
   sock.on('project:changed', (p: any) => {
     if (!p?.sessionId) return;
-    const prev = get().projectChanges[p.sessionId];
-    set({ projectChanges: { ...get().projectChanges, [p.sessionId]: { ...p, fired: prev?.fired || false } } });
+    // `fired` belongs to THIS change, not the previous one — carrying it over made a later card
+    // claim a prompt had gone out when none had. project:watchFired sets it right after.
+    set({ projectChanges: { ...get().projectChanges, [p.sessionId]: { ...p, fired: false } } });
   });
   // 'prompt' mode sent its stored prompt as a turn — the card says so instead of looking idle
   sock.on('project:watchFired', (p: any) => {

@@ -150,12 +150,14 @@ export const DEFS: ConfigDef[] = [
   { key: 'projectWatchPromptMaxChars', group: 'watch', type: 'int', default: '2000', min: 10, max: 20000 },
   // One save touches several files (and editors write twice); collect them into one notice.
   { key: 'projectWatchDebounceMs', group: 'watch', type: 'int', default: '2000', min: 200, max: 60000, unit: 'ms' },
-  // A session never hears about the files ITS OWN turn just wrote: changes are ignored while its turn
-  // runs and for this long afterwards (the writes land slightly after the turn ends).
+  // A session's own turn writes land slightly after it ends, so for this long afterwards a change is
+  // treated as that session's own work: the notice still goes out (marked as such), the auto-prompt
+  // does not — queueing a prompt about the files a turn just wrote makes it write again, forever.
   { key: 'projectWatchGraceMs', group: 'watch', type: 'int', default: '15000', min: 0, max: 600000, unit: 'ms' },
-  // Shortest gap between two auto-sent prompts in ONE session. Also what stops two sessions watching
-  // the same project from answering each other's writes forever.
-  { key: 'projectWatchCooldownMs', group: 'watch', type: 'int', default: '600000', min: 0, max: 86400000, unit: 'ms' },
+  // Shortest gap between two auto-sent prompts in ONE session. Also what bounds how fast two sessions
+  // watching the same project can answer each other's writes. Long enough to swallow one save burst,
+  // short enough that editing a file twice in a row still gets a second prompt.
+  { key: 'projectWatchCooldownMs', group: 'watch', type: 'int', default: '30000', min: 0, max: 86400000, unit: 'ms' },
   { key: 'projectWatchMaxFiles', group: 'watch', type: 'int', default: '20', min: 1, max: 500 },
   // Upper bound on directories under an OS watch at once (each one costs kernel watch descriptors).
   { key: 'projectWatchMaxProjects', group: 'watch', type: 'int', default: '20', min: 1, max: 200 },

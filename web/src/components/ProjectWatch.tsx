@@ -139,6 +139,9 @@ export function ProjectChangeCard() {
         {change.fired && (
           <div className="mt-1.5 inline-flex items-center gap-1 text-clay"><IconBolt size={13} />{t('watch.fired')}</div>
         )}
+        {/* the chat was working while these moved — most likely its own turn wrote them, and that is
+            why no prompt went out for it */}
+        {change.self && !change.fired && <div className="mt-1.5 text-txt3">{t('watch.selfChange')}</div>}
         {c.projectId && (
           <div className="mt-2"><button className="pill" onClick={() => setExplorer(true)}>{t('chat.filesBtn')}</button></div>
         )}
