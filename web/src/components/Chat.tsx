@@ -1174,11 +1174,14 @@ function AskQuestion({ p, canApprove, respond }: { p: any; canApprove: boolean; 
     .flatMap((q, i) => ((sel[i] || []).length
       ? [t('chat.userChoiceAnswer', { question: q.question, label: (sel[i] || []).join(', ') })] : []))
     .join('\n'));
+  // updater form, not `{ ...picks }`: clicks that land in the same render (a fast multi-pick) would
+  // otherwise each start from the same stale picks and only the last one would stick.
   const choose = (qi: number, value: string, multi: boolean) => {
-    const cur = picks[qi] || [];
-    const next = multi ? (cur.includes(value) ? cur.filter((v) => v !== value) : [...cur, value]) : [value];
-    const sel = { ...picks, [qi]: next };
-    if (instant) send(sel); else setPicks(sel);
+    if (instant) { send({ [qi]: [value] }); return; }
+    setPicks((prev) => {
+      const cur = prev[qi] || [];
+      return { ...prev, [qi]: multi ? (cur.includes(value) ? cur.filter((v) => v !== value) : [...cur, value]) : [value] };
+    });
   };
   const ready = qs.length > 0 && qs.every((_, i) => (picks[i] || []).length > 0);
   if (!canApprove) {
