@@ -10,11 +10,12 @@ ClaudeCode Workspace — 서버 1대 상주 Claude Code 팀 워크스페이스. 
 
 1. **큰 작업은 브랜치 분리.** 규모가 크다고 판단되면 `main`에서 feature 브랜치를 파고 개발한다. 브랜치에서 작업한 경우, **사용자의 명시적 지시가 없으면 `main`에 바로 병합하지 않는다.** 브랜치 상태로 두고 병합 여부를 사용자에게 확인받는다.
 2. **기능 단위 커밋.** 별도 지시가 없어도 하나의 기능/논리 단위가 끝날 때마다 커밋한다. 커밋 메시지는 `feat/fix/...` 컨벤션.
-3. **완료 후 docker compose 반영 + Docker Hub 배포.** 기능 개발이 끝나면 `docker compose`로 프로젝트가 실행 중인지 확인하고, 빌드 & 재실행해서 변경을 반영한다. 그 다음 버전을 올려 Docker Hub(`cian0204/claudecode-workspace`)에 이미지를 push 한다.
+3. **완료 후 docker compose 반영.** 기능 개발이 끝나면 `docker compose`로 프로젝트가 실행 중인지 확인하고, 빌드 & 재실행해서 변경을 반영한다. 기본은 **여기까지**다.
+   - **Docker Hub 릴리즈는 자동으로 하지 않는다.** `npm run release:*`(버전 올림 + `cian0204/claudecode-workspace` push)는 **사용자가 명시적으로 요청할 때만** 실행한다("릴리즈해", "허브에 올려", "배포해" 등). 요청이 없으면 로컬 반영까지만 하고 끝낸다. 릴리즈할 때가 됐다고 판단되면 실행하지 말고 한 줄로 제안만 한다.
    ```bash
    docker compose ps
    npm run compose:up      # = docker compose up -d --build && docker image prune -f
-   npm run release:patch   # 버그픽스·자잘한 수정 (새 기능이면 release:minor)
+   npm run release:patch   # (지시 있을 때만) 버그픽스·자잘한 수정 — 새 기능이면 release:minor
    ```
    - **로컬 빌드는 반드시 `npm run compose:up`으로** 한다. `docker compose up -d --build`를 맨손으로 돌리면 재빌드마다 이전 이미지가 `:latest` 태그를 잃고 dangling(`<none>`)으로 쌓인다. `compose:up`은 빌드·재실행 후 `docker image prune -f`로 즉시 정리한다(dangling만 삭제 — 태그 달린 이미지·실행 중 컨테이너·볼륨·빌드 캐시는 건드리지 않음).
    - 릴리스로 생긴 구버전 태그(`:1.2.3`, `:sha-abc1234`)까지 비우려면 명시적으로: `docker image rm cian0204/claudecode-workspace:<태그>`. 빌드 캐시가 커졌으면 `docker builder prune -f`.

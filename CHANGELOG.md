@@ -77,6 +77,17 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
+## Unreleased
+
+<details>
+<summary><b>docs: a Docker Hub release now waits to be asked for</b> — the local build stays automatic · <code>HASH</code></summary>
+
+Until now the working rules said to bump the version and push the image to `cian0204/claudecode-workspace` at the end of every feature, so a small change could send a new image out of the machine on its own. Rule 3 in `CLAUDE.md` now stops after the local `npm run compose:up` build and rerun. `npm run release:patch|minor` runs only when it is asked for. When a release looks due, it gets suggested in one line instead of run.
+
+</details>
+
+---
+
 ## v1.21.1 — 2026-08-19
 
 <sub>release commit `2327e47`</sub>
