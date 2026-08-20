@@ -4,7 +4,7 @@
 
 # Update notes
 
-Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and now — **v1.23.0** (2026-08-20) plus what is not yet released — all **421 commits**.
+Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and now — **v1.23.0** (2026-08-20) plus what is not yet released — all **422 commits**.
 
 Each row shows only its **title and commit hash**; click the triangle for the detail (root cause, implementation, config keys).
 
@@ -26,7 +26,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 | Version | Date | Commits | Headline |
 |---|---|---|---|
-| [Unreleased](#unreleased) | — | 3 | A chat hears when its project is changed somewhere else |
+| [Unreleased](#unreleased) | — | 4 | A chat hears when its project is changed somewhere else |
 | [v1.23.0](#v1230--2026-08-20) | 2026-08-20 | 16 | Wikis that start from a chat or nothing, link to a session, and grow themselves |
 | [v1.22.0](#v1220--2026-08-20) | 2026-08-20 | 10 | Download a session's project folder, picking the files |
 | [v1.21.1](#v1211--2026-08-19) | 2026-08-19 | 2 | /hooks stops pointing at a page that cannot do it |
@@ -81,6 +81,8 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ---
 
 ## Unreleased
+
+- merge: `feat/project-file-watch` — project file-change watch (notify + auto-sent prompt) — `de8f8cd`
 
 <details>
 <summary><b>fix(watch): every change is reported; only the auto-send waits for an idle chat</b> — added, edited, renamed, deleted · <code>8e4b876</code></summary>
