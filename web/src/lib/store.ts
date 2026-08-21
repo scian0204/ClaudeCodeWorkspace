@@ -159,6 +159,10 @@ interface State {
   channelMessages: DmMessage[];  // messages of the open channel
   requests: AdminRequest[];      // member: own requests; admin: all
   pendingRequestCount: number;   // admins only — drives the sidebar admin-panel badge
+  // admins only — a newer image is published (last cached check, from /api/config). Highlights the
+  // sidebar's admin-panel button; the panel's own banner reads the fuller admin overview.
+  updateAvailable: boolean;
+  updateLatest: string | null;
   viewMode: 'chat' | 'split' | 'editor';
   editorUrl: string | null;
   gitPanelOpen: boolean;   // header Git panel (store-lifted so the Mod+Shift+G shortcut can drive it)
@@ -284,7 +288,7 @@ export const useStore = create<State>((set, get) => ({
   presence: [], congested: false, sessionImportEnabled: true, sessionExportEnabled: true, sessionBundleEnabled: true, fileTreeWarnCount: 300, teamAgentsEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenuEnabled: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, wikiLinkEnabled: true, wikiAutoLearnEnabled: true, reviewWebhookEnabled: true, dockerReady: true, dockerReason: 'ok',
   guideEnabled: true, guideWriteEnabled: true, guideOpen: false, guideLoaded: false, guideMessages: [], guideLive: null, guideBusy: false, guideUnread: false,
   asideEnabled: true, asideOpen: false, asideMessages: [], asideLive: null, asideBusy: false,
-  resumes: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, toolFoldMin: 3, tokenPoolEnabled: false, sessionSandboxEnabled: false, projectWatchEnabled: true, projectWatchPromptEnabled: true, projectWatchPromptMax: 2000, pools: [], poolAllUsers: false, poolOptedOut: false, myPoolId: null, poolCanCreate: false, poolHasCredential: false, requests: [], pendingRequestCount: 0, viewMode: 'chat', editorUrl: null, gitPanelOpen: false, explorerOpen: false, exportOpen: false, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
+  resumes: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, toolFoldMin: 3, tokenPoolEnabled: false, sessionSandboxEnabled: false, projectWatchEnabled: true, projectWatchPromptEnabled: true, projectWatchPromptMax: 2000, pools: [], poolAllUsers: false, poolOptedOut: false, myPoolId: null, poolCanCreate: false, poolHasCredential: false, requests: [], pendingRequestCount: 0, updateAvailable: false, updateLatest: null, viewMode: 'chat', editorUrl: null, gitPanelOpen: false, explorerOpen: false, exportOpen: false, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
   channels: [], activeChannelId: null, channelMessages: [], titling: [],
   commands: [],
 
@@ -308,7 +312,7 @@ export const useStore = create<State>((set, get) => ({
 
   logout: async () => {
     await api.post('/api/auth/logout');
-    set({ user: null, current: null, messages: [], sessions: [], rooms: [], wikiTopics: [], wikiProposals: [], wikiLearned: [], projectChanges: {}, reviewRepos: [], reviewSessions: [], requests: [], pendingRequestCount: 0, channels: [], activeChannelId: null, channelMessages: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null,
+    set({ user: null, current: null, messages: [], sessions: [], rooms: [], wikiTopics: [], wikiProposals: [], wikiLearned: [], projectChanges: {}, reviewRepos: [], reviewSessions: [], requests: [], pendingRequestCount: 0, updateAvailable: false, updateLatest: null, channels: [], activeChannelId: null, channelMessages: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null,
       guideOpen: false, guideLoaded: false, guideMessages: [], guideLive: null, guideBusy: false, guideUnread: false,
       asideOpen: false, asideMessages: [], asideLive: null, asideBusy: false });
   },
@@ -364,6 +368,8 @@ export const useStore = create<State>((set, get) => ({
       projectWatchPromptMax: cf.projectWatchPromptMaxChars || 2000,
       dockerReady: cf.dockerReady !== false,
       dockerReason: cf.dockerReason || 'ok',
+      updateAvailable: cf.updateAvailable === true, // absent for non-admins
+      updateLatest: cf.updateLatest || null,
     });
     await get().refreshRequests();
     await get().refreshPools();

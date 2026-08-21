@@ -180,7 +180,8 @@ the chat–split–editor switch. Bottom-right corner: this guide panel.
 - **Backup & restore** — download the whole workspace as one archive and restore it on a fresh
   instance (\`backupEnabled\`); the server swaps the data in and restarts itself.
 - **Updates** — the panel reports the running version, and when a newer image is published it says so
-  in a highlighted banner on every tab (click it to land on the Update tab and apply).
+  in a highlighted banner on every tab (click it to land on the Update tab and apply). Admins also see
+  it before opening the panel: the sidebar's **Admin panel** row lights up with the new version.
 
 ### Everywhere
 Light/dark theme, Korean/English interface, its own right-click menu (\`customContextMenu\`), a

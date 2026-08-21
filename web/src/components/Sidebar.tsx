@@ -20,7 +20,7 @@ import {
 } from '../lib/icons';
 
 export function Sidebar() {
-  const { user, sessions, rooms, projects, wikiTopics, current, openPrivate, openRoom, openWiki, newSession, newRoom, logout, setPanel, panel, deleteSession, deleteRoom, deleteWikiTopic, renameSession, retitleSession, autoTitleEnabled, setError, sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed, sessionImportEnabled, teamAgentsEnabled, pendingRequestCount, channels, activeChannelId, openChannel, dmEnabled, goHome, setShortcutsOpen, titling, projectChanges } = useStore();
+  const { user, sessions, rooms, projects, wikiTopics, current, openPrivate, openRoom, openWiki, newSession, newRoom, logout, setPanel, panel, deleteSession, deleteRoom, deleteWikiTopic, renameSession, retitleSession, autoTitleEnabled, setError, sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed, sessionImportEnabled, teamAgentsEnabled, pendingRequestCount, updateAvailable, updateLatest, channels, activeChannelId, openChannel, dmEnabled, goHome, setShortcutsOpen, titling, projectChanges } = useStore();
   const [showRoom, setShowRoom] = useState(false);
   const [roomName, setRoomName] = useState('');
   const [showWiki, setShowWiki] = useState(false);
@@ -215,10 +215,21 @@ export function Sidebar() {
             <span className="w-7 grid place-items-center"><IconUsers size={17} /></span> {t('sidebar.agents')}
           </button>
         )}
+        {/* A published update is worth seeing without opening the panel, so the row that leads there
+            carries it: highlighted, with the version on a pill next to the pending-approvals count. */}
         {user?.role === 'admin' && (
-          <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full hover:bg-line text-left text-[13px] text-txt2" onClick={() => setPanel('admin')}>
+          <button onClick={() => setPanel('admin')}
+            title={updateAvailable ? (updateLatest ? t('admin.upd.bannerNew', { v: `v${updateLatest}` }) : t('admin.upd.bannerImage')) : undefined}
+            className={`flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full text-left text-[13px] ${updateAvailable ? 'text-clay bg-claysoft font-semibold' : 'text-txt2 hover:bg-line'}`}>
             <span className="w-7 grid place-items-center"><IconSliders size={17} /></span> {t('sidebar.adminPanel')}
-            {pendingRequestCount > 0 && <span className="ml-auto text-[10px] bg-warnsoft text-warn px-1.5 py-0.5 rounded-full whitespace-nowrap">{pendingRequestCount}</span>}
+            <span className="ml-auto flex items-center gap-1 shrink-0">
+              {updateAvailable && (
+                <span className="text-[10px] bg-clay text-white px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                  {updateLatest ? `v${updateLatest}` : t('sidebar.updateBadge')}
+                </span>
+              )}
+              {pendingRequestCount > 0 && <span className="text-[10px] bg-warnsoft text-warn px-1.5 py-0.5 rounded-full whitespace-nowrap">{pendingRequestCount}</span>}
+            </span>
           </button>
         )}
         <div className="flex items-center gap-2.5 px-2 py-1.5 rounded-md w-full text-[13px] text-txt2">

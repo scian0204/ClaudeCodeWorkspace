@@ -13,6 +13,7 @@ import { getProvider, setProvider, clearProvider } from './provider.js';
 import { syncPrimer } from '../claude/window-primer.js';
 import * as cs from '../codeserver/manager.js';
 import { cfg, publicConfig } from '../lib/config-registry.js';
+import { cachedStatus } from '../admin/self-update.js';
 import { dockerStatus } from '../lib/docker-status.js';
 import { paths, ensureUserLayout } from '../lib/paths.js';
 import { EXT_MIME, IMAGE_EXTS, pickImage } from '../lib/images.js';
@@ -61,10 +62,17 @@ export async function authRoutes(app: FastifyInstance) {
   // client-facing config subset (drives the model dropdown) — any authed user.
   // Docker readiness rides along so the UI can disable the editor views with a reason instead of
   // offering a button that fails on click; the daemon version/error stay in the admin overview.
+  // For admins the "an update is published" flag rides along too, so the sidebar's admin-panel
+  // button can show it without opening the panel. Read from the last cached check only — this
+  // endpoint is on the load path and must never talk to a registry.
   app.get('/api/config', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
     const dk = dockerStatus();
-    return { ...publicConfig(), dockerReady: dk.ok && dk.configured, dockerReason: dk.reason };
+    const upd = u.role === 'admin' ? cachedStatus() : null;
+    return {
+      ...publicConfig(), dockerReady: dk.ok && dk.configured, dockerReason: dk.reason,
+      updateAvailable: !!upd?.updateAvailable, updateLatest: upd?.latest || null,
+    };
   });
 
   // ── self-service preferences (My Page) ──
