@@ -702,19 +702,28 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
       .push({ id: genId('mk'), scope, name: String(b.name || '').trim() || repoLast(url), url: url || '' });
     return ok({});
   }
-  if (seg[1] === 'marketplaces' && seg[2] && M === 'PATCH') {
-    const m: any = [...db.marketplaces.common, ...db.marketplaces.mine].find((x: any) => x.id === idAt(2));
-    if (!m) return { status: 404, data: { error: 'not found' } };
-    const url = fullRepo(b.url) || (/^[\w-][\w.-]*\/[\w-][\w.-]*$/.test(String(b.name || '').trim()) ? fullRepo(b.name) : '');
-    m.name = String(b.name || '').trim() || repoLast(url); m.url = url || '';
-    return ok({ marketplace: m });
-  }
+  if (seg[1] === 'marketplaces' && seg[3] === 'plugins' && M === 'GET') return ok(db.marketCatalogs[idAt(2)] || { name: '', description: '', plugins: [] });
+  if (seg[1] === 'marketplaces' && seg[3] === 'refresh' && M === 'POST') return slow(ok(db.marketCatalogs[idAt(2)] || { name: '', description: '', plugins: [] }), 700);
   if (seg[1] === 'marketplaces' && seg[2] && M === 'DELETE') {
     db.marketplaces.common = db.marketplaces.common.filter((x: any) => x.id !== idAt(2));
     db.marketplaces.mine = db.marketplaces.mine.filter((x: any) => x.id !== idAt(2));
     return ok({});
   }
-  if (P === '/api/plugins/install' && M === 'POST') { const arr = b.scope === 'common' ? db.plugins.common : db.plugins.mine; arr.push({ id: genId('pl'), name: String(b.name || '').trim() || repoLast(b.repo), source: 'marketplace', enabled: 1, forced: 0, repo: fullRepo(b.repo) }); return ok({}); }
+  if (P === '/api/plugins/install' && M === 'POST') {
+    const arr = b.scope === 'common' ? db.plugins.common : db.plugins.mine;
+    const ref = String(b.repo || b.plugin || '').trim();
+    const market = /^[^@:/]+@[^@:/]+$/.test(ref) ? ref.split('@') : null;   // "<plugin>@<marketplace>"
+    if (b.marketplaceId || market) {
+      const id = b.marketplaceId || Object.keys(db.marketCatalogs).find((k) => db.marketCatalogs[k].name === market![1]);
+      const want = String(b.marketplaceId ? (b.plugin || b.name || ref) : market![0]);
+      const entry = id && db.marketCatalogs[id]?.plugins.find((p: any) => p.name.toLowerCase() === want.toLowerCase());
+      if (!entry) return { status: 404, data: { error: `등록된 마켓플레이스가 아닙니다: ${b.marketplaceId || market?.[1]}` } };
+      arr.push({ id: genId('pl'), name: entry.name, source: 'marketplace', enabled: 1, forced: 0, repo: typeof entry.source === 'object' ? entry.source.url : null });
+      return ok({});
+    }
+    arr.push({ id: genId('pl'), name: String(b.name || '').trim() || repoLast(ref), source: 'marketplace', enabled: 1, forced: 0, repo: fullRepo(ref) });
+    return ok({});
+  }
   if (P === '/api/plugins/upload' && M === 'POST') { const arr = (b.scope === 'common') ? db.plugins.common : db.plugins.mine; arr.push({ id: genId('pl'), name: b.name || 'uploaded', source: 'local', enabled: 1, forced: 0, repo: null }); return ok({}); }
   if (seg[1] === 'plugins' && seg[3] === 'detail') return ok(pluginDetail(idAt(2)));
   if (seg[1] === 'plugins' && seg[3] === 'tree') return ok(levelFrom(TREE_PLUGIN, query.get('path') || ''));

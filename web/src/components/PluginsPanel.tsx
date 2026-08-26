@@ -4,7 +4,7 @@ import { api } from '../lib/api';
 import { PluginDetail } from './PluginDetail';
 import { MobileMenuButton } from '../lib/ui';
 import { useT } from '../lib/i18n';
-import { IconArrowLeft, IconPuzzle, IconCheck, IconLock, IconGlobe } from '../lib/icons';
+import { IconArrowLeft, IconPuzzle, IconCheck, IconLock, IconGlobe, IconRefresh, IconChevronRight } from '../lib/icons';
 
 export function PluginsPanel() {
   const setPanel = useStore((s) => s.setPanel);
@@ -111,7 +111,7 @@ function InstallForms({ scope, mkt, onChange, onErr }: { scope: 'common' | 'user
       {mkt.length > 0 && (
         <div className="space-y-1">
           <div className="text-[11px] text-txt3">{t('plugins.marketsLabel')}</div>
-          {mkt.map((m) => <MarketRow key={m.id} m={m} onChange={onChange} onErr={onErr} />)}
+          {mkt.map((m) => <MarketRow key={m.id} m={m} scope={scope} onChange={onChange} onErr={onErr} />)}
         </div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-1.5">
@@ -134,36 +134,59 @@ function InstallForms({ scope, mkt, onChange, onErr }: { scope: 'common' | 'user
   );
 }
 
-// One registered marketplace: rename/re-point it, or drop it. Editing follows the add form's rule —
-// either field alone is enough, and the server fills in the other.
-function MarketRow({ m, onChange, onErr }: { m: any; onChange: () => void; onErr: (e: any) => void }) {
-  const [edit, setEdit] = useState<{ name: string; url: string } | null>(null);
+// One registered marketplace: pull its repo's latest (new plugins pushed there appear after that),
+// browse what it offers, install one by a button, or drop the registration.
+function MarketRow({ m, scope, onChange, onErr }: { m: any; scope: 'common' | 'user'; onChange: () => void; onErr: (e: any) => void }) {
+  const [cat, setCat] = useState<{ plugins: any[] } | null>(null);
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
   const t = useT();
-  const save = async () => {
-    if (!edit || (!edit.name.trim() && !edit.url.trim())) return;
-    try { await api.patch(`/api/marketplaces/${m.id}`, edit); setEdit(null); onChange(); } catch (e) { onErr(e); }
-  };
-  const del = async () => { try { await api.del(`/api/marketplaces/${m.id}`); onChange(); } catch (e) { onErr(e); } };
 
-  if (edit) return (
-    <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-1.5">
-      <input className="input !py-1.5 !text-xs" placeholder={t('plugins.marketNamePlaceholder')} value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} />
-      <input className="input !py-1.5 !text-xs" placeholder={t('plugins.marketUrlPlaceholder')} value={edit.url} onChange={(e) => setEdit({ ...edit, url: e.target.value })} />
-      <div className="flex items-center gap-3">
-        <button className="btn-ghost !py-1.5 !text-xs" onClick={save}>{t('common.save')}</button>
-        <button className="text-[11px] text-txt3 hover:text-clay" onClick={() => setEdit(null)}>{t('common.cancel')}</button>
-      </div>
-    </div>
-  );
+  // ?refresh=1 pulls the repo first; without it the cached clone answers (and is cloned if missing)
+  const load = async (refresh: boolean) => {
+    setBusy(true);
+    try { setCat(await api.get(`/api/marketplaces/${m.id}/plugins${refresh ? '?refresh=1' : ''}`)); setOpen(true); }
+    catch (e) { onErr(e); } finally { setBusy(false); }
+  };
+  const install = async (name: string) => {
+    setBusy(true);
+    try { await api.post('/api/plugins/install', { scope, marketplaceId: m.id, plugin: name }); onChange(); }
+    catch (e) { onErr(e); } finally { setBusy(false); }
+  };
+
   return (
-    <div className="flex items-center gap-2 text-xs">
-      <IconGlobe size={12} className="text-txt3 shrink-0" />
-      <span className="text-txt2 shrink-0">{m.name}</span>
-      {m.url && <span className="text-txt3 truncate" title={m.url}>{m.url}</span>}
-      <div className="ml-auto flex items-center gap-3 shrink-0">
-        <button className="text-[11px] text-txt3 hover:text-clay" onClick={() => setEdit({ name: m.name, url: m.url || '' })}>{t('common.edit')}</button>
-        <button className="text-[11px] text-txt3 hover:text-danger" onClick={del}>{t('common.delete')}</button>
+    <div className="border-b border-line last:border-0 pb-1">
+      <div className="flex items-center gap-2 text-xs">
+        <button className="text-txt3 shrink-0 inline-flex" aria-label={t('plugins.marketBrowse')} disabled={busy}
+          onClick={() => (open ? setOpen(false) : (cat ? setOpen(true) : load(false)))}>
+          <span className={`inline-flex transition-transform ${open ? 'rotate-90' : ''}`}><IconChevronRight size={13} /></span>
+        </button>
+        <IconGlobe size={12} className="text-txt3 shrink-0" />
+        <span className="text-txt2 shrink-0">{m.name}</span>
+        {m.url && <span className="text-txt3 truncate" title={m.url}>{m.url}</span>}
+        <div className="ml-auto flex items-center gap-3 shrink-0">
+          <button className="text-[11px] text-txt3 hover:text-clay inline-flex items-center gap-1" disabled={busy} onClick={() => load(true)}>
+            <IconRefresh size={11} />{busy ? t('plugins.marketSyncing') : t('plugins.marketUpdate')}
+          </button>
+          <button className="text-[11px] text-txt3 hover:text-danger" disabled={busy}
+            onClick={async () => { try { await api.del(`/api/marketplaces/${m.id}`); onChange(); } catch (e) { onErr(e); } }}>{t('common.delete')}</button>
+        </div>
       </div>
+      {open && cat && (
+        <div className="mt-1 ml-6 space-y-1">
+          {cat.plugins.length === 0 && <div className="text-[11px] text-txt3">{t('plugins.marketNoPlugins')}</div>}
+          {cat.plugins.map((p: any) => (
+            <div key={p.name} className="flex items-start gap-2 text-[11px]">
+              <IconPuzzle size={11} className="text-txt3 mt-0.5 shrink-0" />
+              <div className="min-w-0">
+                <div className="text-txt2">{p.name}</div>
+                {p.description && <div className="text-txt3 line-clamp-2">{p.description}</div>}
+              </div>
+              <button className="ml-auto shrink-0 text-[11px] text-clay hover:underline" disabled={busy} onClick={() => install(p.name)}>{t('plugins.install')}</button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

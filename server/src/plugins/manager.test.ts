@@ -1,7 +1,7 @@
 // Runnable check (no framework): npx tsx server/src/plugins/manager.test.ts
 // Covers the DB-free half of plugin install: how a repo reference typed into the UI is read.
 import assert from 'node:assert';
-import { isRepoRef, normalizeRepo, repoName } from './manager.js';
+import { isRepoRef, normalizeRepo, parseMarketRef, repoName } from './manager.js';
 
 // GitHub shorthand — the whole point: "foo/bar" needs no full URL
 assert.equal(normalizeRepo('foo/bar'), 'https://github.com/foo/bar');
@@ -21,5 +21,13 @@ assert.equal(repoName('https://github.com/foo/bar.git'), 'bar');
 assert.equal(repoName('https://github.com/foo/bar/'), 'bar');
 assert.equal(repoName('git@github.com:foo/bar.git'), 'bar');
 assert.equal(repoName(''), '');
+
+// "<plugin>@<marketplace>" — what the install box takes for a plugin from a registered marketplace
+assert.deepEqual(parseMarketRef('test@bar'), { plugin: 'test', market: 'bar' });
+assert.deepEqual(parseMarketRef('  caveman@caveman  '), { plugin: 'caveman', market: 'caveman' });
+// repo refs must NOT be read as market refs, or a git address would install nothing
+for (const notMarket of ['foo/bar', 'https://github.com/foo/bar', 'git@github.com:foo/bar.git', 'plain', '@bar', 'test@', '']) {
+  assert.equal(parseMarketRef(notMarket), null, `should not be a market ref: ${notMarket}`);
+}
 
 console.log('ok: plugin repo refs');

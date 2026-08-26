@@ -262,8 +262,24 @@ export const db = {
       { id: 'mk_anthropic', scope: 'common', name: 'anthropic', url: 'https://github.com/anthropics/claude-code' },
       { id: 'mk_community', scope: 'common', name: 'community', url: 'https://github.com/example/claude-plugins' },
     ] as any[],
-    mine: [] as any[],
+    mine: [
+      { id: 'mk_mine', scope: 'user', name: 'my-tools', url: 'https://github.com/acme/claude-plugins' },
+    ] as any[],
   },
+  // what each marketplace repo's .claude-plugin/marketplace.json lists
+  marketCatalogs: {
+    mk_anthropic: { name: 'anthropic', description: 'Official examples', plugins: [
+      { name: 'code-review', description: 'Review a diff against the repo conventions', source: './' },
+      { name: 'commit-helper', description: 'Draft a commit message from the staged diff', source: './commit-helper' },
+    ] },
+    mk_community: { name: 'community', description: 'Community plugins', plugins: [
+      { name: 'ecc-toolkit', description: 'Agents, skills and hooks for everyday work', source: { source: 'url', url: 'https://github.com/example/ecc.git' } },
+      { name: 'caveman', description: 'Terse output mode', source: './caveman' },
+    ] },
+    mk_mine: { name: 'my-tools', description: 'My own plugins', plugins: [
+      { name: 'deploy-notes', description: 'Turn a release diff into deploy notes', source: './deploy-notes' },
+    ] },
+  } as Record<string, any>,
   reviewRepos: [
     { id: 'rr_web', name: 'acme/webapp', provider: 'github', host: 'github.com', slug: 'acme/webapp', gitUrl: 'https://github.com/acme/webapp.git', baseBranch: 'main', sandboxImage: null, webhookSecret: null, pollEnabled: true, polledAt: ago(2), pollError: null, openCount: 2, createdAt: ago(600) },
   ] as any[],

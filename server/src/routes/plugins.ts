@@ -84,13 +84,21 @@ export async function pluginRoutes(app: FastifyInstance) {
     } catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
   });
 
-  app.patch('/api/marketplaces/:id', async (req, reply) => {
+  // what a marketplace offers (.claude-plugin/marketplace.json in its repo). ?refresh=1 pulls first.
+  app.get('/api/marketplaces/:id/plugins', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
-    const { name, url } = (req.body || {}) as any;
     const m = pm.getMarketplace((req.params as any).id); if (!m) return reply.code(404).send({ error: 'not found' });
     if (!canMutateMarket(u, m)) return reply.code(403).send({ error: 'forbidden' });
-    if (!String(name || '').trim() && !String(url || '').trim()) return reply.code(400).send({ error: 'name or url required' });
-    try { return { marketplace: pm.updateMarketplace(m.id, String(name || ''), String(url || '')) }; }
+    try { return await pm.marketplaceCatalog(m.id, String((req.query as any)?.refresh || '') === '1'); }
+    catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
+  });
+
+  // pull the marketplace repo's latest — new plugins pushed there show up after this
+  app.post('/api/marketplaces/:id/refresh', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    const m = pm.getMarketplace((req.params as any).id); if (!m) return reply.code(404).send({ error: 'not found' });
+    if (!canMutateMarket(u, m)) return reply.code(403).send({ error: 'forbidden' });
+    try { await pm.syncMarketplace(m.id); return await pm.marketplaceCatalog(m.id); }
     catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
   });
 
@@ -102,15 +110,33 @@ export async function pluginRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  // install from git — repo is "owner/repo" (GitHub) or a full git URL; name defaults to the repo name
+  // install a plugin. `repo` is a marketplace ref "<plugin>@<marketplace>", GitHub shorthand
+  // "owner/repo", or a full git URL. `marketplaceId` + `plugin` names one explicitly (row buttons).
   app.post('/api/plugins/install', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
-    const { scope, name, repo } = (req.body || {}) as any;
+    const { scope, name, repo, plugin, marketplaceId } = (req.body || {}) as any;
     if (scope === 'common' && !requireAdmin(req, reply)) return;
-    if (!repo) return reply.code(400).send({ error: 'repo required' });
-    if (!pm.isRepoRef(String(repo))) return reply.code(400).send({ error: 'repo must be "owner/repo" or a git URL' });
+    const common = scope === 'common';
+    const ref = String(repo || plugin || '').trim();
+    if (!ref) return reply.code(400).send({ error: 'repo required' });
+
+    // from a registered marketplace, by id or by the name in "<plugin>@<marketplace>"
+    const market = pm.parseMarketRef(ref);
+    if (marketplaceId || market) {
+      const rows = [...pm.listMarketplaces('user', u.id), ...pm.listMarketplaces('common')];
+      const m = marketplaceId
+        ? rows.find((r) => r.id === marketplaceId)
+        : rows.find((r) => r.name.toLowerCase() === market!.market.toLowerCase());
+      if (!m) return reply.code(404).send({ error: `등록된 마켓플레이스가 아닙니다: ${marketplaceId || market!.market}` });
+      if (m.scope === 'common' && u.role !== 'admin' && common) return reply.code(403).send({ error: 'admin only' });
+      const want = marketplaceId ? String(plugin || name || ref) : market!.plugin;
+      try { return { plugin: await pm.installFromMarketplace(common ? 'common' : 'user', common ? null : u.id, m.id, want) }; }
+      catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
+    }
+
+    if (!pm.isRepoRef(ref)) return reply.code(400).send({ error: 'use "<plugin>@<marketplace>", "owner/repo", or a git URL' });
     try {
-      const row = await pm.installFromGit(scope === 'common' ? 'common' : 'user', scope === 'common' ? null : u.id, String(name || ''), String(repo));
+      const row = await pm.installFromGit(common ? 'common' : 'user', common ? null : u.id, String(name || ''), ref);
       return { plugin: row };
     } catch (e: any) { return reply.code(500).send({ error: String(e?.message || e) }); }
   });

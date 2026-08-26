@@ -74,6 +74,7 @@ export const API_ROUTES: ApiRoute[] = [
   r('GET', '/api/plugins/:id/tree', 'the file tree of an installed plugin — use it to see what a skill actually contains.'),
   r('GET', '/api/plugins/:id/file', 'one file of an installed plugin as text. Query: ?path=<relative path>.'),
   r('GET', '/api/marketplaces', 'registered plugin marketplaces: { common, mine }.'),
+  r('GET', '/api/marketplaces/:id/plugins', 'what a marketplace offers: { name, description, plugins:[{ name, description }] } read from its .claude-plugin/marketplace.json. Add ?refresh=1 to pull the repo first.'),
   r('GET', '/api/review/sessions', 'PR review sessions visible to the user (verdict, merge state).'),
   r('GET', '/api/review/sessions/:id', 'one PR review: the PR (number, title, url, branches), its verdict + summary, merge state, and whether this user may act on it.'),
   r('GET', '/api/review/repos', 'watched PR-review repositories.', true),
@@ -126,12 +127,12 @@ export const API_ROUTES: ApiRoute[] = [
   r('PUT', '/api/pools/opt-out', "keep this user's own plan out of the workspace-wide pool. Body: { optOut: boolean }."),
 
   // ── write: plugins / skills ──
-  r('POST', '/api/plugins/install', 'install a plugin (its skills come with it) from a git repo. Body: { scope:"user"|"common", repo, name? } — repo is GitHub shorthand "foo/bar" or a full git URL, and name defaults to the repo name. scope "common" is admin-only; for a member always use "user".'),
+  r('POST', '/api/plugins/install', 'install a plugin (its skills come with it). Body: { scope:"user"|"common", repo, name? } — repo is "<plugin>@<marketplace>" for a plugin from a registered marketplace, GitHub shorthand "foo/bar", or a full git URL; name defaults to the repo name. { marketplaceId, plugin } names one from a marketplace explicitly. scope "common" is admin-only; for a member always use "user".'),
   r('POST', '/api/plugins/:id/enabled', 'enable/disable a plugin you own (or, as admin, a common one). Body: { enabled }.'),
   r('POST', '/api/plugins/:id/pref', 'your personal on/off for a COMMON plugin. Body: { enabled }.'),
   r('POST', '/api/plugins/:id/update', 'pull the latest of a git-installed plugin (no body).'),
   r('POST', '/api/marketplaces', 'register a plugin marketplace. Body: { scope:"user"|"common", name?, url? } — either field alone is enough; a name like "foo/bar" fills in the GitHub url, a url alone names it after the repo.'),
-  r('PATCH', '/api/marketplaces/:id', 'rename a registered marketplace or re-point it. Body: { name?, url? } — same rule as adding: either field alone is enough.'),
+  r('POST', '/api/marketplaces/:id/refresh', 'pull a registered marketplace repo to its latest, then return its catalog — do this when plugins were pushed there after it was added.'),
 
   // ── write: admin ──
   r('POST', '/api/requests/:id/decide', 'approve or reject a member request. Body: { approve: boolean, note? }.', true),

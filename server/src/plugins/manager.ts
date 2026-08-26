@@ -5,6 +5,7 @@ import { promisify } from 'node:util';
 import { and, eq } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { paths, ensure } from '../lib/paths.js';
+import { resolveUnder } from '../lib/filetree.js';
 import { newId } from '../lib/ids.js';
 
 const run = promisify(execFile);
@@ -33,6 +34,16 @@ export function listMarketplaces(scope: 'common' | 'user', ownerId?: string) {
 const SHORTHAND = /^[\w-][\w.-]*\/[\w-][\w.-]*$/;
 const URLISH = /^(https?|ssh|git):\/\/[^\s]+$/;
 const SCPISH = /^[\w.-]+@[\w.-]+:[^\s]+$/;      // git@github.com:foo/bar.git
+
+// "<plugin>@<marketplace>" — how a plugin from a registered marketplace is named. Not a repo ref and
+// not an scp-style git address (those have a ':' after the host), so the install box takes either.
+export function parseMarketRef(raw: string): { plugin: string; market: string } | null {
+  const v = String(raw || '').trim();
+  if (!v || v.includes('://') || v.includes(':') || v.includes('/')) return null;
+  const at = v.lastIndexOf('@');
+  if (at <= 0 || at === v.length - 1) return null;
+  return { plugin: v.slice(0, at), market: v.slice(at + 1) };
+}
 
 export function isRepoRef(s: string): boolean {
   const v = String(s || '').trim();
@@ -68,23 +79,9 @@ export function getMarketplace(id: string) {
   return db.select().from(schema.marketplaces).where(eq(schema.marketplaces.id, id)).get();
 }
 
-// Edit a registered marketplace in place. Same rules as adding: either field may carry the repo ref,
-// and a blank name falls back to the repo's name.
-export function updateMarketplace(id: string, nameIn: string, urlIn: string) {
-  const row = getMarketplace(id);
-  if (!row) throw new Error('marketplace not found');
-  const rawName = String(nameIn ?? '').trim();
-  const rawUrl = String(urlIn ?? '').trim();
-  const src = rawUrl || (isRepoRef(rawName) ? rawName : '');
-  const url = src ? normalizeRepo(src) : '';
-  const name = rawName || repoName(url);
-  if (!name) throw new Error('마켓 이름 또는 저장소 주소가 필요합니다');
-  db.update(schema.marketplaces).set({ name, url }).where(eq(schema.marketplaces.id, id)).run();
-  return { ...row, name, url };
-}
-
 export function removeMarketplace(id: string) {
   db.delete(schema.marketplaces).where(eq(schema.marketplaces.id, id)).run();
+  fs.rmSync(paths.marketplaceDir(id), { recursive: true, force: true });   // installed plugins stay
 }
 
 async function record(scope: 'common' | 'user', ownerId: string | null, name: string, source: 'marketplace' | 'local', repo: string | null, dest: string) {
@@ -104,6 +101,96 @@ export async function installFromGit(scope: 'common' | 'user', ownerId: string |
   ensure(path.dirname(dest));
   await run('git', ['clone', '--depth', '1', '--', url, dest]);
   return record(scope, ownerId, name, 'marketplace', url, dest);
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Installing from a marketplace. A marketplace is a git repo whose .claude-plugin/marketplace.json
+// lists the plugins it offers; each entry's `source` is either a path inside that repo ("./", "./x")
+// or another repo ({source:"url"|"git",url,ref} / {source:"github",repo} / "owner/repo"). We keep a
+// shallow clone per marketplace and install out of it, so "<plugin>@<marketplace>" is all a user types.
+
+const GIT_ENV = { env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '/bin/echo' } };
+
+export type MarketPlugin = { name: string; description: string; source: any };
+
+// Clone the marketplace repo, or refresh an existing clone to the remote's latest.
+export async function syncMarketplace(id: string): Promise<string> {
+  const m = getMarketplace(id);
+  if (!m) throw new Error('marketplace not found');
+  if (!m.url) throw new Error('이 마켓에는 저장소 주소가 없습니다 — 수정해서 주소를 넣어주세요');
+  const dir = paths.marketplaceDir(m.id);
+  if (fs.existsSync(path.join(dir, '.git'))) {
+    await run('git', ['-C', dir, 'fetch', '--depth', '1', 'origin', 'HEAD'], GIT_ENV);
+    await run('git', ['-C', dir, 'reset', '--hard', 'FETCH_HEAD'], GIT_ENV);
+    await run('git', ['-C', dir, 'clean', '-fd'], GIT_ENV);
+  } else {
+    fs.rmSync(dir, { recursive: true, force: true });
+    ensure(paths.marketplaces);
+    await run('git', ['clone', '--depth', '1', '--', m.url, dir], GIT_ENV);
+  }
+  return dir;
+}
+
+// What the marketplace offers. Reads the clone; clones first if it is not there yet.
+export async function marketplaceCatalog(id: string, refresh = false): Promise<{ name: string; description: string; plugins: MarketPlugin[] }> {
+  const dir = paths.marketplaceDir(id);
+  if (refresh || !fs.existsSync(path.join(dir, '.claude-plugin', 'marketplace.json'))) await syncMarketplace(id);
+  let raw: any;
+  try { raw = JSON.parse(fs.readFileSync(path.join(dir, '.claude-plugin', 'marketplace.json'), 'utf8')); }
+  catch { throw new Error('이 저장소에는 .claude-plugin/marketplace.json 이 없습니다'); }
+  const plugins: MarketPlugin[] = (Array.isArray(raw?.plugins) ? raw.plugins : [])
+    .filter((p: any) => p && typeof p.name === 'string')
+    .map((p: any) => ({ name: p.name, description: String(p.description || ''), source: p.source ?? './' }));
+  return { name: String(raw?.name || ''), description: String(raw?.description || raw?.metadata?.description || ''), plugins };
+}
+
+// One marketplace entry's `source` → either a directory inside the clone, or a repo to clone.
+function resolveSource(src: any, marketDir: string): { dir: string } | { url: string; ref?: string } {
+  if (typeof src === 'string') {
+    const v = src.trim();
+    if (v === '' || v === '.' || v === './') return { dir: marketDir };
+    if (v.startsWith('./') || v.startsWith('../') || !isRepoRef(v)) {
+      const full = resolveUnder(marketDir, v.replace(/^\.\//, ''));   // never let an entry point outside its clone
+      if (!full) throw new Error(`마켓 안에서 찾을 수 없는 경로입니다: ${v}`);
+      return { dir: full };
+    }
+    return { url: normalizeRepo(v) };
+  }
+  const kind = String(src?.source || '');
+  if (kind === 'github' && src?.repo) return { url: normalizeRepo(String(src.repo)), ref: src.ref ? String(src.ref) : undefined };
+  if ((kind === 'url' || kind === 'git') && src?.url) return { url: normalizeRepo(String(src.url)), ref: src.ref ? String(src.ref) : undefined };
+  if (src?.path || src?.source === 'local') {
+    const full = resolveUnder(marketDir, String(src.path || '.').replace(/^\.\//, ''));
+    if (!full) throw new Error('마켓 안에서 찾을 수 없는 경로입니다');
+    return { dir: full };
+  }
+  throw new Error('알 수 없는 플러그인 소스 형식입니다');
+}
+
+// Install "<plugin>@<marketplace>": look the plugin up in the marketplace's catalog and take it from
+// wherever that entry points — a folder in the marketplace repo, or a repo of its own.
+export async function installFromMarketplace(
+  scope: 'common' | 'user', ownerId: string | null, marketplaceId: string, pluginName: string,
+) {
+  const want = String(pluginName || '').trim().toLowerCase();
+  if (!want) throw new Error('플러그인 이름이 필요합니다');
+  const cat = await marketplaceCatalog(marketplaceId);
+  const entry = cat.plugins.find((p) => p.name.toLowerCase() === want);
+  if (!entry) throw new Error(`마켓에 "${pluginName}" 플러그인이 없습니다`);
+  const resolved = resolveSource(entry.source, paths.marketplaceDir(marketplaceId));
+  const dest = pluginDest(scope, ownerId, entry.name);
+  ensure(path.dirname(dest));
+  if ('dir' in resolved) {
+    if (!fs.existsSync(resolved.dir)) throw new Error('마켓 안에 플러그인 폴더가 없습니다');
+    fs.rmSync(dest, { recursive: true, force: true });
+    // the clone's own .git would make the copy look like a git plugin it is not
+    fs.cpSync(resolved.dir, dest, { recursive: true, filter: (src) => path.basename(src) !== '.git' });
+    return record(scope, ownerId, entry.name, 'marketplace', null, dest);
+  }
+  const args = ['clone', '--depth', '1'];
+  if (resolved.ref) args.push('--branch', resolved.ref);
+  await run('git', [...args, '--', resolved.url, dest], GIT_ENV);
+  return record(scope, ownerId, entry.name, 'marketplace', resolved.url, dest);
 }
 
 export function getPlugin(id: string) {

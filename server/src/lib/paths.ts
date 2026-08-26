@@ -27,6 +27,9 @@ export const paths = {
   backupStaging: path.join(D, '.backup-staging'),   // transient: DB snapshot + meta while a backup streams
   restoreStaging: path.join(D, '.restore-staging'), // transient: uploaded archive + extraction until applied/discarded
   preRestore: path.join(D, '.pre-restore'),         // one-shot rollback: the previous state, kept after a restore
+  // marketplace clones: read-only source of truth for what a marketplace offers (.claude-plugin/marketplace.json)
+  marketplaces: path.join(D, '.marketplaces'),
+  marketplaceDir: (id: string) => path.join(D, '.marketplaces', id),
   reviews: path.join(D, 'reviews'),
   reviewRepo: (id: string) => path.join(D, 'reviews', id, 'repo'),      // the full clone
   reviewWorktrees: (id: string) => path.join(D, 'reviews', id, 'wt'),   // per-PR worktrees root

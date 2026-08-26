@@ -149,8 +149,11 @@ the chat–split–editor switch. Bottom-right corner: this guide panel.
   takes the repo's name. Personal scope is yours alone; common scope is workspace-wide and admin-only,
   and an admin can force a common plugin on for everyone.
 - **Marketplaces** — registered plugin sources to install from. Adding one takes either field alone:
-  a name like \`foo/bar\` fills in the address, an address alone names it after the repo. Each row can
-  be renamed or re-pointed later (Edit), or dropped (Delete).
+  a name like \`foo/bar\` fills in the address, an address alone names it after the repo. Open the arrow
+  on a row to see what that marketplace offers and install any of it with one button; **Update** pulls
+  the marketplace repo again, so plugins pushed there after you added it show up; **Delete** drops the
+  registration (installed plugins stay). A plugin from a marketplace also installs by typing
+  \`<plugin>@<marketplace>\` in the install box.
 - **Team agents** — named agents (description, system prompt, allowed tools, model) that every chat
   gets as subagents: personal, common (admin-managed), or per project. A chat-header pill can put one
   in charge of the main thread. Agent files on disk (.claude/agents/*.md) appear read-only
@@ -227,9 +230,13 @@ const RECIPES = `
   \`name\` only if the user asked for one), then POST /api/sessions { projectId: <new project id> },
   then ui refresh, then ui openSession <session id>. If the clone fails because the repo is private,
   say so and point at My Page for the git credential.
-- "add this skill/plugin <repo>": POST /api/plugins/install { scope:"user", repo:<"owner/repo" or a
-  full git url> }, then ui refresh — leave \`name\` out and it takes the repo's name. A common
-  (workspace-wide) install is admin-only.
+- "add this skill/plugin <repo>": POST /api/plugins/install { scope:"user", repo:<"owner/repo", a full
+  git url, or "<plugin>@<marketplace>"> }, then ui refresh — leave \`name\` out and it takes the repo's
+  name. A common (workspace-wide) install is admin-only.
+- "what's in <marketplace>" / "install <x> from <marketplace>": GET /api/marketplaces to find its id,
+  GET /api/marketplaces/:id/plugins for the list, then POST /api/plugins/install { scope:"user",
+  marketplaceId, plugin }. If the plugin they name is not listed, POST /api/marketplaces/:id/refresh
+  and look again before saying it does not exist.
 - "make me an agent that <does X>": POST /api/agents { scope:"user", name, description, prompt } —
   write the system prompt yourself from what they described, leave \`tools\` empty unless they asked to
   restrict it, then ui openPanel agents so they can see it. Common and project scope need more rights.
