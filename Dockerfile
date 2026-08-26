@@ -24,7 +24,15 @@ RUN apt-get update && apt-get install -y python3 make g++ ca-certificates git &&
 COPY package.json ./
 COPY server/package.json server/
 COPY web/package.json web/
-RUN npm install -w server --omit=dev=false && npm cache clean --force
+# better-sqlite3 ships a prebuilt binary, and `npm install` has silently produced a package with no
+# build/ at all (image builds fine, then every container crash-loops on "Could not locate the bindings
+# file"). Compile it from source when the module will not load, then load it again with no fallback so
+# a still-broken driver fails the build here instead of at runtime.
+RUN npm install -w server --omit=dev=false \
+ && (node -e "new (require('better-sqlite3'))(':memory:').close()" \
+     || npm rebuild better-sqlite3 --build-from-source) \
+ && node -e "new (require('better-sqlite3'))(':memory:').close()" \
+ && npm cache clean --force
 RUN npm install -g @anthropic-ai/claude-code
 COPY server server
 COPY --from=webbuild /app/web/dist web/dist
