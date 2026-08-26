@@ -4,7 +4,7 @@
 
 # Update notes
 
-Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and now — **v1.25.1** (2026-08-21) — all **432 commits**.
+Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and now — **v1.25.1** (2026-08-21) — all **433 commits**.
 
 Each row shows only its **title and commit hash**; click the triangle for the detail (root cause, implementation, config keys).
 
@@ -26,7 +26,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 | Version | Date | Commits | Headline |
 |---|---|---|---|
-| [Unreleased](#unreleased) | — | 3 | Plugin marketplaces you can edit and delete, `foo/bar` in place of a full URL, and an app image that cannot ship without its database driver |
+| [Unreleased](#unreleased) | — | 4 | Marketplaces you can actually install from, `foo/bar` in place of a full URL, and an app image that cannot ship without its database driver |
 | [v1.25.1](#v1251--2026-08-21) | 2026-08-21 | 1 | The sidebar says an update is published, before the panel is open |
 | [v1.25.0](#v1250--2026-08-21) | 2026-08-21 | 5 | The choice card really asks — and a /btw button, and updates you cannot miss |
 | [v1.24.0](#v1240--2026-08-21) | 2026-08-21 | 5 | A chat hears when its project is changed somewhere else |
@@ -84,6 +84,31 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ---
 
 ## Unreleased
+
+<details>
+<summary><b>feat(plugins): a registered marketplace is now something you can install from</b> — browse it, install by <code>plugin@market</code>, pull its latest · <code>1e88def</code></summary>
+
+**What was wrong.** Registering a marketplace achieved nothing. The install box only accepted a git
+repo, so the usual way of naming a plugin from a marketplace — `<plugin>@<marketplace>` — failed, and
+nothing showed what a marketplace even offered. The row's **Edit** button from the previous entry was
+the wrong control: a marketplace is a git repo, so what it needs is a pull.
+
+**What it does now.** Each marketplace keeps a shallow clone under `<data>/.marketplaces`, and its
+`.claude-plugin/marketplace.json` is read from there. Open the arrow on a marketplace row to see the
+plugins it lists, each with its own **Install** button. Typing `<plugin>@<marketplace>` in the install
+box does the same thing. **Update** pulls the marketplace repo again, so plugins pushed there after
+you added it appear; **Delete** drops the registration and its clone, while installed plugins stay.
+
+A marketplace entry can point at a folder inside the marketplace repo (`"./"`, `"./x"` — copied
+without its `.git`) or at a repo of its own (`{source:"url"|"git",url,ref}`, `{source:"github",repo}`,
+`"owner/repo"`); all of those install. A folder entry is resolved under the clone, so an entry cannot
+reach outside it. New endpoints: `GET /api/marketplaces/:id/plugins` (add `?refresh=1` to pull first)
+and `POST /api/marketplaces/:id/refresh`; `POST /api/plugins/install` also takes
+`<plugin>@<marketplace>` or `{ marketplaceId, plugin }`. `PATCH /api/marketplaces/:id` and the Edit
+form are gone. Checked against two real marketplaces — one that ships its plugin as a folder, one
+that points at separate repos — reading each catalog and installing a plugin with its skills intact.
+
+</details>
 
 <details>
 <summary><b>fix(docker): a build with no database driver now fails instead of shipping</b> — the app image crash-looped on startup · <code>cfcac05</code></summary>
