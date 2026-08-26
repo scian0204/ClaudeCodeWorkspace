@@ -4,7 +4,7 @@
 
 # Update notes
 
-Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and now — **v1.25.1** (2026-08-21) — all **429 commits**.
+Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and now — **v1.25.1** (2026-08-21) — all **430 commits**.
 
 Each row shows only its **title and commit hash**; click the triangle for the detail (root cause, implementation, config keys).
 
@@ -15,6 +15,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ## Contents
 
 - [Timeline](#timeline)
+- [Unreleased](#unreleased)
 - **1.x releases** — [v1.25.1](#v1251--2026-08-21) · [v1.25.0](#v1250--2026-08-21) · [v1.24.0](#v1240--2026-08-21) · [v1.23.0](#v1230--2026-08-20) · [v1.22.0](#v1220--2026-08-20) · [v1.21.1](#v1211--2026-08-19) · [v1.21.0](#v1210--2026-08-19) · [v1.20.2](#v1202--2026-08-19) · [v1.20.1](#v1201--2026-08-19) · [v1.20.0](#v1200--2026-08-19) · [v1.19.13](#v11913--2026-08-19) · [v1.19.12](#v11912--2026-08-19) · [v1.19.11](#v11911--2026-08-19) · [v1.19.10](#v11910--2026-08-19) · [v1.19.9](#v1199--2026-08-18) · [v1.19.8](#v1198--2026-08-18) · [v1.19.7](#v1197--2026-08-18) · [v1.19.6](#v1196--2026-08-18) · [v1.19.5](#v1195--2026-08-14) · [v1.19.4](#v1194--2026-08-14) · [v1.19.3](#v1193--2026-08-14) · [v1.19.2](#v1192--2026-08-14) · [v1.19.1](#v1191--2026-08-14) · [v1.19.0](#v1190--2026-08-14) · [v1.18.0](#v1180--2026-08-14) · [v1.17.3](#v1173--2026-08-14) · [v1.17.2](#v1172--2026-08-14) · [v1.17.1](#v1171--2026-08-14) · [v1.17.0](#v1170--2026-08-14) · [v1.16.1](#v1161--2026-08-13) · [v1.16.0](#v1160--2026-08-13) · [v1.15.1](#v1151--2026-08-13) · [v1.15.0](#v1150--2026-08-13) · [v1.14.2](#v1142--2026-08-13) · [v1.14.1](#v1141--2026-08-13) · [v1.14.0](#v1140--2026-08-13) · [v1.13.0](#v1130--2026-08-13) · [v1.12.0](#v1120--2026-08-07) · [v1.11.0](#v1110--2026-08-06) · [v1.10.0](#v1100--2026-08-05) · [v1.9.1](#v191--2026-08-05) · [v1.9.0](#v190--2026-08-05) · [v1.8.0](#v180--2026-08-04) · [v1.7.0](#v170--2026-08-04) · [v1.6.0](#v160--2026-08-04) · [v1.5.0](#v150--2026-08-04) · [v1.4.0](#v140--2026-08-03) · [v1.3.1](#v131--2026-08-03) · [v1.3.0](#v130--2026-07-31) · [v1.2.0](#v120--2026-07-31) · [v1.1.1](#v111--2026-07-31) · [v1.1.0](#v110--2026-07-31)
 - [Early development (2026-07-20 → 07-31)](#early-development--2026-07-20--07-31)
 - [Where it diverged from the original design](#where-it-diverged-from-the-original-design)
@@ -25,6 +26,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 | Version | Date | Commits | Headline |
 |---|---|---|---|
+| [Unreleased](#unreleased) | — | 1 | A repo can be written as `foo/bar`, and the plugin forms stop demanding every field |
 | [v1.25.1](#v1251--2026-08-21) | 2026-08-21 | 1 | The sidebar says an update is published, before the panel is open |
 | [v1.25.0](#v1250--2026-08-21) | 2026-08-21 | 5 | The choice card really asks — and a /btw button, and updates you cannot miss |
 | [v1.24.0](#v1240--2026-08-21) | 2026-08-21 | 5 | A chat hears when its project is changed somewhere else |
@@ -80,6 +82,31 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 | [Early development](#early-development--2026-07-20--07-31) | 07-20 → 07-31 | 144 | P0–P5 skeleton · LLM Wiki · tokens · git · PR review · config · import · DM |
 
 ---
+
+## Unreleased
+
+<details>
+<summary><b>fix(plugins): a repo can be written as <code>foo/bar</code>, and the forms stop demanding every field</b> — plugin install · marketplace add · <code>e4d53f1</code></summary>
+
+**Symptom.** Adding a marketplace by hand refused to save unless a name *and* a git URL were both
+filled in, and installing a plugin wanted a full `https://github.com/…` URL plus a name typed by
+hand.
+
+**Cause.** Both forms checked every field before sending, and the install endpoint required `name`
+and `repo`. A marketplace address is only a bookmark here — nothing installs from it — so demanding
+it was friction for nothing.
+
+**Fix.** Anywhere a git URL is asked for, a GitHub repo can now be written short as `foo/bar`; it
+expands to `https://github.com/foo/bar`. Installing needs only the repo — leave the name blank and it
+takes the repo's name. Adding a marketplace needs only one of the two fields: a name like `foo/bar`
+fills in the address, an address alone names it after the repo. Anything git cannot clone over the
+network is refused with 400 before it reaches `git clone`: `ext::` (which makes git run a local
+command), a value starting with `-` (which git would read as an option), and bare paths. The clone
+also passes `--` before the url. New keys `plugins.repoPlaceholder`, `plugins.marketUrlPlaceholder`,
+`plugins.refHint` (ko+en), and the form carries a one-line hint. The guide agent, its API reference,
+and the static demo learned the short form too. Check: `npx tsx server/src/plugins/manager.test.ts`.
+
+</details>
 
 ## v1.25.1 — 2026-08-21
 
