@@ -27,7 +27,39 @@ export function listMarketplaces(scope: 'common' | 'user', ownerId?: string) {
     .where(and(eq(schema.marketplaces.scope, 'user'), eq(schema.marketplaces.ownerId, ownerId!))).all();
 }
 
-export function addMarketplace(scope: 'common' | 'user', ownerId: string | null, name: string, url: string) {
+// A repo can be written as GitHub shorthand ("foo/bar") anywhere a git URL is asked for. Anything
+// else must be a transport git can clone over the network — notably NOT `ext::`, which makes git run
+// a local command, and not a leading "-" that git would read as an option.
+const SHORTHAND = /^[\w-][\w.-]*\/[\w-][\w.-]*$/;
+const URLISH = /^(https?|ssh|git):\/\/[^\s]+$/;
+const SCPISH = /^[\w.-]+@[\w.-]+:[^\s]+$/;      // git@github.com:foo/bar.git
+
+export function isRepoRef(s: string): boolean {
+  const v = String(s || '').trim();
+  return SHORTHAND.test(v) || URLISH.test(v) || SCPISH.test(v);
+}
+
+export function normalizeRepo(input: string): string {
+  const s = String(input || '').trim();
+  if (SHORTHAND.test(s)) return `https://github.com/${s}`;
+  if (URLISH.test(s) || SCPISH.test(s)) return s;
+  throw new Error(`지원하지 않는 저장소 주소입니다: ${s || '(비어 있음)'} — "foo/bar" 또는 git URL`);
+}
+
+// Last path segment of a repo ref — the default plugin/marketplace name when none was typed.
+export function repoName(repo: string): string {
+  return (String(repo || '').trim().replace(/\/+$/, '').split(/[/:]/).pop() || '').replace(/\.git$/, '');
+}
+
+// name and url are interchangeable entry points: either alone registers the marketplace. A name that
+// is itself a repo ref ("foo/bar") fills in the url; a url alone names it after the repo.
+export function addMarketplace(scope: 'common' | 'user', ownerId: string | null, nameIn: string, urlIn: string) {
+  const rawName = String(nameIn || '').trim();
+  const rawUrl = String(urlIn || '').trim();
+  const src = rawUrl || (isRepoRef(rawName) ? rawName : '');
+  const url = src ? normalizeRepo(src) : '';
+  const name = rawName || repoName(url);
+  if (!name) throw new Error('마켓 이름 또는 저장소 주소가 필요합니다');
   const row = { id: newId(), scope, ownerId, name, url, createdAt: Date.now() };
   db.insert(schema.marketplaces).values(row).run();
   return row;
@@ -45,11 +77,14 @@ async function record(scope: 'common' | 'user', ownerId: string | null, name: st
   return row;
 }
 
-export async function installFromGit(scope: 'common' | 'user', ownerId: string | null, name: string, repo: string) {
+export async function installFromGit(scope: 'common' | 'user', ownerId: string | null, nameIn: string, repo: string) {
+  const url = normalizeRepo(repo);
+  const name = String(nameIn || '').trim() || repoName(url);
+  if (!name) throw new Error('플러그인 이름을 알 수 없습니다');
   const dest = pluginDest(scope, ownerId, name);
   ensure(path.dirname(dest));
-  await run('git', ['clone', '--depth', '1', repo, dest]);
-  return record(scope, ownerId, name, 'marketplace', repo, dest);
+  await run('git', ['clone', '--depth', '1', '--', url, dest]);
+  return record(scope, ownerId, name, 'marketplace', url, dest);
 }
 
 export function getPlugin(id: string) {

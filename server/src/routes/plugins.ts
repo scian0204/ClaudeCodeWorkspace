@@ -71,8 +71,12 @@ export async function pluginRoutes(app: FastifyInstance) {
     const u = requireAuth(req, reply); if (!u) return;
     const { scope, name, url } = (req.body || {}) as any;
     if (scope === 'common' && !requireAdmin(req, reply)) return;
-    const row = pm.addMarketplace(scope === 'common' ? 'common' : 'user', scope === 'common' ? null : u.id, String(name), String(url));
-    return { marketplace: row };
+    // either field alone is enough: a name like "foo/bar" fills in the url, a url alone names it
+    if (!String(name || '').trim() && !String(url || '').trim()) return reply.code(400).send({ error: 'name or url required' });
+    try {
+      const row = pm.addMarketplace(scope === 'common' ? 'common' : 'user', scope === 'common' ? null : u.id, String(name || ''), String(url || ''));
+      return { marketplace: row };
+    } catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
   });
 
   app.delete('/api/marketplaces/:id', async (req, reply) => {
@@ -81,14 +85,15 @@ export async function pluginRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  // install from git (marketplace repo url)
+  // install from git — repo is "owner/repo" (GitHub) or a full git URL; name defaults to the repo name
   app.post('/api/plugins/install', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
     const { scope, name, repo } = (req.body || {}) as any;
     if (scope === 'common' && !requireAdmin(req, reply)) return;
-    if (!name || !repo) return reply.code(400).send({ error: 'name/repo required' });
+    if (!repo) return reply.code(400).send({ error: 'repo required' });
+    if (!pm.isRepoRef(String(repo))) return reply.code(400).send({ error: 'repo must be "owner/repo" or a git URL' });
     try {
-      const row = await pm.installFromGit(scope === 'common' ? 'common' : 'user', scope === 'common' ? null : u.id, String(name), String(repo));
+      const row = await pm.installFromGit(scope === 'common' ? 'common' : 'user', scope === 'common' ? null : u.id, String(name || ''), String(repo));
       return { plugin: row };
     } catch (e: any) { return reply.code(500).send({ error: String(e?.message || e) }); }
   });

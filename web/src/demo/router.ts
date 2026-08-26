@@ -86,6 +86,11 @@ function levelFrom(files: { name: string; size: number }[], rel: string, opts: {
 const MIN_Q = 2;
 const PER_TYPE = 8;
 const hasText = (s: any, n: string) => typeof s === 'string' && s.toLowerCase().includes(n);
+
+// GitHub shorthand ("foo/bar") is accepted anywhere a git URL is — mirrors server/src/plugins/manager.ts
+const SHORTHAND = /^[\w-][\w.-]*\/[\w-][\w.-]*$/;
+const fullRepo = (r: any) => { const v = String(r || '').trim(); return v ? (SHORTHAND.test(v) ? `https://github.com/${v}` : v) : null; };
+const repoLast = (r: any) => (String(r || '').trim().replace(/\/+$/, '').split(/[/:]/).pop() || '').replace(/\.git$/, '');
 // flatten a message's content the way the server does: prose + tool name/input/output
 function msgText(content: any): string {
   if (!content || typeof content !== 'object') return '';
@@ -690,8 +695,8 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   // ---- plugins / marketplaces ----
   if (P === '/api/plugins' && M === 'GET') return ok({ common: db.plugins.common, mine: db.plugins.mine, prefs: db.plugins.prefs });
   if (P === '/api/marketplaces' && M === 'GET') return ok({ common: db.marketplaces.common, mine: db.marketplaces.mine });
-  if (P === '/api/marketplaces' && M === 'POST') { const arr = b.scope === 'common' ? db.marketplaces.common : db.marketplaces.mine; arr.push({ name: b.name }); return ok({}); }
-  if (P === '/api/plugins/install' && M === 'POST') { const arr = b.scope === 'common' ? db.plugins.common : db.plugins.mine; arr.push({ id: genId('pl'), name: b.name, source: 'marketplace', enabled: 1, forced: 0, repo: b.repo || null }); return ok({}); }
+  if (P === '/api/marketplaces' && M === 'POST') { const arr = b.scope === 'common' ? db.marketplaces.common : db.marketplaces.mine; arr.push({ name: String(b.name || '').trim() || repoLast(b.url) }); return ok({}); }
+  if (P === '/api/plugins/install' && M === 'POST') { const arr = b.scope === 'common' ? db.plugins.common : db.plugins.mine; arr.push({ id: genId('pl'), name: String(b.name || '').trim() || repoLast(b.repo), source: 'marketplace', enabled: 1, forced: 0, repo: fullRepo(b.repo) }); return ok({}); }
   if (P === '/api/plugins/upload' && M === 'POST') { const arr = (b.scope === 'common') ? db.plugins.common : db.plugins.mine; arr.push({ id: genId('pl'), name: b.name || 'uploaded', source: 'local', enabled: 1, forced: 0, repo: null }); return ok({}); }
   if (seg[1] === 'plugins' && seg[3] === 'detail') return ok(pluginDetail(idAt(2)));
   if (seg[1] === 'plugins' && seg[3] === 'tree') return ok(levelFrom(TREE_PLUGIN, query.get('path') || ''));

@@ -144,10 +144,12 @@ the chat–split–editor switch. Bottom-right corner: this guide panel.
   \`sessionBundleExcludes\`).
 
 ### Extending Claude
-- **Plugins & skills** — install a plugin from a git URL (or upload a zip); the skills it ships become
-  available in chats. Personal scope is yours alone; common scope is workspace-wide and admin-only,
+- **Plugins & skills** — install a plugin from a GitHub repo written short as \`foo/bar\` (or a full git
+  URL, or upload a zip); the skills it ships become available in chats. Leave the name blank and it
+  takes the repo's name. Personal scope is yours alone; common scope is workspace-wide and admin-only,
   and an admin can force a common plugin on for everyone.
-- **Marketplaces** — registered plugin sources to install from.
+- **Marketplaces** — registered plugin sources to install from. Adding one takes either field alone:
+  a name like \`foo/bar\` fills in the address, an address alone names it after the repo.
 - **Team agents** — named agents (description, system prompt, allowed tools, model) that every chat
   gets as subagents: personal, common (admin-managed), or per project. A chat-header pill can put one
   in charge of the main thread. Agent files on disk (.claude/agents/*.md) appear read-only

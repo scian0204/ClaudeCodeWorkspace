@@ -291,6 +291,8 @@ function guideTool(input: any, output: string, blocks: any[], at: number): numbe
 function guidePlan(text: string): { steps: { input: any; output: string }[]; reply: string } {
   const q = text.toLowerCase();
   const url = /https?:\/\/\S+/.exec(text)?.[0];
+  // a plugin repo may be typed as GitHub shorthand ("foo/bar") instead of a full URL
+  const shorthand = /(?:^|\s)([\w-][\w.-]*\/[\w-][\w.-]*)(?=$|\s)/.exec(text)?.[1];
   if (/(btw|사이드 ?채팅|side chat|곁다리|따로 물어)/.test(q)) {
     return {
       steps: [{ input: { action: 'openAside' }, output: 'ok — dispatched openAside' }],
@@ -323,11 +325,12 @@ function guidePlan(text: string): { steps: { input: any; output: string }[]; rep
       reply: `이 대화에 \`${topic?.name}\` 위키를 연결했습니다. 앞으로 이 대화의 질문은 그 지식 기반을 먼저 찾아본 뒤 답합니다(위키 자체는 건드리지 않아요).\n\n상단 위키 버튼에서 다른 주제로 바꾸거나 연결을 끊을 수 있습니다.`,
     };
   }
-  if (url && /(skill|plugin|스킬|플러그인)/.test(q)) {
-    const name = url.replace(/\.git$/, '').split('/').pop() || 'plugin';
+  if ((url || shorthand) && /(skill|plugin|스킬|플러그인)/.test(q)) {
+    const repo = url || shorthand!;
+    const name = repo.replace(/\.git$/, '').split('/').pop() || 'plugin';
     return {
       steps: [
-        { input: { method: 'POST', path: '/api/plugins/install', body: { scope: 'user', name, repo: url } }, output: `status=200\n{"plugin":{"id":"pl_demo","name":"${name}","scope":"user","enabled":true}}` },
+        { input: { method: 'POST', path: '/api/plugins/install', body: { scope: 'user', repo } }, output: `status=200\n{"plugin":{"id":"pl_demo","name":"${name}","scope":"user","enabled":true}}` },
         { input: { action: 'refresh' }, output: 'ok — dispatched refresh' },
       ],
       reply: `\`${name}\` 플러그인을 개인 범위로 설치했습니다. 함께 들어 있는 스킬은 이제 채팅에서 바로 쓸 수 있어요.\n\n플러그인 패널에서 켜고 끌 수 있습니다.`,

@@ -126,11 +126,11 @@ export const API_ROUTES: ApiRoute[] = [
   r('PUT', '/api/pools/opt-out', "keep this user's own plan out of the workspace-wide pool. Body: { optOut: boolean }."),
 
   // ── write: plugins / skills ──
-  r('POST', '/api/plugins/install', 'install a plugin (its skills come with it) from a git URL. Body: { scope:"user"|"common", name, repo }. scope "common" is admin-only; for a member always use "user".'),
+  r('POST', '/api/plugins/install', 'install a plugin (its skills come with it) from a git repo. Body: { scope:"user"|"common", repo, name? } — repo is GitHub shorthand "foo/bar" or a full git URL, and name defaults to the repo name. scope "common" is admin-only; for a member always use "user".'),
   r('POST', '/api/plugins/:id/enabled', 'enable/disable a plugin you own (or, as admin, a common one). Body: { enabled }.'),
   r('POST', '/api/plugins/:id/pref', 'your personal on/off for a COMMON plugin. Body: { enabled }.'),
   r('POST', '/api/plugins/:id/update', 'pull the latest of a git-installed plugin (no body).'),
-  r('POST', '/api/marketplaces', 'register a plugin marketplace. Body: { scope:"user"|"common", name, url }.'),
+  r('POST', '/api/marketplaces', 'register a plugin marketplace. Body: { scope:"user"|"common", name?, url? } — either field alone is enough; a name like "foo/bar" fills in the GitHub url, a url alone names it after the repo.'),
 
   // ── write: admin ──
   r('POST', '/api/requests/:id/decide', 'approve or reject a member request. Body: { approve: boolean, note? }.', true),
