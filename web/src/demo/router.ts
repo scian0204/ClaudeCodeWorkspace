@@ -696,11 +696,14 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   if (P === '/api/plugins' && M === 'GET') return ok({ common: db.plugins.common, mine: db.plugins.mine, prefs: db.plugins.prefs });
   if (P === '/api/marketplaces' && M === 'GET') return ok({ common: db.marketplaces.common, mine: db.marketplaces.mine });
   if (P === '/api/marketplaces' && M === 'POST') {
+    const src = String(b.ref || b.url || b.name || '').trim();
+    if (!src) return { status: 400, data: { error: 'repo required — "owner/repo" or a git URL' } };
     const scope = b.scope === 'common' ? 'common' : 'user';
-    const url = fullRepo(b.url) || (/^[\w-][\w.-]*\/[\w-][\w.-]*$/.test(String(b.name || '').trim()) ? fullRepo(b.name) : '');
-    (scope === 'common' ? db.marketplaces.common : db.marketplaces.mine)
-      .push({ id: genId('mk'), scope, name: String(b.name || '').trim() || repoLast(url), url: url || '' });
-    return ok({});
+    const id = genId('mk');
+    const name = repoLast(src) || src;
+    db.marketCatalogs[id] = { name, description: '', plugins: [{ name: `${name}-skill`, description: 'Demo plugin from this marketplace', source: './' }] };
+    (scope === 'common' ? db.marketplaces.common : db.marketplaces.mine).push({ id, scope, name, url: fullRepo(src) || '' });
+    return slow(ok({}), 800);
   }
   if (seg[1] === 'marketplaces' && seg[3] === 'plugins' && M === 'GET') return ok(db.marketCatalogs[idAt(2)] || { name: '', description: '', plugins: [] });
   if (seg[1] === 'marketplaces' && seg[3] === 'refresh' && M === 'POST') return slow(ok(db.marketCatalogs[idAt(2)] || { name: '', description: '', plugins: [] }), 700);
@@ -711,17 +714,26 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   }
   if (P === '/api/plugins/install' && M === 'POST') {
     const arr = b.scope === 'common' ? db.plugins.common : db.plugins.mine;
-    const ref = String(b.repo || b.plugin || '').trim();
-    const market = /^[^@:/]+@[^@:/]+$/.test(ref) ? ref.split('@') : null;   // "<plugin>@<marketplace>"
-    if (b.marketplaceId || market) {
-      const id = b.marketplaceId || Object.keys(db.marketCatalogs).find((k) => db.marketCatalogs[k].name === market![1]);
-      const want = String(b.marketplaceId ? (b.plugin || b.name || ref) : market![0]);
-      const entry = id && db.marketCatalogs[id]?.plugins.find((p: any) => p.name.toLowerCase() === want.toLowerCase());
-      if (!entry) return { status: 404, data: { error: `등록된 마켓플레이스가 아닙니다: ${b.marketplaceId || market?.[1]}` } };
+    const asked = String(b.name || b.plugin || '').trim();
+    const gitRef = String(b.repo || '').trim();
+    if (!asked && !gitRef) return { status: 400, data: { error: 'plugin name or repo required' } };
+    const market = /^[^@:/]+@[^@:/]+$/.test(asked) ? asked.split('@') : null;   // "<plugin>@<marketplace>"
+    if (b.marketplaceId || market || !gitRef) {
+      let id: string | undefined = b.marketplaceId;
+      let want = asked;
+      if (!id && market) { id = Object.keys(db.marketCatalogs).find((k) => db.marketCatalogs[k].name === market[1]); want = market[0]; }
+      if (!id) {   // bare plugin name: whichever registered market offers it
+        const hits = Object.keys(db.marketCatalogs).filter((k) => db.marketCatalogs[k].plugins.some((p: any) => p.name.toLowerCase() === want.toLowerCase()));
+        if (hits.length === 0) return { status: 400, data: { error: `등록된 마켓플레이스에 "${want}" 플러그인이 없습니다 — git URL을 넣거나 마켓을 먼저 추가하세요` } };
+        if (hits.length > 1) return { status: 400, data: { error: `"${want}" 플러그인이 여러 마켓에 있습니다 — "${want}@마켓이름" 으로 지정하세요` } };
+        id = hits[0];
+      }
+      const entry = id && db.marketCatalogs[id]?.plugins.find((p: any) => p.name.toLowerCase() === String(want || b.plugin || '').toLowerCase());
+      if (!entry) return { status: 404, data: { error: `마켓에 "${want}" 플러그인이 없습니다` } };
       arr.push({ id: genId('pl'), name: entry.name, source: 'marketplace', enabled: 1, forced: 0, repo: typeof entry.source === 'object' ? entry.source.url : null });
       return ok({});
     }
-    arr.push({ id: genId('pl'), name: String(b.name || '').trim() || repoLast(ref), source: 'marketplace', enabled: 1, forced: 0, repo: fullRepo(ref) });
+    arr.push({ id: genId('pl'), name: asked || repoLast(gitRef), source: 'marketplace', enabled: 1, forced: 0, repo: fullRepo(gitRef) });
     return ok({});
   }
   if (P === '/api/plugins/upload' && M === 'POST') { const arr = (b.scope === 'common') ? db.plugins.common : db.plugins.mine; arr.push({ id: genId('pl'), name: b.name || 'uploaded', source: 'local', enabled: 1, forced: 0, repo: null }); return ok({}); }

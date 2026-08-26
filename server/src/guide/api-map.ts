@@ -127,11 +127,11 @@ export const API_ROUTES: ApiRoute[] = [
   r('PUT', '/api/pools/opt-out', "keep this user's own plan out of the workspace-wide pool. Body: { optOut: boolean }."),
 
   // ── write: plugins / skills ──
-  r('POST', '/api/plugins/install', 'install a plugin (its skills come with it). Body: { scope:"user"|"common", repo, name? } — repo is "<plugin>@<marketplace>" for a plugin from a registered marketplace, GitHub shorthand "foo/bar", or a full git URL; name defaults to the repo name. { marketplaceId, plugin } names one from a marketplace explicitly. scope "common" is admin-only; for a member always use "user".'),
+  r('POST', '/api/plugins/install', 'install a plugin (its skills come with it). Body: { scope:"user"|"common", name?, repo? } — name is a plugin name (looked up in the registered marketplaces) or "<plugin>@<marketplace>"; repo is "owner/repo" or a full git URL and is only needed to install straight from a repo. Either field alone works; with both, the repo is cloned under the given name. { marketplaceId, plugin } names a marketplace plugin explicitly. scope "common" is admin-only; for a member always use "user".'),
   r('POST', '/api/plugins/:id/enabled', 'enable/disable a plugin you own (or, as admin, a common one). Body: { enabled }.'),
   r('POST', '/api/plugins/:id/pref', 'your personal on/off for a COMMON plugin. Body: { enabled }.'),
   r('POST', '/api/plugins/:id/update', 'pull the latest of a git-installed plugin (no body).'),
-  r('POST', '/api/marketplaces', 'register a plugin marketplace. Body: { scope:"user"|"common", name?, url? } — either field alone is enough; a name like "foo/bar" fills in the GitHub url, a url alone names it after the repo.'),
+  r('POST', '/api/marketplaces', 'register a plugin marketplace. Body: { scope:"user"|"common", ref } — ref is "owner/repo" or a full git URL. The repo is cloned on the spot, so this fails on an unreachable repo or one without .claude-plugin/marketplace.json, and the name comes from that file.'),
   r('POST', '/api/marketplaces/:id/refresh', 'pull a registered marketplace repo to its latest, then return its catalog — do this when plugins were pushed there after it was added.'),
 
   // ── write: admin ──

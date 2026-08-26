@@ -62,19 +62,26 @@ export function repoName(repo: string): string {
   return (String(repo || '').trim().replace(/\/+$/, '').split(/[/:]/).pop() || '').replace(/\.git$/, '');
 }
 
-// name and url are interchangeable entry points: either alone registers the marketplace. A name that
-// is itself a repo ref ("foo/bar") fills in the url; a url alone names it after the repo.
-export function addMarketplace(scope: 'common' | 'user', ownerId: string | null, nameIn: string, urlIn: string) {
-  const rawName = String(nameIn || '').trim();
-  const rawUrl = String(urlIn || '').trim();
-  const src = rawUrl || (isRepoRef(rawName) ? rawName : '');
-  const url = src ? normalizeRepo(src) : '';
-  const name = rawName || repoName(url);
-  if (!name) throw new Error('마켓 이름 또는 저장소 주소가 필요합니다');
-  const row = { id: newId(), scope, ownerId, name, url, createdAt: Date.now() };
+// Registering a marketplace takes one field: "foo/bar" or a full git URL. The clone happens right
+// here, so a repo we cannot reach (or one without .claude-plugin/marketplace.json) never becomes a
+// row, and the name shown is the one the marketplace declares for itself.
+export async function addMarketplace(scope: 'common' | 'user', ownerId: string | null, ref: string) {
+  const url = normalizeRepo(ref);
+  const row = { id: newId(), scope, ownerId, name: repoName(url) || url, url, createdAt: Date.now() };
   db.insert(schema.marketplaces).values(row).run();
+  try {
+    const cat = await marketplaceCatalog(row.id, true);
+    if (cat.name) {
+      db.update(schema.marketplaces).set({ name: cat.name }).where(eq(schema.marketplaces.id, row.id)).run();
+      row.name = cat.name;
+    }
+  } catch (e) {
+    removeMarketplace(row.id);   // no half-registered market to puzzle over later
+    throw e;
+  }
   return row;
 }
+
 export function getMarketplace(id: string) {
   return db.select().from(schema.marketplaces).where(eq(schema.marketplaces.id, id)).get();
 }
@@ -165,6 +172,24 @@ function resolveSource(src: any, marketDir: string): { dir: string } | { url: st
     return { dir: full };
   }
   throw new Error('알 수 없는 플러그인 소스 형식입니다');
+}
+
+// A plugin name with no marketplace behind it: look through the ones registered for this user (own
+// first, then workspace-wide) and say which offers it. Two markets offering the same name is not ours
+// to guess — the caller is told to write "<plugin>@<marketplace>".
+export async function findMarketplaceFor(pluginName: string, userId: string): Promise<string> {
+  const want = String(pluginName || '').trim().toLowerCase();
+  const rows = [...listMarketplaces('user', userId), ...listMarketplaces('common')];
+  const hits: { id: string; name: string }[] = [];
+  for (const m of rows) {
+    try {
+      const cat = await marketplaceCatalog(m.id);
+      if (cat.plugins.some((p) => p.name.toLowerCase() === want)) hits.push({ id: m.id, name: m.name });
+    } catch { /* unreachable or manifest-less market: skip, another one may have it */ }
+  }
+  if (hits.length === 0) throw new Error(`등록된 마켓플레이스에 "${pluginName}" 플러그인이 없습니다 — git URL을 넣거나 마켓을 먼저 추가하세요`);
+  if (hits.length > 1) throw new Error(`"${pluginName}" 플러그인이 여러 마켓에 있습니다(${hits.map((h) => h.name).join(', ')}) — "${pluginName}@마켓이름" 으로 지정하세요`);
+  return hits[0].id;
 }
 
 // Install "<plugin>@<marketplace>": look the plugin up in the marketplace's catalog and take it from

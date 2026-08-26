@@ -144,12 +144,13 @@ the chat–split–editor switch. Bottom-right corner: this guide panel.
   \`sessionBundleExcludes\`).
 
 ### Extending Claude
-- **Plugins & skills** — install a plugin from a GitHub repo written short as \`foo/bar\` (or a full git
-  URL, or upload a zip); the skills it ships become available in chats. Leave the name blank and it
-  takes the repo's name. Personal scope is yours alone; common scope is workspace-wide and admin-only,
-  and an admin can force a common plugin on for everyone.
-- **Marketplaces** — registered plugin sources to install from. Adding one takes either field alone:
-  a name like \`foo/bar\` fills in the address, an address alone names it after the repo. Open the arrow
+- **Plugins & skills** — the install row's first field takes a plugin name (found in the marketplaces
+  you registered) or \`<plugin>@<marketplace>\`; the second is only for installing straight from a repo,
+  as \`foo/bar\` or a full git URL, and a blank name then takes the repo's name. A zip upload works too.
+  The skills a plugin ships become available in chats. Personal scope is yours alone; common scope is
+  workspace-wide and admin-only, and an admin can force a common plugin on for everyone.
+- **Marketplaces** — registered plugin sources to install from. Adding one takes a single field: the
+  marketplace repo as \`foo/bar\` or a full git URL, and its own name is read from the repo. Open the arrow
   on a row to see what that marketplace offers and install any of it with one button; **Update** pulls
   the marketplace repo again, so plugins pushed there after you added it show up; **Delete** drops the
   registration (installed plugins stay). A plugin from a marketplace also installs by typing
@@ -230,9 +231,10 @@ const RECIPES = `
   \`name\` only if the user asked for one), then POST /api/sessions { projectId: <new project id> },
   then ui refresh, then ui openSession <session id>. If the clone fails because the repo is private,
   say so and point at My Page for the git credential.
-- "add this skill/plugin <repo>": POST /api/plugins/install { scope:"user", repo:<"owner/repo", a full
-  git url, or "<plugin>@<marketplace>"> }, then ui refresh — leave \`name\` out and it takes the repo's
-  name. A common (workspace-wide) install is admin-only.
+- "add this skill/plugin <repo>": POST /api/plugins/install { scope:"user", repo:<"owner/repo" or a
+  full git url> }, then ui refresh — leave \`name\` out and it takes the repo's name. Asked for a plugin
+  by name instead, send { scope:"user", name:<the name, or "<plugin>@<marketplace>"> } and no repo. A
+  common (workspace-wide) install is admin-only.
 - "what's in <marketplace>" / "install <x> from <marketplace>": GET /api/marketplaces to find its id,
   GET /api/marketplaces/:id/plugins for the list, then POST /api/plugins/install { scope:"user",
   marketplaceId, plugin }. If the plugin they name is not listed, POST /api/marketplaces/:id/refresh

@@ -91,15 +91,25 @@ export function PluginsPanel() {
 
 function InstallForms({ scope, mkt, onChange, onErr }: { scope: 'common' | 'user'; mkt: any[]; onChange: () => void; onErr: (e: any) => void }) {
   const [git, setGit] = useState({ name: '', repo: '' });
-  const [mk, setMk] = useState({ name: '', url: '' });
+  const [mk, setMk] = useState('');
+  const [adding, setAdding] = useState(false);
   const [upName, setUpName] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   const t = useT();
 
-  // repo/url may be GitHub shorthand ("foo/bar"); a blank plugin name falls back to the repo name,
-  // and a marketplace registers with either field alone — the server fills in the other.
-  const installGit = async () => { if (!git.repo) return; try { await api.post('/api/plugins/install', { scope, ...git }); setGit({ name: '', repo: '' }); onChange(); } catch (e) { onErr(e); } };
-  const addMk = async () => { if (!mk.name && !mk.url) return; try { await api.post('/api/marketplaces', { scope, ...mk }); setMk({ name: '', url: '' }); onChange(); } catch (e) { onErr(e); } };
+  // The name field carries a plugin name or "<plugin>@<marketplace>"; the git field is only needed to
+  // install straight from a repo. Either one alone is enough — the server resolves the rest.
+  const installGit = async () => {
+    if (!git.name && !git.repo) return;
+    try { await api.post('/api/plugins/install', { scope, ...git }); setGit({ name: '', repo: '' }); onChange(); } catch (e) { onErr(e); }
+  };
+  // registering clones the marketplace repo, so this one waits on the network
+  const addMk = async () => {
+    if (!mk.trim() || adding) return;
+    setAdding(true);
+    try { await api.post('/api/marketplaces', { scope, ref: mk.trim() }); setMk(''); onChange(); }
+    catch (e) { onErr(e); } finally { setAdding(false); }
+  };
   const upload = async () => {
     const f = fileRef.current?.files?.[0]; if (!f || !upName) return;
     const form = new FormData(); form.append('scope', scope); form.append('name', upName); form.append('file', f);
@@ -114,10 +124,9 @@ function InstallForms({ scope, mkt, onChange, onErr }: { scope: 'common' | 'user
           {mkt.map((m) => <MarketRow key={m.id} m={m} scope={scope} onChange={onChange} onErr={onErr} />)}
         </div>
       )}
-      <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-1.5">
-        <input className="input !py-1.5 !text-xs" placeholder={t('plugins.marketNamePlaceholder')} value={mk.name} onChange={(e) => setMk({ ...mk, name: e.target.value })} />
-        <input className="input !py-1.5 !text-xs" placeholder={t('plugins.marketUrlPlaceholder')} value={mk.url} onChange={(e) => setMk({ ...mk, url: e.target.value })} />
-        <button className="btn-ghost !py-1.5 !text-xs" onClick={addMk}>{t('plugins.addMarket')}</button>
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-1.5">
+        <input className="input !py-1.5 !text-xs" placeholder={t('plugins.marketRefPlaceholder')} value={mk} onChange={(e) => setMk(e.target.value)} />
+        <button className="btn-ghost !py-1.5 !text-xs" disabled={adding} onClick={addMk}>{adding ? t('plugins.marketSyncing') : t('plugins.addMarket')}</button>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-1.5">
         <input className="input !py-1.5 !text-xs" placeholder={t('plugins.pluginNamePlaceholder')} value={git.name} onChange={(e) => setGit({ ...git, name: e.target.value })} />

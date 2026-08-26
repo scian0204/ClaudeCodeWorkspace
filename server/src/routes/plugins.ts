@@ -72,14 +72,16 @@ export async function pluginRoutes(app: FastifyInstance) {
     return { common: pm.listMarketplaces('common'), mine: pm.listMarketplaces('user', u.id) };
   });
 
+  // register a marketplace from one field: "foo/bar" or a full git URL (`ref`, `url` both accepted).
+  // The repo is cloned here, so the name comes from its own marketplace.json.
   app.post('/api/marketplaces', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
-    const { scope, name, url } = (req.body || {}) as any;
+    const { scope, ref, url, name } = (req.body || {}) as any;
     if (scope === 'common' && !requireAdmin(req, reply)) return;
-    // either field alone is enough: a name like "foo/bar" fills in the url, a url alone names it
-    if (!String(name || '').trim() && !String(url || '').trim()) return reply.code(400).send({ error: 'name or url required' });
+    const src = String(ref || url || name || '').trim();
+    if (!src) return reply.code(400).send({ error: 'repo required — "owner/repo" or a git URL' });
     try {
-      const row = pm.addMarketplace(scope === 'common' ? 'common' : 'user', scope === 'common' ? null : u.id, String(name || ''), String(url || ''));
+      const row = await pm.addMarketplace(scope === 'common' ? 'common' : 'user', scope === 'common' ? null : u.id, src);
       return { marketplace: row };
     } catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
   });
@@ -110,33 +112,43 @@ export async function pluginRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  // install a plugin. `repo` is a marketplace ref "<plugin>@<marketplace>", GitHub shorthand
-  // "owner/repo", or a full git URL. `marketplaceId` + `plugin` names one explicitly (row buttons).
+  // install a plugin. `name` is a plugin name or "<plugin>@<marketplace>"; `repo` is a git URL or
+  // "owner/repo". Either field alone works: a name alone is looked up in the registered marketplaces,
+  // a repo alone is cloned and named after itself, and both together clone under the given name.
   app.post('/api/plugins/install', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
     const { scope, name, repo, plugin, marketplaceId } = (req.body || {}) as any;
     if (scope === 'common' && !requireAdmin(req, reply)) return;
     const common = scope === 'common';
-    const ref = String(repo || plugin || '').trim();
-    if (!ref) return reply.code(400).send({ error: 'repo required' });
+    const owner = common ? null : u.id;
+    const asked = String(name || plugin || '').trim();
+    const gitRef = String(repo || '').trim();
+    if (!asked && !gitRef) return reply.code(400).send({ error: 'plugin name or repo required' });
 
-    // from a registered marketplace, by id or by the name in "<plugin>@<marketplace>"
-    const market = pm.parseMarketRef(ref);
-    if (marketplaceId || market) {
-      const rows = [...pm.listMarketplaces('user', u.id), ...pm.listMarketplaces('common')];
-      const m = marketplaceId
-        ? rows.find((r) => r.id === marketplaceId)
-        : rows.find((r) => r.name.toLowerCase() === market!.market.toLowerCase());
-      if (!m) return reply.code(404).send({ error: `등록된 마켓플레이스가 아닙니다: ${marketplaceId || market!.market}` });
-      if (m.scope === 'common' && u.role !== 'admin' && common) return reply.code(403).send({ error: 'admin only' });
-      const want = marketplaceId ? String(plugin || name || ref) : market!.plugin;
-      try { return { plugin: await pm.installFromMarketplace(common ? 'common' : 'user', common ? null : u.id, m.id, want) }; }
-      catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
+    // a marketplace install: by id (row button), by "<plugin>@<marketplace>", or by a bare plugin
+    // name that only one registered marketplace offers
+    const market = pm.parseMarketRef(asked) || pm.parseMarketRef(gitRef);
+    if (marketplaceId || market || !gitRef) {
+      try {
+        let mid = marketplaceId as string | undefined;
+        let want = asked;
+        if (!mid && market) {
+          const rows = [...pm.listMarketplaces('user', u.id), ...pm.listMarketplaces('common')];
+          const m = rows.find((r) => r.name.toLowerCase() === market.market.toLowerCase());
+          if (!m) return reply.code(404).send({ error: `등록된 마켓플레이스가 아닙니다: ${market.market}` });
+          mid = m.id; want = market.plugin;
+        }
+        if (!mid) mid = await pm.findMarketplaceFor(asked, u.id);
+        const m = pm.getMarketplace(mid);
+        if (!m) return reply.code(404).send({ error: 'not found' });
+        if (m.scope === 'common' && u.role !== 'admin' && common) return reply.code(403).send({ error: 'admin only' });
+        return { plugin: await pm.installFromMarketplace(common ? 'common' : 'user', owner, mid, want || String(plugin || '')) };
+      } catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
     }
 
-    if (!pm.isRepoRef(ref)) return reply.code(400).send({ error: 'use "<plugin>@<marketplace>", "owner/repo", or a git URL' });
+    if (!pm.isRepoRef(gitRef)) return reply.code(400).send({ error: 'repo must be "owner/repo" or a git URL' });
     try {
-      const row = await pm.installFromGit(common ? 'common' : 'user', common ? null : u.id, String(name || ''), ref);
+      const row = await pm.installFromGit(common ? 'common' : 'user', owner, asked, gitRef);
       return { plugin: row };
     } catch (e: any) { return reply.code(500).send({ error: String(e?.message || e) }); }
   });
