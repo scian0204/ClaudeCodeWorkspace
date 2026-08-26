@@ -4,7 +4,7 @@
 
 # Update notes
 
-Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and now — **v1.25.1** (2026-08-21) — all **430 commits**.
+Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and now — **v1.25.1** (2026-08-21) — all **431 commits**.
 
 Each row shows only its **title and commit hash**; click the triangle for the detail (root cause, implementation, config keys).
 
@@ -26,7 +26,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 | Version | Date | Commits | Headline |
 |---|---|---|---|
-| [Unreleased](#unreleased) | — | 1 | A repo can be written as `foo/bar`, and the plugin forms stop demanding every field |
+| [Unreleased](#unreleased) | — | 2 | Plugin marketplaces you can edit and delete, and `foo/bar` in place of a full URL |
 | [v1.25.1](#v1251--2026-08-21) | 2026-08-21 | 1 | The sidebar says an update is published, before the panel is open |
 | [v1.25.0](#v1250--2026-08-21) | 2026-08-21 | 5 | The choice card really asks — and a /btw button, and updates you cannot miss |
 | [v1.24.0](#v1240--2026-08-21) | 2026-08-21 | 5 | A chat hears when its project is changed somewhere else |
@@ -84,6 +84,23 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ---
 
 ## Unreleased
+
+<details>
+<summary><b>feat(plugins): a registered marketplace can be edited or dropped</b> — and only by someone allowed to · <code>903c034</code></summary>
+
+Marketplaces could only be added. The panel printed the registered names as one line of text, with no
+control to rename one, re-point it, or remove it — and `DELETE /api/marketplaces/:id` had no check at
+all, so any signed-in member could delete anyone's row, the workspace-wide ones included.
+
+Each marketplace is now its own row (name · address) with **Edit** and **Delete**; Edit swaps the row
+for the two inputs plus Save/Cancel. Editing goes through the new `PATCH /api/marketplaces/:id`
+(`{ name?, url? }`) and follows the same rule as adding: either field alone is enough, `foo/bar`
+expands, and a blank name takes the repo's name. Both PATCH and DELETE now check the row's scope —
+workspace-wide rows are admin-only, personal rows belong to their owner (an admin may act on either).
+The key `plugins.marketplaces` gave way to `plugins.marketsLabel` (ko+en); the guide agent, its API
+reference, and the static demo follow.
+
+</details>
 
 <details>
 <summary><b>fix(plugins): a repo can be written as <code>foo/bar</code>, and the forms stop demanding every field</b> — plugin install · marketplace add · <code>e4d53f1</code></summary>
