@@ -4,7 +4,7 @@
 
 # Update notes
 
-Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and now — **v1.25.1** (2026-08-21) — all **431 commits**.
+Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and now — **v1.25.1** (2026-08-21) — all **432 commits**.
 
 Each row shows only its **title and commit hash**; click the triangle for the detail (root cause, implementation, config keys).
 
@@ -26,7 +26,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 | Version | Date | Commits | Headline |
 |---|---|---|---|
-| [Unreleased](#unreleased) | — | 2 | Plugin marketplaces you can edit and delete, and `foo/bar` in place of a full URL |
+| [Unreleased](#unreleased) | — | 3 | Plugin marketplaces you can edit and delete, `foo/bar` in place of a full URL, and an app image that cannot ship without its database driver |
 | [v1.25.1](#v1251--2026-08-21) | 2026-08-21 | 1 | The sidebar says an update is published, before the panel is open |
 | [v1.25.0](#v1250--2026-08-21) | 2026-08-21 | 5 | The choice card really asks — and a /btw button, and updates you cannot miss |
 | [v1.24.0](#v1240--2026-08-21) | 2026-08-21 | 5 | A chat hears when its project is changed somewhere else |
@@ -84,6 +84,25 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ---
 
 ## Unreleased
+
+<details>
+<summary><b>fix(docker): a build with no database driver now fails instead of shipping</b> — the app image crash-looped on startup · <code>cfcac05</code></summary>
+
+**Symptom.** A local rebuild produced an image that built cleanly, then crash-looped on every start
+with `Could not locate the bindings file` — the workspace was down until the image was built again
+with the driver in place.
+
+**Cause.** `npm install` in the runtime stage left `better-sqlite3` (11.10.0) unpacked but with no
+`build/` directory at all — the compiled database driver was simply missing — and still exited 0, so
+nothing failed until a container tried to open the database. The previous image carries the same
+version on the same Node (22.23.2) with the driver present, and compiling it by hand inside the
+broken image works, so the install step silently produced nothing.
+
+**Fix.** After installing, the runtime stage opens an in-memory database to prove the driver loads;
+if it does not, it compiles the driver from source and tries once more with no fallback. An image
+whose database driver still will not load now fails the build instead of reaching a container.
+
+</details>
 
 <details>
 <summary><b>feat(plugins): a registered marketplace can be edited or dropped</b> — and only by someone allowed to · <code>903c034</code></summary>
