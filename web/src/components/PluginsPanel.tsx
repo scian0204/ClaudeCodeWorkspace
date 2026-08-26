@@ -4,7 +4,7 @@ import { api } from '../lib/api';
 import { PluginDetail } from './PluginDetail';
 import { MobileMenuButton } from '../lib/ui';
 import { useT } from '../lib/i18n';
-import { IconArrowLeft, IconPuzzle, IconCheck, IconLock } from '../lib/icons';
+import { IconArrowLeft, IconPuzzle, IconCheck, IconLock, IconGlobe } from '../lib/icons';
 
 export function PluginsPanel() {
   const setPanel = useStore((s) => s.setPanel);
@@ -108,7 +108,12 @@ function InstallForms({ scope, mkt, onChange, onErr }: { scope: 'common' | 'user
 
   return (
     <div className="space-y-2 border-t border-line pt-3">
-      {mkt.length > 0 && <div className="text-xs text-txt3">{t('plugins.marketplaces', { names: mkt.map((m) => m.name).join(', ') })}</div>}
+      {mkt.length > 0 && (
+        <div className="space-y-1">
+          <div className="text-[11px] text-txt3">{t('plugins.marketsLabel')}</div>
+          {mkt.map((m) => <MarketRow key={m.id} m={m} onChange={onChange} onErr={onErr} />)}
+        </div>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-1.5">
         <input className="input !py-1.5 !text-xs" placeholder={t('plugins.marketNamePlaceholder')} value={mk.name} onChange={(e) => setMk({ ...mk, name: e.target.value })} />
         <input className="input !py-1.5 !text-xs" placeholder={t('plugins.marketUrlPlaceholder')} value={mk.url} onChange={(e) => setMk({ ...mk, url: e.target.value })} />
@@ -124,6 +129,40 @@ function InstallForms({ scope, mkt, onChange, onErr }: { scope: 'common' | 'user
         <input className="input !py-1.5 !text-xs" placeholder={t('plugins.uploadNamePlaceholder')} value={upName} onChange={(e) => setUpName(e.target.value)} />
         <input ref={fileRef} type="file" accept=".tar.gz,.tgz" className="text-xs text-txt2" />
         <button className="btn-ghost !py-1.5 !text-xs" onClick={upload}>{t('plugins.uploadTarGz')}</button>
+      </div>
+    </div>
+  );
+}
+
+// One registered marketplace: rename/re-point it, or drop it. Editing follows the add form's rule —
+// either field alone is enough, and the server fills in the other.
+function MarketRow({ m, onChange, onErr }: { m: any; onChange: () => void; onErr: (e: any) => void }) {
+  const [edit, setEdit] = useState<{ name: string; url: string } | null>(null);
+  const t = useT();
+  const save = async () => {
+    if (!edit || (!edit.name.trim() && !edit.url.trim())) return;
+    try { await api.patch(`/api/marketplaces/${m.id}`, edit); setEdit(null); onChange(); } catch (e) { onErr(e); }
+  };
+  const del = async () => { try { await api.del(`/api/marketplaces/${m.id}`); onChange(); } catch (e) { onErr(e); } };
+
+  if (edit) return (
+    <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-1.5">
+      <input className="input !py-1.5 !text-xs" placeholder={t('plugins.marketNamePlaceholder')} value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} />
+      <input className="input !py-1.5 !text-xs" placeholder={t('plugins.marketUrlPlaceholder')} value={edit.url} onChange={(e) => setEdit({ ...edit, url: e.target.value })} />
+      <div className="flex items-center gap-3">
+        <button className="btn-ghost !py-1.5 !text-xs" onClick={save}>{t('common.save')}</button>
+        <button className="text-[11px] text-txt3 hover:text-clay" onClick={() => setEdit(null)}>{t('common.cancel')}</button>
+      </div>
+    </div>
+  );
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <IconGlobe size={12} className="text-txt3 shrink-0" />
+      <span className="text-txt2 shrink-0">{m.name}</span>
+      {m.url && <span className="text-txt3 truncate" title={m.url}>{m.url}</span>}
+      <div className="ml-auto flex items-center gap-3 shrink-0">
+        <button className="text-[11px] text-txt3 hover:text-clay" onClick={() => setEdit({ name: m.name, url: m.url || '' })}>{t('common.edit')}</button>
+        <button className="text-[11px] text-txt3 hover:text-danger" onClick={del}>{t('common.delete')}</button>
       </div>
     </div>
   );

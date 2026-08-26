@@ -131,6 +131,7 @@ export const API_ROUTES: ApiRoute[] = [
   r('POST', '/api/plugins/:id/pref', 'your personal on/off for a COMMON plugin. Body: { enabled }.'),
   r('POST', '/api/plugins/:id/update', 'pull the latest of a git-installed plugin (no body).'),
   r('POST', '/api/marketplaces', 'register a plugin marketplace. Body: { scope:"user"|"common", name?, url? } — either field alone is enough; a name like "foo/bar" fills in the GitHub url, a url alone names it after the repo.'),
+  r('PATCH', '/api/marketplaces/:id', 'rename a registered marketplace or re-point it. Body: { name?, url? } — same rule as adding: either field alone is enough.'),
 
   // ── write: admin ──
   r('POST', '/api/requests/:id/decide', 'approve or reject a member request. Body: { approve: boolean, note? }.', true),

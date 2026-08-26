@@ -64,6 +64,25 @@ export function addMarketplace(scope: 'common' | 'user', ownerId: string | null,
   db.insert(schema.marketplaces).values(row).run();
   return row;
 }
+export function getMarketplace(id: string) {
+  return db.select().from(schema.marketplaces).where(eq(schema.marketplaces.id, id)).get();
+}
+
+// Edit a registered marketplace in place. Same rules as adding: either field may carry the repo ref,
+// and a blank name falls back to the repo's name.
+export function updateMarketplace(id: string, nameIn: string, urlIn: string) {
+  const row = getMarketplace(id);
+  if (!row) throw new Error('marketplace not found');
+  const rawName = String(nameIn ?? '').trim();
+  const rawUrl = String(urlIn ?? '').trim();
+  const src = rawUrl || (isRepoRef(rawName) ? rawName : '');
+  const url = src ? normalizeRepo(src) : '';
+  const name = rawName || repoName(url);
+  if (!name) throw new Error('마켓 이름 또는 저장소 주소가 필요합니다');
+  db.update(schema.marketplaces).set({ name, url }).where(eq(schema.marketplaces.id, id)).run();
+  return { ...row, name, url };
+}
+
 export function removeMarketplace(id: string) {
   db.delete(schema.marketplaces).where(eq(schema.marketplaces.id, id)).run();
 }

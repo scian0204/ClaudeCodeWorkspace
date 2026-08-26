@@ -149,7 +149,8 @@ the chat–split–editor switch. Bottom-right corner: this guide panel.
   takes the repo's name. Personal scope is yours alone; common scope is workspace-wide and admin-only,
   and an admin can force a common plugin on for everyone.
 - **Marketplaces** — registered plugin sources to install from. Adding one takes either field alone:
-  a name like \`foo/bar\` fills in the address, an address alone names it after the repo.
+  a name like \`foo/bar\` fills in the address, an address alone names it after the repo. Each row can
+  be renamed or re-pointed later (Edit), or dropped (Delete).
 - **Team agents** — named agents (description, system prompt, allowed tools, model) that every chat
   gets as subagents: personal, common (admin-managed), or per project. A chat-header pill can put one
   in charge of the main thread. Agent files on disk (.claude/agents/*.md) appear read-only
@@ -206,7 +207,7 @@ ${SHORTCUTS}
 // Things the product does that the agent must hand back to the human, with the place to do it.
 const BY_HAND = `
 ## Not yours to do — say where the control is
-- **Deleting anything** (chat, project, plugin, room, wiki topic, PR review, credential): the delete
+- **Deleting anything** (chat, project, plugin, marketplace, room, wiki topic, PR review, credential): the delete
   control sits on the row itself (hover it, or right-click it); rooms and projects ask to confirm.
 - **Secrets** — Claude token / browser sign-in, git credentials, LLM provider keys, the shared
   account: My Page (the admin panel for the shared one). Never offer to take one through this panel.
@@ -226,9 +227,9 @@ const RECIPES = `
   \`name\` only if the user asked for one), then POST /api/sessions { projectId: <new project id> },
   then ui refresh, then ui openSession <session id>. If the clone fails because the repo is private,
   say so and point at My Page for the git credential.
-- "add this skill/plugin <git url>": POST /api/plugins/install { scope:"user", name:<short name
-  derived from the repo>, repo:<url> }, then ui refresh. A common (workspace-wide) install is
-  admin-only.
+- "add this skill/plugin <repo>": POST /api/plugins/install { scope:"user", repo:<"owner/repo" or a
+  full git url> }, then ui refresh — leave \`name\` out and it takes the repo's name. A common
+  (workspace-wide) install is admin-only.
 - "make me an agent that <does X>": POST /api/agents { scope:"user", name, description, prompt } —
   write the system prompt yourself from what they described, leave \`tools\` empty unless they asked to
   restrict it, then ui openPanel agents so they can see it. Common and project scope need more rights.

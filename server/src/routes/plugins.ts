@@ -19,6 +19,11 @@ function ownsPlugin(id: string, userId: string): boolean {
 function pluginScope(id: string) {
   return db.select().from(schema.plugins).where(eq(schema.plugins.id, id)).get();
 }
+// who may EDIT/DELETE a registered marketplace: common → admin only; user-scoped → owner or admin
+function canMutateMarket(u: AuthUser, m: { scope: string; ownerId: string | null }): boolean {
+  if (u.role === 'admin') return true;
+  return m.scope === 'user' && m.ownerId === u.id;
+}
 // who may VIEW a plugin's detail/files: common → any signed-in user; user-scoped → owner or admin
 function canViewPlugin(u: AuthUser, p: NonNullable<ReturnType<typeof pluginScope>>): boolean {
   if (u.role === 'admin') return true;
@@ -79,9 +84,21 @@ export async function pluginRoutes(app: FastifyInstance) {
     } catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
   });
 
+  app.patch('/api/marketplaces/:id', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    const { name, url } = (req.body || {}) as any;
+    const m = pm.getMarketplace((req.params as any).id); if (!m) return reply.code(404).send({ error: 'not found' });
+    if (!canMutateMarket(u, m)) return reply.code(403).send({ error: 'forbidden' });
+    if (!String(name || '').trim() && !String(url || '').trim()) return reply.code(400).send({ error: 'name or url required' });
+    try { return { marketplace: pm.updateMarketplace(m.id, String(name || ''), String(url || '')) }; }
+    catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
+  });
+
   app.delete('/api/marketplaces/:id', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
-    pm.removeMarketplace((req.params as any).id);
+    const m = pm.getMarketplace((req.params as any).id); if (!m) return reply.code(404).send({ error: 'not found' });
+    if (!canMutateMarket(u, m)) return reply.code(403).send({ error: 'forbidden' });
+    pm.removeMarketplace(m.id);
     return { ok: true };
   });
 

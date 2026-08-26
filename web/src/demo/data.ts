@@ -257,7 +257,13 @@ export const db = {
       { name: 'api-linter', description: 'Checks handlers against the internal API style guide.', model: 'claude-haiku-4-5-20251001', source: 'project', projectId: 'p_api', file: '.claude/agents/api-linter.md' },
     ] as any[],
   },
-  marketplaces: { common: [{ name: 'anthropic' }, { name: 'community' }], mine: [] as any[] },
+  marketplaces: {
+    common: [
+      { id: 'mk_anthropic', scope: 'common', name: 'anthropic', url: 'https://github.com/anthropics/claude-code' },
+      { id: 'mk_community', scope: 'common', name: 'community', url: 'https://github.com/example/claude-plugins' },
+    ] as any[],
+    mine: [] as any[],
+  },
   reviewRepos: [
     { id: 'rr_web', name: 'acme/webapp', provider: 'github', host: 'github.com', slug: 'acme/webapp', gitUrl: 'https://github.com/acme/webapp.git', baseBranch: 'main', sandboxImage: null, webhookSecret: null, pollEnabled: true, polledAt: ago(2), pollError: null, openCount: 2, createdAt: ago(600) },
   ] as any[],
