@@ -4,7 +4,7 @@
 
 # Update notes
 
-Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and now — **v1.25.1** (2026-08-21) — all **433 commits**.
+Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and now — **v1.25.1** (2026-08-21) — all **434 commits**.
 
 Each row shows only its **title and commit hash**; click the triangle for the detail (root cause, implementation, config keys).
 
@@ -26,7 +26,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 | Version | Date | Commits | Headline |
 |---|---|---|---|
-| [Unreleased](#unreleased) | — | 4 | Marketplaces you can actually install from, `foo/bar` in place of a full URL, and an app image that cannot ship without its database driver |
+| [Unreleased](#unreleased) | — | 5 | Marketplaces you can actually install from — by plugin name — and an app image that cannot ship without its database driver |
 | [v1.25.1](#v1251--2026-08-21) | 2026-08-21 | 1 | The sidebar says an update is published, before the panel is open |
 | [v1.25.0](#v1250--2026-08-21) | 2026-08-21 | 5 | The choice card really asks — and a /btw button, and updates you cannot miss |
 | [v1.24.0](#v1240--2026-08-21) | 2026-08-21 | 5 | A chat hears when its project is changed somewhere else |
@@ -84,6 +84,29 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ---
 
 ## Unreleased
+
+<details>
+<summary><b>feat(plugins): the plugin field takes the plugin, the git field is optional</b> — and registering a marketplace is one field · <code>0427e7c</code></summary>
+
+The previous change taught the *git* field to swallow `<plugin>@<marketplace>`, which left the plugin
+name field with nothing to do — a fair question to ask of it. The two fields now hold what their
+labels say.
+
+**Install row.** The first field is the plugin: a plain name, or `<plugin>@<marketplace>`. The second
+is a git URL or `owner/repo`, needed only to install straight from a repo. Either field alone is
+enough, and both together clone the repo under the name you typed, exactly as before. A plain name
+with no marketplace behind it is looked up across the marketplaces registered for you; if none offers
+it, or two do, the message says what to write instead of guessing.
+
+**Marketplace add.** One field now: `owner/repo` or a full git URL. The repo is cloned during the add,
+so the name on the row is the one the marketplace declares for itself in `.claude-plugin/marketplace.json`,
+and a repo that cannot be reached (or has no such file) leaves no row behind. Body field is `ref`.
+
+Checked on the running image: `JuliusBrussee/caveman` and the superpowers-marketplace URL both came in
+named from their own manifests, a bare `superpowers` resolved to the single marketplace offering it and
+installed with its 14 skills, and a bad repo registered nothing.
+
+</details>
 
 <details>
 <summary><b>feat(plugins): a registered marketplace is now something you can install from</b> — browse it, install by <code>plugin@market</code>, pull its latest · <code>1e88def</code></summary>

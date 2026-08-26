@@ -507,8 +507,9 @@ flowchart TB
 
 - Common tier = admin-only (register marketplaces · git/local upload · force-required)
 - Personal tier = user-controlled (add marketplaces · install · toggle common class-2)
-- A repo can be written short as `foo/bar` — install needs only the repo (a blank name takes the repo's name), and a marketplace registers with either the name or the address alone
+- A repo can be written short as `foo/bar` anywhere a git URL is asked for; registering a marketplace takes that single field and reads the name from the marketplace's own manifest
 - Install from a registered marketplace: open its row to browse what it lists and install with one button, or type `plugin@market`; **Update** pulls the marketplace repo for plugins added since
+- Install by plugin name: the name field takes a plugin from any marketplace you registered (or `plugin@market` when two offer it); the git field is only for installing straight from a repo
 - Per-plugin detail view (manifest · skills · file tree) with one-click update for git-sourced plugins
 - Per-skill usage counters: expand a skill to see how many times the workspace and you invoked it (admins also get the per-user breakdown)
 </details>
