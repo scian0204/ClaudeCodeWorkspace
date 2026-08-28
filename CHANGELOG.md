@@ -4,7 +4,7 @@
 
 # Update notes
 
-Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and now — **v1.25.1** (2026-08-21) — all **434 commits**.
+Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and now — **v1.25.1** (2026-08-21) — all **435 commits**.
 
 Each row shows only its **title and commit hash**; click the triangle for the detail (root cause, implementation, config keys).
 
@@ -26,7 +26,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 | Version | Date | Commits | Headline |
 |---|---|---|---|
-| [Unreleased](#unreleased) | — | 7 | Plugins that belong to a project, and common projects anyone can create |
+| [Unreleased](#unreleased) | — | 8 | A wiki you can see the shape of, plugins that belong to a project, and common projects anyone can create |
 | [v1.25.1](#v1251--2026-08-21) | 2026-08-21 | 1 | The sidebar says an update is published, before the panel is open |
 | [v1.25.0](#v1250--2026-08-21) | 2026-08-21 | 5 | The choice card really asks — and a /btw button, and updates you cannot miss |
 | [v1.24.0](#v1240--2026-08-21) | 2026-08-21 | 5 | A chat hears when its project is changed somewhere else |
@@ -84,6 +84,33 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ---
 
 ## Unreleased
+
+<details>
+<summary><b>feat(wiki): link graph of a topic's compiled articles</b> — see the whole knowledge base at once, click a dot to read it · <code>3488089</code></summary>
+
+**What was missing.** A finished wiki was a list of files. Which article covers what, which ones the
+index points at, which one everything else refers back to — none of that was visible without opening
+the documents one by one. The links themselves were already being written: the compile instructions
+have always told Claude to cross-link every article twice (an Obsidian `[[name]]` plus a plain
+markdown link) and to write `_index.md` as a map of links. Nothing read them back.
+
+**What is new.** The wiki file explorer has a second view: **Link graph**. One dot per article, sized
+by how many links it has, and a line for every link between two articles. Hovering a dot fades
+everything more than one link away, so a dense base stays readable; clicking one returns to the file
+view with that article open, folders expanded on the way down. Zoom with the wheel or the +/−
+buttons, drag to move; on a phone it opens already zoomed in so the labels can be read.
+
+New endpoint `GET /api/wiki/topics/:id/graph` reads `wiki/*.md` and returns the nodes and edges.
+Nothing is stored — the links live in the articles, so a recompile changes the graph the next time it
+is opened. A pair of articles is one line however many times the two link at each other (the compile
+writes the same link twice by design), links to documents that were never written are dropped rather
+than drawn as empty dots, and a bare `[[name]]` finds an article inside a subfolder.
+
+Placement runs in the browser and is deterministic: the same wiki draws the same way every time
+instead of reshuffling on each open. It costs the square of the article count, so **`wikiGraphMaxNodes`**
+(default 400) bounds it — past that the view draws what it can and says so on screen.
+
+</details>
 
 <details>
 <summary><b>feat(plugins): per-project plugins</b> — install a plugin onto a project and every chat in it loads it · <code>836f079</code></summary>
