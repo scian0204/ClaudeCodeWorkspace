@@ -210,6 +210,9 @@ export function initDb() {
   try { sqlite.exec("ALTER TABLE wiki_topics ADD COLUMN auto_learn TEXT NOT NULL DEFAULT 'off'"); } catch { /* already present */ }
   // topic kind: 'wiki' (synthesized articles) | 'minutes' (per-meeting docs + registers)
   try { sqlite.exec("ALTER TABLE wiki_topics ADD COLUMN kind TEXT NOT NULL DEFAULT 'wiki'"); } catch { /* already present */ }
+  // project-scope plugins ('' for common/user rows) — the plugin dir lives under
+  // <dataDir>/project-plugins/<projectId>/, not inside the project's own working tree
+  try { sqlite.exec("ALTER TABLE plugins ADD COLUMN project_id TEXT NOT NULL DEFAULT ''"); } catch { /* already present */ }
   // project-scope team agents ('' for common/user rows). The unique index must include project_id,
   // so it is (re)created here — after the ALTER — instead of in the DDL block.
   try { sqlite.exec("ALTER TABLE team_agents ADD COLUMN project_id TEXT NOT NULL DEFAULT ''"); } catch { /* already present */ }

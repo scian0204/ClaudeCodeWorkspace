@@ -237,6 +237,8 @@ export const db = {
   plugins: {
     common: [plugin('pl_review', 'code-review', 'marketplace', 1, 1, 'https://github.com/anthropics/claude-code-review'), plugin('pl_ecc', 'ecc-toolkit', 'marketplace', 1, 0, 'https://github.com/example/ecc')],
     mine: [plugin('pl_caveman', 'caveman', 'local', 1, 0)],
+    // per-project: applies to every chat pointed at that project, whoever owns it
+    projects: [{ ...plugin('pl_api_sql', 'sql-lint', 'marketplace', 1, 0, 'https://github.com/example/sql-lint'), scope: 'project', projectId: 'p_api' }] as any[],
     prefs: [] as any[],
   },
   // team agents (GET/POST/PATCH/DELETE /api/agents) — common (admin) + personal + per-project rows
@@ -627,11 +629,12 @@ const skillUses = (seed: number) => {
 };
 
 export const pluginDetail = (id: string) => {
-  const all = [...db.plugins.common, ...db.plugins.mine];
-  const p = all.find((x) => x.id === id) || db.plugins.common[0];
-  const isCommon = db.plugins.common.some((x) => x.id === p.id);
+  const all = [...db.plugins.common, ...db.plugins.mine, ...db.plugins.projects];
+  const p: any = all.find((x) => x.id === id) || db.plugins.common[0];
+  const scope = db.plugins.common.some((x) => x.id === p.id) ? 'common'
+    : db.plugins.projects.some((x: any) => x.id === p.id) ? 'project' : 'user';
   return {
-    plugin: { id: p.id, name: p.name, scope: isCommon ? 'common' : 'user', source: p.source, repo: p.repo ?? null },
+    plugin: { id: p.id, name: p.name, scope, source: p.source, repo: p.repo ?? null },
     manifest: { name: p.name, description: `${p.name} — packaged skills for Claude Code.`, version: '1.2.0', homepage: p.repo ?? undefined },
     skills: [
       { dir: `${p.name}/review`, name: 'review', description: 'One-line code review comments', ...skillUses(p.name.length % 4) },

@@ -128,7 +128,7 @@ export async function runAsideTurn(p: RunAsideParams): Promise<void> {
         // Plan mode is the closest match to "answer, do not act". The session's own mode is
         // deliberately ignored — the tool lists below are what actually hold the line.
         permissionMode: clampMode('plan', allowBypass()),
-        plugins: resolvePluginPaths(kind, ownerId),
+        plugins: resolvePluginPaths(kind, ownerId, s.projectId),
         authToken: '', providerEnv: prov.env, providerModel: prov.model,
         disallowedTools: DENIED_TOOLS,
         systemPromptAppend: SYSTEM_APPEND,

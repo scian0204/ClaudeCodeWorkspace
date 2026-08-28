@@ -20,6 +20,7 @@ import {
 } from '../lib/git-ops.js';
 import { createRemoteRepo, safeRepoName } from '../lib/git-publish.js';
 import { cfg } from '../lib/config-registry.js';
+import { removeProjectPlugins } from '../plugins/manager.js';
 import { syncWatchers, watchStatus } from '../watch/manager.js';
 import {
   resolveGitCred, resolveGitCredById, resolveGitCredMeta, getGitCredRow, gitIdentity, askpassEnv, identityEnv, hostFromGitUrl,
@@ -124,7 +125,7 @@ export async function createProject(input: ProjectInput, user: AuthUser): Promis
   return row;
 }
 
-// also used by routes/agents.ts to gate project-scope agents
+// also used by routes/agents.ts + routes/plugins.ts to gate project-scope agents/plugins
 export function canAccessProject(u: AuthUser, p: NonNullable<ReturnType<typeof getProject>>): boolean {
   if (u.role === 'admin') return true;
   if (p.scope === 'common') return true;
@@ -133,6 +134,14 @@ export function canAccessProject(u: AuthUser, p: NonNullable<ReturnType<typeof g
   return false;
 }
 const canAccess = canAccessProject;
+// Who may CREATE/EDIT/DELETE things attached to a project (team agents, project plugins): admins
+// anywhere, members only on their own personal projects. A common project's attachments apply to
+// everyone's sessions, which is the same trust class as a common plugin — admin only.
+export function canManageProject(u: { id: string; role: string }, projectId: string): boolean {
+  if (u.role === 'admin') return true;
+  const p = getProject(projectId);
+  return !!p && p.scope === 'user' && p.ownerId === u.id;
+}
 export function getProject(id: string) {
   return db.select().from(schema.projects).where(eq(schema.projects.id, id)).get();
 }
@@ -254,6 +263,7 @@ export async function projectRoutes(app: FastifyInstance) {
     if (dir !== root && dir.startsWith(root + path.sep)) {
       try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort: keep going, still unindex */ }
     }
+    removeProjectPlugins(id);   // its plugin dir is outside p.path, so it needs its own cleanup
     db.delete(schema.projects).where(eq(schema.projects.id, id)).run();
     syncWatchers(); // its directory is gone — drop the file watch with it
     return { ok: true };

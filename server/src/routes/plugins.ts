@@ -6,28 +6,43 @@ import type { FastifyInstance } from 'fastify';
 import { eq } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { requireAuth, requireAdmin, type AuthUser } from '../auth/index.js';
+import { canAccessProject, canManageProject, getProject } from './projects.js';
 import { newId } from '../lib/ids.js';
 import { listDir, resolveUnder, IMG_CT } from '../lib/filetree.js';
 import * as pm from '../plugins/manager.js';
 import { skillUsageRows } from '../usage/tracker.js';
 import { cfg } from '../lib/config-registry.js';
 
-function ownsPlugin(id: string, userId: string): boolean {
-  const p = db.select().from(schema.plugins).where(eq(schema.plugins.id, id)).get();
-  return !!p && p.scope === 'user' && p.ownerId === userId;
-}
 function pluginScope(id: string) {
   return db.select().from(schema.plugins).where(eq(schema.plugins.id, id)).get();
+}
+type PluginRow = NonNullable<ReturnType<typeof pluginScope>>;
+// The projects whose plugins the caller may SEE (their own + every common one, admins everything).
+function visibleProjectIds(u: AuthUser): string[] {
+  return db.select().from(schema.projects).all().filter((p) => canAccessProject(u, p)).map((p) => p.id);
+}
+// who may INSTALL/TOGGLE/DELETE a plugin: common → admin; personal → owner; project → whoever may
+// manage that project (admins anywhere, members on their own personal projects)
+function canMutatePlugin(u: AuthUser, p: PluginRow): boolean {
+  if (u.role === 'admin') return true;
+  if (p.scope === 'user') return p.ownerId === u.id;
+  if (p.scope === 'project') return canManageProject(u, p.projectId);
+  return false;   // common
 }
 // who may EDIT/DELETE a registered marketplace: common → admin only; user-scoped → owner or admin
 function canMutateMarket(u: AuthUser, m: { scope: string; ownerId: string | null }): boolean {
   if (u.role === 'admin') return true;
   return m.scope === 'user' && m.ownerId === u.id;
 }
-// who may VIEW a plugin's detail/files: common → any signed-in user; user-scoped → owner or admin
-function canViewPlugin(u: AuthUser, p: NonNullable<ReturnType<typeof pluginScope>>): boolean {
+// who may VIEW a plugin's detail/files: common → any signed-in user; personal → owner or admin;
+// project → anyone who may open that project (its plugins run in their sessions, so they can read them)
+function canViewPlugin(u: AuthUser, p: PluginRow): boolean {
   if (u.role === 'admin') return true;
   if (p.scope === 'common') return true;
+  if (p.scope === 'project') {
+    const proj = getProject(p.projectId);
+    return !!proj && canAccessProject(u, proj);
+  }
   return p.scope === 'user' && p.ownerId === u.id;
 }
 
@@ -63,6 +78,7 @@ export async function pluginRoutes(app: FastifyInstance) {
     return {
       common: pm.listPlugins('common'),
       mine: pm.listPlugins('user', u.id),
+      projects: pm.listProjectPlugins(visibleProjectIds(u)),
       prefs: pm.getUserPrefs(u.id),
     };
   });
@@ -117,10 +133,16 @@ export async function pluginRoutes(app: FastifyInstance) {
   // a repo alone is cloned and named after itself, and both together clone under the given name.
   app.post('/api/plugins/install', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
-    const { scope, name, repo, plugin, marketplaceId } = (req.body || {}) as any;
+    const { scope, name, repo, plugin, marketplaceId, projectId } = (req.body || {}) as any;
     if (scope === 'common' && !requireAdmin(req, reply)) return;
     const common = scope === 'common';
-    const owner = common ? null : u.id;
+    const target: pm.PluginScope = common ? 'common' : scope === 'project' ? 'project' : 'user';
+    const pid = String(projectId || '').trim();
+    if (target === 'project') {
+      if (!pid || !getProject(pid)) return reply.code(400).send({ error: 'unknown project' });
+      if (!canManageProject(u, pid)) return reply.code(403).send({ error: 'forbidden' });
+    }
+    const owner = target === 'user' ? u.id : null;
     const asked = String(name || plugin || '').trim();
     const gitRef = String(repo || '').trim();
     if (!asked && !gitRef) return reply.code(400).send({ error: 'plugin name or repo required' });
@@ -142,13 +164,13 @@ export async function pluginRoutes(app: FastifyInstance) {
         const m = pm.getMarketplace(mid);
         if (!m) return reply.code(404).send({ error: 'not found' });
         if (m.scope === 'common' && u.role !== 'admin' && common) return reply.code(403).send({ error: 'admin only' });
-        return { plugin: await pm.installFromMarketplace(common ? 'common' : 'user', owner, mid, want || String(plugin || '')) };
+        return { plugin: await pm.installFromMarketplace(target, owner, mid, want || String(plugin || ''), pid) };
       } catch (e: any) { return reply.code(400).send({ error: String(e?.message || e) }); }
     }
 
     if (!pm.isRepoRef(gitRef)) return reply.code(400).send({ error: 'repo must be "owner/repo" or a git URL' });
     try {
-      const row = await pm.installFromGit(common ? 'common' : 'user', owner, asked, gitRef);
+      const row = await pm.installFromGit(target, owner, asked, gitRef, pid);
       return { plugin: row };
     } catch (e: any) { return reply.code(500).send({ error: String(e?.message || e) }); }
   });
@@ -157,7 +179,7 @@ export async function pluginRoutes(app: FastifyInstance) {
   app.post('/api/plugins/upload', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
     const parts = (req as any).parts();
-    let scope = 'user', name = '', tmp = '';
+    let scope = 'user', name = '', tmp = '', projectId = '';
     for await (const part of parts) {
       if (part.type === 'file') {
         tmp = path.join(os.tmpdir(), `ccw-plugin-${newId()}.tar.gz`);
@@ -165,12 +187,18 @@ export async function pluginRoutes(app: FastifyInstance) {
       } else {
         if (part.fieldname === 'scope') scope = String(part.value);
         if (part.fieldname === 'name') name = String(part.value);
+        if (part.fieldname === 'projectId') projectId = String(part.value).trim();
       }
     }
-    if (scope === 'common' && u.role !== 'admin') return reply.code(403).send({ error: 'admin only' });
-    if (!name || !tmp) return reply.code(400).send({ error: 'name + file required' });
+    const target: pm.PluginScope = scope === 'common' ? 'common' : scope === 'project' ? 'project' : 'user';
     try {
-      const row = await pm.installFromTarball(scope === 'common' ? 'common' : 'user', scope === 'common' ? null : u.id, name, tmp);
+      if (target === 'common' && u.role !== 'admin') return reply.code(403).send({ error: 'admin only' });
+      if (target === 'project') {
+        if (!projectId || !getProject(projectId)) return reply.code(400).send({ error: 'unknown project' });
+        if (!canManageProject(u, projectId)) return reply.code(403).send({ error: 'forbidden' });
+      }
+      if (!name || !tmp) return reply.code(400).send({ error: 'name + file required' });
+      const row = await pm.installFromTarball(target, target === 'user' ? u.id : null, name, tmp, projectId);
       return { plugin: row };
     } catch (e: any) { return reply.code(500).send({ error: String(e?.message || e) }); }
     finally { fs.rm(tmp, () => {}); }
@@ -180,8 +208,7 @@ export async function pluginRoutes(app: FastifyInstance) {
     const u = requireAuth(req, reply); if (!u) return;
     const { id } = req.params as any; const { enabled } = (req.body || {}) as any;
     const p = pluginScope(id); if (!p) return reply.code(404).send({ error: 'not found' });
-    if (p.scope === 'common' && u.role !== 'admin') return reply.code(403).send({ error: 'admin only' });
-    if (p.scope === 'user' && !ownsPlugin(id, u.id)) return reply.code(403).send({ error: 'forbidden' });
+    if (!canMutatePlugin(u, p)) return reply.code(403).send({ error: p.scope === 'common' ? 'admin only' : 'forbidden' });
     pm.setEnabled(id, !!enabled);
     return { ok: true };
   });
@@ -258,8 +285,7 @@ export async function pluginRoutes(app: FastifyInstance) {
   app.post('/api/plugins/:id/update', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
     const p = pluginScope((req.params as any).id); if (!p) return reply.code(404).send({ error: 'not found' });
-    if (p.scope === 'common' && u.role !== 'admin') return reply.code(403).send({ error: 'admin only' });
-    if (p.scope === 'user' && !ownsPlugin(p.id, u.id) && u.role !== 'admin') return reply.code(403).send({ error: 'forbidden' });
+    if (!canMutatePlugin(u, p)) return reply.code(403).send({ error: p.scope === 'common' ? 'admin only' : 'forbidden' });
     try { await pm.updatePlugin(p.id); return { ok: true }; }
     catch (e: any) { return reply.code(500).send({ error: String(e?.message || e) }); }
   });
@@ -268,8 +294,7 @@ export async function pluginRoutes(app: FastifyInstance) {
     const u = requireAuth(req, reply); if (!u) return;
     const { id } = req.params as any;
     const p = pluginScope(id); if (!p) return reply.code(404).send({ error: 'not found' });
-    if (p.scope === 'common' && u.role !== 'admin') return reply.code(403).send({ error: 'admin only' });
-    if (p.scope === 'user' && !ownsPlugin(id, u.id)) return reply.code(403).send({ error: 'forbidden' });
+    if (!canMutatePlugin(u, p)) return reply.code(403).send({ error: p.scope === 'common' ? 'admin only' : 'forbidden' });
     pm.removePlugin(id);
     return { ok: true };
   });

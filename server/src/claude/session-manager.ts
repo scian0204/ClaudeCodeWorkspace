@@ -167,7 +167,7 @@ export async function probeCommands(chatSessionId: string, requesterId?: string 
   if (prov.source === 'none') return [];
   // a wiki thread runs with only the dedicated plugin, so probe with that same set — otherwise the
   // command list advertises skills the turn cannot reach
-  const plugins = s.wikiTopicId ? wikiPluginPaths() : resolvePluginPaths(kind, ownerId);
+  const plugins = s.wikiTopicId ? wikiPluginPaths() : resolvePluginPaths(kind, ownerId, s.projectId);
   const key = `${chatSessionId}|${plugins.join(',')}`;
   const hit = cmdCache.get(key);
   if (hit) return hit;
@@ -307,7 +307,7 @@ export async function probeUsage(chatSessionId: string, requesterId?: string | n
     kind, ownerId, cwd: await cwdFor(s), model: s.model || cfg.str('defaultModel'),
     effort: (s.effort || cfg.str('defaultEffort')) as SessionContext['effort'],
     permissionMode: clampMode((s.permissionMode as PermMode) || 'default', allowBypass()),
-    plugins: resolvePluginPaths(kind, ownerId), authToken: '', providerEnv: prov.env, providerModel: prov.model,
+    plugins: resolvePluginPaths(kind, ownerId, s.projectId), authToken: '', providerEnv: prov.env, providerModel: prov.model,
   };
   const abort = new AbortController();
   const abortLimits = new AbortController();
@@ -481,7 +481,7 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
   const ctx: SessionContext = {
     kind, ownerId, cwd, model: s.model || cfg.str('defaultModel'),
     effort: (s.effort || cfg.str('defaultEffort')) as SessionContext['effort'],
-    permissionMode: mode, plugins: isWikiThread ? wikiPluginPaths() : resolvePluginPaths(kind, ownerId),
+    permissionMode: mode, plugins: isWikiThread ? wikiPluginPaths() : resolvePluginPaths(kind, ownerId, s.projectId),
     settingSources: isWikiThread ? ['project'] : undefined,
     authToken: '', providerEnv: prov.env, providerModel: prov.model, gitEnv, mcpServers, disallowedTools, systemPromptAppend, extraRoots,
     agents: isWikiThread ? undefined : resolveAgents(kind, ownerId, s.projectId), agentName: s.agent || undefined,

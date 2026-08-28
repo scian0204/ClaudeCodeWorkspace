@@ -189,10 +189,13 @@ export const marketplaces = sqliteTable('marketplaces', {
   createdAt: integer('created_at').notNull(),
 });
 
+// Installed plugins. Scopes: admin-managed common + per-user personal + per-project (applies to
+// every session pointed at that project, whoever owns it — same shape as team_agents).
 export const plugins = sqliteTable('plugins', {
   id: text('id').primaryKey(),
-  scope: text('scope').notNull(), // 'common' | 'user'
-  ownerId: text('owner_id'),
+  scope: text('scope').notNull(), // 'common' | 'user' | 'project'
+  ownerId: text('owner_id'),      // uid for 'user'; null for 'common'/'project'
+  projectId: text('project_id').notNull().default(''), // projects.id for 'project'; '' otherwise
   name: text('name').notNull(),
   source: text('source').notNull(), // 'marketplace' | 'local'
   repo: text('repo'),

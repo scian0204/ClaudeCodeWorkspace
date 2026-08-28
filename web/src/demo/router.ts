@@ -526,6 +526,7 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
     db.projects.common = db.projects.common.filter((p: any) => p.id !== id);
     db.projects.mine = db.projects.mine.filter((p: any) => p.id !== id);
     for (const k of Object.keys(db.roomProjects)) db.roomProjects[k] = db.roomProjects[k].filter((p: any) => p.id !== id);
+    db.plugins.projects = db.plugins.projects.filter((p: any) => p.projectId !== id);
     return ok({ ok: true });
   }
   // the file watch is always live in the demo (no OS watch to fail)
@@ -695,7 +696,7 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   }
 
   // ---- plugins / marketplaces ----
-  if (P === '/api/plugins' && M === 'GET') return ok({ common: db.plugins.common, mine: db.plugins.mine, prefs: db.plugins.prefs });
+  if (P === '/api/plugins' && M === 'GET') return ok({ common: db.plugins.common, mine: db.plugins.mine, projects: db.plugins.projects, prefs: db.plugins.prefs });
   if (P === '/api/marketplaces' && M === 'GET') return ok({ common: db.marketplaces.common, mine: db.marketplaces.mine });
   if (P === '/api/marketplaces' && M === 'POST') {
     const src = String(b.ref || b.url || b.name || '').trim();
@@ -715,7 +716,9 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
     return ok({});
   }
   if (P === '/api/plugins/install' && M === 'POST') {
-    const arr = b.scope === 'common' ? db.plugins.common : db.plugins.mine;
+    if (b.scope === 'project' && !b.projectId) return { status: 400, data: { error: 'unknown project' } };
+    const arr = b.scope === 'common' ? db.plugins.common : b.scope === 'project' ? db.plugins.projects : db.plugins.mine;
+    const extra = b.scope === 'project' ? { scope: 'project', projectId: b.projectId } : {};
     const asked = String(b.name || b.plugin || '').trim();
     const gitRef = String(b.repo || '').trim();
     if (!asked && !gitRef) return { status: 400, data: { error: 'plugin name or repo required' } };
@@ -732,26 +735,33 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
       }
       const entry = id && db.marketCatalogs[id]?.plugins.find((p: any) => p.name.toLowerCase() === String(want || b.plugin || '').toLowerCase());
       if (!entry) return { status: 404, data: { error: `마켓에 "${want}" 플러그인이 없습니다` } };
-      arr.push({ id: genId('pl'), name: entry.name, source: 'marketplace', enabled: 1, forced: 0, repo: typeof entry.source === 'object' ? entry.source.url : null });
+      arr.push({ id: genId('pl'), name: entry.name, source: 'marketplace', enabled: 1, forced: 0, repo: typeof entry.source === 'object' ? entry.source.url : null, ...extra });
       return ok({});
     }
-    arr.push({ id: genId('pl'), name: asked || repoLast(gitRef), source: 'marketplace', enabled: 1, forced: 0, repo: fullRepo(gitRef) });
+    arr.push({ id: genId('pl'), name: asked || repoLast(gitRef), source: 'marketplace', enabled: 1, forced: 0, repo: fullRepo(gitRef), ...extra });
     return ok({});
   }
-  if (P === '/api/plugins/upload' && M === 'POST') { const arr = (b.scope === 'common') ? db.plugins.common : db.plugins.mine; arr.push({ id: genId('pl'), name: b.name || 'uploaded', source: 'local', enabled: 1, forced: 0, repo: null }); return ok({}); }
+  if (P === '/api/plugins/upload' && M === 'POST') {
+    const arr = b.scope === 'common' ? db.plugins.common : b.scope === 'project' ? db.plugins.projects : db.plugins.mine;
+    arr.push({ id: genId('pl'), name: b.name || 'uploaded', source: 'local', enabled: 1, forced: 0, repo: null, ...(b.scope === 'project' ? { scope: 'project', projectId: b.projectId } : {}) });
+    return ok({});
+  }
   if (seg[1] === 'plugins' && seg[3] === 'detail') return ok(pluginDetail(idAt(2)));
   if (seg[1] === 'plugins' && seg[3] === 'tree') return ok(levelFrom(TREE_PLUGIN, query.get('path') || ''));
   if (seg[1] === 'plugins' && seg[3] === 'file') { const path = query.get('path') || ''; return ok({ name: path.split('/').pop(), content: fileContent(path) }); }
   if (seg[1] === 'plugins' && seg[3] === 'update') return ok({});
   if (seg[1] === 'plugins' && (seg[3] === 'enabled' || seg[3] === 'forced' || seg[3] === 'pref')) {
-    const all = [...db.plugins.common, ...db.plugins.mine]; const p: any = all.find((x) => x.id === idAt(2));
+    const all = [...db.plugins.common, ...db.plugins.mine, ...db.plugins.projects]; const p: any = all.find((x) => x.id === idAt(2));
     if (p && seg[3] === 'enabled') p.enabled = b.enabled ? 1 : 0;
     if (p && seg[3] === 'forced') p.forced = b.forced ? 1 : 0;
     if (seg[3] === 'pref') { db.plugins.prefs = db.plugins.prefs.filter((x) => x.pluginId !== idAt(2)); db.plugins.prefs.push({ pluginId: idAt(2), enabled: b.enabled ? 1 : 0 }); }
     return ok({});
   }
   if (seg[1] === 'plugins' && seg[2] && seg.length === 3 && M === 'DELETE') {
-    db.plugins.common = db.plugins.common.filter((x) => x.id !== idAt(2)); db.plugins.mine = db.plugins.mine.filter((x) => x.id !== idAt(2)); return ok({});
+    db.plugins.common = db.plugins.common.filter((x) => x.id !== idAt(2));
+    db.plugins.mine = db.plugins.mine.filter((x) => x.id !== idAt(2));
+    db.plugins.projects = db.plugins.projects.filter((x: any) => x.id !== idAt(2));
+    return ok({});
   }
 
   // ---- users ----

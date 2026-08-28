@@ -4,7 +4,7 @@ import { cfg } from '../lib/config-registry.js';
 import { db, schema } from '../db/index.js';
 import { listAgents, getAgent, createAgent, updateAgent, setAgentEnabled, deleteAgent } from '../claude/team-agents.js';
 import { listFsAgents } from '../claude/fs-agents.js';
-import { canAccessProject, getProject } from './projects.js';
+import { canAccessProject, canManageProject, getProject } from './projects.js';
 
 // Team-agent CRUD. Mirrors the plugins trust model: 'common' agents are admin-only (their prompt is
 // injected into every member's turns once enabled — same class as forced plugins), personal agents
@@ -14,11 +14,6 @@ import { canAccessProject, getProject } from './projects.js';
 export async function agentRoutes(app: FastifyInstance) {
   const off = (reply: any) =>
     cfg.bool('teamAgentsEnabled') ? false : (reply.code(403).send({ error: 'team agents are disabled' }), true);
-  const canManageProject = (u: { id: string; role: string }, projectId: string) => {
-    if (u.role === 'admin') return true;
-    const p = getProject(projectId);
-    return !!p && p.scope === 'user' && p.ownerId === u.id;
-  };
   const canManage = (u: { id: string; role: string }, row: { scope: string; ownerId: string; projectId: string }) =>
     u.role === 'admin' || (row.scope === 'user' && row.ownerId === u.id)
     || (row.scope === 'project' && canManageProject(u, row.projectId));

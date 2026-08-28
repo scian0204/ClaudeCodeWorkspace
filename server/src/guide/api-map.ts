@@ -69,7 +69,7 @@ export const API_ROUTES: ApiRoute[] = [
   r('GET', '/api/wiki/topics/:id/file', 'one file of a topic as text. Query: ?path=<relative path>.'),
   r('GET', '/api/agents', 'team agents the user can see: { common, mine, project, files }. `files` are read-only .claude/agents/*.md found on disk.'),
   r('GET', '/api/pools', 'shared-plan pools (토큰 모아쓰기): { pools, allUsers, myPoolId, optedOut, hasCredential, canCreate }. All empty when an admin has the feature off.'),
-  r('GET', '/api/plugins', 'installed plugins: { common, mine, prefs }. Skills live inside plugins.'),
+  r('GET', '/api/plugins', 'installed plugins: { common, mine, projects, prefs }. `projects` are per-project installs (each row carries projectId) that apply to every chat pointed at that project. Skills live inside plugins.'),
   r('GET', '/api/plugins/:id/detail', "one plugin's manifest + the skills it exposes (with usage counters)."),
   r('GET', '/api/plugins/:id/tree', 'the file tree of an installed plugin — use it to see what a skill actually contains.'),
   r('GET', '/api/plugins/:id/file', 'one file of an installed plugin as text. Query: ?path=<relative path>.'),
@@ -127,8 +127,8 @@ export const API_ROUTES: ApiRoute[] = [
   r('PUT', '/api/pools/opt-out', "keep this user's own plan out of the workspace-wide pool. Body: { optOut: boolean }."),
 
   // ── write: plugins / skills ──
-  r('POST', '/api/plugins/install', 'install a plugin (its skills come with it). Body: { scope:"user"|"common", name?, repo? } — name is a plugin name (looked up in the registered marketplaces) or "<plugin>@<marketplace>"; repo is "owner/repo" or a full git URL and is only needed to install straight from a repo. Either field alone works; with both, the repo is cloned under the given name. { marketplaceId, plugin } names a marketplace plugin explicitly. scope "common" is admin-only; for a member always use "user".'),
-  r('POST', '/api/plugins/:id/enabled', 'enable/disable a plugin you own (or, as admin, a common one). Body: { enabled }.'),
+  r('POST', '/api/plugins/install', 'install a plugin (its skills come with it). Body: { scope:"user"|"common"|"project", name?, repo?, projectId? } — name is a plugin name (looked up in the registered marketplaces) or "<plugin>@<marketplace>"; repo is "owner/repo" or a full git URL and is only needed to install straight from a repo. Either field alone works; with both, the repo is cloned under the given name. { marketplaceId, plugin } names a marketplace plugin explicitly. scope "common" is admin-only; scope "project" needs `projectId` and is allowed for an admin on any project, or for a member on their own personal project — it then applies to every chat pointed at that project. For a member with no project in mind, use "user".'),
+  r('POST', '/api/plugins/:id/enabled', 'enable/disable a plugin you own — personal, or one on a project you manage (or, as admin, any). Body: { enabled }.'),
   r('POST', '/api/plugins/:id/pref', 'your personal on/off for a COMMON plugin. Body: { enabled }.'),
   r('POST', '/api/plugins/:id/update', 'pull the latest of a git-installed plugin (no body).'),
   r('POST', '/api/marketplaces', 'register a plugin marketplace. Body: { scope:"user"|"common", ref } — ref is "owner/repo" or a full git URL. The repo is cloned on the spot, so this fails on an unreachable repo or one without .claude-plugin/marketplace.json, and the name comes from that file.'),

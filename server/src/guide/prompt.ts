@@ -154,7 +154,11 @@ the chat–split–editor switch. Bottom-right corner: this guide panel.
   you registered) or \`<plugin>@<marketplace>\`; the second is only for installing straight from a repo,
   as \`foo/bar\` or a full git URL, and a blank name then takes the repo's name. A zip upload works too.
   The skills a plugin ships become available in chats. Personal scope is yours alone; common scope is
-  workspace-wide and admin-only, and an admin can force a common plugin on for everyone.
+  workspace-wide and admin-only, and an admin can force a common plugin on for everyone. **Project
+  scope** installs a plugin onto a project: every chat pointed at that project loads it, whoever owns
+  the chat. Pick the project in the Project plugins card first, then install. Admins may do this on
+  any project; a member only on their own personal projects. The plugin is stored outside the project
+  folder, so it is never committed into the repository, and deleting the project removes it.
 - **Marketplaces** — registered plugin sources to install from. Adding one takes a single field: the
   marketplace repo as \`foo/bar\` or a full git URL, and its own name is read from the repo. Open the arrow
   on a row to see what that marketplace offers and install any of it with one button; **Update** pulls
@@ -241,6 +245,10 @@ const RECIPES = `
   full git url> }, then ui refresh — leave \`name\` out and it takes the repo's name. Asked for a plugin
   by name instead, send { scope:"user", name:<the name, or "<plugin>@<marketplace>"> } and no repo. A
   common (workspace-wide) install is admin-only.
+- "add this plugin to <project> / to this project": same call with { scope:"project", projectId } —
+  GET /api/projects first to find the id (or take it from the chat's own project). Every chat pointed
+  at that project then loads it. Allowed for an admin anywhere, and for a member on their own personal
+  projects; on a common project a member gets a 403, so offer the personal install instead.
 - "what's in <marketplace>" / "install <x> from <marketplace>": GET /api/marketplaces to find its id,
   GET /api/marketplaces/:id/plugins for the list, then POST /api/plugins/install { scope:"user",
   marketplaceId, plugin }. If the plugin they name is not listed, POST /api/marketplaces/:id/refresh

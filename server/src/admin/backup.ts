@@ -36,7 +36,7 @@ const ARCHIVE = 'archive.tgz';
 const EXTRACT = 'x';
 // dataDir top-level entries a backup carries. WAL sidecars (app.db-wal/-shm) are deliberately NOT
 // in the archive (VACUUM INTO produces a self-contained snapshot; a stale WAL corrupts a restored DB).
-const DATA_DIRS = ['common', 'users', 'rooms', 'wiki', 'brand'];
+const DATA_DIRS = ['common', 'users', 'rooms', 'wiki', 'brand', 'project-plugins'];
 
 const rmrf = (p: string) => { try { fs.rmSync(p, { recursive: true, force: true }); } catch { /* best effort */ } };
 

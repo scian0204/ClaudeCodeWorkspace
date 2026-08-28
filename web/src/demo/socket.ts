@@ -328,12 +328,18 @@ function guidePlan(text: string): { steps: { input: any; output: string }[]; rep
   if ((url || shorthand) && /(skill|plugin|스킬|플러그인)/.test(q)) {
     const repo = url || shorthand!;
     const name = repo.replace(/\.git$/, '').split('/').pop() || 'plugin';
+    // "…이 프로젝트에" 라고 하면 프로젝트 범위로 — 그 프로젝트를 쓰는 모든 대화에 적용된다
+    const toProject = /(project|프로젝트)/.test(q);
+    const body = toProject ? { scope: 'project', projectId: 'p_api', repo } : { scope: 'user', repo };
+    const row = toProject ? `"scope":"project","projectId":"p_api"` : `"scope":"user"`;
     return {
       steps: [
-        { input: { method: 'POST', path: '/api/plugins/install', body: { scope: 'user', repo } }, output: `status=200\n{"plugin":{"id":"pl_demo","name":"${name}","scope":"user","enabled":true}}` },
+        { input: { method: 'POST', path: '/api/plugins/install', body }, output: `status=200\n{"plugin":{"id":"pl_demo","name":"${name}",${row},"enabled":true}}` },
         { input: { action: 'refresh' }, output: 'ok — dispatched refresh' },
       ],
-      reply: `\`${name}\` 플러그인을 개인 범위로 설치했습니다. 함께 들어 있는 스킬은 이제 채팅에서 바로 쓸 수 있어요.\n\n플러그인 패널에서 켜고 끌 수 있습니다.`,
+      reply: toProject
+        ? `\`${name}\` 플러그인을 \`api-server\` 프로젝트에 설치했습니다. 이 프로젝트를 쓰는 대화는 누구 것이든 이 플러그인을 함께 불러옵니다.\n\n플러그인 패널의 프로젝트 플러그인에서 켜고 끌 수 있습니다.`
+        : `\`${name}\` 플러그인을 개인 범위로 설치했습니다. 함께 들어 있는 스킬은 이제 채팅에서 바로 쓸 수 있어요.\n\n플러그인 패널에서 켜고 끌 수 있습니다.`,
     };
   }
   if (url) {
