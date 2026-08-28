@@ -9,6 +9,7 @@ import { getUserById, toAuthUser, type AuthUser } from '../auth/index.js';
 import { newId } from '../lib/ids.js';
 import { createProject, validateProjectInput } from '../routes/projects.js';
 import { createWikiTopic } from '../routes/wiki.js';
+import { cfg } from '../lib/config-registry.js';
 
 export interface ActionField { key: string; type: 'text' | 'textarea'; required: boolean; }
 export interface AdminAction {
@@ -75,8 +76,12 @@ export const ACTIONS: Record<string, AdminAction> = {
 };
 
 // Registry projection for GET /api/requests/actions — lets the UI render a form per action.
+// `commonProjectOpen` makes the common-project request pointless (anyone may create one directly),
+// so it drops out of the list; requests already filed still approve through ACTIONS as before.
 export function actionList() {
-  return Object.entries(ACTIONS).map(([type, a]) => ({ type, label: a.label, fields: a.fields }));
+  return Object.entries(ACTIONS)
+    .filter(([type]) => !(type === 'common_project' && cfg.bool('commonProjectOpen')))
+    .map(([type, a]) => ({ type, label: a.label, fields: a.fields }));
 }
 
 function getRequest(id: string) {

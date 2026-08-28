@@ -7,9 +7,10 @@ import { IconDownload, IconPlus } from '../lib/icons';
 // The single project-create form, reused by Chat's ProjectMenu (compact, in the dropdown) and My Page's
 // requests section. It mirrors the real create feature — name / git clone URL / branch / credential
 // picker — and decides what "submit" means from the scope + the current user's role:
-//   • scope !== 'common'                → direct POST /api/projects (as today)
-//   • scope === 'common' AND admin      → direct POST /api/projects { scope:'common' }
-//   • scope === 'common' AND member     → submitRequest('common_project', …) (admin approval → real clone)
+//   • scope !== 'common'                       → direct POST /api/projects (as today)
+//   • scope === 'common' AND admin             → direct POST /api/projects { scope:'common' }
+//   • scope === 'common' AND commonProjectOpen → direct POST for members too (admin setting)
+//   • scope === 'common' AND member            → submitRequest('common_project', …) (admin approval → real clone)
 // Only a credentialId REFERENCE is sent — never a token/secret.
 export function ProjectCreateForm({ scope, roomId, compact, onCreated, onDone }: {
   scope: 'user' | 'room' | 'common';
@@ -19,6 +20,7 @@ export function ProjectCreateForm({ scope, roomId, compact, onCreated, onDone }:
   onDone?: () => void;                            // called after any successful submit (close menu / reset)
 }) {
   const isAdmin = useStore((s) => s.user?.role === 'admin');
+  const commonOpen = useStore((s) => s.commonProjectOpen);
   const submitRequest = useStore((s) => s.submitRequest);
   const refresh = useStore((s) => s.refreshLists);
   const setError = useStore((s) => s.setError);
@@ -33,7 +35,7 @@ export function ProjectCreateForm({ scope, roomId, compact, onCreated, onDone }:
 
   useEffect(() => { api.get('/api/git-credentials').then((r) => setCreds([...(r.mine || []), ...(r.common || [])])).catch(() => {}); }, []);
 
-  const asRequest = scope === 'common' && !isAdmin; // member → request instead of direct create
+  const asRequest = scope === 'common' && !isAdmin && !commonOpen; // member → request instead of direct create
   const git = gitUrl.trim();
   const inputCls = compact ? 'input !py-1 !text-xs' : 'input';
 

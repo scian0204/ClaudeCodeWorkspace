@@ -285,7 +285,7 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   if (P === '/api/admin/restore/apply' && M === 'POST') { ADMIN.restoreStaged = null; return ok({ ok: true }); }
 
   // ---- client-facing config (model dropdown) ----
-  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, sessionExportEnabled: true, sessionBundleEnabled: true, fileTreeWarnCount: 300, teamAgentsEnabled: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenu: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, wikiLinkEnabled: true, wikiAutoLearnEnabled: true, reviewWebhookEnabled: true, guideEnabled: true, guideWriteEnabled: true, asideEnabled: true, taskPanelEnabled: true, processPollMs: 5000, toolFoldMin: 3, tokenPoolEnabled: true, tokenPoolAllUsers: true, tokenPoolPartyCreate: true, sessionSandboxEnabled: true, projectWatchEnabled: true, projectWatchPromptEnabled: true, projectWatchPromptMaxChars: 2000, dockerReady: ADMIN.docker.ok && ADMIN.docker.configured, dockerReason: ADMIN.docker.reason, updateAvailable: ADMIN.update.status().updateAvailable, updateLatest: ADMIN.update.status().latest });
+  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, sessionExportEnabled: true, sessionBundleEnabled: true, fileTreeWarnCount: 300, teamAgentsEnabled: true, commonProjectOpen: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenu: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, wikiLinkEnabled: true, wikiAutoLearnEnabled: true, reviewWebhookEnabled: true, guideEnabled: true, guideWriteEnabled: true, asideEnabled: true, taskPanelEnabled: true, processPollMs: 5000, toolFoldMin: 3, tokenPoolEnabled: true, tokenPoolAllUsers: true, tokenPoolPartyCreate: true, sessionSandboxEnabled: true, projectWatchEnabled: true, projectWatchPromptEnabled: true, projectWatchPromptMaxChars: 2000, dockerReady: ADMIN.docker.ok && ADMIN.docker.configured, dockerReason: ADMIN.docker.reason, updateAvailable: ADMIN.update.status().updateAvailable, updateLatest: ADMIN.update.status().latest });
 
   // ── shared-plan pools ("토큰 모아쓰기") ──
   if (P === '/api/pools' && M === 'GET') return ok({ pools: db.pools, allUsers: true, myPoolId: db.myPoolId, optedOut: db.poolOptedOut, hasCredential: true, canCreate: true });
@@ -360,7 +360,9 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   if (P === '/api/search') return ok(searchDemo(String(query.get('q') || '')));
 
   // ---- member requests (approval workflow) ----
-  if (P === '/api/requests/actions') return ok({ actions: REQUEST_ACTIONS });
+  // commonProjectOpen is on in the demo, so the common-project request drops out of the list —
+  // the same projection the server does (admin/requests.ts actionList)
+  if (P === '/api/requests/actions') return ok({ actions: REQUEST_ACTIONS.filter((a: any) => a.type !== 'common_project') });
   if (P === '/api/requests' && M === 'GET') return ok({ requests: db.requests }); // demo me is admin → all
   if (P === '/api/requests' && M === 'POST') {
     const req = { id: genId('req'), requesterId: db.me.id, type: String(b.type || ''), payload: JSON.stringify(b.payload || {}), reason: String(b.reason || ''), status: 'pending', reviewerId: null, decidedAt: null, result: null, createdAt: Date.now(), updatedAt: Date.now() };

@@ -9,6 +9,7 @@
 import type { AuthUser } from '../auth/index.js';
 import { apiReference } from './api-map.js';
 import { uiActionReference } from './ui-actions.js';
+import { cfg } from '../lib/config-registry.js';
 
 // Mirror of web/src/lib/shortcuts.ts SHORTCUT_GROUPS. The cheat sheet in the app is generated from
 // that table and is always authoritative — when asked, prefer the `openShortcuts` ui action AND a
@@ -76,6 +77,9 @@ the chat–split–editor switch. Bottom-right corner: this guide panel.
 ### Projects, files and git
 - **Project** — a working directory a chat runs in. Created empty or by cloning a git repository.
   The sidebar groups chats by project. A private repo needs a git credential stored for that host.
+  Personal projects are yours; a **common** project is shared with everyone and is admin-only to
+  create unless \`commonProjectOpen\` is on, in which case any member creates one straight from the
+  project menu. Deleting a common project stays admin-only either way.
 - **File explorer** — browse and preview the project's files beside the chat (Ctrl/Cmd+Shift+F).
 - **Git panel** (Ctrl/Cmd+Shift+G) — status, commit, push, pull (plain or with rebase), branch
   switching, remotes (add / retarget / remove), and **History**: a commit graph with branches and
@@ -105,7 +109,9 @@ the chat–split–editor switch. Bottom-right corner: this guide panel.
 - **DM & group chat** — plain person-to-person text, no Claude involved. An admin can promote a group
   channel into a common project room.
 - **Member requests** — a member asks an admin for an admin-only action (common project, wiki topic,
-  role upgrade); the admin approves and the server runs it as the requester.
+  role upgrade); the admin approves and the server runs it as the requester. With
+  \`commonProjectOpen\` on, the common-project request disappears from the list — there is nothing to
+  ask for.
 - **Workspace search** (Ctrl/Cmd+K) — one palette over chats, rooms, DMs, projects, wiki, PR reviews
   and people, sorted newest/oldest with per-feature tabs. Nobody, admins included, can search someone
   else's private chats, threads or DMs.
@@ -306,9 +312,10 @@ the server exactly as if they had clicked it themselves. You cannot exceed their
 not try to.
 ${isAdmin
     ? '- They are an ADMIN, so workspace-wide actions are available to them.'
-    : `- They are a MEMBER. Admin-only things (common projects, common plugins, wiki topics, workspace
-  settings, other people's data) are NOT available. Do not attempt them "to see if it works" — offer
-  to file a member request instead (POST /api/requests), or explain who to ask.`}
+    : `- They are a MEMBER. Admin-only things (common plugins, wiki topics, workspace settings, other
+  people's data) are NOT available. Do not attempt them "to see if it works" — offer to file a member
+  request instead (POST /api/requests), or explain who to ask.
+- Creating a COMMON project is ${cfg.bool('commonProjectOpen') ? 'open to them right now (`commonProjectOpen` is on) — POST /api/projects { scope:"common", … } works' : 'admin-only right now (`commonProjectOpen` is off) — file a member request instead'}.`}
 - A 403 means the answer is no. Report it plainly; never look for a way around it.
 - You have no access to anyone else's chats, projects, threads or DMs, and no way to read or set
   secrets (Claude tokens, git credentials, provider keys). Those are typed by the human into the real

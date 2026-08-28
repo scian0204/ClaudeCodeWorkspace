@@ -5,7 +5,7 @@ import { promisify } from 'node:util';
 import type { FastifyInstance } from 'fastify';
 import { and, eq } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
-import { requireAuth, requireAdmin, type AuthUser } from '../auth/index.js';
+import { requireAuth, type AuthUser } from '../auth/index.js';
 import { paths, ensure } from '../lib/paths.js';
 import { newId } from '../lib/ids.js';
 import { walkFiles, listDir, resolveUnder, IMG_CT } from '../lib/filetree.js';
@@ -158,10 +158,14 @@ export async function projectRoutes(app: FastifyInstance) {
   app.post('/api/projects', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
     const body = (req.body || {}) as ProjectInput;
-    // Members reach a common project ONLY through an approved member-request (admin/requests.ts);
-    // the direct route stays admin-only. createProject itself does NOT gate common (approval creates
-    // one for a member on purpose), so the gate must live here.
-    if (body.scope === 'common' && !requireAdmin(req, reply)) return;
+    // By default a member reaches a common project ONLY through an approved member-request
+    // (admin/requests.ts) and the direct route stays admin-only. `commonProjectOpen` lets anyone
+    // create one directly; deleting stays admin-only either way (the row has no creator column).
+    // createProject itself does NOT gate common (approval creates one for a member on purpose),
+    // so the gate must live here.
+    if (body.scope === 'common' && u.role !== 'admin' && !cfg.bool('commonProjectOpen')) {
+      return reply.code(403).send({ error: 'admin only' });
+    }
     try {
       const row = await createProject(body, u);
       return { project: row };
