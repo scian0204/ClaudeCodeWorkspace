@@ -40,7 +40,7 @@ export async function authRoutes(app: FastifyInstance) {
   app.post('/api/auth/login', async (req, reply) => {
     const { username, password } = (req.body || {}) as any;
     if (!username || !password) return reply.code(400).send({ error: 'username/password required' });
-    const res = login(String(username), String(password));
+    const res = await login(String(username), String(password));
     if (!res) return reply.code(401).send({ error: 'invalid credentials' });
     reply.setCookie(COOKIE, res.token, { httpOnly: true, sameSite: 'lax', path: '/', maxAge: cfg.int('sessionTtlDays') * 86_400 });
     return { user: authUserWithToken(res.user) };
@@ -253,6 +253,10 @@ export async function authRoutes(app: FastifyInstance) {
     const { password } = (req.body || {}) as any;
     if (me.role !== 'admin' && me.id !== id) return reply.code(403).send({ error: 'forbidden' });
     if (!password) return reply.code(400).send({ error: 'password required' });
+    // A directory account has no local password by design — writing one here would leave a hash that
+    // login() never consults, which just looks like a broken password reset.
+    const target = getUserById(String(id));
+    if (target && target.authSource !== 'local') return reply.code(400).send({ error: `password is managed by ${target.authSource}` });
     db.update(schema.users).set({ passwordHash: hashPassword(String(password)) }).where(eq(schema.users.id, id)).run();
     return { ok: true };
   });

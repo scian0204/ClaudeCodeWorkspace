@@ -145,6 +145,11 @@ CREATE TABLE IF NOT EXISTS token_pools (
   strategy TEXT NOT NULL DEFAULT 'rotate', cursor INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS auth_providers (
+  id TEXT PRIMARY KEY, kind TEXT NOT NULL, config_enc TEXT NOT NULL,
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_auth_providers_kind ON auth_providers(kind);
 CREATE TABLE IF NOT EXISTS token_pool_members (
   pool_id TEXT NOT NULL, user_id TEXT NOT NULL, priority INTEGER NOT NULL DEFAULT 0,
   cooldown_until INTEGER NOT NULL DEFAULT 0, joined_at INTEGER NOT NULL,
@@ -216,6 +221,11 @@ export function initDb() {
   // project-scope team agents ('' for common/user rows). The unique index must include project_id,
   // so it is (re)created here — after the ALTER — instead of in the DDL block.
   try { sqlite.exec("ALTER TABLE team_agents ADD COLUMN project_id TEXT NOT NULL DEFAULT ''"); } catch { /* already present */ }
+  // which directory owns an account's password (local scrypt hash / LDAP / OIDC) + the directory's
+  // own stable key for it. Existing rows stay 'local', so nothing about them changes.
+  try { sqlite.exec("ALTER TABLE users ADD COLUMN auth_source TEXT NOT NULL DEFAULT 'local'"); } catch { /* already present */ }
+  try { sqlite.exec("ALTER TABLE users ADD COLUMN external_id TEXT"); } catch { /* already present */ }
+  try { sqlite.exec("ALTER TABLE users ADD COLUMN external_synced_at INTEGER"); } catch { /* already present */ }
   sqlite.exec("DROP INDEX IF EXISTS idx_team_agents_scope_owner_name");
   sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_team_agents_scope_owner_proj_name ON team_agents(scope, owner_id, project_id, name)");
   db = drizzle(sqlite, { schema });
