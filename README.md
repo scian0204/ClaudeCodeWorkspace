@@ -125,11 +125,13 @@ Claude pauses right before a risky tool and asks the browser: **Allow / Deny / A
 </tr>
 </table>
 
-### 🤝 Shared plans · 📦 Per-session build container
+### 🤝 Shared plans · 📦 Per-session build container · 🪟 Windows builds
 
 **Shared plans ("토큰 모아쓰기")** — members who registered their own Claude plan can pool them, so a turn runs on a pool member's plan instead of only the sender's. When one member's allowance is used up, the same prompt continues on the next member's plan instead of failing. Three levels decide which pool backs a turn, most specific first: the **session's own choice** (a pool, or "each sender's own plan" to opt out — a shared room counts as one session), the **sender's own default pool** (their party, set in My Page), then **workspace-wide sharing** — one admin switch that pools the plan of every user who registered one, with nothing to create or join (individuals can keep their own plan out). Joining is always the member's own action — nobody can enrol someone else's plan — and each answer says whose plan paid for it. Off by default; an admin turns it on.
 
 **Per-session build container** — every session shares the app container, so two people who both run `npm run dev` or a test suite collide on ports and caches. Turn the header toggle on and the session gets its own sibling container: installs, builds, dev servers and tests run in there through a tool Claude is told to prefer, while the ordinary shell stays available for git and file work. The container survives between turns (so `node_modules` sticks around) and is removed once the session goes idle. Off by default; an admin turns it on.
+
+**Windows build container (.NET Framework)** — MSBuild for .NET Framework only exists in a Windows container, and one Docker daemon cannot run Linux and Windows containers at the same time. So the same header pill can point a chat at a container on a **separate Windows Docker host** instead: `/sandbox windows`, or pick it from the pill. The project is copied to that host before each command (there is no shared volume between the two daemons) and sits at `C:\project` inside the container, so `nuget restore`, `msbuild` and `vstest.console` work while the ordinary tools keep editing the project on its normal path. Build output stays in the container and persists between commands, so incremental builds are not repeated. An admin sets the host address — `tcp://host:2376` plus a cert dir for TLS — and can pull the multi-GB SDK image and test the connection from the **Windows build container** settings group. Off by default; not used for PR review (the hardening those sandboxes rely on is Linux-only).
 
 ### 📎 `@` file references · 🖇 attach & paste
 
@@ -594,6 +596,8 @@ flowchart TB
 | `BOOTSTRAP_ADMIN_USER` / `_PASSWORD` | First-boot admin (only when there are zero users) | `admin` |
 | `CODE_SERVER_IMAGE` | Editor image | `codercom/code-server:latest` |
 | `CODE_SERVER_IDLE_MS` | Idle-container reclaim time | `1800000` |
+| `WIN_DOCKER_HOST` | Windows Docker host for .NET Framework builds, e.g. `tcp://win-build:2376` (empty = the feature stays off) | — |
+| `WIN_DOCKER_CERT_DIR` | Dir with `ca.pem`/`cert.pem`/`key.pem` for that host; set = TLS. Mount it into the container | — |
 
 > Every variable above is only the **default**. All operational settings — plus many that were previously hardcoded (git/provider timeouts, sandbox limits, session lifetime, retry/backoff, …) — are live-editable in the **admin panel → Configuration**, stored as DB overrides that apply without a restart. Infrastructure (`PORT`, `DATA_DIR`, TLS, docker network/volume) and secrets are shown read-only there; edit `.env` and restart to change those.
 

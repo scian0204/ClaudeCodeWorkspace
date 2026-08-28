@@ -32,7 +32,7 @@ function stub(over: Partial<CmdStore> = {}) {
     theme: 'light', user: { role: 'member' },
     sessionExportEnabled: true, searchEnabled: true, taskPanelEnabled: true, dockerReady: true, asideEnabled: true,
     setMode: async (m) => { calls.push(`setMode:${m}`); },
-    setSandbox: async (on) => { calls.push(`setSandbox:${on}`); },
+    setSandbox: async (on, target) => { calls.push(`setSandbox:${on}${target ? ':' + target : ''}`); },
     setExportOpen: rec('setExportOpen'), setPanel: rec('setPanel'), setTasksOpen: rec('setTasksOpen'),
     setGitPanelOpen: rec('setGitPanelOpen'), setExplorerOpen: rec('setExplorerOpen'),
     setShortcutsOpen: rec('setShortcutsOpen'), setSearchOpen: rec('setSearchOpen'),
@@ -77,6 +77,10 @@ eq(run('/btw', 'x', { asideEnabled: false }), { handled: true, calls: [] }, 'sid
 // ── /sandbox and /theme read their argument ──
 eq(run('/sandbox').calls, ['setSandbox:true'], 'bare /sandbox turns it on');
 eq(run('/sandbox', 'off').calls, ['setSandbox:false'], '/sandbox off');
+eq(run('/sandbox', 'windows').calls, ['setSandbox:true:windows'], '/sandbox windows picks the target and turns it on');
+eq(run('/sandbox', 'win').calls, ['setSandbox:true:windows'], '/sandbox win is the same thing');
+eq(run('/sandbox', 'linux').calls, ['setSandbox:true:linux'], '/sandbox linux switches back');
+eq(run('/sandbox', 'on').calls, ['setSandbox:true'], '/sandbox on leaves the target alone');
 eq(run('/theme', 'dark').calls, ['toggleTheme'], '/theme dark from light');
 eq(run('/theme', 'light').calls, [], 'already light — nothing to do');
 

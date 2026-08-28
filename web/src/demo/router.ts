@@ -285,7 +285,7 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   if (P === '/api/admin/restore/apply' && M === 'POST') { ADMIN.restoreStaged = null; return ok({ ok: true }); }
 
   // ---- client-facing config (model dropdown) ----
-  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, sessionExportEnabled: true, sessionBundleEnabled: true, fileTreeWarnCount: 300, teamAgentsEnabled: true, commonProjectOpen: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenu: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, wikiLinkEnabled: true, wikiAutoLearnEnabled: true, reviewWebhookEnabled: true, guideEnabled: true, guideWriteEnabled: true, asideEnabled: true, taskPanelEnabled: true, processPollMs: 5000, toolFoldMin: 3, tokenPoolEnabled: true, tokenPoolAllUsers: true, tokenPoolPartyCreate: true, sessionSandboxEnabled: true, projectWatchEnabled: true, projectWatchPromptEnabled: true, projectWatchPromptMaxChars: 2000, dockerReady: ADMIN.docker.ok && ADMIN.docker.configured, dockerReason: ADMIN.docker.reason, updateAvailable: ADMIN.update.status().updateAvailable, updateLatest: ADMIN.update.status().latest });
+  if (P === '/api/config') return ok({ models: ADMIN.models, defaultModel: ADMIN.defaultModel, defaultEffort: ADMIN.defaultEffort, sessionImportEnabled: true, sessionExportEnabled: true, sessionBundleEnabled: true, fileTreeWarnCount: 300, teamAgentsEnabled: true, commonProjectOpen: true, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenu: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, wikiLinkEnabled: true, wikiAutoLearnEnabled: true, reviewWebhookEnabled: true, guideEnabled: true, guideWriteEnabled: true, asideEnabled: true, taskPanelEnabled: true, processPollMs: 5000, toolFoldMin: 3, tokenPoolEnabled: true, tokenPoolAllUsers: true, tokenPoolPartyCreate: true, sessionSandboxEnabled: true, winSandboxEnabled: true, projectWatchEnabled: true, projectWatchPromptEnabled: true, projectWatchPromptMaxChars: 2000, dockerReady: ADMIN.docker.ok && ADMIN.docker.configured, dockerReason: ADMIN.docker.reason, updateAvailable: ADMIN.update.status().updateAvailable, updateLatest: ADMIN.update.status().latest });
 
   // ── shared-plan pools ("토큰 모아쓰기") ──
   if (P === '/api/pools' && M === 'GET') return ok({ pools: db.pools, allUsers: true, myPoolId: db.myPoolId, optedOut: db.poolOptedOut, hasCredential: true, canCreate: true });
@@ -964,6 +964,9 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   if (P === '/api/admin/cleanup' && M === 'POST') return ok(ADMIN.runCleanup(b.action));
   if (P === '/api/admin/processes' && M === 'GET') return ok(ADMIN.processes);
   if (P === '/api/admin/processes' && M === 'POST') return ok(ADMIN.runProcess(b));
+  // remote Windows build host: the cached verdict, and the admin panel's "test connection" button
+  if (P === '/api/admin/windows-docker' && M === 'GET') return ok({ windows: ADMIN.winDocker });
+  if (P === '/api/admin/windows-docker/test' && M === 'POST') return ok({ windows: { ...ADMIN.winDocker, checkedAt: Date.now() } });
   if (P === '/api/admin/docker/probe' && M === 'POST') return ok({ docker: { ...ADMIN.docker, checkedAt: Date.now() } });
   if (P === '/api/admin/update' && M === 'GET') return ok(ADMIN.update.status());
   if (P === '/api/admin/update/check' && M === 'POST') return ok(ADMIN.update.status());

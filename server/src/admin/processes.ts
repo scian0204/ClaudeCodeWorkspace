@@ -6,6 +6,7 @@ import { allQueueStates, cancelQueued } from '../rooms/queue.js';
 import { killEditor } from '../codeserver/manager.js';
 import { killSessionSandbox } from '../claude/session-sandbox.js';
 import { killSandbox } from '../review/sandbox.js';
+import { listWinSandboxes, killWinSandbox } from '../claude/win-sandbox.js';
 
 // Admin "activity / processes" — a live task-manager view over the runtime activity the server
 // already manages (running/queued Claude turns, code-server editor containers, review sandbox
@@ -15,7 +16,7 @@ import { killSandbox } from '../review/sandbox.js';
 export interface ProcTurn { sessionId: string; title: string; kind: string; author: { id: string; name: string }; startedAt: number; elapsedMs: number }
 export interface ProcQueued { sessionId: string; itemId: string; author: { id: string; name: string } }
 export interface ProcEditor { id: string; name: string; owner: string; project: string; state: string; createdAt: number }
-export interface ProcSandbox { id: string; name: string; state: string; createdAt: number }
+export interface ProcSandbox { id: string; name: string; state: string; createdAt: number; host?: 'windows' }
 export interface ProcPipeline { reviewId: string; prNumber: number; prTitle: string; repoName: string; chatSessionId: string }
 export interface ProcessList {
   turns: ProcTurn[]; queued: ProcQueued[]; editors: ProcEditor[]; sandboxes: ProcSandbox[];
@@ -54,6 +55,12 @@ export async function listProcesses(): Promise<ProcessList> {
     });
     sandboxes = sbx.map((c): ProcSandbox => ({ id: c.id, name: c.name, state: c.state, createdAt: c.createdAt }));
   } catch { dockerUnavailable = true; }
+  // Windows build containers live on a SECOND daemon, so they need their own listing. An unreachable
+  // Windows host must not make the local Docker look down, hence the separate try.
+  try {
+    const win = await listWinSandboxes();
+    sandboxes = [...sandboxes, ...win.map((c): ProcSandbox => ({ ...c, host: 'windows' as const }))];
+  } catch { /* remote host unreachable — nothing to show */ }
 
   // ── review pipelines (DB) — review_sessions mid-run (verdict='running') ──
   const repoNames = new Map(db.select().from(schema.reviewRepos).all().map((r) => [r.id, r.name]));
@@ -79,9 +86,10 @@ export async function controlProcess(kind: string, action: string, ids: { sessio
       return { ok: await killEditor(ids.id) };
     case 'sandbox':
       if (action !== 'stop' || !ids.id) throw new Error('sandbox: stop + id required');
-      // one id, two kinds: the session killer force-removes by id either way and also drops the
-      // in-memory entry when it is a session container
-      return { ok: (await killSessionSandbox(ids.id)) || (await killSandbox(ids.id)) };
+      // one id, three kinds: the session killer force-removes by id either way and also drops the
+      // in-memory entry when it is a session container; the Windows one lives on the other daemon,
+      // where an id from this list can only be found by asking that daemon
+      return { ok: (await killSessionSandbox(ids.id)) || (await killSandbox(ids.id)) || (await killWinSandbox(ids.id)) };
     case 'pipeline':
       // "stop" a running review pipeline = interrupt the Claude turn driving its chat session.
       if (action !== 'stop' || !ids.chatSessionId) throw new Error('pipeline: stop + chatSessionId required');

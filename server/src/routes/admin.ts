@@ -2,8 +2,9 @@ import type { FastifyInstance } from 'fastify';
 import { requireAdmin } from '../auth/index.js';
 import { db, schema } from '../db/index.js';
 import { getSetting, setSetting } from '../lib/settings.js';
-import { cfg, listConfigForApi, setConfigValue, resetConfigValue, imageConfigValues } from '../lib/config-registry.js';
+import { cfg, listConfigForApi, setConfigValue, resetConfigValue, imageConfigValues, imageHostFor } from '../lib/config-registry.js';
 import { inspectImage, pullImage } from '../lib/docker-images.js';
+import { probeWinDocker, winDockerStatus, winDocker } from '../lib/docker-hosts.js';
 import { scanResources, runCleanup } from '../admin/cleanup.js';
 import { listProcesses, controlProcess } from '../admin/processes.js';
 import { appVersion, cachedStatus, checkForUpdate, updateStatus, applyUpdate } from '../admin/self-update.js';
@@ -14,6 +15,12 @@ import { setCommonToken, clearCommonToken, commonTokenMeta } from '../auth/claud
 import { startLogin, submitCode, cancelLogin, logoutLogin, loginMeta, loginInFlight, COMMON as COMMON_LOGIN } from '../auth/claude-login.js';
 import { getProvider, setProvider, clearProvider } from '../auth/provider.js';
 import { refreshModels } from '../claude/models.js';
+
+// Which daemon an image-typed setting points at. Only ever called with a value that already passed
+// the imageConfigValues() allowlist, so this cannot be steered at an arbitrary host.
+function hostFor(image: string) {
+  return imageHostFor(image) === 'windows' ? (winDocker() || undefined) : undefined;
+}
 
 export async function adminRoutes(app: FastifyInstance) {
   app.get('/api/admin/overview', async (req, reply) => {
@@ -96,15 +103,26 @@ export async function adminRoutes(app: FastifyInstance) {
     if (!requireAdmin(req, reply)) return;
     const image = String((req.body as any)?.image || '');
     if (!imageConfigValues().includes(image)) return reply.code(400).send({ error: 'unknown image' });
-    return inspectImage(image);
+    return inspectImage(image, hostFor(image));
   });
   app.post('/api/admin/image/pull', async (req, reply) => {
     if (!requireAdmin(req, reply)) return;
     const image = String((req.body as any)?.image || '');
     if (!imageConfigValues().includes(image)) return reply.code(400).send({ error: 'unknown image' });
-    try { await pullImage(image); }
+    try { await pullImage(image, hostFor(image)); }
     catch (e: any) { return reply.code(500).send({ error: String(e?.message || e).slice(0, 300) }); }
-    return inspectImage(image);
+    return inspectImage(image, hostFor(image));
+  });
+
+  // ── remote Windows build host: reachability + "is it really a Windows daemon" ──
+  // GET is the cached verdict (cheap, for rendering); POST re-probes on the admin's click.
+  app.get('/api/admin/windows-docker', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    return { windows: winDockerStatus() };
+  });
+  app.post('/api/admin/windows-docker/test', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    return { windows: await probeWinDocker() };
   });
 
   // ── resource cleanup (spawned containers / dangling images / orphaned dirs+rows) ──

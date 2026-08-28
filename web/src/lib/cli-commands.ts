@@ -29,7 +29,7 @@ export interface CmdStore {
   taskPanelEnabled: boolean;
   dockerReady: boolean;
   setMode: (mode: string) => Promise<void>;
-  setSandbox: (on: boolean) => Promise<void>;
+  setSandbox: (on: boolean, target?: string) => Promise<void>;
   setExportOpen: (open: boolean) => void;
   setPanel: (p: null | 'admin' | 'plugins' | 'agents' | 'me') => void;
   setTasksOpen: (open: boolean) => void;
@@ -76,8 +76,13 @@ export const WORKSPACE_CMDS: WorkspaceCmd[] = [
   },
   { cmds: ['/plan'], label: 'cliCmd.plan', run: (s) => { void s.setMode('plan'); return true; } },
   {
-    cmds: ['/sandbox'], label: 'cliCmd.sandbox', hint: 'on|off',
-    run: (s, arg) => { void s.setSandbox(arg !== 'off'); return true; },
+    cmds: ['/sandbox'], label: 'cliCmd.sandbox', hint: 'on|off|linux|windows',
+    // naming a target turns it on there in one go — `/sandbox windows` is the whole gesture
+    run: (s, arg) => {
+      const target = arg === 'windows' || arg === 'win' ? 'windows' : arg === 'linux' ? 'linux' : undefined;
+      void s.setSandbox(arg !== 'off', target);
+      return true;
+    },
   },
   {
     cmds: ['/export'], label: 'cliCmd.export',

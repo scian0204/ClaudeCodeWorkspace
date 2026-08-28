@@ -91,6 +91,13 @@ the chat–split–editor switch. Bottom-right corner: this guide panel.
   side by side with the chat (the chat / split / editor switch).
 - **Per-session build container** — a locked-down sibling container a chat can build and run in
   (\`sessionSandboxEnabled\`).
+- **Windows build container (.NET Framework)** — the same **build container** pill can instead point
+  a chat at a container on a Windows Docker host, which is the only place MSBuild for .NET Framework
+  runs. The pill becomes a picker (off / Linux container / Windows container); \`/sandbox windows\`
+  does the same from the composer. The project is copied to the Windows host before each command and
+  lives at \`C:\\project\` there; build output stays inside that container. Not used for PR review.
+  Flags \`winSandboxEnabled\` + \`winDockerHost\` (an admin sets the host address and can test it in
+  the admin panel's **Windows build container** settings group).
 - **Project file-change watch** — a chat can watch the project it points at and hear when the files
   are changed somewhere else: another chat's turn, an edit in the VS Code view, a git pull. The
   **Watch** pill in the chat header has three settings — off, notify only, or notify plus sending a
