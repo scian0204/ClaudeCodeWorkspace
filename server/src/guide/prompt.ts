@@ -122,6 +122,9 @@ the chat–split–editor switch. Bottom-right corner: this guide panel.
   an existing chat (personal or room), from a project's files, or from nothing at all. Admins can add
   or edit sources later and press recompile (\`wikiSourceEditEnabled\`), and rename a topic or change
   its settings from the gear on its sidebar row.
+- **Wiki link graph** — the wiki file explorer has a second view that draws the compiled articles as
+  a graph: one dot per article, a line for every cross-link the compile wrote, clicking a dot opens
+  that article. Zoom with the wheel, drag to move (\`wikiGraphMaxNodes\` caps how much is drawn).
 - **Wiki threads are plugin-isolated** — a wiki query (and the compile) loads ONE plugin, the bundled
   \`llm-wiki\` skill, and only the topic's own CLAUDE.md. Workspace plugins, personal settings and team
   agents do not apply there, so answers cannot pick up another plugin's style or hooks

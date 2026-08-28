@@ -7,6 +7,7 @@ import { requireAuth, requireAdmin } from '../auth/index.js';
 import { paths, ensure } from '../lib/paths.js';
 import { newId } from '../lib/ids.js';
 import { compileTopic } from '../wiki/compile.js';
+import { buildGraph } from '../wiki/graph.js';
 import { applySeed, type Seed, type SeedType } from '../wiki/seed.js';
 import { pendingProposals, decideProposal, getProposal } from '../wiki/learn.js';
 import { canAccessProject, getProject } from './projects.js';
@@ -419,6 +420,25 @@ export async function wikiRoutes(app: FastifyInstance) {
       wiki: walkFiles(path.join(t.path, 'wiki')).map((f) => f.name),
       raw: walkFiles(path.join(t.path, 'raw')).map((f) => f.name),
     };
+  });
+
+  // article link graph of a topic (any user) — nodes/edges read out of the compiled wiki/ markdown.
+  // Nothing is stored: the links live in the articles, so this is a re-read, and a recompile changes
+  // the graph the next time it is opened.
+  app.get('/api/wiki/topics/:id/graph', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    const { id } = req.params as any;
+    const t = getTopic(id); if (!t) return reply.code(404).send({ error: 'not found' });
+    const wikiDir = path.join(t.path, 'wiki');
+    const md = walkFiles(wikiDir).filter((f) => /\.(md|markdown)$/i.test(f.name));
+    const max = cfg.int('wikiGraphMaxNodes');
+    const files = md.slice(0, max).map(({ name, size }) => {
+      let content = '';
+      // only the links are wanted, and a huge generated file would cost more to scan than it says
+      if (size <= 500_000) { try { content = fs.readFileSync(path.join(wikiDir, name), 'utf8'); } catch { /* unreadable */ } }
+      return { path: name, content };
+    });
+    return { ...buildGraph(files), truncated: md.length > max, status: t.compileStatus };
   });
 
   // ONE directory level of a topic (any user) — ?dir=raw|wiki & ?path=<relative>. The explorer walks

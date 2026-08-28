@@ -127,10 +127,11 @@ export const fileContent = (path: string) => FILE_CONTENT[path]
 
 // ---- wiki content ----------------------------------------------------------
 export const WIKI_ARTICLES = [
-  { name: '_index.md', content: '# Payments Domain — Index\n\nEntry point for the compiled knowledge base.\n\n- [[overview]] — what the domain owns\n- [[refunds]] — refund state machine + idempotency\n- [[ledger]] — double-entry source of truth' },
-  { name: 'overview.md', content: '# Payments Domain\n\nThe payments domain owns money movement: **captures**, **refunds**, and the **ledger**. Everything is event-sourced on the `Payment` aggregate.' },
-  { name: 'refunds.md', content: '# Refunds\n\nA refund is a *negative capture*, never a delete.\n\n| State | Trigger |\n|---|---|\n| RefundRequested | user/admin action |\n| RefundSettled | provider webhook |\n\nRefunds are **idempotent** by `(paymentId, requestId)`.' },
-  { name: 'ledger.md', content: '# Ledger\n\nDouble-entry. Every capture/refund writes two rows. The ledger is the source of truth for reporting — not the gateway.' },
+  { name: '_index.md', content: '# Payments Domain — Index\n\nEntry point for the compiled knowledge base.\n\n- [[overview]] ([overview](./overview.md)) — what the domain owns\n- [[refunds]] ([refunds](./refunds.md)) — refund state machine + idempotency\n- [[ledger]] ([ledger](./ledger.md)) — double-entry source of truth\n- [[idempotency]] ([idempotency](./concepts/idempotency.md)) — the retry rule the rest leans on' },
+  { name: 'overview.md', content: '# Payments Domain\n\nThe payments domain owns money movement: **captures**, **refunds**, and the **ledger**. Everything is event-sourced on the `Payment` aggregate.\n\nRelated: [[refunds]] ([refunds](./refunds.md)), [[ledger]] ([ledger](./ledger.md)).' },
+  { name: 'refunds.md', content: '# Refunds\n\nA refund is a *negative capture*, never a delete.\n\n| State | Trigger |\n|---|---|\n| RefundRequested | user/admin action |\n| RefundSettled | provider webhook |\n\nRefunds are **idempotent** by `(paymentId, requestId)` — see [[idempotency]] ([idempotency](./concepts/idempotency.md)). Settlement writes to the [[ledger]] ([ledger](./ledger.md)).' },
+  { name: 'ledger.md', content: '# Ledger\n\nDouble-entry. Every capture/refund writes two rows. The ledger is the source of truth for reporting — not the gateway.\n\nRefunds arrive here as negative entries: [[refunds]] ([refunds](./refunds.md)). Context: [[overview]] ([overview](./overview.md)).' },
+  { name: 'concepts/idempotency.md', content: '# Idempotency\n\nEvery money-moving call carries a request id. Replaying it returns the first result instead of moving the money twice.\n\nUsed by [[refunds]] ([refunds](../refunds.md)).' },
 ];
 export const WIKI_RAW = [
   { name: 'raw/billing-spec.pdf', size: 40320 }, { name: 'raw/gateway-notes.md', size: 2210 }, { name: 'raw/ledger.sql', size: 1180 },

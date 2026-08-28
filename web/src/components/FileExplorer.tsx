@@ -40,7 +40,7 @@ export type Source = { key: string; label: string };
 // report through `onChanged` so the owner can offer a follow-up action via `notice`.
 export function FileExplorer({
   title, width = 780, sources, loadDir, fileUrl, blobUrl, onClose, initialDir, initialPath,
-  uploadDir, onUpload, editDir, onSave, onChanged, notice,
+  uploadDir, onUpload, editDir, onSave, onChanged, notice, titleExtra,
 }: {
   title: string;
   width?: number;
@@ -57,6 +57,7 @@ export function FileExplorer({
   onSave?: (dir: string, path: string, content: string) => Promise<void>;
   onChanged?: () => void;
   notice?: React.ReactNode;
+  titleExtra?: React.ReactNode; // right end of the title row (a view switch, an extra action)
 }) {
   const t = useT();
   const [dir, setDir] = useState(initialDir && sources.some((s) => s.key === initialDir) ? initialDir : sources[0].key);
@@ -219,7 +220,7 @@ export function FileExplorer({
   };
 
   return (
-    <Modal open onOpenChange={(o) => { if (!o) onClose(); }} title={title} width={width}>
+    <Modal open onOpenChange={(o) => { if (!o) onClose(); }} title={title} width={width} titleExtra={titleExtra}>
       {sources.length > 1 && (
         <div className="flex gap-2 mb-2 text-xs">
           {sources.map((s) => (

@@ -65,6 +65,7 @@ export const API_ROUTES: ApiRoute[] = [
   r('GET', '/api/wiki/proposals', 'knowledge a conversation offered to a wiki and nobody has decided on yet. Query: ?sessionId=<chat id>.'),
   r('GET', '/api/wiki/topics/:id/files', "a topic's compiled wiki documents (or its raw sources when nothing is compiled yet) + compile status and the source list."),
   r('GET', '/api/wiki/topics/:id/tree', 'the file tree of a topic (wiki/ and raw/), paths + sizes.'),
+  r('GET', '/api/wiki/topics/:id/graph', "the link graph of a topic's compiled articles: nodes (one per article, with its link count) and edges (one per cross-link). Read out of the articles themselves, so it changes with each recompile."),
   r('GET', '/api/wiki/topics/:id/paths', 'every file in a topic as two flat lists (wiki/ and raw/), names only.'),
   r('GET', '/api/wiki/topics/:id/file', 'one file of a topic as text. Query: ?path=<relative path>.'),
   r('GET', '/api/agents', 'team agents the user can see: { common, mine, project, files }. `files` are read-only .claude/agents/*.md found on disk.'),

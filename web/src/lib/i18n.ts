@@ -637,6 +637,7 @@ const ko: Dict = {
   'cfg.wikiLearnModel': '지식 판단 모델', 'cfgDesc.wikiLearnModel': '대화에서 지식을 추릴 때 쓰는 모델. 짧은 호출이라 가벼운 모델이면 충분합니다',
   'cfg.wikiLearnTimeoutMs': '지식 판단 제한 시간', 'cfgDesc.wikiLearnTimeoutMs': '지식 판단 호출이 이 시간을 넘기면 포기합니다. 대화 자체에는 영향이 없습니다',
   'cfg.wikiLearnMaxKB': '추가 지식 최대 크기', 'cfgDesc.wikiLearnMaxKB': '대화에서 추려 넣는 글 하나의 최대 크기',
+  'cfg.wikiGraphMaxNodes': '관계 그래프 최대 문서 수', 'cfgDesc.wikiGraphMaxNodes': '위키 관계 그래프에 한 번에 그릴 아티클 개수 상한. 그래프 배치 계산이 문서 수의 제곱에 비례해 무거워지므로, 문서가 아주 많은 주제에서 브라우저가 멈추지 않게 막습니다. 넘는 문서는 그려지지 않고 안내가 표시됩니다',
   'cfg.wikiSeedMaxFiles': '프로젝트 시작 파일 수 한도', 'cfgDesc.wikiSeedMaxFiles': '프로젝트로 위키를 시작할 때 원본으로 복사할 파일 개수 상한(.gitignore에 걸리는 파일은 제외)',
   'cfg.wikiSeedMaxKB': '프로젝트 시작 용량 한도', 'cfgDesc.wikiSeedMaxKB': '프로젝트로 위키를 시작할 때 복사할 전체 용량 상한',
   'cfg.searchMaxPerType': '종류별 최대 결과 수', 'cfgDesc.searchMaxPerType': '검색 결과에서 한 종류(대화 내용·프로젝트·위키 문서 등)당 반환할 최대 개수. 올리면 결과가 많아지고 검색이 느려집니다',
@@ -1168,6 +1169,17 @@ const ko: Dict = {
   'wikiExplorer.sourceRaw': '원본 raw',
   'wikiExplorer.sourceWiki': '컴파일 wiki',
   'wikiExplorer.recompileNeeded': '원본이 변경됐습니다 — 재컴파일해야 위키에 반영됩니다.',
+  'wikiExplorer.graphTab': '관계 그래프',
+  'wikiGraph.title': 'LLM Wiki 관계 그래프',
+  'wikiGraph.filesTab': '파일 탐색기',
+  'wikiGraph.reset': '보기 초기화',
+  'wikiGraph.stat': '아티클 {nodes}개 · 링크 {edges}개',
+  'wikiGraph.hint': '점을 누르면 문서가 열립니다 · 휠로 확대, 끌어서 이동',
+  'wikiGraph.hintTouch': '점을 누르면 문서가 열립니다 · 끌어서 이동',
+  'wikiGraph.zoomIn': '확대',
+  'wikiGraph.zoomOut': '축소',
+  'wikiGraph.truncated': '문서가 많아 일부만 그렸습니다.',
+  'wikiGraph.empty': '그릴 아티클이 없습니다 — 먼저 컴파일하세요.',
 
   // wikiSources — 답변이 인용한 출처 패널
   // 작업 패널 — 턴이 뒤에서 돌리는 서브에이전트 / 백그라운드 셸 / 워크플로
@@ -2025,6 +2037,7 @@ const en: Dict = {
   'cfg.wikiLearnModel': 'Knowledge-check model', 'cfgDesc.wikiLearnModel': 'Model used to pull knowledge out of a conversation. The call is short, so a light model is enough',
   'cfg.wikiLearnTimeoutMs': 'Knowledge-check timeout', 'cfgDesc.wikiLearnTimeoutMs': 'The check is given up on after this long. The conversation itself is unaffected',
   'cfg.wikiLearnMaxKB': 'Max added article size', 'cfgDesc.wikiLearnMaxKB': 'Largest single article written from a conversation',
+  'cfg.wikiGraphMaxNodes': 'Link graph - max documents', 'cfgDesc.wikiGraphMaxNodes': 'How many articles the wiki link graph draws at once. Laying the graph out costs roughly the square of the document count, so this keeps a very large topic from freezing the browser. Anything past the limit is left out and the view says so',
   'cfg.wikiSeedMaxFiles': 'Project start - file limit', 'cfgDesc.wikiSeedMaxFiles': 'How many files are copied in as sources when a wiki starts from a project (.gitignore matches are skipped)',
   'cfg.wikiSeedMaxKB': 'Project start - size limit', 'cfgDesc.wikiSeedMaxKB': 'Total size copied in when a wiki starts from a project',
   'cfg.searchMaxPerType': 'Max results per type', 'cfgDesc.searchMaxPerType': 'How many hits one result group (conversation content, projects, wiki documents…) returns. Higher means more results and slower searches',
@@ -2556,6 +2569,17 @@ const en: Dict = {
   'wikiExplorer.sourceRaw': 'Raw source',
   'wikiExplorer.sourceWiki': 'Compiled wiki',
   'wikiExplorer.recompileNeeded': 'Sources changed — recompile to fold them into the wiki.',
+  'wikiExplorer.graphTab': 'Link graph',
+  'wikiGraph.title': 'LLM Wiki link graph',
+  'wikiGraph.filesTab': 'File explorer',
+  'wikiGraph.reset': 'Reset view',
+  'wikiGraph.stat': '{nodes} articles · {edges} links',
+  'wikiGraph.hint': 'Click a dot to open the article · wheel to zoom, drag to move',
+  'wikiGraph.hintTouch': 'Tap a dot to open the article · drag to move',
+  'wikiGraph.zoomIn': 'Zoom in',
+  'wikiGraph.zoomOut': 'Zoom out',
+  'wikiGraph.truncated': 'Too many documents — only part of the wiki is drawn.',
+  'wikiGraph.empty': 'Nothing to draw yet — compile the topic first.',
 
   // wikiSources — cited-sources panel
   // task panel — the subagents / background shells / workflows a turn runs behind the main thread

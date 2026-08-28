@@ -308,6 +308,9 @@ export const DEFS: ConfigDef[] = [
   { key: 'wikiLearnTimeoutMs', group: 'wiki', type: 'int', default: '60000', min: 5000, max: 600000, unit: 'ms' },
   { key: 'wikiLearnMaxKB', group: 'wiki', type: 'int', default: '64', min: 1, max: 1024, unit: 'KB' },
   // Seeding a new topic from an existing project directory (files copied into raw/).
+  // Article link graph (the wiki explorer's graph view) — how many articles it draws at once.
+  // The layout is O(nodes^2) per tick in the browser, so this is the guard on a huge topic.
+  { key: 'wikiGraphMaxNodes', group: 'wiki', type: 'int', default: '400', min: 10, max: 5000 },
   { key: 'wikiSeedMaxFiles', group: 'wiki', type: 'int', default: '400', min: 1, max: 20000 },
   { key: 'wikiSeedMaxKB', group: 'wiki', type: 'int', default: '4096', min: 64, max: 1048576, unit: 'KB' },
 

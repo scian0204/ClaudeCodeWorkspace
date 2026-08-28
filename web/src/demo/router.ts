@@ -653,6 +653,24 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
     return ok({ session: { id: cs, title: w?.name || 'Wiki', model: 'claude-opus-4-8', permissionMode: 'default' }, messages: msgs(cs) });
   }
   if (seg[1] === 'wiki' && seg[2] === 'topics' && seg[4] === 'files') return ok({ files: WIKI_ARTICLES, source: 'compiled' });
+  // link graph of the compiled articles — mirrors the server's scan of [[name]] + ](./name.md)
+  if (seg[1] === 'wiki' && seg[2] === 'topics' && seg[4] === 'graph') {
+    const stem = (p: string) => (p.split('/').pop() || p).replace(/\.md$/i, '');
+    const byStem = new Map(WIKI_ARTICLES.map((a) => [stem(a.name).toLowerCase(), a.name]));
+    const deg: Record<string, number> = {}; const edges: { source: string; target: string }[] = []; const seen = new Set<string>();
+    for (const a of WIKI_ARTICLES) {
+      for (const m of [...a.content.matchAll(/\[\[([^\]\n]+)\]\]/g), ...a.content.matchAll(/\]\(\s*([^)\s]+)\s*\)/g)]) {
+        const to = byStem.get(stem(m[1].split('|')[0].split('#')[0]).toLowerCase());
+        if (!to || to === a.name) continue;
+        const pair = [a.name, to].sort().join(' ');
+        if (seen.has(pair)) continue;
+        seen.add(pair);
+        edges.push({ source: a.name, target: to });
+        deg[a.name] = (deg[a.name] || 0) + 1; deg[to] = (deg[to] || 0) + 1;
+      }
+    }
+    return ok({ nodes: WIKI_ARTICLES.map((a) => ({ id: a.name, label: stem(a.name), deg: deg[a.name] || 0 })), edges, truncated: false, status: 'done' });
+  }
   // flat file list — the citation layer drops sources with no file behind them
   if (seg[1] === 'wiki' && seg[2] === 'topics' && seg[4] === 'paths') {
     const rel = (n: string) => n.replace(/^(wiki|raw)\//, '');
