@@ -4,6 +4,7 @@ import { useStore } from './store';
 import { withKeys } from './shortcuts';
 import { IconMenu, IconSparkle } from './icons';
 import { mdHighlight } from './md';
+import { guideInsetPx } from './guideinset';
 
 // Tailwind `md` breakpoint (768px). React needs JS to branch on viewport (e.g. force chat-only
 // layout, skip the code-server iframe) since those decisions can't be pure CSS show/hide.
@@ -41,11 +42,12 @@ export function useGuideInset(enabled: boolean) {
   const [pad, setPad] = useState(0);
   const measure = React.useCallback(() => {
     if (!enabled || !el) { setPad(0); return; }
-    // the launcher's square: right-3 + w-12 (<md) / right-5 + w-14 (≥md), plus breathing room
-    const box = (window.innerWidth < 768 ? 12 + 48 : 20 + 56) + 8;
-    const r = el.getBoundingClientRect(); // padding-right never moves this edge → no feedback loop
-    const clears = r.bottom < window.innerHeight - box || window.innerWidth - r.right >= box;
-    setPad(clears ? 0 : Math.ceil(box - (window.innerWidth - r.right)));
+    // Measure the row's CONTAINER, never the row itself: the padding this hook sets can push the
+    // row's own right edge outward, and that edge is the next measurement's input — the row then
+    // asks for more padding, gets wider, asks again, and React tears the page down at 50 rounds.
+    // The parent's box is the row's natural width and our padding cannot move it.
+    const host = el.parentElement ?? el;
+    setPad(guideInsetPx(host.getBoundingClientRect(), window.innerWidth, window.innerHeight));
   }, [enabled, el]);
   // Every commit, because the row can *move* without resizing (drawer slide, pane swap) and a
   // ResizeObserver only sees size. One getBoundingClientRect; setPad no-ops when nothing changed.
