@@ -4,7 +4,7 @@
 
 # Update notes
 
-Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and now — **v1.25.1** (2026-08-21) — all **435 commits**.
+Everything between the spec being frozen in [DESIGN.md](DESIGN.md) (2026-07-20) and now — **v1.25.1** (2026-08-21) — all **436 commits**.
 
 Each row shows only its **title and commit hash**; click the triangle for the detail (root cause, implementation, config keys).
 
@@ -26,7 +26,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 | Version | Date | Commits | Headline |
 |---|---|---|---|
-| [Unreleased](#unreleased) | — | 8 | A wiki you can see the shape of, plugins that belong to a project, and common projects anyone can create |
+| [Unreleased](#unreleased) | — | 9 | A wiki you can see the shape of, plugins that belong to a project, and common projects anyone can create |
 | [v1.25.1](#v1251--2026-08-21) | 2026-08-21 | 1 | The sidebar says an update is published, before the panel is open |
 | [v1.25.0](#v1250--2026-08-21) | 2026-08-21 | 5 | The choice card really asks — and a /btw button, and updates you cannot miss |
 | [v1.24.0](#v1240--2026-08-21) | 2026-08-21 | 5 | A chat hears when its project is changed somewhere else |
@@ -84,6 +84,31 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ---
 
 ## Unreleased
+
+<details>
+<summary><b>fix(web): composer padding no longer chases itself into a page crash</b> — a chat could take the whole page down on open · <code>5b9db37</code></summary>
+
+**Symptom.** Opening a chat sometimes blanked the entire page. The browser console showed React's
+"Maximum update depth exceeded", pointing at the message composer.
+
+**Cause.** The composer keeps its Send and attach buttons clear of the round guide button floating
+in the bottom-right corner. It does that by measuring where the button row ends and adding that much
+padding to the row — measuring something and then changing that same thing. Two ways it fed itself:
+
+- When the window reported a size of 0 x 0 — a hidden pane, a minimized window, a page laid out
+  before it is shown — the sum came out as the width of the whole row instead of the small corner.
+  Padding that large pushes the row past the edge of the card it sits in, the next measurement reads
+  the pushed-out edge, and it asks for more again. The recorded values grew by about 93px each pass
+  until React stopped the page.
+- Even at a normal window size, the row's own right edge was the wrong thing to read, because the
+  padding we add can move it.
+
+**Fix.** The row's container is measured instead — padding inside the row cannot move it. A window
+reporting no size asks for no padding at all, and the answer is capped at the size of the guide
+button, so it can never grow past what it exists to clear. The arithmetic moved into its own file
+with a check behind it covering both runaway cases.
+
+</details>
 
 <details>
 <summary><b>feat(wiki): link graph of a topic's compiled articles</b> — see the whole knowledge base at once, click a dot to read it · <code>3488089</code></summary>
