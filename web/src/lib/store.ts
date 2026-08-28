@@ -31,7 +31,7 @@ export interface ReviewSessionSummary { id: string; chatSessionId: string; repoI
 export interface ReviewMeta { reviewId: string; prNumber: number; prTitle: string; prUrl: string; prState: string; authorLogin: string; baseRef: string; headRef: string; mergeState: string; verdict: string; verdictSummary: string | null; repoName: string; provider: string; }
 // hasClaudeToken = a token is pasted; hasClaudeAuth = the user has ANY auth of their own (token,
 // browser sign-in, or an LLM provider profile). The nag + sidebar badge key on the latter.
-export interface User { id: string; username: string; role: string; displayName: string; avatarColor: string; avatar?: string | null; hasClaudeToken?: boolean; hasClaudeAuth?: boolean; claudeTokenSetAt?: number | null; autoTitle?: boolean; autoResume?: boolean; primeWindow?: boolean; primedAt?: number | null; }
+export interface User { id: string; username: string; role: string; displayName: string; avatarColor: string; avatar?: string | null; hasClaudeToken?: boolean; hasClaudeAuth?: boolean; claudeTokenSetAt?: number | null; autoTitle?: boolean; autoResume?: boolean; primeWindow?: boolean; primedAt?: number | null; authSource?: 'local' | 'ldap' | 'oidc'; }
 export interface DmMemberInfo { userId: string; displayName: string; avatarColor: string; avatar: string | null; username: string; }
 export interface DmChannel { id: string; kind: 'dm' | 'group'; name: string | null; createdBy: string; createdAt: number; members: DmMemberInfo[]; lastMessage: { text: string; createdAt: number; userId: string } | null; unread: number; }
 export interface DmMessage { id: string; channelId: string; userId: string; text: string; createdAt: number; }

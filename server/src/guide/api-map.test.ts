@@ -26,6 +26,8 @@ for (const [m, p] of [
   ['DELETE', '/api/sessions/x'], ['DELETE', '/api/projects/x'], ['DELETE', '/api/plugins/x'],
   ['PUT', '/api/auth/me/claude-token'], ['GET', '/api/git-credentials'], ['POST', '/api/git-credentials'],
   ['PUT', '/api/admin/claude-token'], ['PUT', '/api/auth/me/provider'], ['GET', '/api/admin/provider'],
+  ['GET', '/api/admin/ldap'], ['PUT', '/api/admin/ldap'], ['POST', '/api/admin/ldap/import'],
+  ['GET', '/api/admin/oidc'], ['PUT', '/api/admin/oidc'],
   ['POST', '/api/admin/restart'], ['POST', '/api/admin/cleanup'], ['POST', '/api/users'],
   ['POST', '/api/admin/image/pull'], ['GET', '/api/sessions/x/attachments/y'],
   // one-way doors outside this server + the infra verbs — see the header comment in api-map.ts

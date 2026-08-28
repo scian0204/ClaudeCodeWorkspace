@@ -506,6 +506,22 @@ export const ADMIN = {
     { key: 'selfUpdateHealthWaitMs', group: 'update', type: 'int', value: '30000', default: '30000', min: 5000, max: 600000, unit: 'ms', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'selfUpdateContainer', group: 'update', type: 'string', value: '', default: '', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'sessionTtlDays', group: 'auth', type: 'int', value: '30', default: '30', unit: 'days', min: 1, max: 365, restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'localLoginEnabled', group: 'auth', type: 'bool', value: '1', default: '1', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'ldapEnabled', group: 'auth', type: 'bool', value: '1', default: '0', restart: false, readonly: false, secret: false, overridden: true },
+    { key: 'ldapJitEnabled', group: 'auth', type: 'bool', value: '1', default: '1', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'ldapLinkExisting', group: 'auth', type: 'bool', value: '0', default: '0', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'ldapRoleSync', group: 'auth', type: 'bool', value: '1', default: '0', restart: false, readonly: false, secret: false, overridden: true },
+    { key: 'ldapTimeoutMs', group: 'auth', type: 'int', value: '10000', default: '10000', min: 1000, max: 120000, unit: 'ms', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'ldapSyncMs', group: 'auth', type: 'int', value: '3600000', default: '0', min: 0, max: 604800000, unit: 'ms', restart: false, readonly: false, secret: false, overridden: true },
+    { key: 'ldapImportMax', group: 'auth', type: 'int', value: '500', default: '500', min: 1, max: 20000, restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'oidcEnabled', group: 'auth', type: 'bool', value: '1', default: '0', restart: false, readonly: false, secret: false, overridden: true },
+    { key: 'oidcJitEnabled', group: 'auth', type: 'bool', value: '1', default: '1', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'oidcLinkExisting', group: 'auth', type: 'bool', value: '0', default: '0', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'oidcRoleSync', group: 'auth', type: 'bool', value: '0', default: '0', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'oidcTimeoutMs', group: 'auth', type: 'int', value: '10000', default: '10000', min: 1000, max: 120000, unit: 'ms', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'oidcStateTtlMs', group: 'auth', type: 'int', value: '600000', default: '600000', min: 60000, max: 3600000, unit: 'ms', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'oidcDiscoveryTtlMs', group: 'auth', type: 'int', value: '3600000', default: '3600000', min: 60000, max: 86400000, unit: 'ms', restart: false, readonly: false, secret: false, overridden: false },
+    { key: 'oidcClockSkewMs', group: 'auth', type: 'int', value: '60000', default: '60000', min: 0, max: 600000, unit: 'ms', restart: false, readonly: false, secret: false, overridden: false },
     { key: 'httpBodyLimitMB', group: 'server', type: 'int', value: '6', default: '6', unit: 'MB', restart: true, readonly: false, secret: false, overridden: false },
     { key: 'port', group: 'infra', type: 'int', value: '3000', default: '3000', restart: true, readonly: true, secret: false, overridden: false },
     { key: 'dataDir', group: 'infra', type: 'string', value: '/data', default: './data', restart: true, readonly: true, secret: false, overridden: false },
@@ -677,3 +693,24 @@ export const REQUEST_ACTIONS = [
 
 // helpers used by the router for mutations
 export const genId = (p: string) => `${p}_${Date.now().toString(36)}${Math.floor(Math.random() * 1e4).toString(36)}`;
+
+// AD/LDAP + OIDC settings as the admin panel sees them: never the bind password / client secret,
+// only whether one is stored. Mutated in place by the demo router so Save/Delete actually stick.
+export const SSO = {
+  ldap: {
+    url: 'ldaps://dc.corp.local:636', bindDn: 'CN=ccw-svc,OU=Service,DC=corp,DC=local', hasBindPassword: true,
+    baseDn: 'DC=corp,DC=local',
+    userFilter: '(&(objectClass=user)(sAMAccountName={username}))',
+    importFilter: '(&(objectClass=user)(objectCategory=person))',
+    attrUsername: 'sAMAccountName', attrDisplayName: 'displayName', attrEmail: 'mail',
+    attrMemberOf: 'memberOf', adminGroup: 'CN=CCW-Admins,OU=Groups,DC=corp,DC=local',
+    startTls: false, tlsRejectUnauthorized: true,
+  } as any,
+  oidc: {
+    issuer: 'https://login.microsoftonline.com/contoso/v2.0', clientId: 'ccw-workspace', hasClientSecret: true,
+    scopes: 'openid profile email', redirectUri: '',
+    usernameClaim: 'preferred_username', displayNameClaim: 'name', emailClaim: 'email',
+    groupsClaim: 'groups', adminGroup: 'ccw-admins', allowedDomains: 'corp.local',
+    buttonLabel: 'Entra ID',
+  } as any,
+};

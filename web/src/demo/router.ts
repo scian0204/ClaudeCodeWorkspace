@@ -3,7 +3,7 @@
 import {
   db, ME, ADMIN, ATTACHMENTS, GIT, PROVIDERS, COMMANDS, USAGE, TREE_PROJECT, TREE_PLUGIN, TREE_DOWNLOAD,
   DOWNLOAD_IGNORED, DOWNLOAD_BIG_DIRS, WIKI_ARTICLES, WIKI_RAW, WIKI_TREE_ARTICLES,
-  REQUEST_ACTIONS, IMPORT_SESSIONS, fileContent, wikiFileContent, WIKI_RAW_EDITS, pluginDetail, EDITOR_URL, genId,
+  REQUEST_ACTIONS, IMPORT_SESSIONS, fileContent, wikiFileContent, WIKI_RAW_EDITS, pluginDetail, EDITOR_URL, genId, SSO,
 } from './data';
 import { runDemoGuide, clearDemoGuide, runDemoAside, simulateProjectChange } from './socket';
 
@@ -884,6 +884,57 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   if (P === '/api/admin/overview') return ok(ADMIN.overview());
   if (P === '/api/admin/settings' && M === 'GET') return ok(ADMIN.settings);
   if (P === '/api/admin/settings' && M === 'POST') { Object.assign(ADMIN.settings, b); return ok({}); }
+  // ---- external sign-in: AD/LDAP + OIDC (admin panel > 로그인 연동) ----
+  // The real server keeps these encrypted and never returns the secret; the mock mirrors that shape,
+  // so an empty password box means "keep the stored one" here too.
+  if (P === '/api/auth/methods') {
+    const on = (k: string) => ADMIN.config.find((x: any) => x.key === k)?.value === '1';
+    return ok({ localRestricted: !on('localLoginEnabled'), ldap: on('ldapEnabled') && !!SSO.ldap, oidc: on('oidcEnabled') && !!SSO.oidc, oidcLabel: SSO.oidc?.buttonLabel || 'SSO' });
+  }
+  if (P === '/api/admin/ldap') {
+    const enabled = ADMIN.config.find((x: any) => x.key === 'ldapEnabled')?.value === '1';
+    if (M === 'DELETE') { SSO.ldap = null; return ok({ ldap: null, enabled }); }
+    if (M === 'PUT') {
+      if (!String(b.url || '').trim()) return { status: 400, data: { error: 'ldap: server URL required (ldap://host:389 or ldaps://host:636)' } };
+      if (!String(b.baseDn || '').trim()) return { status: 400, data: { error: 'ldap: base DN required' } };
+      if (!String(b.userFilter || '').includes('{username}')) return { status: 400, data: { error: 'ldap: user filter must contain {username}' } };
+      const { bindPassword, ...rest } = b;
+      SSO.ldap = { ...(SSO.ldap || {}), ...rest, hasBindPassword: !!bindPassword || !!SSO.ldap?.hasBindPassword };
+      return ok({ ldap: SSO.ldap, enabled });
+    }
+    return ok({ ldap: SSO.ldap, enabled });
+  }
+  if (P === '/api/admin/ldap/test') {
+    if (!SSO.ldap) return { status: 400, data: { error: 'ldap: not configured' } };
+    const who = String(b.username || '').trim();
+    return slow(ok({ ok: true, entries: who ? 1 : 3, sample: who
+      ? [`${who} — CN=${who},OU=Staff,DC=corp,DC=local`]
+      : ['jiwoo — CN=jiwoo,OU=Staff,DC=corp,DC=local', 'minseo — CN=minseo,OU=Staff,DC=corp,DC=local', 'alex — CN=alex,OU=Contractors,DC=corp,DC=local'] }), 900);
+  }
+  if (P === '/api/admin/ldap/import') {
+    if (!SSO.ldap) return { status: 400, data: { error: 'ldap: not configured' } };
+    return slow(ok({ summary: { found: 34, created: 2, updated: 31, skipped: 1, errors: ['admin: username \'admin\' already belongs to a local account'] } }), 1600);
+  }
+  if (P === '/api/admin/oidc') {
+    const enabled = ADMIN.config.find((x: any) => x.key === 'oidcEnabled')?.value === '1';
+    const callbackUrl = `${location.origin}/api/auth/oidc/callback`;
+    if (M === 'DELETE') { SSO.oidc = null; return ok({ oidc: null, enabled }); }
+    if (M === 'PUT') {
+      if (!/^https?:\/\//i.test(String(b.issuer || ''))) return { status: 400, data: { error: 'oidc: issuer URL required' } };
+      if (!String(b.clientId || '').trim()) return { status: 400, data: { error: 'oidc: client id required' } };
+      if (!String(b.scopes || '').split(/\s+/).includes('openid')) return { status: 400, data: { error: 'oidc: scopes must include openid' } };
+      const { clientSecret, ...rest } = b;
+      SSO.oidc = { ...(SSO.oidc || {}), ...rest, hasClientSecret: !!clientSecret || !!SSO.oidc?.hasClientSecret };
+      return ok({ oidc: SSO.oidc, enabled });
+    }
+    return ok({ oidc: SSO.oidc, enabled, callbackUrl });
+  }
+  if (P === '/api/admin/oidc/test') {
+    if (!SSO.oidc) return { status: 400, data: { error: 'oidc: not configured' } };
+    const iss = String(SSO.oidc.issuer || '').replace(/\/+$/, '');
+    return slow(ok({ ok: true, issuer: iss, authorize: `${iss}/authorize`, token: `${iss}/token`, jwks: true, userinfo: true }), 900);
+  }
+
   if (P === '/api/admin/config' && M === 'GET') return ok({ items: ADMIN.config });
   if (P === '/api/admin/config' && M === 'PUT') {
     const it = ADMIN.config.find((x: any) => x.key === b.key);
