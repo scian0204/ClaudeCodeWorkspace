@@ -114,23 +114,22 @@ async function removeIfExists(name: string) {
   try { await d.getContainer(name).remove({ force: true }); } catch { /* absent */ }
 }
 
-async function ensureImage(image: string) {
+// The Framework SDK image is several GB and takes tens of minutes to pull — inside a turn that would
+// look exactly like a hung chat. So a missing image is refused with the fix instead of pulled here;
+// the admin panel's Windows build container group pulls it once, up front.
+async function requireImage(image: string) {
   const d = winDocker(); if (!d) throw new Error(winDockerError() || 'windows docker not configured');
-  try { await d.getImage(image).inspect(); return; } catch { /* pull below */ }
-  await new Promise<void>((resolve, reject) => {
-    d.pull(image, (err: any, stream: any) => {
-      if (err) return reject(err);
-      d.modem.followProgress(stream, (e: any) => (e ? reject(e) : resolve()));
-    });
-  });
+  try { await d.getImage(image).inspect(); }
+  catch {
+    throw new Error(`image ${image} is not on the Windows host — pull it from the admin panel first (it is several GB, so pulling it now would stall this turn)`);
+  }
 }
 
 /**
  * Spawn (or reuse) this session's Windows build container. Returns its name, or null when the remote
- * host cannot serve it — the caller then runs without a sandbox, exactly as before the feature.
- * The multi-GB Framework SDK image is NOT pulled on demand here if it is missing and the admin never
- * pulled it: the first pull can take tens of minutes, which would look like a hung turn. It is
- * attempted anyway, but only after the daemon answered, so the failure is a clear error.
+ * host cannot serve it — the caller then falls back to the local container, or to no sandbox at all,
+ * exactly as before the feature. The reason is logged, since a chat whose builds quietly moved back
+ * to Linux is otherwise hard to explain.
  */
 export async function ensureWinSandbox(sessionId: string, cwd: string): Promise<string | null> {
   if (!winSandboxAvailable()) return null;
@@ -163,7 +162,7 @@ export async function ensureWinSandbox(sessionId: string, cwd: string): Promise<
     const image = cfg.str('winSandboxImage');
     const workdir = cfg.str('winSandboxWorkdir');
     const isolation = cfg.str('winSandboxIsolation');
-    await ensureImage(image);
+    await requireImage(image);
     await removeIfExists(name);
     const c = await d.createContainer({
       name,
@@ -257,8 +256,13 @@ export async function winSandboxMcp(sessionId: string, containerName: string) {
           let note: string | null = null;
           try { note = await syncProject(sessionId); }
           catch (e: any) { return { content: [{ type: 'text' as const, text: `exit=1\n${String(e?.message || e)}` }] }; }
-          const r = await execInWinSandbox(containerName, String(args.command), cfg.int('winSandboxExecTimeoutMs'), cfg.int('winSandboxMaxOutputBytes'));
-          return { content: [{ type: 'text' as const, text: `exit=${r.code}\n${note ? note + '\n' : ''}${r.output}` }] };
+          try {
+            const r = await execInWinSandbox(containerName, String(args.command), cfg.int('winSandboxExecTimeoutMs'), cfg.int('winSandboxMaxOutputBytes'));
+            return { content: [{ type: 'text' as const, text: `exit=${r.code}\n${note ? note + '\n' : ''}${r.output}` }] };
+          } catch (e: any) {
+            // the container went away between commands (idle reap, or the host restarted)
+            return { content: [{ type: 'text' as const, text: `exit=1\n${String(e?.message || e)}` }] };
+          }
         },
       ),
     ],
@@ -286,12 +290,6 @@ export function winSandboxHint(cwd: string): string {
 async function stop(inst: Instance) {
   instances.delete(inst.sessionId);
   await removeIfExists(inst.name);
-}
-
-export async function removeWinSandbox(sessionId: string): Promise<void> {
-  const inst = instances.get(sessionId);
-  if (inst) await stop(inst).catch(() => {});
-  else if (winDockerConfigured()) await removeIfExists(nameFor(sessionId));
 }
 
 /** Admin process panel: the Windows containers this app spawned, on the remote daemon. */
