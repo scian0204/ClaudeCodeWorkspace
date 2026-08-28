@@ -26,7 +26,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 | Version | Date | Commits | Headline |
 |---|---|---|---|
-| [Unreleased](#unreleased) | — | 5 | Marketplaces you can actually install from — by plugin name — and an app image that cannot ship without its database driver |
+| [Unreleased](#unreleased) | — | 7 | Plugins that belong to a project, and common projects anyone can create |
 | [v1.25.1](#v1251--2026-08-21) | 2026-08-21 | 1 | The sidebar says an update is published, before the panel is open |
 | [v1.25.0](#v1250--2026-08-21) | 2026-08-21 | 5 | The choice card really asks — and a /btw button, and updates you cannot miss |
 | [v1.24.0](#v1240--2026-08-21) | 2026-08-21 | 5 | A chat hears when its project is changed somewhere else |
@@ -84,6 +84,62 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ---
 
 ## Unreleased
+
+<details>
+<summary><b>feat(plugins): per-project plugins</b> — install a plugin onto a project and every chat in it loads it · <code>836f079</code></summary>
+
+**What was missing.** A plugin could be installed for one person or for the whole workspace, and
+nothing in between. A repository with its own tooling — a review checklist, a house lint skill —
+had to be installed again by every person who opened it, and a teammate joining the project got
+none of it.
+
+**What is new.** Plugins now have the same third scope team agents already had: **project**. A
+plugin installed on a project is loaded by every chat pointed at that project, whoever owns the
+chat. The Plugins panel has a new **Project plugins** card: pick the project, then install exactly
+as before (marketplace, plugin name, git repo, or a `.tar.gz` upload). Admins may do this on any
+project; anyone else on their own personal projects.
+
+The files are stored under the workspace's data directory (`project-plugins/<project id>/`), not
+inside the project folder — a plugin is workspace state and has no business appearing in someone's
+repository. That directory is included in the admin backup archive, and deleting the project
+deletes it along with the plugin's rows.
+
+New settings: none. New endpoint fields: `POST /api/plugins/install` and `/api/plugins/upload`
+accept `scope: "project"` with a `projectId`, and `GET /api/plugins` returns a `projects` list.
+
+Rights are the ones the project already had, not a new set: the permission check team agents use
+(`canManageProject`) moved to `routes/projects.ts` and both features now share it, so there is one
+answer to "may this person change things on this project".
+
+The rule for which plugins a chat loads was pulled out of the database call into a plain function,
+so the precedence — a required common plugin beats a personal preference, a disabled row never
+loads, one project's plugins never reach another's — is checked directly by
+`server/src/plugins/scope.test.ts`. Wiki threads are unaffected: they still load only their own
+bundled plugin.
+
+</details>
+
+<details>
+<summary><b>feat(projects): let anyone create a common project</b> — new <code>commonProjectOpen</code> setting · <code>566edb8</code></summary>
+
+Creating a shared (common) project was admin-only: a member had to file a request and wait for
+approval. That is the right default for some teams and pure friction for others, so it is now a
+setting — **Anyone can create common projects** in Admin → Config → Feature flags
+(`commonProjectOpen`, off by default, so nothing changes until an admin turns it on).
+
+With it on, the common tab of the project menu creates the project straight away for everyone,
+git clone and credential picker included, and the common-project row disappears from the member
+request form — there is nothing left to ask for. Requests filed before the switch still approve
+normally.
+
+Deleting a common project stays admin-only. The row records no creator, so there is nobody the
+right could be handed to; opening deletion up would mean anyone could remove a project the whole
+team works in.
+
+The check that matters is the server's — the create endpoint refuses on its own, and the UI only
+follows what `/api/config` reports.
+
+</details>
 
 <details>
 <summary><b>feat(plugins): the plugin field takes the plugin, the git field is optional</b> — and registering a marketplace is one field · <code>0427e7c</code></summary>
