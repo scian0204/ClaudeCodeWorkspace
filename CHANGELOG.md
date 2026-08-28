@@ -84,7 +84,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ## v1.26.0 — 2026-08-28
 
-<sub>release commit `RELEASE_HASH`</sub>
+<sub>release commit `f829ebb`</sub>
 
 - merge: `feat/ldap-oidc-auth` — `aaad1dc`
 
