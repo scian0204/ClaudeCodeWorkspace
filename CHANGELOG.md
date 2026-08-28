@@ -102,6 +102,8 @@ New settings: `winSandboxEnabled`, `winDockerHost`, `winDockerCertDir`, `winDock
 
 </details>
 
+- **fix(sandbox): never pull the Framework SDK image inside a turn** — it is several GB and takes tens of minutes, so pulling it on first use made the chat look hung. A missing image is now refused with the fix (pull it from the admin panel) and the chat falls back to the local container. A command whose container went away between turns — idle cleanup, or the Windows host restarting — now returns its reason instead of a raw docker error. · `7d58e77`
+
 ---
 
 ## v1.26.0 — 2026-08-28
