@@ -26,7 +26,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 | Version | Date | Commits | Headline |
 |---|---|---|---|
-| [Unreleased](#unreleased) | — | 12 | Sign in with a company account (AD/SSO), a wiki you can see the shape of, plugins that belong to a project |
+| [Unreleased](#unreleased) | — | 14 | Sign in with a company account (AD/SSO), a wiki you can see the shape of, plugins that belong to a project |
 | [v1.25.1](#v1251--2026-08-21) | 2026-08-21 | 1 | The sidebar says an update is published, before the panel is open |
 | [v1.25.0](#v1250--2026-08-21) | 2026-08-21 | 5 | The choice card really asks — and a /btw button, and updates you cannot miss |
 | [v1.24.0](#v1240--2026-08-21) | 2026-08-21 | 5 | A chat hears when its project is changed somewhere else |
@@ -84,6 +84,27 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ---
 
 ## Unreleased
+
+<details>
+<summary><b>fix(auth): a plain <code>ldap://</code> server no longer fails with a TLS error</b> — every unencrypted directory refused to connect · <code>4aa7c76</code></summary>
+
+**Symptom.** Pointing AD/LDAP sign-in at an `ldap://` server (no TLS) failed every time, on the
+connection test and on a real login, with `Client network socket disconnected before secure TLS
+connection was established`.
+
+**Cause.** The LDAP library switches to TLS when **either** the address starts with `ldaps://` **or**
+certificate options were handed to it at all. Those options were being passed on every connection,
+so a plain connection tried a TLS handshake the server was never going to answer.
+
+**Fix.** The certificate options go to the connection only for `ldaps://`; on a plain connection they
+go to StartTLS instead, which is the step that actually needs them.
+
+Found by running the whole feature against a real OpenLDAP server: after the fix, search, sign-in,
+first-time account creation, bulk import and the group-to-admin mapping were all confirmed working,
+along with the guards — a wrong password, an empty password, a directory `admin` that must not
+inherit the local admin account, and a `*` in the login name.
+
+</details>
 
 <details>
 <summary><b>feat(auth): sign in with a company account — AD/LDAP and OIDC single sign-on</b> — no second password to hand out, and accounts that make themselves · <code>f4a85a8</code> · <code>b4b0eec</code></summary>
