@@ -194,6 +194,16 @@ the chat–split–editor switch. Bottom-right corner: this guide panel.
   instead of a claude.ai plan (\`llmProvidersEnabled\`).
 
 ### Administration
+- **Company sign-in (AD/LDAP)** — people log in on the ordinary card with their work username and
+  password, which is checked against the company directory; no password is kept here. An account is
+  made the first time someone signs in, and an admin can also import everyone at once or have it
+  re-import on a schedule. A directory group can decide who is an admin. Flags \`ldapEnabled\`,
+  \`ldapJitEnabled\`, \`ldapSyncMs\`; settings in the admin panel's **Sign-in** tab.
+- **Single sign-on (OIDC)** — an extra button on the login card that hands the sign-in to an identity
+  provider (Entra ID, Keycloak, Okta and the like) and comes back with the person already identified.
+  Flags \`oidcEnabled\`, \`oidcJitEnabled\`; same **Sign-in** tab. \`localLoginEnabled\` can stop
+  members from using the username/password form once one of these is in place — admins always can, so
+  a directory outage never locks the workspace.
 - **Admin panel** — users, usage/cost dashboard, running processes, cleanup, branding (title + logo),
   the shared Claude account, the model list (auto-fetched from the provider, with a Fetch-now button)
   and every workspace setting (feature flags, timeouts, limits, privacy egress switches).
@@ -232,6 +242,8 @@ const BY_HAND = `
   session-import folder: all drag-and-drop in their own dialog. You have no file to send.
 - **Merging a PR** (admin, in the PR review view) and **publishing a new repository** (Git panel):
   both change something outside this server in one click. Explain it, then let them press it.
+- **AD/LDAP and SSO settings** — the directory URL, the service account, the client secret: admin
+  panel > Sign-in. They carry credentials, so they are typed into that form, never through this panel.
 - **Backup / restore, restart, cleanup, image pull, creating or removing users** — admin panel.
 - **Session import / export** — the import button is at the top of the sidebar, the export button in
   the chat header.

@@ -17,6 +17,22 @@ export const users = sqliteTable('users', {
   primedAt: integer('primed_at'), // when the primer last opened a window (epoch ms), null = never
   defaultPoolId: text('default_pool_id'), // this user's own shared-plan pool, used when a session names none
   poolOptOut: integer('pool_opt_out').notNull().default(0), // 1 = keep my plan out of the workspace-wide pool
+  // Which directory owns this account's password. 'local' = the scrypt hash in this table (the only
+  // kind login() ever checks locally); 'ldap' / 'oidc' = an external directory decides, and the local
+  // hash is deliberately an unguessable random string so the local form can never sign them in.
+  authSource: text('auth_source').notNull().default('local'), // 'local' | 'ldap' | 'oidc'
+  externalId: text('external_id'),  // LDAP entry DN / OIDC `sub` — the stable key we re-find them by
+  externalSyncedAt: integer('external_synced_at'), // last time the directory refreshed this row
+});
+
+// LDAP/AD + OIDC connection settings, encrypted at rest (bind password / client secret live inside
+// the blob). Exactly the llm_providers shape: one row per kind, config never leaves the server.
+export const authProviders = sqliteTable('auth_providers', {
+  id: text('id').primaryKey(),
+  kind: text('kind').notNull(),            // 'ldap' | 'oidc' (unique)
+  configEnc: text('config_enc').notNull(), // AES-GCM blob of the settings JSON
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
 });
 
 // A turn parked because its author's claude.ai plan window (5h / weekly) was exhausted. Re-enqueued

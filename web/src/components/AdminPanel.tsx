@@ -5,6 +5,7 @@ import { useT } from '../lib/i18n';
 import { MobileMenuButton, timeAgo } from '../lib/ui';
 import { GitCredList } from './GitCredentials';
 import { LlmProviderForm } from './LlmProvider';
+import { LdapForm, OidcForm } from './SsoSettings';
 import { RequestInfo } from './MyPage';
 import { ClaudeLoginBlock } from './TokenSettings';
 import {
@@ -18,6 +19,7 @@ const TABS = [
   { key: 'overview', label: 'admin.tab.overview' },
   { key: 'requests', label: 'admin.tab.requests' },
   { key: 'users', label: 'admin.tab.users' },
+  { key: 'signin', label: 'admin.tab.signin' },
   { key: 'providers', label: 'admin.tab.providers' },
   { key: 'processes', label: 'admin.tab.processes' },
   { key: 'config', label: 'admin.tab.config' },
@@ -135,6 +137,19 @@ export function AdminPanel() {
         )}
 
         {tab === 'requests' && <RequestsTab users={users} />}
+
+        {/* External sign-in: AD/LDAP and OIDC SSO. Kept apart from the 자격증명 tab on purpose —
+            that one is about which Claude account a turn runs on, this one about who may log in. */}
+        {tab === 'signin' && (
+          <>
+            <Section title={t('sso.ldapTitle')}>
+              <LdapForm />
+            </Section>
+            <Section title={t('sso.oidcTitle')}>
+              <OidcForm />
+            </Section>
+          </>
+        )}
 
         {tab === 'providers' && (
           <>

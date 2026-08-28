@@ -4,9 +4,29 @@
     {
       "name": "demo-preview",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "preview", "-w", "web", "--", "--base=/ClaudeCodeWorkspace/", "--port", "4173", "--strictPort"],
+      "runtimeArgs": [
+        "run",
+        "preview",
+        "-w",
+        "web",
+        "--",
+        "--base=/ClaudeCodeWorkspace/",
+        "--port",
+        "4173",
+        "--strictPort"
+      ],
       "url": "http://localhost:4173",
       "port": 4173
+    },
+    {
+      "name": "dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "url": "http://localhost:5173",
+      "port": 5173
     }
   ]
 }

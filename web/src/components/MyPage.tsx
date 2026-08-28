@@ -137,7 +137,12 @@ function ProfileSection() {
       <Avatar name={user?.displayName} color={user?.avatarColor} src={src} size={72} />
       <div className="min-w-0 flex-1">
         <div className="font-semibold text-lg truncate">{user?.displayName}</div>
-        <div className="text-sm text-txt3 truncate">@{user?.username} · {user?.role}</div>
+        <div className="text-sm text-txt3 truncate">
+          @{user?.username} · {user?.role}
+          {/* Where this account's password lives: an AD/SSO account has none here, so the admin's
+              password reset is refused for it — say so instead of leaving that unexplained. */}
+          {user?.authSource && user.authSource !== 'local' && ` · ${t(`mypage.authSource.${user.authSource}`)}`}
+        </div>
         <div className="flex gap-2 mt-2">
           <button className="btn-ghost !py-1 !text-xs" disabled={busy} onClick={() => fileRef.current?.click()}>{t('mypage.uploadAvatar')}</button>
           {src && <button className="btn-ghost !py-1 !text-xs" disabled={busy} onClick={remove}>{t('mypage.removeAvatar')}</button>}

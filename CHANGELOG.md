@@ -26,7 +26,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 | Version | Date | Commits | Headline |
 |---|---|---|---|
-| [Unreleased](#unreleased) | — | 9 | A wiki you can see the shape of, plugins that belong to a project, and common projects anyone can create |
+| [Unreleased](#unreleased) | — | 14 | Sign in with a company account (AD/SSO), a wiki you can see the shape of, plugins that belong to a project |
 | [v1.25.1](#v1251--2026-08-21) | 2026-08-21 | 1 | The sidebar says an update is published, before the panel is open |
 | [v1.25.0](#v1250--2026-08-21) | 2026-08-21 | 5 | The choice card really asks — and a /btw button, and updates you cannot miss |
 | [v1.24.0](#v1240--2026-08-21) | 2026-08-21 | 5 | A chat hears when its project is changed somewhere else |
@@ -84,6 +84,84 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ---
 
 ## Unreleased
+
+<details>
+<summary><b>fix(auth): a plain <code>ldap://</code> server no longer fails with a TLS error</b> — every unencrypted directory refused to connect · <code>4aa7c76</code></summary>
+
+**Symptom.** Pointing AD/LDAP sign-in at an `ldap://` server (no TLS) failed every time, on the
+connection test and on a real login, with `Client network socket disconnected before secure TLS
+connection was established`.
+
+**Cause.** The LDAP library switches to TLS when **either** the address starts with `ldaps://` **or**
+certificate options were handed to it at all. Those options were being passed on every connection,
+so a plain connection tried a TLS handshake the server was never going to answer.
+
+**Fix.** The certificate options go to the connection only for `ldaps://`; on a plain connection they
+go to StartTLS instead, which is the step that actually needs them.
+
+Found by running the whole feature against a real OpenLDAP server: after the fix, search, sign-in,
+first-time account creation, bulk import and the group-to-admin mapping were all confirmed working,
+along with the guards — a wrong password, an empty password, a directory `admin` that must not
+inherit the local admin account, and a `*` in the login name.
+
+</details>
+
+<details>
+<summary><b>feat(auth): sign in with a company account — AD/LDAP and OIDC single sign-on</b> — no second password to hand out, and accounts that make themselves · <code>f4a85a8</code> · <code>b4b0eec</code></summary>
+
+Until now the workspace had exactly one way in: a username and password it stored itself. A team
+already running Active Directory or an identity provider had to create every person here a second
+time and hand out a second password. Two directories now sit next to the local form.
+
+**AD/LDAP** (`f4a85a8`, `server/src/auth/ldap.ts`). The ordinary login card is enough: what someone
+types is checked against the company directory. The server binds with a service account, searches
+for that person's entry, then binds a second time as that entry with the password they typed — so
+the directory does the checking and no work password is ever stored here. `ldaps://` or StartTLS
+over `ldap://`, a filter and attribute names an operator can change, and a directory group that can
+decide who is an admin. Admin panel › **Sign-in** has a connection test that lists what the filter
+actually matched, and an **import users** button that creates a local account for everyone in the
+directory at once; `ldapSyncMs` repeats that on a schedule.
+
+**SSO (OpenID Connect)** (`f4a85a8`, `server/src/auth/oidc.ts`). A second button on the login card
+hands the sign-in to Entra ID, Keycloak, Okta or anything else that speaks OIDC, and the person
+comes back already identified. Authorization Code with PKCE; the identity document that comes back
+is verified against the provider's own signing keys (or the client secret for HMAC-signed ones), and
+its issuer, audience, expiry and the one-time value we sent are all checked. No new dependency — the
+key handling is node's own crypto.
+
+**Where a mistake would have been a hole**, and what stops it:
+
+- The account's own source decides who checks the password, with no fallback either way. A local
+  account is only ever checked against its stored hash, so an `admin` object appearing in AD cannot
+  sign in as this workspace's admin. A directory account has no usable local password at all, so a
+  stale hash cannot outlive a disabled AD account.
+- Adopting an account that already exists under another source is refused unless an admin turns it
+  on deliberately (`ldapLinkExisting` / `oidcLinkExisting`, both off). The same email address is not
+  proof of the same person.
+- A login name is escaped before it reaches an LDAP filter, so `*)(sAMAccountName=admin` cannot
+  rewrite the search. An empty password is refused before the wire, because an LDAP bind with no
+  password succeeds as an anonymous one and would otherwise let anyone in as anyone.
+- The address a browser is sent back to after SSO is restricted to a path on this site.
+- Role sync (`ldapRoleSync` / `oidcRoleSync`, both off) never demotes the last admin, so a mistyped
+  group name cannot lock everyone out of the admin panel.
+- `localLoginEnabled` hides the username/password form from members once a directory is in place —
+  but never from admins, so a directory outage never locks the workspace.
+
+Settings (bind password, client secret) are encrypted at rest in a new `auth_providers` table, the
+same shape the LLM provider profiles use, and are never returned to the browser: a blank box in the
+form means "keep the stored one". Switches live in the config registry under the auth group:
+`ldapEnabled`, `ldapJitEnabled`, `ldapLinkExisting`, `ldapRoleSync`, `ldapTimeoutMs`, `ldapSyncMs`,
+`ldapImportMax`, `oidcEnabled`, `oidcJitEnabled`, `oidcLinkExisting`, `oidcRoleSync`,
+`oidcTimeoutMs`, `oidcStateTtlMs`, `oidcDiscoveryTtlMs`, `oidcClockSkewMs`, `localLoginEnabled`.
+`users.auth_source` records which directory owns an account; My Page shows it, and an admin password
+reset is refused for one. New public endpoint `GET /api/auth/methods` tells the login card which
+buttons to draw before anyone is signed in. The guide agent can describe both features but is given
+no route to configure them — they carry credentials.
+
+`b4b0eec` is the browser half: the **Sign-in** tab, the login-card button, the demo mock layer and
+the Korean/English strings. Check: `npx tsx server/src/auth/sso.test.ts`.
+
+</details>
 
 <details>
 <summary><b>fix(web): composer padding no longer chases itself into a page crash</b> — a chat could take the whole page down on open · <code>5b9db37</code></summary>

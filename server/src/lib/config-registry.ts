@@ -250,6 +250,37 @@ export const DEFS: ConfigDef[] = [
   { key: 'claudeLoginTimeoutMs', group: 'auth', type: 'int', default: '600000', min: 60000, max: 3600000, unit: 'ms' },
   { key: 'claudeLoginFinishMs', group: 'auth', type: 'int', default: '60000', min: 5000, max: 300000, unit: 'ms' },
 
+  // ── external directories: AD/LDAP sign-in and OIDC single sign-on ──
+  // Both are OFF by default and both need their connection settings filled in (admin panel › 인증),
+  // which live encrypted in the auth_providers table — never here, because they carry a secret.
+  // The local username/password form keeps working the whole time unless localLoginEnabled is off,
+  // and even then admins can still use it, so a broken directory can never lock the workspace out.
+  { key: 'localLoginEnabled', group: 'auth', type: 'bool', default: '1' },
+  { key: 'ldapEnabled', group: 'auth', type: 'bool', default: '0' },
+  // Create the local account the first time someone signs in through the directory. Off = only the
+  // people a bulk import (or an admin) already created may sign in.
+  { key: 'ldapJitEnabled', group: 'auth', type: 'bool', default: '1' },
+  // DANGEROUS by design: on, a directory account may take over an existing local account with the
+  // same username. Anyone who can create a `admin` user upstream then inherits this workspace's
+  // admin row, so it stays off unless an operator is deliberately migrating local accounts.
+  { key: 'ldapLinkExisting', group: 'auth', type: 'bool', default: '0' },
+  // Let the directory's admin group decide the workspace role on every sign-in / import.
+  { key: 'ldapRoleSync', group: 'auth', type: 'bool', default: '0' },
+  { key: 'ldapTimeoutMs', group: 'auth', type: 'int', default: '10000', min: 1000, max: 120000, unit: 'ms' },
+  // Periodic bulk import of directory users. 0 = never (the manual button in the admin panel still works).
+  { key: 'ldapSyncMs', group: 'auth', type: 'int', default: '0', min: 0, max: 604800000, unit: 'ms' },
+  { key: 'ldapImportMax', group: 'auth', type: 'int', default: '500', min: 1, max: 20000 },
+  { key: 'oidcEnabled', group: 'auth', type: 'bool', default: '0' },
+  { key: 'oidcJitEnabled', group: 'auth', type: 'bool', default: '1' },
+  { key: 'oidcLinkExisting', group: 'auth', type: 'bool', default: '0' }, // same takeover warning as ldapLinkExisting
+  { key: 'oidcRoleSync', group: 'auth', type: 'bool', default: '0' },
+  { key: 'oidcTimeoutMs', group: 'auth', type: 'int', default: '10000', min: 1000, max: 120000, unit: 'ms' },
+  // How long an unfinished sign-in stays valid (the browser is away at the identity provider).
+  { key: 'oidcStateTtlMs', group: 'auth', type: 'int', default: '600000', min: 60000, max: 3600000, unit: 'ms' },
+  // Discovery document + signing keys are static per issuer; refetched on a key the JWKS does not know.
+  { key: 'oidcDiscoveryTtlMs', group: 'auth', type: 'int', default: '3600000', min: 60000, max: 86400000, unit: 'ms' },
+  { key: 'oidcClockSkewMs', group: 'auth', type: 'int', default: '60000', min: 0, max: 600000, unit: 'ms' },
+
   // feature flags (live — toggle without restart)
   { key: 'sessionImportEnabled', group: 'features', type: 'bool', default: '1' },
   { key: 'sessionExportEnabled', group: 'features', type: 'bool', default: '1' },

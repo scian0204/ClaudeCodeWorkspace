@@ -18,6 +18,7 @@ import { importRoutes, reapImportStaging } from './routes/import.js';
 import { pluginRoutes } from './routes/plugins.js';
 import { agentRoutes } from './routes/agents.js';
 import { adminRoutes } from './routes/admin.js';
+import { ssoRoutes } from './routes/sso.js';
 import { reapBackupStaging } from './admin/backup.js';
 import { gitCredentialRoutes } from './routes/git-credentials.js';
 import { reviewRoutes } from './routes/review.js';
@@ -30,6 +31,7 @@ import { startReviewPoller, reapReviewOrphans } from './review/manager.js';
 import { scheduleModelRefresh } from './claude/models.js';
 import { armPendingResumes } from './claude/auto-resume.js';
 import { startWindowPrimer } from './claude/window-primer.js';
+import { startLdapSync } from './auth/ldap.js';
 import { cleanupSandboxOrphans } from './review/sandbox.js';
 import { initRealtime } from './realtime/io.js';
 import { startProjectWatch } from './watch/manager.js';
@@ -84,6 +86,7 @@ async function main() {
   await app.register(pluginRoutes);
   await app.register(agentRoutes);
   await app.register(adminRoutes);
+  await app.register(ssoRoutes);
   await app.register(gitCredentialRoutes);
   await app.register(reviewRoutes);
   await app.register(requestRoutes);
@@ -130,6 +133,7 @@ async function main() {
   scheduleModelRefresh(); // pull the live model list into the `models` config (frontier ids move fast)
   armPendingResumes(); // re-arm turns parked for a claude.ai window reset (must follow initRealtime: they emit)
   startWindowPrimer(); // keep opted-in users' claude.ai 5h window open so idle time isn't wasted
+  startLdapSync(); // periodic AD/LDAP user import (off unless ldapSyncMs is set)
   void reconcileSelfUpdate().catch(() => {}); // decide how a self-update swap ended (we may BE the new image)
   scheduleUpdateCheck(); // periodic "is a newer image published" check (cache only — never auto-applies)
 
