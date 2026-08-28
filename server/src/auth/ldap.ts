@@ -159,8 +159,13 @@ export function identityFromEntry(entry: any, c: LdapConfig): DirectoryIdentity 
 async function connect(c: LdapConfig): Promise<Client> {
   const timeout = cfg.int('ldapTimeoutMs');
   const tlsOptions = { rejectUnauthorized: c.tlsRejectUnauthorized };
-  const client = new Client({ url: c.url, timeout, connectTimeout: timeout, tlsOptions });
-  if (c.startTls && /^ldap:\/\//i.test(c.url)) await client.startTLS(tlsOptions);
+  const secure = /^ldaps:\/\//i.test(c.url);
+  // ldapts turns TLS on when EITHER the URL is ldaps:// or `tlsOptions` is present at all, so
+  // passing the options unconditionally makes a plain ldap:// connection attempt a TLS handshake and
+  // fail with "socket disconnected before secure TLS connection was established". They go to
+  // startTLS() instead on a plain connection, which is where they belong.
+  const client = new Client({ url: c.url, timeout, connectTimeout: timeout, ...(secure ? { tlsOptions } : {}) });
+  if (!secure && c.startTls) await client.startTLS(tlsOptions);
   return client;
 }
 
