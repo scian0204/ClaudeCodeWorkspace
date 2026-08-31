@@ -20,6 +20,7 @@ import { resolveGitCred, gitIdentity, identityEnv, askpassEnv } from '../auth/gi
 import { getReviewByChat, ensureWorktree } from '../review/manager.js';
 import { sandboxAvailable, ensureSandbox, removeSandbox, sandboxMcpServer } from '../review/sandbox.js';
 import { ensureSessionSandbox, sandboxMcp, sandboxHint, sessionSandboxAvailable } from './session-sandbox.js';
+import { ensureWinSandbox, winSandboxMcp, winSandboxHint, winSandboxAvailable } from './win-sandbox.js';
 import { poolForSession, runOrder, markExhausted, markAvailable } from '../auth/token-pool.js';
 import { cfg } from '../lib/config-registry.js';
 import { maybeAutoTitle } from './auto-title.js';
@@ -439,14 +440,28 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
   // agent to build/run there. Bash stays allowed (git/grep/file work has no reason to pay for a
   // container hop) — unlike review, this code is the team's own. Kept alive between turns and
   // reaped on idle, so it is NOT torn down in `finally`.
-  if (s.kind !== 'review' && s.sandbox === 1 && sessionSandboxAvailable()) {
-    try {
-      const cname = await ensureSessionSandbox(s.id, cwd);
-      if (cname) {
-        mcpServers = { sandbox: await sandboxMcp(cname, cwd) };
-        systemPromptAppend = sandboxHint(cwd);
-      }
-    } catch { /* container failed to start → host exec, exactly as before */ }
+  // 'windows' sends the build to a container on a remote Windows Docker host instead (the only way
+  // to run MSBuild for .NET Framework); it falls back to the local one when that host is not usable.
+  if (s.kind !== 'review' && s.sandbox === 1) {
+    const wantWin = s.sandboxTarget === 'windows' && winSandboxAvailable();
+    if (wantWin) {
+      try {
+        const cname = await ensureWinSandbox(s.id, cwd);
+        if (cname) {
+          mcpServers = { sandbox: await winSandboxMcp(s.id, cname) };
+          systemPromptAppend = winSandboxHint(cwd);
+        }
+      } catch { /* remote host unusable → the local container below, or host exec */ }
+    }
+    if (!mcpServers && sessionSandboxAvailable()) {
+      try {
+        const cname = await ensureSessionSandbox(s.id, cwd);
+        if (cname) {
+          mcpServers = { sandbox: await sandboxMcp(cname, cwd) };
+          systemPromptAppend = sandboxHint(cwd);
+        }
+      } catch { /* container failed to start → host exec, exactly as before */ }
+    }
   }
   if (s.kind === 'review' && sandboxAvailable()) {
     const rv = getReviewByChat(s.id);

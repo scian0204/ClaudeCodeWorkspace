@@ -74,6 +74,9 @@ export const chatSessions = sqliteTable('chat_sessions', {
   agent: text('agent'), // team-agent name driving the MAIN thread (SDK options.agent); null = default Claude
   poolId: text('pool_id'),   // shared-plan pool this session's turns draw from; null = the global pool (if any)
   sandbox: integer('sandbox').notNull().default(0), // 1 = build/run in this session's own container
+  // which daemon that container runs on: 'linux' (the local socket) | 'windows' (a remote
+  // Windows host, for .NET Framework builds — see claude/win-sandbox.ts)
+  sandboxTarget: text('sandbox_target').notNull().default('linux'),
   // Watch this session's project for file changes made OUTSIDE it (another chat, the editor, a pull).
   // 'off' = never look; 'notify' = tell the session; 'prompt' = also send watchPrompt as a turn.
   // See server/src/lib/project-watch.ts.

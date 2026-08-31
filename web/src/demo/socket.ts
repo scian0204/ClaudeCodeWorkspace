@@ -299,6 +299,18 @@ function guidePlan(text: string): { steps: { input: any; output: string }[]; rep
       reply: '사이드 채팅을 열었습니다. 지금 대화를 그대로 이어받아 답하지만, 여기서 오간 내용은 대화 기록에 남지 않습니다 — 읽기 전용이라 파일을 고치거나 명령을 실행하지도 않아요.\n\n입력창에 `/btw 질문` 처럼 바로 물어봐도 됩니다.',
     };
   }
+  if (/(\.net|dotnet|framework|msbuild|윈도우|windows)/.test(q) && /(빌드|build|컨테이너|container|샌드박스|sandbox)/.test(q)) {
+    const sid = db.sessions[0]?.id || '';
+    (db.sessions[0] as any).sandbox = 1;
+    (db.sessions[0] as any).sandboxTarget = 'windows';
+    return {
+      steps: [
+        { input: { method: 'PATCH', path: `/api/sessions/${sid}`, body: { sandbox: 1, sandboxTarget: 'windows' } }, output: 'status=200\n{"ok":true}' },
+        { input: { action: 'refresh' }, output: 'ok — dispatched refresh' },
+      ],
+      reply: '이 대화의 빌드를 Windows 컨테이너로 돌렸습니다. .NET Framework(MSBuild)는 여기서만 빌드됩니다 — 프로젝트는 명령 전에 Windows 호스트로 복사되고, 컨테이너 안에서는 `C:\\project` 에 있습니다.\n\n상단 빌드 컨테이너 버튼에서 Linux 컨테이너로 되돌리거나 끌 수 있고, 입력창에서는 `/sandbox windows` · `/sandbox linux` · `/sandbox off` 로도 됩니다.',
+    };
+  }
   if (/(파일 ?변경|변경 ?감지|watch|감시)/.test(q)) {
     const sid = db.sessions[0]?.id || '';
     const prompt = '{files} 가 바뀌었습니다. 어떤 영향이 있는지 확인해 주세요.';

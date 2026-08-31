@@ -27,6 +27,7 @@ export interface ConfigDef {
   options?: string[];   // select choices
   unit?: string;        // UI hint: 'ms' | 'MB' | 'days' | 'bytes' | ''
   image?: boolean;      // docker image value → UI offers presence check + pull/update
+  imageHost?: 'windows'; // that image lives on the remote Windows daemon, not the local one
   disabledWhen?: string; // bool key that overrides this one — UI locks the row while that key is on
 }
 
@@ -136,6 +137,37 @@ export const DEFS: ConfigDef[] = [
   // Kept alive between turns so a build's node_modules/target survive; reaped once the session idles.
   { key: 'sessionSandboxIdleMs', group: 'sandbox', type: 'int', default: '3600000', min: 60000, max: 86400000, unit: 'ms' },
   { key: 'sessionSandboxReaperMs', group: 'sandbox', type: 'int', default: '60000', min: 10000, max: 3600000, unit: 'ms' },
+
+  // ── Windows build container (server/src/claude/win-sandbox.ts) ──
+  // .NET Framework only builds in a Windows container, and one Docker daemon cannot run Linux and
+  // Windows containers at the same time — so this points at a SECOND daemon on a Windows machine.
+  // The project is copied there as an archive (no shared volume), so it also works on a bare-metal
+  // deploy with no DATA_VOLUME. Off by default: it needs a Windows host to exist.
+  { key: 'winSandboxEnabled', group: 'windocker', type: 'bool', default: '0' },
+  // tcp://host:2376 (TLS, with winDockerCertDir) or tcp://host:2375 (plain — every machine that can
+  // reach that port is root on the Windows host, so only on a network you fully trust).
+  { key: 'winDockerHost', group: 'windocker', type: 'string', default: '', env: 'WIN_DOCKER_HOST' },
+  // Dir holding ca.pem / cert.pem / key.pem, the layout the docker CLI uses. Set → TLS.
+  { key: 'winDockerCertDir', group: 'windocker', type: 'string', default: '', env: 'WIN_DOCKER_CERT_DIR' },
+  { key: 'winDockerTimeoutMs', group: 'windocker', type: 'int', default: '120000', min: 5000, max: 1800000, unit: 'ms' },
+  // How long a failed reachability check is trusted before the next build attempt re-checks.
+  { key: 'winDockerProbeTtlMs', group: 'windocker', type: 'int', default: '60000', min: 5000, max: 3600000, unit: 'ms' },
+  // Several GB — pull it from the admin panel before the first build, not during a turn.
+  { key: 'winSandboxImage', group: 'windocker', type: 'string', default: 'mcr.microsoft.com/dotnet/framework/sdk:4.8', image: true, imageHost: 'windows' },
+  { key: 'winSandboxWorkdir', group: 'windocker', type: 'string', default: 'C:\\project' },
+  // 'process' needs the container's Windows build to match the host's; 'default' lets the daemon pick.
+  { key: 'winSandboxIsolation', group: 'windocker', type: 'select', default: 'default', options: ['default', 'process', 'hyperv'] },
+  { key: 'winSandboxShell', group: 'windocker', type: 'select', default: 'cmd', options: ['cmd', 'powershell'] },
+  { key: 'winSandboxMemMB', group: 'windocker', type: 'int', default: '8192', min: 512, max: 262144, unit: 'MB' },
+  // A cold MSBuild + NuGet restore is slow; the Linux default (15min) times out real solutions.
+  { key: 'winSandboxExecTimeoutMs', group: 'windocker', type: 'int', default: '1800000', min: 10000, max: 14400000, unit: 'ms' },
+  { key: 'winSandboxMaxOutputBytes', group: 'windocker', type: 'int', default: '60000', min: 1000, max: 5000000, unit: 'bytes' },
+  { key: 'winSandboxIdleMs', group: 'windocker', type: 'int', default: '3600000', min: 60000, max: 86400000, unit: 'ms' },
+  { key: 'winSandboxReaperMs', group: 'windocker', type: 'int', default: '60000', min: 10000, max: 3600000, unit: 'ms' },
+  // Guard rail on the copy: refuse instead of pushing a huge tree over the network every command.
+  { key: 'winSandboxSyncMaxMB', group: 'windocker', type: 'int', default: '512', min: 1, max: 20480, unit: 'MB' },
+  // Names left out of the copy, matched against each file/dir name at any depth (*.suffix works).
+  { key: 'winSandboxSyncExclude', group: 'windocker', type: 'string', default: '.git,node_modules,bin,obj,packages,.vs,dist,target,.next' },
 
   // ── project file-change watch (server/src/lib/project-watch.ts) ──
   // A shared project is edited from many places (another chat's turn, the VS Code editor, a git pull),
@@ -481,7 +513,7 @@ export function resetConfigValue(key: string): void {
 export interface ConfigItemDto {
   key: string; group: string; type: ConfigType; unit?: string;
   restart: boolean; readonly: boolean; secret: boolean;
-  min?: number; max?: number; options?: string[]; image?: boolean; disabledWhen?: string;
+  min?: number; max?: number; options?: string[]; image?: boolean; imageHost?: string; disabledWhen?: string;
   default: string; overridden: boolean;
   value?: string;   // omitted for secrets
   set?: boolean;    // secrets only: is a non-default value configured
@@ -494,7 +526,7 @@ export function listConfigForApi(): ConfigItemDto[] {
     const base: ConfigItemDto = {
       key: d.key, group: d.group, type: d.type, unit: d.unit,
       restart: !!d.restart, readonly: !!d.readonly, secret: !!d.secret,
-      min: d.min, max: d.max, options: optionsFor(d), image: !!d.image, disabledWhen: d.disabledWhen,
+      min: d.min, max: d.max, options: optionsFor(d), image: !!d.image, imageHost: d.imageHost, disabledWhen: d.disabledWhen,
       default: d.default, overridden,
     };
     if (d.secret) return { ...base, set: val !== '' && val !== d.default };
@@ -508,6 +540,14 @@ export function imageConfigValues(): string[] {
   return DEFS.filter((d) => d.image).map((d) => resolve(d.key)).filter(Boolean);
 }
 
+// Which daemon an image-typed setting's value lives on: the local socket, or the remote Windows
+// host. The admin inspect/pull routes read this so a Framework SDK image is never looked for on the
+// Linux daemon (where it can neither be pulled nor run).
+export function imageHostFor(image: string): 'local' | 'windows' {
+  const d = DEFS.find((x) => x.image && resolve(x.key) === image);
+  return d?.imageHost === 'windows' ? 'windows' : 'local';
+}
+
 // The (model id → display name) map behind the chat dropdown. Corrupt JSON falls back to the default.
 export function modelMap(): Record<string, string> {
   try {
@@ -519,6 +559,6 @@ export function modelMap(): Record<string, string> {
 // Client-facing subset (any authed user): drives the model dropdown.
 // The Docker-readiness flags the UI also gates on are merged in by the /api/config route — importing
 // lib/docker-status.ts here would make the two modules circular (it reads cfg).
-export function publicConfig(): { models: Record<string, string>; defaultModel: string; defaultEffort: string; sessionImportEnabled: boolean; sessionExportEnabled: boolean; sessionBundleEnabled: boolean; fileTreeWarnCount: number; teamAgentsEnabled: boolean; commonProjectOpen: boolean; llmProvidersEnabled: boolean; approvalsEnabled: boolean; dmEnabled: boolean; searchEnabled: boolean; customContextMenu: boolean; autoTitleEnabled: boolean; autoResumeEnabled: boolean; windowPrimerEnabled: boolean; gitPublishEnabled: boolean; wikiSourceEditEnabled: boolean; wikiLinkEnabled: boolean; wikiAutoLearnEnabled: boolean; reviewWebhookEnabled: boolean; guideEnabled: boolean; guideWriteEnabled: boolean; asideEnabled: boolean; taskPanelEnabled: boolean; projectWatchEnabled: boolean; projectWatchPromptEnabled: boolean; projectWatchPromptMaxChars: number; processPollMs: number; toolFoldMin: number; tokenPoolEnabled: boolean; tokenPoolAllUsers: boolean; tokenPoolPartyCreate: boolean; sessionSandboxEnabled: boolean } {
-  return { models: modelMap(), defaultModel: cfg.str('defaultModel'), defaultEffort: cfg.str('defaultEffort'), sessionImportEnabled: cfg.bool('sessionImportEnabled'), sessionExportEnabled: cfg.bool('sessionExportEnabled'), sessionBundleEnabled: cfg.bool('sessionBundleEnabled'), fileTreeWarnCount: cfg.int('fileTreeWarnCount'), teamAgentsEnabled: cfg.bool('teamAgentsEnabled'), commonProjectOpen: cfg.bool('commonProjectOpen'), llmProvidersEnabled: cfg.bool('llmProvidersEnabled'), approvalsEnabled: cfg.bool('approvalsEnabled'), dmEnabled: cfg.bool('dmEnabled'), searchEnabled: cfg.bool('searchEnabled'), customContextMenu: cfg.bool('customContextMenu'), autoTitleEnabled: cfg.bool('autoTitleEnabled'), autoResumeEnabled: cfg.bool('autoResumeEnabled'), windowPrimerEnabled: cfg.bool('windowPrimerEnabled'), gitPublishEnabled: cfg.bool('gitPublishEnabled'), wikiSourceEditEnabled: cfg.bool('wikiSourceEditEnabled'), wikiLinkEnabled: cfg.bool('wikiLinkEnabled'), wikiAutoLearnEnabled: cfg.bool('wikiAutoLearnEnabled'), reviewWebhookEnabled: cfg.bool('reviewWebhook'), guideEnabled: cfg.bool('guideEnabled'), guideWriteEnabled: cfg.bool('guideWriteEnabled'), asideEnabled: cfg.bool('asideEnabled'), taskPanelEnabled: cfg.bool('taskPanelEnabled'), projectWatchEnabled: cfg.bool('projectWatchEnabled'), projectWatchPromptEnabled: cfg.bool('projectWatchEnabled') && cfg.bool('projectWatchPromptEnabled'), projectWatchPromptMaxChars: cfg.int('projectWatchPromptMaxChars'), processPollMs: cfg.int('processPollMs'), toolFoldMin: cfg.int('toolFoldMin'), tokenPoolEnabled: cfg.bool('tokenPoolEnabled'), tokenPoolAllUsers: cfg.bool('tokenPoolAllUsers'), tokenPoolPartyCreate: cfg.bool('tokenPoolPartyCreate'), sessionSandboxEnabled: cfg.bool('sessionSandboxEnabled') };
+export function publicConfig(): { models: Record<string, string>; defaultModel: string; defaultEffort: string; sessionImportEnabled: boolean; sessionExportEnabled: boolean; sessionBundleEnabled: boolean; fileTreeWarnCount: number; teamAgentsEnabled: boolean; commonProjectOpen: boolean; llmProvidersEnabled: boolean; approvalsEnabled: boolean; dmEnabled: boolean; searchEnabled: boolean; customContextMenu: boolean; autoTitleEnabled: boolean; autoResumeEnabled: boolean; windowPrimerEnabled: boolean; gitPublishEnabled: boolean; wikiSourceEditEnabled: boolean; wikiLinkEnabled: boolean; wikiAutoLearnEnabled: boolean; reviewWebhookEnabled: boolean; guideEnabled: boolean; guideWriteEnabled: boolean; asideEnabled: boolean; taskPanelEnabled: boolean; projectWatchEnabled: boolean; projectWatchPromptEnabled: boolean; projectWatchPromptMaxChars: number; processPollMs: number; toolFoldMin: number; tokenPoolEnabled: boolean; tokenPoolAllUsers: boolean; tokenPoolPartyCreate: boolean; sessionSandboxEnabled: boolean; winSandboxEnabled: boolean } {
+  return { models: modelMap(), defaultModel: cfg.str('defaultModel'), defaultEffort: cfg.str('defaultEffort'), sessionImportEnabled: cfg.bool('sessionImportEnabled'), sessionExportEnabled: cfg.bool('sessionExportEnabled'), sessionBundleEnabled: cfg.bool('sessionBundleEnabled'), fileTreeWarnCount: cfg.int('fileTreeWarnCount'), teamAgentsEnabled: cfg.bool('teamAgentsEnabled'), commonProjectOpen: cfg.bool('commonProjectOpen'), llmProvidersEnabled: cfg.bool('llmProvidersEnabled'), approvalsEnabled: cfg.bool('approvalsEnabled'), dmEnabled: cfg.bool('dmEnabled'), searchEnabled: cfg.bool('searchEnabled'), customContextMenu: cfg.bool('customContextMenu'), autoTitleEnabled: cfg.bool('autoTitleEnabled'), autoResumeEnabled: cfg.bool('autoResumeEnabled'), windowPrimerEnabled: cfg.bool('windowPrimerEnabled'), gitPublishEnabled: cfg.bool('gitPublishEnabled'), wikiSourceEditEnabled: cfg.bool('wikiSourceEditEnabled'), wikiLinkEnabled: cfg.bool('wikiLinkEnabled'), wikiAutoLearnEnabled: cfg.bool('wikiAutoLearnEnabled'), reviewWebhookEnabled: cfg.bool('reviewWebhook'), guideEnabled: cfg.bool('guideEnabled'), guideWriteEnabled: cfg.bool('guideWriteEnabled'), asideEnabled: cfg.bool('asideEnabled'), taskPanelEnabled: cfg.bool('taskPanelEnabled'), projectWatchEnabled: cfg.bool('projectWatchEnabled'), projectWatchPromptEnabled: cfg.bool('projectWatchEnabled') && cfg.bool('projectWatchPromptEnabled'), projectWatchPromptMaxChars: cfg.int('projectWatchPromptMaxChars'), processPollMs: cfg.int('processPollMs'), toolFoldMin: cfg.int('toolFoldMin'), tokenPoolEnabled: cfg.bool('tokenPoolEnabled'), tokenPoolAllUsers: cfg.bool('tokenPoolAllUsers'), tokenPoolPartyCreate: cfg.bool('tokenPoolPartyCreate'), sessionSandboxEnabled: cfg.bool('sessionSandboxEnabled'), winSandboxEnabled: cfg.bool('winSandboxEnabled') };
 }

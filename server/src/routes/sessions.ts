@@ -396,7 +396,7 @@ export async function sessionRoutes(app: FastifyInstance) {
     // spend, the other spawns a container. canEditChat lets any authed user edit a room's shared row
     // (it leans on chatSessionId obscurity), which is fine for the model dropdown but too loose here —
     // require the same authority as sending a turn (admin, or a member of the room).
-    if (('poolId' in b || 'sandbox' in b) && !canWriteSession(u, s)) {
+    if (('poolId' in b || 'sandbox' in b || 'sandboxTarget' in b) && !canWriteSession(u, s)) {
       return reply.code(403).send({ error: 'forbidden' });
     }
     // Shared-plan pool backing this session's turns. Three states: null = inherit (the sender's own
@@ -409,6 +409,7 @@ export async function sessionRoutes(app: FastifyInstance) {
     }
     // per-session build container (only meaningful while the admin flag is on; the turn re-checks)
     if ('sandbox' in b) patch.sandbox = b.sandbox ? 1 : 0;
+    if ('sandboxTarget' in b) patch.sandboxTarget = b.sandboxTarget === 'windows' ? 'windows' : 'linux';
     // Project file-change watch. 'prompt' mode SENDS TURNS on its own, so it needs the same
     // authority as sending one — canEditChat alone leans on chatSessionId obscurity, which is fine
     // for a title but not for something that spends a plan unattended.

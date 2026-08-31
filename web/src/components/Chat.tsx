@@ -349,6 +349,15 @@ function Menu({ children, side, align = 'end' }: { children: React.ReactNode; si
     </DM.Portal>
   );
 }
+// one tick on whichever menu entry is active, so a pill's state is readable inside its menu too
+function Row({ on, children }: { on: boolean; children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <IconCheck size={12} className={on ? 'text-clay' : 'opacity-0'} />{children}
+    </span>
+  );
+}
+
 function MenuItem({ children, onSelect }: { children: React.ReactNode; onSelect: () => void }) {
   return <DM.Item onSelect={onSelect} className="px-2 py-1.5 text-sm rounded cursor-pointer hover:bg-line outline-none data-[highlighted]:bg-line">{children}</DM.Item>;
 }
@@ -919,12 +928,6 @@ function PoolPicker() {
   const inheritTarget = mine ? mine.name : poolAllUsers ? t('pool.allUsersName') : t('pool.own');
   const inheritLabel = t('pool.auto', { name: inheritTarget });
   const label = bound ? nameOf(bound) : c.poolId === POOL_OWN ? t('pool.own') : inheritLabel;
-  // one tick on whichever entry is active, so the pill's state is readable inside the menu too
-  const Row = ({ on, children }: { on: boolean; children: React.ReactNode }) => (
-    <span className="inline-flex items-center gap-1.5">
-      <IconCheck size={12} className={on ? 'text-clay' : 'opacity-0'} />{children}
-    </span>
-  );
   return (
     <DM.Root>
       <DM.Trigger asChild><button className="pill" disabled={!!c.readOnly} title={t('pool.pickTip')}><IconUsers size={13} />{label}<IconChevronDown size={14} /></button></DM.Trigger>
@@ -944,19 +947,43 @@ function PoolPicker() {
   );
 }
 
-// Per-session build container. Hidden while the admin flag is off or Docker isn't wired — the
-// toggle would have nothing to spawn.
+// Per-session build container. Hidden while nothing can spawn one: the local Linux container needs
+// the admin flag AND a wired Docker socket, the Windows one needs a remote Windows host configured.
+// With both available it becomes a picker — the Windows container is the only place .NET Framework
+// builds, and the local one is the right default for everything else.
 function SandboxToggle() {
   const t = useT();
-  const { current: c, sessionSandboxEnabled, dockerReady, setSandbox } = useStore();
-  if (!sessionSandboxEnabled || !dockerReady || !c) return null;
+  const { current: c, sessionSandboxEnabled, winSandboxEnabled, dockerReady, setSandbox } = useStore();
+  const linuxOk = sessionSandboxEnabled && dockerReady;
+  if (!c || (!linuxOk && !winSandboxEnabled)) return null;
   const on = c.sandbox === 1;
+  const win = on && c.sandboxTarget === 'windows';
+  const label = t(win ? 'sandbox.onWin' : on ? 'sandbox.on' : 'sandbox.off');
+  if (!winSandboxEnabled) {
+    return (
+      <button className={`pill inline-flex items-center gap-1 ${on ? 'ring-1 ring-clay text-clay' : ''}`}
+        disabled={!!c.readOnly} title={t(on ? 'sandbox.onTip' : 'sandbox.offTip')}
+        onClick={() => void setSandbox(!on)}>
+        <IconBox size={13} />{label}
+      </button>
+    );
+  }
   return (
-    <button className={`pill inline-flex items-center gap-1 ${on ? 'ring-1 ring-clay text-clay' : ''}`}
-      disabled={!!c.readOnly} title={t(on ? 'sandbox.onTip' : 'sandbox.offTip')}
-      onClick={() => void setSandbox(!on)}>
-      <IconBox size={13} />{t(on ? 'sandbox.on' : 'sandbox.off')}
-    </button>
+    <DM.Root>
+      <DM.Trigger asChild>
+        <button className={`pill inline-flex items-center gap-1 ${on ? 'ring-1 ring-clay text-clay' : ''}`}
+          disabled={!!c.readOnly} title={t('sandbox.pickTip')}>
+          <IconBox size={13} />{label}<IconChevronDown size={14} />
+        </button>
+      </DM.Trigger>
+      <Menu>
+        <MenuItem onSelect={() => void setSandbox(false)}><Row on={!on}>{t('sandbox.targetOff')}</Row></MenuItem>
+        {linuxOk && (
+          <MenuItem onSelect={() => void setSandbox(true, 'linux')}><Row on={on && !win}>{t('sandbox.targetLinux')}</Row></MenuItem>
+        )}
+        <MenuItem onSelect={() => void setSandbox(true, 'windows')}><Row on={win}>{t('sandbox.targetWindows')}</Row></MenuItem>
+      </Menu>
+    </DM.Root>
   );
 }
 

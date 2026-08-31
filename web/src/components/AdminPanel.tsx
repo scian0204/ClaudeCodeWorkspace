@@ -400,6 +400,7 @@ function ConfigManager() {
                 <div className="text-[11px] text-txt3 mb-2">{t(g === 'secret' ? 'admin.cfgSecretHint' : 'admin.cfgReadonlyHint')}</div>
               )}
               {g === 'privacy' && <div className="text-[11px] text-txt3 mb-2">{t('admin.cfgPrivacyHint')}</div>}
+              {g === 'windocker' && <WinDockerPanel />}
               <div className="divide-y divide-line">
                 {rows.map((it) => (
                   <ConfigRow key={it.key} it={it} edit={edits[it.key]}
@@ -570,6 +571,7 @@ function ImageControl({ it, edit, onEdit, onSave }: {
         {dirty && <button className="btn-primary text-xs px-2 py-1" onClick={() => onSave(it.key, edit)}>{t('admin.save')}</button>}
       </div>
       <div className="flex items-center gap-2 text-[11px]">
+        {it.imageHost === 'windows' && <span className="text-txt3">{t('admin.cfgImageOnWinHost')}</span>}
         {busy === 'check' ? <span className="text-txt3">{t('admin.cfgImageChecking')}</span>
           : status?.dockerUnavailable ? <span className="text-txt3">docker N/A</span>
           : status?.present ? <span className="text-ok inline-flex items-center gap-1"><IconDot size={10} />{t('admin.cfgImagePresent')}{status.size ? ` · ${Math.round(status.size / 1e6)}MB` : ''}</span>
@@ -577,6 +579,40 @@ function ImageControl({ it, edit, onEdit, onSave }: {
         <button className="text-clay hover:underline disabled:opacity-40" disabled={busy !== null || dirty}
           onClick={pull}>{busy === 'pull' ? t('admin.cfgImagePulling') : t('admin.cfgImagePull')}</button>
       </div>
+    </div>
+  );
+}
+
+// The remote Windows build host: is it reachable, and is it really a Windows daemon? Both matter
+// before the first build — pointing this at another Linux daemon starts containers that cannot build
+// .NET Framework at all, and the failure would only surface much later as "msbuild not found".
+function WinDockerPanel() {
+  const t = useT();
+  const [st, setSt] = useState<any>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let live = true;
+    api.get('/api/admin/windows-docker').then((r) => { if (live) setSt(r.windows); }).catch(() => {});
+    return () => { live = false; };
+  }, []);
+  const test = async () => {
+    setBusy(true);
+    try { setSt((await api.post('/api/admin/windows-docker/test', {})).windows); }
+    catch (e: any) { useStore.getState().setError(e.message); }
+    finally { setBusy(false); }
+  };
+  const state = !st ? '' : !st.configured ? t('admin.winDocker.unset') : st.ok
+    ? t('admin.winDocker.ok', { os: st.os || '?', version: st.version || '?' })
+    : t('admin.winDocker.bad');
+  return (
+    <div className="text-[11px] text-txt3 mb-2 space-y-1.5">
+      <div className="leading-snug">{t('admin.winDocker.hint')}</div>
+      <div className="flex items-center gap-2 flex-wrap">
+        <button className="text-xs border border-line rounded-lg px-2.5 py-1 hover:border-clay disabled:opacity-40 inline-flex items-center gap-1.5"
+          disabled={busy} onClick={test}><IconRefresh size={12} />{busy ? t('admin.upd.checking') : t('admin.winDocker.test')}</button>
+        {st && <span className={st.ok ? 'text-ok' : st.configured ? 'text-warn' : ''}>{state}</span>}
+      </div>
+      {st?.error && <div className="font-mono text-[10px] text-txt3 break-all">{st.error}</div>}
     </div>
   );
 }

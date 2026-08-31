@@ -15,6 +15,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ## Contents
 
 - [Timeline](#timeline)
+- [Unreleased](#unreleased)
 - **1.x releases** — [v1.26.0](#v1260--2026-08-28) · [v1.25.1](#v1251--2026-08-21) · [v1.25.0](#v1250--2026-08-21) · [v1.24.0](#v1240--2026-08-21) · [v1.23.0](#v1230--2026-08-20) · [v1.22.0](#v1220--2026-08-20) · [v1.21.1](#v1211--2026-08-19) · [v1.21.0](#v1210--2026-08-19) · [v1.20.2](#v1202--2026-08-19) · [v1.20.1](#v1201--2026-08-19) · [v1.20.0](#v1200--2026-08-19) · [v1.19.13](#v11913--2026-08-19) · [v1.19.12](#v11912--2026-08-19) · [v1.19.11](#v11911--2026-08-19) · [v1.19.10](#v11910--2026-08-19) · [v1.19.9](#v1199--2026-08-18) · [v1.19.8](#v1198--2026-08-18) · [v1.19.7](#v1197--2026-08-18) · [v1.19.6](#v1196--2026-08-18) · [v1.19.5](#v1195--2026-08-14) · [v1.19.4](#v1194--2026-08-14) · [v1.19.3](#v1193--2026-08-14) · [v1.19.2](#v1192--2026-08-14) · [v1.19.1](#v1191--2026-08-14) · [v1.19.0](#v1190--2026-08-14) · [v1.18.0](#v1180--2026-08-14) · [v1.17.3](#v1173--2026-08-14) · [v1.17.2](#v1172--2026-08-14) · [v1.17.1](#v1171--2026-08-14) · [v1.17.0](#v1170--2026-08-14) · [v1.16.1](#v1161--2026-08-13) · [v1.16.0](#v1160--2026-08-13) · [v1.15.1](#v1151--2026-08-13) · [v1.15.0](#v1150--2026-08-13) · [v1.14.2](#v1142--2026-08-13) · [v1.14.1](#v1141--2026-08-13) · [v1.14.0](#v1140--2026-08-13) · [v1.13.0](#v1130--2026-08-13) · [v1.12.0](#v1120--2026-08-07) · [v1.11.0](#v1110--2026-08-06) · [v1.10.0](#v1100--2026-08-05) · [v1.9.1](#v191--2026-08-05) · [v1.9.0](#v190--2026-08-05) · [v1.8.0](#v180--2026-08-04) · [v1.7.0](#v170--2026-08-04) · [v1.6.0](#v160--2026-08-04) · [v1.5.0](#v150--2026-08-04) · [v1.4.0](#v140--2026-08-03) · [v1.3.1](#v131--2026-08-03) · [v1.3.0](#v130--2026-07-31) · [v1.2.0](#v120--2026-07-31) · [v1.1.1](#v111--2026-07-31) · [v1.1.0](#v110--2026-07-31)
 - [Early development (2026-07-20 → 07-31)](#early-development--2026-07-20--07-31)
 - [Where it diverged from the original design](#where-it-diverged-from-the-original-design)
@@ -79,6 +80,29 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 | [v1.1.1](#v111--2026-07-31) | 2026-07-31 | 3 | Multi-arch build, Docker Hub overview |
 | [v1.1.0](#v110--2026-07-31) | 2026-07-31 | 4 | Release pipeline + Hub publishing |
 | [Early development](#early-development--2026-07-20--07-31) | 07-20 → 07-31 | 144 | P0–P5 skeleton · LLM Wiki · tokens · git · PR review · config · import · DM |
+
+---
+
+## Unreleased
+
+<details>
+<summary><b>feat(sandbox): Windows build container on a remote Docker host</b> — .NET Framework builds, at last · <code>d1d2184</code></summary>
+
+**What it is.** A chat's build container can now run on a **second Docker host — a Windows one**. That is the only way to build .NET Framework: MSBuild for Framework exists solely in a Windows container, and one Docker daemon cannot run Linux and Windows containers at the same time.
+
+**How the project gets there.** The two daemons share no volume, so nothing can be mounted. The project is copied to the Windows host as an archive before each command and sits at `C:\project` inside the container. The copy is skipped entirely when nothing under the project changed since the last one, so a run of read-only commands costs nothing. Files the build writes — `bin`, `obj`, restored NuGet packages — stay in the container and survive between commands, so incremental builds and `nuget restore` are not repeated; they never appear on the project path. A file deleted on the host is not deleted in the container (an archive only adds and overwrites) — turning the container off and on again recreates it clean.
+
+**Using it.** The header's build-container pill becomes a picker — off / Linux container / Windows container — once an admin has set a Windows host. `/sandbox windows`, `/sandbox linux` and `/sandbox off` do the same from the composer. The chat's choice is stored on the session (`chat_sessions.sandbox_target`), and a Windows choice falls back to the Linux container when the remote host is unusable, rather than failing the turn.
+
+**Setting up the host.** `winDockerHost` takes `tcp://host:2376` with `winDockerCertDir` pointing at a dir of `ca.pem`/`cert.pem`/`key.pem` (the layout the docker CLI uses) — the certificates are read from disk, so the client key never enters the workspace database. Plain `tcp://host:2375` also works but hands full control of that Windows machine to anything that can reach the port, so it is only for a network you fully trust. The admin panel's new **Windows build container** group has a connection test that reports the Docker version *and* whether the daemon really is a Windows one: pointing this at another Linux daemon by mistake would otherwise surface much later as a confusing "msbuild not found". The multi-GB `mcr.microsoft.com/dotnet/framework/sdk:4.8` image is pulled from that same group — image presence checks and pulls now go to whichever daemon the image actually lives on.
+
+**Boundaries.** Not used for PR review: review sandboxes exist to run untrusted code and depend on `CapDrop` / no-new-privileges, which Windows does not have. Works on a deploy with no `DATA_VOLUME` too, since nothing is mounted. Windows containers are also listed and killable in the admin process panel, and swept at boot.
+
+New settings: `winSandboxEnabled`, `winDockerHost`, `winDockerCertDir`, `winDockerTimeoutMs`, `winDockerProbeTtlMs`, `winSandboxImage`, `winSandboxWorkdir`, `winSandboxIsolation`, `winSandboxShell`, `winSandboxMemMB`, `winSandboxExecTimeoutMs`, `winSandboxMaxOutputBytes`, `winSandboxIdleMs`, `winSandboxReaperMs`, `winSandboxSyncMaxMB`, `winSandboxSyncExclude`. New endpoints: `GET /api/admin/windows-docker`, `POST /api/admin/windows-docker/test`. Check: `npx tsx server/src/claude/win-sandbox.test.ts`.
+
+</details>
+
+- **fix(sandbox): never pull the Framework SDK image inside a turn** — it is several GB and takes tens of minutes, so pulling it on first use made the chat look hung. A missing image is now refused with the fix (pull it from the admin panel) and the chat falls back to the local container. A command whose container went away between turns — idle cleanup, or the Windows host restarting — now returns its reason instead of a raw docker error. · `7d58e77`
 
 ---
 

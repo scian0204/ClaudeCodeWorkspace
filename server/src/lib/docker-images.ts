@@ -28,9 +28,11 @@ export async function listCcwContainers(label: string): Promise<CcwContainer[]> 
   }));
 }
 
-export async function inspectImage(image: string): Promise<ImageStatus> {
+// `client` overrides the local socket — the Windows build image lives on a different daemon
+// (lib/docker-hosts.ts), where it must be inspected and pulled instead.
+export async function inspectImage(image: string, client?: Docker): Promise<ImageStatus> {
   try {
-    const info: any = await docker.getImage(image).inspect();
+    const info: any = await (client || docker).getImage(image).inspect();
     return { present: true, id: String(info.Id || '').replace(/^sha256:/, '').slice(0, 12), size: info.Size, created: info.Created };
   } catch (e: any) {
     const status = e?.statusCode;
@@ -40,11 +42,12 @@ export async function inspectImage(image: string): Promise<ImageStatus> {
   }
 }
 
-export async function pullImage(image: string): Promise<void> {
+export async function pullImage(image: string, client?: Docker): Promise<void> {
+  const d = client || docker;
   await new Promise<void>((resolve, reject) => {
-    docker.pull(image, (err: any, stream: any) => {
+    d.pull(image, (err: any, stream: any) => {
       if (err) return reject(err);
-      docker.modem.followProgress(stream, (e: any) => (e ? reject(e) : resolve()));
+      d.modem.followProgress(stream, (e: any) => (e ? reject(e) : resolve()));
     });
   });
 }

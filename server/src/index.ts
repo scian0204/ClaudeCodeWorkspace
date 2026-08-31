@@ -37,6 +37,7 @@ import { initRealtime } from './realtime/io.js';
 import { startProjectWatch } from './watch/manager.js';
 import { startReaper, cleanupOrphans, ensureNetwork } from './codeserver/manager.js';
 import { removeAllSessionSandboxes, startReaper as startSessionSandboxReaper } from './claude/session-sandbox.js';
+import { removeAllWinSandboxes, startWinReaper } from './claude/win-sandbox.js';
 import { poolRoutes } from './routes/pools.js';
 import { reconcileSelfUpdate, scheduleUpdateCheck } from './admin/self-update.js';
 import { startDockerProbe } from './lib/docker-status.js';
@@ -126,8 +127,10 @@ async function main() {
   await cleanupOrphans(); // clear orphans from a previous run
   await cleanupSandboxOrphans(); // clear leftover review build sandboxes from a previous run
   await removeAllSessionSandboxes(); // same for per-session build containers (registry is in-memory)
+  await removeAllWinSandboxes().catch(() => {}); // and on the remote Windows host, if one is configured
   startReaper();
   startSessionSandboxReaper();
+  startWinReaper();
   startProjectWatch(); // watch the projects sessions subscribed to for file changes (must follow initRealtime: it emits)
   startReviewPoller(); // poll each watched repo's host for open PRs → spawn/refresh review sessions
   scheduleModelRefresh(); // pull the live model list into the `models` config (frontier ids move fast)
