@@ -85,7 +85,7 @@
 
 ## v1.27.0 — 2026-09-01
 
-<sub>release commit `PENDING`</sub>
+<sub>release commit `2978295`</sub>
 
 <details>
 <summary><b>feat(sandbox): Windows 빌드 컨테이너 — 원격 도커 호스트</b> — 드디어 .NET Framework 빌드 · <code>d1d2184</code></summary>

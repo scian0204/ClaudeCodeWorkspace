@@ -85,7 +85,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ## v1.27.0 — 2026-09-01
 
-<sub>release commit `PENDING`</sub>
+<sub>release commit `2978295`</sub>
 
 <details>
 <summary><b>feat(sandbox): Windows build container on a remote Docker host</b> — .NET Framework builds, at last · <code>d1d2184</code></summary>
