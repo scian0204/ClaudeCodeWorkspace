@@ -133,6 +133,49 @@ Claude는 위험한 툴을 쓰기 직전 멈추고 브라우저에 물어봅니�
 
 **Windows 빌드 컨테이너 (.NET Framework)** — .NET Framework용 MSBuild는 Windows 컨테이너에만 있고, 도커 데몬 하나는 Linux와 Windows 컨테이너를 함께 돌릴 수 없습니다. 그래서 같은 헤더 버튼으로 그 대화의 빌드만 **별도 Windows 도커 호스트**의 컨테이너로 보낼 수 있습니다 — 버튼에서 고르거나 `/sandbox windows`. 두 데몬은 볼륨을 공유할 수 없으므로 프로젝트는 명령 전에 그 호스트로 복사되고, 컨테이너 안에서는 `C:\project` 에 있습니다. 파일 편집은 평소 경로에서 그대로 하고, `nuget restore` · `msbuild` · `vstest.console` 은 Windows 쪽에서 돌아갑니다. 빌드 결과는 컨테이너에 남아 명령 사이에 유지되므로 매번 처음부터 빌드하지 않습니다. 호스트 주소(`tcp://호스트:2376` + TLS 인증서 폴더)는 관리자가 지정하고, 수 GB짜리 SDK 이미지 받기와 연결 확인도 관리자 설정의 **Windows 빌드 컨테이너** 그룹에서 합니다. 기본은 꺼짐이며, PR 리뷰에는 쓰지 않습니다(리뷰 샌드박스가 기대는 권한 상한이 Linux 전용이라서).
 
+<details>
+<summary><b>Windows 빌드 호스트 설정</b> — 관리자가 한 번만</summary>
+
+**Windows 머신이 따로 필요합니다.** Windows 컨테이너는 Windows Server, 또는 Windows 10/11 **Pro/Enterprise**(Hyper-V)에서만 됩니다. Home 에디션은 리눅스 컨테이너만 돌립니다. Windows Server VM도 괜찮습니다.
+
+**1 · 그 머신에 도커를 Windows 컨테이너 모드로 설치.** Windows Server라면 [마이크로소프트 스크립트](https://learn.microsoft.com/virtualization/windowscontainers/quick-start/set-up-environment)가 전부 해 줍니다:
+
+```powershell
+Invoke-WebRequest -UseBasicParsing "https://raw.githubusercontent.com/microsoft/Windows-Containers/Main/helpful_tools/Install-DockerCE/install-docker-ce.ps1" -o install-docker-ce.ps1
+.\install-docker-ce.ps1
+```
+
+Windows 10/11 Pro라면 Docker Desktop을 깔고 전환합니다: `& $Env:ProgramFiles\Docker\Docker\DockerCli.exe -SwitchDaemon`. 어느 쪽이든 `docker info --format "{{.OSType}}"` 가 `windows` 로 나와야 합니다.
+
+**2 · 네트워크로 열기.** 기본값은 로컬 파이프만 받습니다. `C:\ProgramData\Docker\config\daemon.json` 을 만들거나 고치고 `Restart-Service docker`:
+
+```json
+{
+  "hosts": ["tcp://0.0.0.0:2376", "npipe://"],
+  "tlsverify": true,
+  "tlscacert": "C:\\ProgramData\\docker\\certs.d\\ca.pem",
+  "tlscert": "C:\\ProgramData\\docker\\certs.d\\server-cert.pem",
+  "tlskey": "C:\\ProgramData\\docker\\certs.d\\server-key.pem"
+}
+```
+
+인증서는 [도커 공식 문서](https://docs.docker.com/engine/security/protect-access/)대로 만듭니다. `tlsverify` 없이 **2375 포트로 열면 인증서가 필요 없지만 아무나 받습니다** — 그 포트에 닿는 누구든 그 Windows 머신에서 뭐든 할 수 있습니다. 사내망에서, 워크스페이스 서버 주소만 방화벽으로 허용해, 임시로만 쓰세요.
+
+**3 · 워크스페이스가 그쪽을 보게 하기.** *클라이언트* 파일 3개(`ca.pem` · `cert.pem` · `key.pem`)를 compose 파일 옆에 두고 읽기 전용으로 마운트합니다:
+
+```yaml
+    volumes:
+      - ./certs/win:/certs/win:ro
+```
+
+그리고 **관리자 → 설정 → Windows 빌드 컨테이너**에서 `winDockerHost` 를 `tcp://<Windows호스트>:2376`, `winDockerCertDir` 를 `/certs/win` 으로 두고 `winSandboxEnabled` 를 켭니다. **연결 확인**을 누르면 `windows` 와 도커 버전이 나와야 합니다. 이어서 이미지 행의 **풀/업데이트**를 누릅니다 — `mcr.microsoft.com/dotnet/framework/sdk:4.8` 은 수 GB이고, 대화 도중에는 일부러 받지 않습니다.
+
+**4 · 쓰기.** 대화에서 **빌드 컨테이너** 버튼을 *Windows 컨테이너*로 바꾸거나 `/sandbox windows` 를 칩니다. 빌드를 시켜 보면 됩니다. 첫 명령은 `msbuild -version` 이 좋습니다.
+
+**컨테이너가 안 뜨면** 이미지 태그를 호스트의 Windows 버전에 맞춰 고정하거나(`4.8-windowsservercore-ltsc2019` · `...-ltsc2022` 등) `winSandboxIsolation` 을 `hyperv` 로 바꾸세요 — process 격리는 컨테이너와 호스트의 Windows 버전이 같아야 합니다.
+
+</details>
+
 ### 📎 `@` 파일 참조 · 🖇 첨부 & 붙여넣기
 
 <img src="docs/screenshots/12-at.png" alt="컴포저 위에 뜬 @ 파일·폴더 참조 메뉴" width="100%" />

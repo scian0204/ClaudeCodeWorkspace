@@ -133,6 +133,49 @@ Claude pauses right before a risky tool and asks the browser: **Allow / Deny / A
 
 **Windows build container (.NET Framework)** — MSBuild for .NET Framework only exists in a Windows container, and one Docker daemon cannot run Linux and Windows containers at the same time. So the same header pill can point a chat at a container on a **separate Windows Docker host** instead: `/sandbox windows`, or pick it from the pill. The project is copied to that host before each command (there is no shared volume between the two daemons) and sits at `C:\project` inside the container, so `nuget restore`, `msbuild` and `vstest.console` work while the ordinary tools keep editing the project on its normal path. Build output stays in the container and persists between commands, so incremental builds are not repeated. An admin sets the host address — `tcp://host:2376` plus a cert dir for TLS — and can pull the multi-GB SDK image and test the connection from the **Windows build container** settings group. Off by default; not used for PR review (the hardening those sandboxes rely on is Linux-only).
 
+<details>
+<summary><b>Setting up the Windows build host</b> — one-time, by an admin</summary>
+
+**You need a separate Windows machine.** Windows containers need Windows Server, or Windows 10/11 **Pro/Enterprise** (Hyper-V). Home editions run Linux containers only. A Windows Server VM is fine.
+
+**1 · Install Docker there, in Windows-container mode.** On Windows Server, [Microsoft's script](https://learn.microsoft.com/virtualization/windowscontainers/quick-start/set-up-environment) does the whole thing:
+
+```powershell
+Invoke-WebRequest -UseBasicParsing "https://raw.githubusercontent.com/microsoft/Windows-Containers/Main/helpful_tools/Install-DockerCE/install-docker-ce.ps1" -o install-docker-ce.ps1
+.\install-docker-ce.ps1
+```
+
+On Windows 10/11 Pro, install Docker Desktop and switch it: `& $Env:ProgramFiles\Docker\Docker\DockerCli.exe -SwitchDaemon`. Either way `docker info --format "{{.OSType}}"` must say `windows`.
+
+**2 · Let it listen on the network.** By default it only accepts a local named pipe. Create or edit `C:\ProgramData\Docker\config\daemon.json`, then `Restart-Service docker`:
+
+```json
+{
+  "hosts": ["tcp://0.0.0.0:2376", "npipe://"],
+  "tlsverify": true,
+  "tlscacert": "C:\\ProgramData\\docker\\certs.d\\ca.pem",
+  "tlscert": "C:\\ProgramData\\docker\\certs.d\\server-cert.pem",
+  "tlskey": "C:\\ProgramData\\docker\\certs.d\\server-key.pem"
+}
+```
+
+Generate the certificates with [Docker's own guide](https://docs.docker.com/engine/security/protect-access/). Port **2375 without `tlsverify` also works and needs no certificates, but it accepts anyone** — whoever reaches that port can do anything on that Windows machine. Only ever on a private network, firewalled to the workspace server's address, and never as the permanent setup.
+
+**3 · Point the workspace at it.** Copy the three *client* files (`ca.pem`, `cert.pem`, `key.pem`) next to your compose file and mount them read-only:
+
+```yaml
+    volumes:
+      - ./certs/win:/certs/win:ro
+```
+
+Then in **admin → Configuration → Windows build container**: set `winDockerHost` to `tcp://<windows-host>:2376`, `winDockerCertDir` to `/certs/win`, and turn `winSandboxEnabled` on. Press **Test connection** — it must report `windows` and a Docker version. Then press **Pull/update** on the image row: `mcr.microsoft.com/dotnet/framework/sdk:4.8` is several GB, and it is deliberately never pulled during a chat.
+
+**4 · Use it.** In a chat, set the **build container** pill to *Windows container*, or type `/sandbox windows`. Ask for a build and watch it run; `msbuild -version` is a good first command.
+
+**If the container will not start**, pin the image tag to the host's Windows build (`4.8-windowsservercore-ltsc2019`, `...-ltsc2022`, …) or set `winSandboxIsolation` to `hyperv` — process isolation requires the container and host Windows versions to match.
+
+</details>
+
 ### 📎 `@` file references · 🖇 attach & paste
 
 <img src="docs/screenshots/12-at.png" alt="@ file and folder reference menu over the composer" width="100%" />
