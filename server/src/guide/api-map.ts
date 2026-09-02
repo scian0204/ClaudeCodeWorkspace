@@ -59,7 +59,7 @@ export const API_ROUTES: ApiRoute[] = [
   r('GET', '/api/projects/:id/git/remotes', 'the remotes of a project (name + url).'),
   r('GET', '/api/projects/:id/watch', "whether this project's file watch is actually running: { enabled, scope, watching, since, error }. The switch itself is per chat (PATCH /api/sessions/:id watchMode)."),
   r('GET', '/api/projects/room/:roomId', 'the projects a shared room may be pointed at.'),
-  r('GET', '/api/projects/:id/tree', 'the file tree of a project (paths + sizes, no content).'),
+  r('GET', '/api/projects/:id/tree', 'one folder of a project (?path=<relative>); ?flat=1 gives the whole tree as a flat file list. Paths + sizes, no content.'),
   r('GET', '/api/projects/:id/file', 'one file of a project as text. Query: ?path=<project-relative path>. Big or binary files come back as a placeholder.'),
   r('GET', '/api/wiki/topics', 'LLM Wiki topics with their compile status and autoLearn mode (off|ask|auto).'),
   r('GET', '/api/wiki/proposals', 'knowledge a conversation offered to a wiki and nobody has decided on yet. Query: ?sessionId=<chat id>.'),

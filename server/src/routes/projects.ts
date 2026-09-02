@@ -213,6 +213,9 @@ export async function projectRoutes(app: FastifyInstance) {
     if (!canAccess(u, p)) return reply.code(403).send({ error: 'forbidden' });
     const rel = String((req.query as any)?.path || '').trim();
     if (rel.split('/').includes('..')) return reply.code(400).send({ error: 'bad path' });
+    // ?flat=1 — the whole tree as a flat file list, which is what the composer's `@` completion
+    // needs: it filters paths as you type and cannot walk folder by folder. Capped by walkFiles.
+    if (String((req.query as any)?.flat || '') === '1') return { files: walkFiles(path.resolve(p.path)) };
     return listDir(path.resolve(p.path), rel, { limit: cfg.int('fileTreeMaxEntries') });
   });
 

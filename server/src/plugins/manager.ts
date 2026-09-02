@@ -164,7 +164,7 @@ export async function marketplaceCatalog(id: string, refresh = false): Promise<{
 }
 
 // One marketplace entry's `source` → either a directory inside the clone, or a repo to clone.
-function resolveSource(src: any, marketDir: string): { dir: string } | { url: string; ref?: string } {
+function resolveSource(src: any, marketDir: string): { dir: string } | { url: string; ref?: string; subdir?: string } {
   if (typeof src === 'string') {
     const v = src.trim();
     if (v === '' || v === '.' || v === './') return { dir: marketDir };
@@ -178,6 +178,13 @@ function resolveSource(src: any, marketDir: string): { dir: string } | { url: st
   const kind = String(src?.source || '');
   if (kind === 'github' && src?.repo) return { url: normalizeRepo(String(src.repo)), ref: src.ref ? String(src.ref) : undefined };
   if ((kind === 'url' || kind === 'git') && src?.url) return { url: normalizeRepo(String(src.url)), ref: src.ref ? String(src.ref) : undefined };
+  // 'git-subdir': one folder of ANOTHER repo (not of the marketplace clone). It carries both `url`
+  // and `path`, so it has to be answered before the local-path branch below — that branch would
+  // otherwise look for the folder inside the marketplace clone, where it does not exist, and every
+  // such entry would fail with "마켓 안에 플러그인 폴더가 없습니다" (a fifth of some catalogues).
+  if (kind === 'git-subdir' && src?.url) {
+    return { url: normalizeRepo(String(src.url)), ref: src.ref ? String(src.ref) : undefined, subdir: String(src.path || '') };
+  }
   if (src?.path || src?.source === 'local') {
     const full = resolveUnder(marketDir, String(src.path || '.').replace(/^\.\//, ''));
     if (!full) throw new Error('마켓 안에서 찾을 수 없는 경로입니다');
@@ -226,6 +233,21 @@ export async function installFromMarketplace(
   }
   const args = ['clone', '--depth', '1'];
   if (resolved.ref) args.push('--branch', resolved.ref);
+  if (resolved.subdir) {
+    // the plugin is one folder of that repo: clone beside the destination, lift the folder out, drop
+    // the clone. Same .git filter as the marketplace-folder case — the copy is not a git plugin.
+    const tmp = `${dest}.clone-${newId()}`;
+    try {
+      await run('git', [...args, '--', resolved.url, tmp], GIT_ENV);
+      const sub = resolveUnder(tmp, resolved.subdir.replace(/^\.\//, ''));
+      if (!sub || !fs.existsSync(sub)) throw new Error(`저장소 안에 "${resolved.subdir}" 폴더가 없습니다`);
+      fs.rmSync(dest, { recursive: true, force: true });
+      fs.cpSync(sub, dest, { recursive: true, filter: (src) => path.basename(src) !== '.git' });
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+    return record(scope, ownerId, entry.name, 'marketplace', resolved.url, dest, projectId);
+  }
   await run('git', [...args, '--', resolved.url, dest], GIT_ENV);
   return record(scope, ownerId, entry.name, 'marketplace', resolved.url, dest, projectId);
 }

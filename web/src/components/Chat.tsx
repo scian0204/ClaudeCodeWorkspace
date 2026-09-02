@@ -1543,7 +1543,7 @@ function Composer() {
   useEffect(() => { setRefs(null); }, [c.projectId]); // project switched → drop cached tree
   useEffect(() => {
     if (canRef && atTok && refs === null && c.projectId)
-      api.get(`/api/projects/${c.projectId}/tree`).then((r) => setRefs(buildRefs(r.files || []))).catch(() => setRefs([]));
+      api.get(`/api/projects/${c.projectId}/tree?flat=1`).then((r) => setRefs(buildRefs(r.files || []))).catch(() => setRefs([]));
   }, [canRef, !!atTok, refs, c.projectId]);
   const atMatches = atTok && refs ? filterRefs(refs, atTok.q) : [];
   const showAt = !showSlash && !!atTok && atMatches.length > 0;
@@ -1573,7 +1573,14 @@ function Composer() {
     // Typed out in full ("/permissions plan") the menu is already closed, so the pick path above
     // never runs — catch it here too or the CLI gets a command it cannot answer.
     const { token, arg } = splitCommand(text);
-    if (palette.find((p) => p.cmd === token)?.run?.(store, arg)) { setText(''); setCaret(0); return; }
+    const entry = palette.find((p) => p.cmd === token);
+    if (entry?.run?.(store, arg)) { setText(''); setCaret(0); return; }
+    // A terminal-only command that still needs its argument (`/permissions` with nothing after it):
+    // the CLI has no answer for it but "isn't available in this environment", which is the whole
+    // reason the shim exists. Keep it in the box with its hint ghosted instead of sending it.
+    if (entry?.run && WORKSPACE_CMDS.some((w) => w.cmds.includes(token))) {
+      setText(`${token} `); setCaret(token.length + 1); taRef.current?.focus(); return;
+    }
     const attachments = atts.length ? atts.map((a) => ({ name: a.name, isImage: a.isImage })) : undefined;
     // A slash command runs on the CLI, so it is never team chat — the room composer opens in chat
     // mode, and sending one there used to just post the text. (The server enforces this too.)

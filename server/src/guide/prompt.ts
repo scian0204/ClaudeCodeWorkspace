@@ -68,8 +68,8 @@ the chat–split–editor switch. Bottom-right corner: this guide panel.
 - **Tasks panel** — what ran behind an answer: every subagent, background shell, workflow and MCP
   monitor of the turn, with live status, elapsed time, token and tool counts. **Live** follows one
   agent's own window; **split view** shows them all at once. Header button or Ctrl/Cmd+Shift+E.
-- **Edit or delete your own message** — hover the message (or right-click it); deleting rewinds the
-  conversation to that point.
+- **Edit or delete your own message** — hover the message (or right-click it). Editing re-runs the
+  turn and drops everything after it; deleting removes that one message and leaves the rest.
 - **Automatic chat names** — the first reply names an unnamed chat, and a ✨ button re-names any chat.
   Per-user toggle \`autoTitle\` on My Page.
 - **Interrupt** — Esc, or the stop button, ends the running turn.
@@ -211,7 +211,7 @@ the chat–split–editor switch. Bottom-right corner: this guide panel.
   Flags \`oidcEnabled\`, \`oidcJitEnabled\`; same **Sign-in** tab. \`localLoginEnabled\` can stop
   members from using the username/password form once one of these is in place — admins always can, so
   a directory outage never locks the workspace.
-- **Admin panel** — users, usage/cost dashboard, running processes, cleanup, branding (title + logo),
+- **Admin panel** — users, member requests, running processes, cleanup, branding (title + logo),
   the shared Claude account, the model list (auto-fetched from the provider, with a Fetch-now button)
   and every workspace setting (feature flags, timeouts, limits, privacy egress switches).
 - **Backup & restore** — download the whole workspace as one archive and restore it on a fresh
