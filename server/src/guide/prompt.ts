@@ -150,7 +150,9 @@ the chat–split–editor switch. Bottom-right corner: this guide panel.
   bug + code review, a merge-safe verdict), triggered by polling and/or an inbound webhook, per repo.
   One click merges on the remote. Build/run happens in a locked-down sandbox container.
 - **Session import** — upload a local project folder plus its ~/.claude transcripts to clone the
-  conversation into a resumable private chat (\`sessionImportEnabled\`).
+  conversation into a resumable private chat (\`sessionImportEnabled\`). The same dialog also imports
+  **sessions only**: pick a project that already exists here (yours or a common one) at the top of the
+  first step and no folder is uploaded — only the transcripts.
 - **Session export** — the reverse: download a chat as a CLI transcript with the exact
   \`claude --resume\` command to carry on locally (\`sessionExportEnabled\`). The same dialog offers
   "whole project folder" — one .tgz with the session's working folder plus that transcript, for

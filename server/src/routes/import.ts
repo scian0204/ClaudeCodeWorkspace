@@ -165,6 +165,17 @@ export async function importRoutes(app: FastifyInstance) {
     const tail = tailOf(orig) || 'imported';
     const name0 = safeName(String(body.projectName || tail));
 
+    // "sessions only": the transcripts land in a project that already exists here, so nothing about
+    // the working dir is touched — no upload, no wipe, no new row. Only projects the caller can
+    // already reach are accepted (their own, or a common one); the id is never trusted as a path.
+    const targetId = String(body.projectId || '');
+    const target = targetId
+      ? db.select().from(schema.projects).where(eq(schema.projects.id, targetId)).get()
+      : undefined;
+    if (targetId && !(target && (target.scope === 'common' || (target.scope === 'user' && target.ownerId === u.id)))) {
+      return reply.code(403).send({ error: 'project not available' });
+    }
+
     // Place the project working dir. "Overwrite" reuses the caller's project of the same name; what
     // happens to the files already there is the importer's choice:
     //   keep (default) — copy the upload over it, so same-path files are replaced and the rest stays
@@ -178,7 +189,9 @@ export async function importRoutes(app: FastifyInstance) {
       : undefined;
     const staged = fs.existsSync(projectSlot) && fs.readdirSync(projectSlot).length > 0;
     let project: { id: string; scope: string; ownerId: string | null; name: string; path: string; createdAt: number };
-    if (prevProject) {
+    if (target) {
+      project = target;
+    } else if (prevProject) {
       project = prevProject;
       if (staged && body.projectWipe === true) emptyProjectDir(u.id, prevProject.path);
       if (staged) fs.cpSync(projectSlot, prevProject.path, { recursive: true, force: true });

@@ -220,7 +220,7 @@ interface State {
   autoReviewRun: (reviewId: string) => Promise<void>;
   approveReview: (reviewId: string) => Promise<{ output: string }>;
   newSession: (projectId?: string) => Promise<void>;
-  importSessions: (payload: { sid: string; projectName?: string; sessionUuids: string[]; autoTitle: boolean; overwrite: string[]; projectOverwrite: boolean; projectWipe: boolean }) => Promise<{ project: any; sessions: any[] }>;
+  importSessions: (payload: { sid: string; projectId?: string; projectName?: string; sessionUuids: string[]; autoTitle: boolean; overwrite: string[]; projectOverwrite: boolean; projectWipe: boolean }) => Promise<{ project: any; sessions: any[] }>;
   newRoom: (name: string) => Promise<void>;
   newWikiTopic: (payload: { name: string; description: string; stagingId?: string; precompiled?: boolean; seedType?: string; seedSessionId?: string; seedProjectId?: string; autoLearn?: string; kind?: string }) => Promise<void>;
   updateWikiTopic: (id: string, patch: { name?: string; description?: string; autoLearn?: string }) => Promise<void>;

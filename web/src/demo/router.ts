@@ -704,11 +704,15 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
     // overwrite reuses the chat row the user already has, so only the cloned ones come back as new
     const overwritten = new Set<string>(Array.isArray(b.overwrite) ? b.overwrite : []);
     const picked: string[] = (Array.isArray(b.sessionUuids) ? b.sessionUuids : []).filter((u: string) => !overwritten.has(u));
+    // "sessions only": an existing project takes the transcripts, nothing about it changes
+    const intoExisting = b.projectId
+      ? [...db.projects.mine, ...db.projects.common].find((p: any) => p.id === b.projectId)
+      : null;
     return ok({
       // overwrite reuses the project the user already has; clone would get a numbered sibling
-      project: b.projectOverwrite
+      project: intoExisting || (b.projectOverwrite
         ? (db.projects.mine.find((p: any) => p.name === b.projectName) || db.projects.mine[0])
-        : { id: genId('prj'), name: `${b.projectName || 'Demo'}-2` },
+        : { id: genId('prj'), name: `${b.projectName || 'Demo'}-2` }),
       sessions: picked.map((u) => ({ id: genId('ses'), title: IMPORT_SESSIONS.find((s) => s.uuid === u)?.title || u })),
     });
   }

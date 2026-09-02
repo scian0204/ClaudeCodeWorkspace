@@ -84,6 +84,9 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
   // what happens to files already in the project dir when overwriting — wipe is never the default
   const [projectFiles, setProjectFiles] = useState<'keep' | 'wipe'>('keep');
   const myProjects = useStore((s) => s.projects.mine);
+  const commonProjects = useStore((s) => s.projects.common);
+  // "sessions only" path: an existing project here takes the transcripts and no folder is uploaded
+  const [targetProjectId, setTargetProjectId] = useState('');
   const [projectName, setProjectName] = useState('');
   const [claudeNotFound, setClaudeNotFound] = useState(false);
   const projectDirRef = useRef<HTMLInputElement>(null);
@@ -156,6 +159,10 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
 
   const skipClaude = () => { setSessions([]); setSessionChecked({}); setStep('sessions'); };
 
+  // projects that can take the transcripts as-is: the caller's own, plus the common ones (server
+  // re-checks — the id is only ever a lookup key)
+  const targetOptions = useMemo(() => [...myProjects, ...commonProjects], [myProjects, commonProjects]);
+  const targetName = targetOptions.find((p: any) => p.id === targetProjectId)?.name || '';
   const checkedUuids = sessions.filter((s) => sessionChecked[s.uuid]).map((s) => s.uuid);
   // the name the server will resolve to — collides with a project this user already owns?
   const projectDup = useMemo(() => {
@@ -167,7 +174,9 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
     setBusy(true);
     try {
       await importSessions({
-        sid, projectName: projectName.trim() || undefined, sessionUuids: checkedUuids,
+        sid, projectId: targetProjectId || undefined,
+        projectName: targetProjectId ? undefined : (projectName.trim() || undefined),
+        sessionUuids: checkedUuids,
         autoTitle: autoTitle && autoTitleEnabled,
         overwrite: checkedUuids.filter((id) => dupMode[id] === 'overwrite'),
         projectOverwrite, projectWipe: projectOverwrite && projectFiles === 'wipe',
@@ -226,6 +235,24 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
     <Modal open onOpenChange={(o) => { if (!o) cancel(); }} title={t('import.title')} width={560}>
       {step === 'project' && (
         <div>
+          {targetOptions.length > 0 && (
+            <div className="rounded-lg border border-line bg-rail/40 p-3 mb-3">
+              <div className="text-sm font-medium mb-1">{t('import.existingTitle')}</div>
+              <div className="text-xs text-txt2 mb-2">{t('import.existingBody')}</div>
+              <div className="flex flex-col md:flex-row md:items-center gap-2">
+                <select className="input flex-1 min-w-0" value={targetProjectId} aria-label={t('import.existingTitle')}
+                  onChange={(e) => setTargetProjectId(e.target.value)}>
+                  <option value="">{t('import.existingPick')}</option>
+                  {targetOptions.map((p: any) => (
+                    <option key={p.id} value={p.id}>{p.scope === 'common' ? `${p.name} (${t('import.existingCommon')})` : p.name}</option>
+                  ))}
+                </select>
+                <button className="btn-primary shrink-0" disabled={!targetProjectId} onClick={() => setStep('claude')}>
+                  {t('import.existingNext')}
+                </button>
+              </div>
+            </div>
+          )}
           <div className="text-xs text-txt2 mb-2">{t('import.pickProject')}</div>
           <div
             onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
@@ -309,7 +336,8 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
           <input ref={claudeDirRef} type="file" multiple className="hidden"
             {...{ webkitdirectory: '', directory: '' } as any} onChange={(e) => pickClaude(e.target.files)} />
           <div className="flex flex-col md:flex-row md:justify-end gap-2">
-            <button className="btn-ghost" onClick={skipClaude} disabled={progress !== null}>{t('import.claudeSkip')}</button>
+            {!targetProjectId && <button className="btn-ghost" onClick={skipClaude} disabled={progress !== null}>{t('import.claudeSkip')}</button>}
+            {targetProjectId && <button className="btn-ghost" onClick={cancel} disabled={progress !== null}>{t('import.cancel')}</button>}
             <button className="btn-primary" onClick={() => claudeDirRef.current?.click()} disabled={progress !== null}>{t('import.claudePick')}</button>
           </div>
         </div>
@@ -319,9 +347,11 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
         <div>
           {/* the project was named and settled on the tree step — recap it, do not re-ask */}
           <div className="text-[11px] text-txt3 mb-3">
-            {t('import.projectSummary', { name: projectName.trim() || t('import.projectUnnamed') })}
-            {projectDup && ` · ${t(projectOverwrite ? 'import.dupOverwrite' : 'import.dupClone')}`}
-            {projectOverwrite && ` · ${t(projectFiles === 'wipe' ? 'import.projectFilesWipe' : 'import.projectFilesKeep')}`}
+            {targetProjectId
+              ? t('import.existingSummary', { name: targetName })
+              : t('import.projectSummary', { name: projectName.trim() || t('import.projectUnnamed') })}
+            {!targetProjectId && projectDup && ` · ${t(projectOverwrite ? 'import.dupOverwrite' : 'import.dupClone')}`}
+            {!targetProjectId && projectOverwrite && ` · ${t(projectFiles === 'wipe' ? 'import.projectFilesWipe' : 'import.projectFilesKeep')}`}
           </div>
 
           {sessions.length === 0 ? (
@@ -381,7 +411,7 @@ export function ImportSessionModal({ onClose }: { onClose: () => void }) {
           <div className="flex justify-end gap-2">
             <button className="btn-ghost" onClick={cancel} disabled={busy}>{t('import.cancel')}</button>
             <button className="btn-primary" onClick={confirm}
-              disabled={busy || (checkedUuids.length === 0 && !projectName.trim())}>
+              disabled={busy || (checkedUuids.length === 0 && (!!targetProjectId || !projectName.trim()))}>
               {busy ? t('import.importing') : t('import.confirm')}
             </button>
           </div>
