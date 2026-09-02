@@ -86,6 +86,39 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 ## Unreleased
 
 <details>
+<summary><b>feat(import): import sessions only, into a project that already exists</b> — no folder upload when the project is already here · <code>7db4384</code></summary>
+
+Bringing a local conversation in always meant uploading the whole project folder with it, even when that project was already in the workspace — a long upload to arrive at files that were already there, and a second copy of them if the name did not match.
+
+The first step of the import dialog now offers picking a project that already exists here (your own, or a common one). Choose one and the dialog jumps straight to the `~/.claude` folder: nothing is uploaded, nothing in the project directory is touched, and only the transcripts are imported. The old path — pick a folder, prune the file tree, name the project — is untouched and still the default.
+
+`POST /api/import/sessions` takes a new `projectId`. The server re-checks that the caller can actually reach that project (their own, or a common one) and answers 403 otherwise; the id is only ever used to look the row up, never as a path.
+
+</details>
+
+<details>
+<summary><b>feat(primer): the 5-hour primer can be pinned to clock times and working hours</b> — instead of running round the clock · <code>ea46981</code></summary>
+
+"Keep the 5-hour window open" opened a window the moment none was running — at any hour. A window opened at 03:00 is spent on nobody, and it is one real (if tiny) message every five hours all night.
+
+My Page now takes a schedule under the same switch: **allowed hours** (say 09:00–19:00, and it may wrap past midnight), **specific times** (say 09:00 and 14:00), or both — in which case only the listed times inside the range count. Leave it empty and nothing changes: it keeps opening a window as soon as none is running, as before. The times are read in the timezone of the browser that saved them, which is stored alongside them.
+
+The saved schedule lives in `users.prime_window_sched` as `{tz,times,from,to}`. Deciding "may I open one now, or how long do I wait?" is one pure function (`server/src/lib/primer-schedule.ts`) with its own runnable check, so the clock arithmetic — midnight wrap, a slot that has just passed, a half-filled range — is tested without a server. While the schedule says no, the pass books the next wake-up and returns before probing, so a sleeping schedule starts no CLI at all. New setting `windowPrimerSlotGraceMs` (default 30 min) says how long a time that has just passed still counts as due, so a restart or a retry after a failure does not skip that slot. The guide agent can set it too (`primeWindowSched` on `PATCH /api/auth/me`).
+
+</details>
+
+<details>
+<summary><b>feat(realtime): lists update themselves instead of needing a page refresh</b> — one hook, every tab · <code>509477f</code></summary>
+
+Only the tab that made a change re-read anything. A room a colleague created, a project renamed in another tab, an agent or a plugin someone added, a setting an admin flipped — every other tab kept showing the old state until its user pressed F5.
+
+Rather than adding a broadcast to each of the ~40 places that change something, one hook now watches the responses: a successful change on a route that alters what a list shows (sessions, rooms, projects, agents, plugins, marketplaces, git credentials, pools, users, wiki topics, PR-review repos, the admin config) pings every connected tab. The ping carries no data at all — each tab then re-reads its own lists through the same endpoints as always, so nobody sees anything they could not already see. Bursts are collapsed into one ping per 300 ms, and the sub-routes that fire constantly or already have their own live updates (file saves, git commands, uploads, one chat's own messages) are left out.
+
+Panels that read their data once when opened — team agents, plugins, git credentials, the user directory, the chat's agent picker — re-read on the same signal.
+
+</details>
+
+<details>
 <summary><b>fix(chat,plugins): three faults found by driving the whole UI end to end</b> — @ file refs, git-subdir plugin installs, bare terminal commands · <code>d1a7789</code></summary>
 
 **`@` in the message box listed nothing.** Typing `@` is supposed to complete file and folder paths from the chat's project. Every file tree in the app was made lazy (one folder at a time) a while back, and the endpoint changed its answer from a list of files to a list of one folder's entries — but the completion still read the old field, so it always got an empty list and the menu never opened. The endpoint now also answers `?flat=1` with the whole tree as one flat file list (same 5000-file ceiling as before), and the message box asks for that.
