@@ -31,7 +31,9 @@ export interface ReviewSessionSummary { id: string; chatSessionId: string; repoI
 export interface ReviewMeta { reviewId: string; prNumber: number; prTitle: string; prUrl: string; prState: string; authorLogin: string; baseRef: string; headRef: string; mergeState: string; verdict: string; verdictSummary: string | null; repoName: string; provider: string; }
 // hasClaudeToken = a token is pasted; hasClaudeAuth = the user has ANY auth of their own (token,
 // browser sign-in, or an LLM provider profile). The nag + sidebar badge key on the latter.
-export interface User { id: string; username: string; role: string; displayName: string; avatarColor: string; avatar?: string | null; hasClaudeToken?: boolean; hasClaudeAuth?: boolean; claudeTokenSetAt?: number | null; autoTitle?: boolean; autoResume?: boolean; primeWindow?: boolean; primedAt?: number | null; authSource?: 'local' | 'ldap' | 'oidc'; }
+// When the 5h-window primer may run (server: lib/primer-schedule.ts). null = continuous.
+export interface PrimerSchedule { tz: string; times: string[]; from: string | null; to: string | null }
+export interface User { id: string; username: string; role: string; displayName: string; avatarColor: string; avatar?: string | null; hasClaudeToken?: boolean; hasClaudeAuth?: boolean; claudeTokenSetAt?: number | null; autoTitle?: boolean; autoResume?: boolean; primeWindow?: boolean; primedAt?: number | null; primeWindowSched?: PrimerSchedule | null; authSource?: 'local' | 'ldap' | 'oidc'; }
 export interface DmMemberInfo { userId: string; displayName: string; avatarColor: string; avatar: string | null; username: string; }
 export interface DmChannel { id: string; kind: 'dm' | 'group'; name: string | null; createdBy: string; createdAt: number; members: DmMemberInfo[]; lastMessage: { text: string; createdAt: number; userId: string } | null; unread: number; }
 export interface DmMessage { id: string; channelId: string; userId: string; text: string; createdAt: number; }
@@ -266,6 +268,7 @@ interface State {
   setAutoTitle: (on: boolean) => Promise<void>;
   setAutoResume: (on: boolean) => Promise<void>;
   setPrimeWindow: (on: boolean) => Promise<void>;
+  setPrimeWindowSched: (sched: PrimerSchedule | null) => Promise<void>;
   cancelResume: (id: string) => void;
   refreshMe: () => Promise<void>;
   saveClaudeToken: (token: string) => Promise<void>;
@@ -850,6 +853,11 @@ export const useStore = create<State>((set, get) => ({
 
   setPrimeWindow: async (on) => {
     const { user } = await api.patch('/api/auth/me', { primeWindow: on });
+    set({ user });
+  },
+  // Clock times / allowed range for the primer. The server sanitizes and answers with what it kept.
+  setPrimeWindowSched: async (sched) => {
+    const { user } = await api.patch('/api/auth/me', { primeWindowSched: sched });
     set({ user });
   },
   // Drop a parked turn. Optimistic: the server's turn:resumeCancelled confirms for every other tab.

@@ -10,6 +10,7 @@ import { setUserToken, userTokenMeta } from './claude-token.js';
 import { hasLogin } from './claude-login.js';
 import { getProvider } from './provider.js';
 import { resolveDirectoryUser, type DirectoryKind } from './directory.js';
+import { parseSchedule, type PrimerSchedule } from '../lib/primer-schedule.js';
 import { ldapAuthenticate, ldapReady } from './ldap.js';
 
 // auth session lifetime is configurable (sessionTtlDays); resolved live at login()
@@ -22,6 +23,7 @@ export interface AuthUser {
   autoResume: boolean;   // re-run a turn that hit the claude.ai 5h window, once it resets
   primeWindow: boolean;  // open a fresh claude.ai 5h window with a tiny query as soon as none runs
   primedAt: number | null; // when the primer last opened one (epoch ms), null = never
+  primeWindowSched: PrimerSchedule | null; // when it may run (clock times / allowed range); null = continuous
   authSource: 'local' | DirectoryKind; // who owns this account's password (local scrypt / AD / SSO)
 }
 
@@ -52,7 +54,7 @@ export function createUser(opts: {
   db.insert(schema.users).values(row).run();
   ensureUserLayout(id);
   if (opts.claudeToken) setUserToken(id, opts.claudeToken); // throws on bad format
-  return { id, username: row.username, role: row.role, displayName: row.displayName, avatarColor: row.avatarColor, avatar: null, autoTitle: true, autoResume: false, primeWindow: false, primedAt: null, authSource: 'local' };
+  return { id, username: row.username, role: row.role, displayName: row.displayName, avatarColor: row.avatarColor, avatar: null, autoTitle: true, autoResume: false, primeWindow: false, primedAt: null, primeWindowSched: null, authSource: 'local' };
 }
 
 export function findByUsername(username: string) {
@@ -62,7 +64,7 @@ export function getUserById(id: string) {
   return db.select().from(schema.users).where(eq(schema.users.id, id)).get();
 }
 export function toAuthUser(u: NonNullable<ReturnType<typeof getUserById>>): AuthUser {
-  return { id: u.id, username: u.username, role: u.role as Role, displayName: u.displayName, avatarColor: u.avatarColor, avatar: u.avatar ?? null, autoTitle: u.autoTitle !== 0, autoResume: u.autoResume === 1, primeWindow: u.primeWindow === 1, primedAt: u.primedAt ?? null, authSource: (u.authSource as 'local' | DirectoryKind) || 'local' };
+  return { id: u.id, username: u.username, role: u.role as Role, displayName: u.displayName, avatarColor: u.avatarColor, avatar: u.avatar ?? null, autoTitle: u.autoTitle !== 0, autoResume: u.autoResume === 1, primeWindow: u.primeWindow === 1, primedAt: u.primedAt ?? null, primeWindowSched: parseSchedule(u.primeWindowSched), authSource: (u.authSource as 'local' | DirectoryKind) || 'local' };
 }
 
 // Does this user's own provider profile actually carry auth? An `anthropic` profile with no token

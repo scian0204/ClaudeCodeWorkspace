@@ -244,7 +244,82 @@ function PrimeWindowSection() {
             : t('mypage.primeWindowNever')}
         </div>
       )}
+      {on && <PrimeWindowSchedule />}
     </>
+  );
+}
+
+// When the primer may run. Empty = the continuous default (open a window the moment none is). A
+// range narrows it to working hours; listed clock times replace "as soon as none is open" with
+// "only at these times". Both are read in this browser's timezone, which rides along on save.
+function PrimeWindowSchedule() {
+  const user = useStore((s) => s.user);
+  const save = useStore((s) => s.setPrimeWindowSched);
+  const setError = useStore((s) => s.setError);
+  const t = useT();
+  const sched = user?.primeWindowSched || null;
+  const [times, setTimes] = useState<string[]>(sched?.times || []);
+  const [from, setFrom] = useState(sched?.from || '');
+  const [to, setTo] = useState(sched?.to || '');
+  const [busy, setBusy] = useState(false);
+  const tz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { return 'UTC'; } })();
+
+  const dirty = JSON.stringify({ times, from, to })
+    !== JSON.stringify({ times: sched?.times || [], from: sched?.from || '', to: sched?.to || '' });
+
+  const apply = async () => {
+    setBusy(true);
+    const clean = times.filter(Boolean);
+    try { await save(clean.length || (from && to) ? { tz, times: clean, from: from || null, to: to || null } : null); }
+    catch (e: any) { setError(e.message); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="mt-3 rounded-lg border border-line p-3">
+      <div className="text-xs font-medium mb-1">{t('mypage.primeSchedTitle')}</div>
+      <div className="text-[11px] text-txt3 mb-2">{t('mypage.primeSchedHint')}</div>
+
+      <div className="flex flex-wrap items-center gap-2 mb-2">
+        <span className="text-xs text-txt2 w-20 shrink-0">{t('mypage.primeSchedRange')}</span>
+        <input type="time" className="input !w-auto !py-0.5 !text-xs" value={from} aria-label={t('mypage.primeSchedFrom')}
+          onChange={(e) => setFrom(e.target.value)} />
+        <span className="text-xs text-txt3">–</span>
+        <input type="time" className="input !w-auto !py-0.5 !text-xs" value={to} aria-label={t('mypage.primeSchedTo')}
+          onChange={(e) => setTo(e.target.value)} />
+        {(from || to) && (
+          <button className="text-[11px] text-txt3 hover:text-clay" onClick={() => { setFrom(''); setTo(''); }}>
+            {t('mypage.primeSchedClear')}
+          </button>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-start gap-2">
+        <span className="text-xs text-txt2 w-20 shrink-0 mt-1">{t('mypage.primeSchedTimes')}</span>
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
+          {times.map((v, i) => (
+            <span key={i} className="inline-flex items-center gap-1">
+              <input type="time" className="input !w-auto !py-0.5 !text-xs" value={v} aria-label={t('mypage.primeSchedTimes')}
+                onChange={(e) => setTimes(times.map((x, j) => (j === i ? e.target.value : x)))} />
+              <button className="text-[11px] text-txt3 hover:text-warn" aria-label={t('common.delete')}
+                onClick={() => setTimes(times.filter((_, j) => j !== i))}>×</button>
+            </span>
+          ))}
+          {times.length < 12 && (
+            <button className="btn-ghost !py-0.5 !text-[11px]" onClick={() => setTimes([...times, '09:00'])}>
+              {t('mypage.primeSchedAdd')}
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 mt-3">
+        <button className="btn-primary !py-0.5 !text-xs" disabled={busy || !dirty} onClick={apply}>{t('common.save')}</button>
+        <span className="text-[11px] text-txt3">
+          {times.length || (from && to) ? t('mypage.primeSchedTz', { tz }) : t('mypage.primeSchedOff')}
+        </span>
+      </div>
+    </div>
   );
 }
 

@@ -112,7 +112,7 @@ export const API_ROUTES: ApiRoute[] = [
   r('PATCH', '/api/wiki/topics/:id', 'change a topic: { name?, description?, autoLearn?: off|ask|auto }. autoLearn: off = never, ask = park it for a person to accept, auto = write it in. Admin-only.', true),
   r('POST', '/api/wiki/proposals/:id/decide', 'accept or discard one parked knowledge addition. Body: { accept: boolean }. Ids come from GET /api/wiki/proposals?sessionId=<chat id>.', true),
   r('POST', '/api/dm/channels', 'open a DM or group channel. Body: { kind:"dm", userId } or { kind:"group", name, memberIds }.'),
-  r('PATCH', '/api/auth/me', 'the per-user toggles. Body: any of { autoTitle, autoResume, primeWindow } as booleans. primeWindow = "keep the claude.ai 5-hour window open" (5시간 선점).'),
+  r('PATCH', '/api/auth/me', 'the per-user toggles. Body: any of { autoTitle, autoResume, primeWindow } as booleans. primeWindow = "keep the claude.ai 5-hour window open" (5시간 선점). primeWindowSched = when it may run: { tz:"Asia/Seoul", times:["09:00"], from:"09:00", to:"19:00" } (times and range both optional; null = round the clock).'),
   r('POST', '/api/requests', 'ask an admin for an admin-only action. Body: { type, payload, reason }. Valid types come from GET /api/requests/actions.'),
 
   // ── write: team agents ──

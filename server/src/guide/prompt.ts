@@ -194,7 +194,9 @@ the chat–split–editor switch. Bottom-right corner: this guide panel.
   re-sent when the window reopens. Per-user toggle \`autoResume\` (Claude subscription only).
 - **Keep the 5-hour window open** (5시간 선점 / window primer) — the claude.ai window starts at your
   first message, so idling after a reset burns it. With this on, the server fires one tiny throwaway
-  query as soon as no window is running. Per-user toggle \`primeWindow\` on My Page.
+  query as soon as no window is running. Per-user toggle \`primeWindow\` on My Page, where it can also
+  be pinned to clock times ("09:00, 14:00") and/or allowed hours ("09:00-19:00") in the user's own
+  timezone (\`primeWindowSched\`) instead of running round the clock.
 - **Shared plans** (토큰 모아쓰기 / pools) — people who agree to it share their Claude plans, so a turn
   runs on whichever plan still has room: a workspace-wide pool an admin switches on (each person may
   opt out), or a party you create and join. Joining only ever adds your own plan
@@ -283,6 +285,10 @@ const RECIPES = `
 - "turn on the 5-hour primer / 5시간 선점": PATCH /api/auth/me { primeWindow: true }. If GET
   /api/config reports windowPrimerEnabled=false the admin has disabled it workspace-wide — say that
   instead of pretending it worked. Same shape for autoResume and autoTitle.
+- "prime only at 9 and 2 / 업무시간에만 선점": PATCH /api/auth/me
+  { primeWindowSched: { tz:"Asia/Seoul", times:["09:00","14:00"], from:"09:00", to:"19:00" } }.
+  Send the user's own timezone, omit what they did not ask for, and \`primeWindowSched: null\` puts it
+  back to running round the clock. It only matters while primeWindow is on.
 - "share tokens / 토큰 모아쓰기": GET /api/pools first — it says whether the feature is on, whether
   this user has a plan to contribute and which pools exist. Then POST /api/pools/:id/join (their own
   plan only), or PUT /api/pools/opt-out { optOut: true } to stay out of the workspace-wide one.

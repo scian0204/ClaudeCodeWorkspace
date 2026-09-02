@@ -7,6 +7,10 @@
 // (right after a reset, or immediately on enable). That single call opens the window, and the next
 // 5 hours are theirs to use whenever they actually sit down.
 //
+// Round the clock is not always what people want — a window opened at 03:00 is spent on nobody. The
+// user can therefore pin it to clock times ("09:00, 14:00") and/or an allowed range ("09:00–19:00"),
+// in their own timezone; see lib/primer-schedule.ts. No schedule = the continuous behaviour above.
+//
 // This is deliberately NOT a chat session: no chat_sessions row, no messages, nothing in the
 // sidebar. Just a short-lived CLI subprocess in the user's own project dir, billed to them (one
 // `usage` row) so the cost stays visible.
@@ -22,6 +26,7 @@ import { resolveProvider } from '../auth/provider.js';
 import { buildOptions, type SessionContext } from './config-layering.js';
 import { io } from '../realtime/io.js';
 import { limitsSettled } from './usage-limits.js';
+import { parseSchedule, waitFor } from '../lib/primer-schedule.js';
 
 const timers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -114,15 +119,21 @@ export async function primeWindow(userId: string): Promise<boolean> {
   return true;
 }
 
-function enabledFor(userId: string): boolean {
-  if (!cfg.bool('windowPrimerEnabled')) return false;
+function rowFor(userId: string) {
+  if (!cfg.bool('windowPrimerEnabled')) return null;
   const u = db.select().from(schema.users).where(eq(schema.users.id, userId)).get();
-  return u?.primeWindow === 1;
+  return u?.primeWindow === 1 ? u : null;
 }
+function enabledFor(userId: string): boolean { return !!rowFor(userId); }
 
 // One pass for a user: find out whether a window is open, and either wait for its reset or open one.
 async function tick(userId: string): Promise<void> {
-  if (!enabledFor(userId)) { clear(userId); return; }
+  const row = rowFor(userId);
+  if (!row) { clear(userId); return; }
+  // A user can pin the primer to clock times and/or an allowed range (My Page). Outside those, this
+  // pass does nothing but book the next one — no probe, so a sleeping schedule spawns no subprocess.
+  const wait = waitFor(parseSchedule(row.primeWindowSched), Date.now(), cfg.int('windowPrimerSlotGraceMs'));
+  if (wait !== null) { schedule(userId, wait); return; }
   const w = await probeWindow(userId);
   if (!w.known) { schedule(userId, cfg.int('windowPrimerRetryMs')); return; } // no auth / probe failed
   if (w.resetsAt) { schedule(userId, w.resetsAt - Date.now() + cfg.int('windowPrimerGraceMs')); return; }
@@ -135,10 +146,11 @@ async function tick(userId: string): Promise<void> {
   schedule(userId, after.resetsAt ? after.resetsAt - Date.now() + cfg.int('windowPrimerGraceMs') : cfg.int('windowPrimerRetryMs'));
 }
 
-// Arm / disarm one user after their My Page toggle.
-export function syncPrimer(userId: string): void {
+// Arm / disarm one user after their My Page toggle. `force` re-books an already-pending wake-up,
+// which a schedule change needs: the pending one was computed from the schedule they just replaced.
+export function syncPrimer(userId: string, force = false): void {
   if (!enabledFor(userId)) { clear(userId); return; }
-  if (timers.has(userId)) return; // already scheduled — leave the pending wake-up alone
+  if (timers.has(userId) && !force) return; // already scheduled — leave the pending wake-up alone
   schedule(userId, 60_000); // first pass shortly after enabling, not inside the request
 }
 

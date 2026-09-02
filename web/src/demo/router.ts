@@ -203,7 +203,7 @@ export function route(method: string, rawPath: string, body?: any): Res | Promis
   const idAt = (i: number) => seg[i];
 
   // ---- auth ----
-  if (P === '/api/auth/me' && M === 'PATCH') { if ('autoTitle' in b) db.me.autoTitle = !!b.autoTitle; if ('autoResume' in b) db.me.autoResume = !!b.autoResume; if ('primeWindow' in b) { db.me.primeWindow = !!b.primeWindow; if (b.primeWindow) db.me.primedAt = Date.now(); } return ok({ user: db.me }); }
+  if (P === '/api/auth/me' && M === 'PATCH') { if ('autoTitle' in b) db.me.autoTitle = !!b.autoTitle; if ('autoResume' in b) db.me.autoResume = !!b.autoResume; if ('primeWindow' in b) { db.me.primeWindow = !!b.primeWindow; if (b.primeWindow) db.me.primedAt = Date.now(); } if ('primeWindowSched' in b) db.me.primeWindowSched = b.primeWindowSched || null; return ok({ user: db.me }); }
   if (P === '/api/auth/me') return ok({ user: db.me });
   if (P === '/api/auth/login') return ok({ user: db.me });
   if (P === '/api/auth/logout') return ok({});

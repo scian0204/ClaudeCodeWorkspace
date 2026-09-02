@@ -13,6 +13,7 @@ export const ME = {
   avatarColor: COLORS.clay, avatar: null as string | null, hasClaudeToken: true, hasClaudeAuth: true, claudeTokenSetAt: ago(60 * 24 * 3) as number | null,
   autoTitle: true, autoResume: true, // demo: on so the limit-reset banner is reachable
   primeWindow: true, primedAt: ago(37) as number | null,
+  primeWindowSched: { tz: 'Asia/Seoul', times: ['09:00', '14:00'], from: '09:00', to: '19:00' } as { tz: string; times: string[]; from: string | null; to: string | null } | null,
 };
 const U_JAMIE = { id: 'u_jamie', username: 'jamie', role: 'member', displayName: 'Jamie Park', avatarColor: COLORS.blue };
 const U_RILEY = { id: 'u_riley', username: 'riley', role: 'member', displayName: 'Riley Kim', avatarColor: COLORS.green };

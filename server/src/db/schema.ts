@@ -15,6 +15,7 @@ export const users = sqliteTable('users', {
   autoResume: integer('auto_resume').notNull().default(0), // 1 = re-run a turn that hit the claude.ai 5h limit once the window resets (opt-in: it runs unattended)
   primeWindow: integer('prime_window').notNull().default(0), // 1 = open a fresh claude.ai 5h window with a tiny throwaway query as soon as none is running
   primedAt: integer('primed_at'), // when the primer last opened a window (epoch ms), null = never
+  primeWindowSched: text('prime_window_sched'), // JSON {tz,times,from,to} limiting WHEN the primer may run; null = continuous
   defaultPoolId: text('default_pool_id'), // this user's own shared-plan pool, used when a session names none
   poolOptOut: integer('pool_opt_out').notNull().default(0), // 1 = keep my plan out of the workspace-wide pool
   // Which directory owns this account's password. 'local' = the scrypt hash in this table (the only

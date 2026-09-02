@@ -11,6 +11,7 @@ import { setUserToken, clearUserToken } from './claude-token.js';
 import { startLogin, submitCode, cancelLogin, logoutLogin, loginMeta, loginInFlight } from './claude-login.js';
 import { getProvider, setProvider, clearProvider } from './provider.js';
 import { syncPrimer } from '../claude/window-primer.js';
+import { sanitizeSchedule } from '../lib/primer-schedule.js';
 import * as cs from '../codeserver/manager.js';
 import { cfg, publicConfig } from '../lib/config-registry.js';
 import { cachedStatus } from '../admin/self-update.js';
@@ -84,6 +85,13 @@ export async function authRoutes(app: FastifyInstance) {
     if ('primeWindow' in b) {
       db.update(schema.users).set({ primeWindow: b.primeWindow ? 1 : 0 }).where(eq(schema.users.id, u.id)).run();
       syncPrimer(u.id); // arm/disarm the 5h-window primer for this user right away
+    }
+    // when the primer may run: clock times and/or an allowed range, in the caller's own timezone.
+    // Anything unusable (a half-filled range, a bad time) sanitizes to null = the continuous default.
+    if ('primeWindowSched' in b) {
+      const sched = sanitizeSchedule(b.primeWindowSched);
+      db.update(schema.users).set({ primeWindowSched: sched ? JSON.stringify(sched) : null }).where(eq(schema.users.id, u.id)).run();
+      syncPrimer(u.id, true); // re-arm: the pending wake-up was computed from the old schedule
     }
     const dto = meDto(u.id); if (!dto) return reply.code(404).send({ error: 'user not found' });
     return { user: dto };

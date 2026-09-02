@@ -99,6 +99,9 @@ export const DEFS: ConfigDef[] = [
   { key: 'windowPrimerGraceMs', group: 'claude', type: 'int', default: '60000', min: 0, max: 3600000, unit: 'ms' },
   { key: 'windowPrimerRetryMs', group: 'claude', type: 'int', default: '900000', min: 60000, max: 21600000, unit: 'ms' },
   { key: 'windowPrimerTimeoutMs', group: 'claude', type: 'int', default: '20000', min: 2000, max: 120000, unit: 'ms' },
+  // how long a scheduled prime time stays "due" after it passes (covers a restart, a retry after a
+  // failed prime, timer drift) before the primer waits for the next listed time instead
+  { key: 'windowPrimerSlotGraceMs', group: 'claude', type: 'int', default: '1800000', min: 60000, max: 21600000, unit: 'ms' },
   // task panel: the subagents / background shells / workflows a turn spawns (server/src/claude/tasks.ts)
   // transcript: fold a run of N+ back-to-back tool calls into one collapsible row. 0 = never fold.
   { key: 'toolFoldMin', group: 'claude', type: 'int', default: '3', min: 0, max: 50 },
