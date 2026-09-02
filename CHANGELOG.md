@@ -83,6 +83,23 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
+## Unreleased
+
+<details>
+<summary><b>fix(chat,plugins): three faults found by driving the whole UI end to end</b> — @ file refs, git-subdir plugin installs, bare terminal commands · <code>d1a7789</code></summary>
+
+**`@` in the message box listed nothing.** Typing `@` is supposed to complete file and folder paths from the chat's project. Every file tree in the app was made lazy (one folder at a time) a while back, and the endpoint changed its answer from a list of files to a list of one folder's entries — but the completion still read the old field, so it always got an empty list and the menu never opened. The endpoint now also answers `?flat=1` with the whole tree as one flat file list (same 5000-file ceiling as before), and the message box asks for that.
+
+**Some marketplace plugins could not be installed.** An entry that points at *one folder of another repository* (401 of the 2282 plugins in the `claude-community` marketplace) always failed with "마켓 안에 플러그인 폴더가 없습니다". Such an entry carries both a repository address and a folder path, and the code checked the folder path first — so it looked for that folder inside the marketplace's own copy, where it does not exist. The repository case is now decided first: the repo is cloned next to the destination, only the named folder is copied in, and the clone is thrown away.
+
+**`/permissions` typed with no mode.** The workspace answers the CLI's terminal-only commands itself, but a command still missing its argument slipped through to the CLI, which replied "/permissions isn't available in this environment." — the exact answer this feature exists to prevent. It now stays in the message box with its options ghosted (`default|acceptEdits|bypassPermissions|plan`), and `/permissions plan` still switches the mode straight away.
+
+Also corrects two lines the built-in guide tells people: deleting a message removes that one message (it is **editing** that re-runs the turn and drops everything after it), and the admin panel has no usage/cost dashboard — that view was removed.
+
+</details>
+
+---
+
 ## v1.27.0 — 2026-09-01
 
 <sub>release commit `2978295`</sub>
