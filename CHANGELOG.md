@@ -86,6 +86,8 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ## v1.28.0 — 2026-09-03
 
+<sub>release commit `54e05b5`</sub>
+
 <details>
 <summary><b>feat(import): import sessions only, into a project that already exists</b> — no folder upload when the project is already here · <code>7db4384</code></summary>
 

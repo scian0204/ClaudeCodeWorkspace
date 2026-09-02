@@ -86,6 +86,8 @@
 
 ## v1.28.0 — 2026-09-03
 
+<sub>릴리스 커밋 `54e05b5`</sub>
+
 <details>
 <summary><b>feat(import): 이미 있는 프로젝트에 세션만 가져오기</b> — 프로젝트가 이미 있으면 폴더 업로드 없이 · <code>7db4384</code></summary>
 
