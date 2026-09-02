@@ -121,12 +121,13 @@ function AgentPicker() {
   const setAgent = useStore((s) => s.setAgent);
   const t = useT();
   const [rows, setRows] = useState<any[]>([]);
+  const listsVersion = useStore((s) => s.listsVersion); // an agent added/removed elsewhere
   useEffect(() => {
     if (!teamAgentsEnabled) return;
     api.get('/api/agents').then((r) => {
       setRows([...(r.common || []), ...(r.mine || []), ...(r.projects || [])]);
     }).catch(() => {});
-  }, [teamAgentsEnabled]);
+  }, [teamAgentsEnabled, listsVersion]);
   // project agents only apply to sessions of their project — mirror resolveAgents' filter
   const names = [...new Set(rows
     .filter((a) => a.enabled && (a.scope !== 'project' || a.projectId === c?.projectId))

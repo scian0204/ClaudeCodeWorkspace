@@ -33,7 +33,7 @@ import { armPendingResumes } from './claude/auto-resume.js';
 import { startWindowPrimer } from './claude/window-primer.js';
 import { startLdapSync } from './auth/ldap.js';
 import { cleanupSandboxOrphans } from './review/sandbox.js';
-import { initRealtime } from './realtime/io.js';
+import { initRealtime, emitListsChanged } from './realtime/io.js';
 import { startProjectWatch } from './watch/manager.js';
 import { startReaper, cleanupOrphans, ensureNetwork } from './codeserver/manager.js';
 import { removeAllSessionSandboxes, startReaper as startSessionSandboxReaper } from './claude/session-sandbox.js';
@@ -44,6 +44,12 @@ import { startDockerProbe } from './lib/docker-status.js';
 import { isCsPath, handleHttp, handleUpgrade } from './codeserver/proxy.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Routes whose successful mutations change what some list shows (see the onResponse hook in main()).
+const LIST_ROUTES = /^\/api\/(sessions|rooms|projects|agents|plugins|marketplaces|git-credentials|pools|users|wiki\/topics|review\/(repos|sessions)|import\/sessions|admin\/(config|settings))(\/|$)/;
+// …minus the sub-routes that only touch one chat's own content, have their own realtime event, or
+// fire far too often to be worth a workspace-wide refetch (file saves, git commands, uploads).
+const NOT_LIST = /^\/api\/(sessions\/[^/]+\/(aside|attachments|export|messages)|projects\/[^/]+\/(git|open-editor)|wiki\/topics\/[^/]+\/(file|files|recompile))/;
 
 async function main() {
   initDb();
@@ -76,6 +82,17 @@ async function main() {
   app.addHook('onRequest', async (req, reply) => {
     if (isCsPath(req.url)) { handleHttp(req.raw, reply.raw); return reply.hijack(); }
     await attachUser(req);
+  });
+
+  // Keep every OTHER tab's lists live. Before this, a room someone else created, a project renamed
+  // in another tab, or a setting an admin flipped only showed up after a manual page reload: the
+  // client that made the change refetched, nobody else did. One hook instead of ~40 emit sites —
+  // a successful mutation on a route that changes what a list shows pings all tabs, and each one
+  // refetches its own lists (the ping carries no data; io.ts coalesces bursts).
+  app.addHook('onResponse', async (req, reply) => {
+    if (req.method === 'GET' || req.method === 'HEAD' || reply.statusCode >= 400) return;
+    const url = (req.url || '').split('?')[0];
+    if (LIST_ROUTES.test(url) && !NOT_LIST.test(url)) emitListsChanged();
   });
 
   await app.register(authRoutes);

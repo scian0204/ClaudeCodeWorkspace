@@ -33,7 +33,8 @@ export function ProjectCreateForm({ scope, roomId, compact, onCreated, onDone }:
   const [busy, setBusy] = useState(false);
   const t = useT();
 
-  useEffect(() => { api.get('/api/git-credentials').then((r) => setCreds([...(r.mine || []), ...(r.common || [])])).catch(() => {}); }, []);
+  const listsVersion = useStore((s) => s.listsVersion); // refetch when something changed elsewhere
+  useEffect(() => { api.get('/api/git-credentials').then((r) => setCreds([...(r.mine || []), ...(r.common || [])])).catch(() => {}); }, [listsVersion]);
 
   const asRequest = scope === 'common' && !isAdmin && !commonOpen; // member → request instead of direct create
   const git = gitUrl.trim();

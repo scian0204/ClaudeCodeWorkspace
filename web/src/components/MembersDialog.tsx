@@ -16,7 +16,8 @@ export function MembersDialog({ open, onClose }: { open: boolean; onClose: () =>
   const t = useT();
   const room = c?.room;
 
-  useEffect(() => { api.get('/api/users/directory').then((r) => setDir(r.users)).catch(() => {}); }, []);
+  const listsVersion = useStore((s) => s.listsVersion); // refetch when something changed elsewhere
+  useEffect(() => { api.get('/api/users/directory').then((r) => setDir(r.users)).catch(() => {}); }, [listsVersion]);
   if (!c || !room) return null;
   const canManage = control.canSetMode; // owner/admin sets delegations
   const memberIds = new Set(room.members.map((m) => m.userId));

@@ -31,10 +31,11 @@ export function AgentsPanel() {
   const t = useT();
 
   const load = async () => setData({ projects: [], files: [], ...(await api.get('/api/agents')) });
+  const listsVersion = useStore((s) => s.listsVersion); // someone changed an agent in another tab
   useEffect(() => {
     load().catch((e) => useStore.getState().setError(e.message));
     api.get('/api/config').then((cf) => { if (cf?.models) setModels(cf.models); }).catch(() => {});
-  }, []);
+  }, [listsVersion]);
   const err = (e: any) => useStore.getState().setError(e.message || String(e));
 
   // where the caller may create/edit project agents: admins anywhere, members on their own projects

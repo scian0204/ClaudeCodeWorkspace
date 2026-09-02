@@ -520,7 +520,8 @@ function NewChannelModal({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const t = useT();
 
-  useEffect(() => { api.get('/api/users/directory').then((r) => setDir(r.users)).catch(() => {}); }, []);
+  const listsVersion = useStore((s) => s.listsVersion); // refetch when something changed elsewhere
+  useEffect(() => { api.get('/api/users/directory').then((r) => setDir(r.users)).catch(() => {}); }, [listsVersion]);
   const candidates = dir.filter((d) => d.id !== user?.id);
 
   const startDm = async (userId: string) => {
@@ -662,7 +663,8 @@ function AddReviewRepoModal({ onClose }: { onClose: () => void }) {
   const [created, setCreated] = useState<ReviewRepo | null>(null);
   const t = useT();
 
-  useEffect(() => { api.get('/api/git-credentials').then((r) => setCreds([...(r.mine || []), ...(r.common || [])])).catch(() => {}); }, []);
+  const listsVersion = useStore((s) => s.listsVersion); // refetch when something changed elsewhere
+  useEffect(() => { api.get('/api/git-credentials').then((r) => setCreds([...(r.mine || []), ...(r.common || [])])).catch(() => {}); }, [listsVersion]);
 
   const submit = async () => {
     if (!gitUrl.trim()) { setError(t('review.gitUrlRequired')); return; }
@@ -744,7 +746,8 @@ function EditReviewRepoModal({ repo, onClose }: { repo: ReviewRepo; onClose: () 
     try { setSecret(await setReviewWebhook(repo.id, enable)); } catch (e: any) { setError(e.message); } finally { setHookBusy(false); }
   };
 
-  useEffect(() => { api.get('/api/git-credentials').then((r) => setCreds([...(r.mine || []), ...(r.common || [])])).catch(() => {}); }, []);
+  const listsVersion = useStore((s) => s.listsVersion); // refetch when something changed elsewhere
+  useEffect(() => { api.get('/api/git-credentials').then((r) => setCreds([...(r.mine || []), ...(r.common || [])])).catch(() => {}); }, [listsVersion]);
 
   const submit = async () => {
     if (!name.trim()) { setError(t('review.repoNameRequired')); return; }

@@ -23,7 +23,8 @@ export function PluginsPanel() {
     const [p, m] = await Promise.all([api.get('/api/plugins'), api.get('/api/marketplaces')]);
     setData({ projects: [], ...p }); setMkt(m);
   };
-  useEffect(() => { load().catch((e) => useStore.getState().setError(e.message)); }, []);
+  const listsVersion = useStore((s) => s.listsVersion); // a plugin installed/removed elsewhere
+  useEffect(() => { load().catch((e) => useStore.getState().setError(e.message)); }, [listsVersion]);
   const err = (e: any) => useStore.getState().setError(e.message || String(e));
 
   const prefMap = new Map<string, number>(data.prefs.map((p: any) => [p.pluginId, p.enabled]));

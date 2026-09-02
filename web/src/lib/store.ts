@@ -186,6 +186,7 @@ interface State {
   login: (u: string, p: string) => Promise<void>;
   logout: () => Promise<void>;
   toggleTheme: () => void;
+  listsVersion: number; // bumped on every lists:changed — panels that fetch once put it in their deps
   refreshLists: () => Promise<void>;
   refreshRequests: () => Promise<void>;
   submitRequest: (type: string, payload: Record<string, string>, reason: string) => Promise<void>;
@@ -295,7 +296,7 @@ export const useStore = create<State>((set, get) => ({
   asideEnabled: true, asideOpen: false, asideMessages: [], asideLive: null, asideBusy: false,
   resumes: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, toolFoldMin: 3, tokenPoolEnabled: false, sessionSandboxEnabled: false, winSandboxEnabled: false, projectWatchEnabled: true, projectWatchPromptEnabled: true, projectWatchPromptMax: 2000, pools: [], poolAllUsers: false, poolOptedOut: false, myPoolId: null, poolCanCreate: false, poolHasCredential: false, requests: [], pendingRequestCount: 0, updateAvailable: false, updateLatest: null, viewMode: 'chat', editorUrl: null, gitPanelOpen: false, explorerOpen: false, exportOpen: false, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
   channels: [], activeChannelId: null, channelMessages: [], titling: [],
-  commands: [],
+  commands: [], listsVersion: 0,
 
   bootstrap: async () => {
     applyTheme(get().theme);
@@ -1252,6 +1253,13 @@ function wire(set: any, get: () => State) {
 
   // member request submitted/decided (broadcast to all) — refresh own list + admin pending badge
   sock.on('requests:changed', () => { if (get().user) void get().refreshRequests(); });
+  // Something changed a list somewhere (any tab, any user): refetch ours instead of waiting for the
+  // user to press F5. The counter re-runs the panels that fetch their own data once on mount.
+  sock.on('lists:changed', () => {
+    if (!get().user) return;
+    set({ listsVersion: get().listsVersion + 1 });
+    void get().refreshLists().catch(() => { /* a failed refresh must not kill the socket handler */ });
+  });
 
   // ── DM / group chat ──
   // A new message in any channel I'm in. If it's the open channel: append + mark read. Always update

@@ -38,6 +38,19 @@ export function emitToSession(sessionId: string, event: string, payload: any) {
   if (!io) return;
   io.to(sessionRoom(sessionId)).emit(event, payload);
 }
+// "Your lists may be stale" — sent to every connected tab after a change that alters what a list
+// shows (a room, a project, a session, an agent, a plugin, the workspace config). It carries no
+// payload: each client refetches its own scoped lists, so nobody learns about anything they could
+// not already see. Coalesced, because one import or one bulk action fires many mutations in a row.
+let listsPing: ReturnType<typeof setTimeout> | null = null;
+export function emitListsChanged() {
+  if (!io || listsPing) return;
+  listsPing = setTimeout(() => {
+    listsPing = null;
+    try { io.emit('lists:changed'); } catch { /* realtime optional */ }
+  }, 300);
+}
+
 // Push to every tab of one user, for work that finishes after the HTTP response and belongs to no
 // session room the client has joined (e.g. titling the chats a local-session import just created).
 export function emitToUser(userId: string, event: string, payload: any) {
