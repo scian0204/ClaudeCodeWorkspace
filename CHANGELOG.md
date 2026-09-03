@@ -87,7 +87,7 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ## v1.29.0 — 2026-09-03
 
-<sub>release commit `RELEASE_HASH`</sub>
+<sub>release commit `0f2d58f`</sub>
 
 <details>
 <summary><b>feat(browser): a browser Claude can use — open pages, click, screenshot, look at its own dev server</b> — one shared container, a private context per chat · <code>2dbb60a</code></summary>

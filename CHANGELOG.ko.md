@@ -87,7 +87,7 @@
 
 ## v1.29.0 — 2026-09-03
 
-<sub>릴리스 커밋 `RELEASE_HASH`</sub>
+<sub>릴리스 커밋 `0f2d58f`</sub>
 
 <details>
 <summary><b>feat(browser): Claude가 쓰는 브라우저 — 페이지 열기·클릭·스크린샷, 자기 개발 서버 화면 확인</b> — 컨테이너 하나를 나눠 쓰되 대화마다 따로 · <code>2dbb60a</code></summary>
