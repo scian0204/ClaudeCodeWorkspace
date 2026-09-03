@@ -41,6 +41,10 @@ export const paths = {
   // prompt attachments: <ownerProjectsDir>/.attachments/<sessionId> — inside an allowed root so the agent can Read them
   attachments: (kind: 'user' | 'room', ownerId: string, sessionId: string) =>
     path.join(D, kind === 'room' ? 'rooms' : 'users', ownerId, 'projects', '.attachments', sessionId),
+  // images a TOOL returned (browser screenshots): a sibling of the attachment dir, not inside it, so
+  // they never count against the attachment limit or show up as pending prompt attachments
+  toolImages: (kind: 'user' | 'room', ownerId: string, sessionId: string) =>
+    path.join(D, kind === 'room' ? 'rooms' : 'users', ownerId, 'projects', '.attachments', `${sessionId}.shots`),
 };
 
 export function ensure(dir: string) {

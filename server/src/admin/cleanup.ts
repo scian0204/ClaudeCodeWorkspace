@@ -100,8 +100,9 @@ function findOrphanAttachmentDirs(): string[] {
     const base = path.join(config.dataDir, kind);
     for (const owner of listDirs(base)) {
       const attRoot = path.join(base, owner, 'projects', '.attachments');
-      for (const sid of listDirs(attRoot)) {
-        if (!sessionIds.has(sid)) out.push(path.join(attRoot, sid));
+      for (const name of listDirs(attRoot)) {
+        // `<sid>.shots` holds the images that session's tools returned — same owner, same fate
+        if (!sessionIds.has(name.replace(/\.shots$/, ''))) out.push(path.join(attRoot, name));
       }
     }
   }

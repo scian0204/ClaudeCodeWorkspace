@@ -21,6 +21,8 @@ import { getReviewByChat, ensureWorktree } from '../review/manager.js';
 import { sandboxAvailable, ensureSandbox, removeSandbox, sandboxMcpServer } from '../review/sandbox.js';
 import { ensureSessionSandbox, sandboxMcp, sandboxHint, sessionSandboxAvailable } from './session-sandbox.js';
 import { ensureWinSandbox, winSandboxMcp, winSandboxHint, winSandboxAvailable } from './win-sandbox.js';
+import { browserAvailable, ensureBrowser, browserMcp, browserHint, appHost } from './browser.js';
+import { splitToolResult, imageExt, type ToolImage } from '../lib/tool-images.js';
 import { poolForSession, runOrder, markExhausted, markAvailable } from '../auth/token-pool.js';
 import { cfg } from '../lib/config-registry.js';
 import { maybeAutoTitle } from './auto-title.js';
@@ -37,7 +39,8 @@ export type Block =
   // thread — nested tool calls get marked cards, nested TEXT is kept out of the main transcript and
   // rendered in the task panel's live view instead.
   | { type: 'text'; text: string; parentId?: string; agentType?: string }
-  | { type: 'tool_use'; id: string; name: string; input: any; output?: string; isError?: boolean; parentId?: string; agentType?: string };
+  // images: URLs of pictures the tool returned (browser screenshots), stored on disk instead of inline
+  | { type: 'tool_use'; id: string; name: string; input: any; output?: string; isError?: boolean; images?: string[]; parentId?: string; agentType?: string };
 
 interface ActiveTurn {
   abort: AbortController; blocks: Block[]; author: { id: string; name: string };
@@ -436,6 +439,7 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
   let disallowedTools: string[] | undefined;
   let sandboxCleanup: (() => Promise<void>) | undefined;
   let systemPromptAppend: string | undefined;
+  let sandboxHost: string | null = null; // the local build container's name — where the browser finds its dev servers
   // Ordinary session with its own build container turned on: expose mcp__sandbox__run and tell the
   // agent to build/run there. Bash stays allowed (git/grep/file work has no reason to pay for a
   // container hop) — unlike review, this code is the team's own. Kept alive between turns and
@@ -459,9 +463,21 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
         if (cname) {
           mcpServers = { sandbox: await sandboxMcp(cname, cwd) };
           systemPromptAppend = sandboxHint(cwd);
+          sandboxHost = cname;
         }
       } catch { /* container failed to start → host exec, exactly as before */ }
     }
+  }
+  // Shared headless browser: one container for everyone, its own browser context per turn. Merged
+  // INTO mcpServers (not assigned) so it sits next to the build container's tool. Not for review
+  // turns — they run untrusted PR code, and the browser can reach every container on the network.
+  if (s.kind !== 'review' && s.browser === 1 && browserAvailable()) {
+    try {
+      if (await ensureBrowser()) {
+        mcpServers = { ...(mcpServers || {}), browser: browserMcp() };
+        systemPromptAppend = [systemPromptAppend, browserHint(appHost(), sandboxHost)].filter(Boolean).join('\n\n');
+      }
+    } catch { /* container failed to start → the turn runs without a browser */ }
   }
   if (s.kind === 'review' && sandboxAvailable()) {
     const rv = getReviewByChat(s.id);
@@ -593,6 +609,7 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
     } else {
       const runOnce = (resume: string | null) => withRateLimitRetry(
         () => runReal({ ctx, prompt, canUseTool, emit, sessionId: s.id, blocks, resume, abort,
+          shots: { dir: paths.toolImages(kind, ownerId, s.id), url: (name) => `/api/sessions/${s.id}/shots/${encodeURIComponent(name)}` },
           onQuery: (q) => { turn.query = q; }, onSessionId: rememberSessionId }),
         (ms) => p.emit('turn:congested', { sessionId: s.id, backoffMs: ms }),
         abort.signal, // a stop during rate-limit backoff must break the sleep, not wait it out
@@ -709,6 +726,23 @@ export async function runTurn(p: RunTurnParams): Promise<void> {
   }
 }
 
+// Write the images one tool result carried and return their URLs. Named after the tool_use id (the
+// CLI's own `toolu_…`, re-sanitised anyway) so the files can be matched to the transcript. A disk
+// error costs the picture, never the turn: the text output has already been taken.
+function saveToolImages(shots: { dir: string; url: (name: string) => string }, toolUseId: string, images: ToolImage[]): string[] {
+  const urls: string[] = [];
+  try {
+    ensure(shots.dir);
+    const stem = String(toolUseId).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64) || newId();
+    images.forEach((img, i) => {
+      const name = `${stem}-${i + 1}.${imageExt(img.mime)}`;
+      fs.writeFileSync(path.join(shots.dir, name), img.data);
+      urls.push(shots.url(name));
+    });
+  } catch { /* the text output still lands; the picture is simply not shown */ }
+  return urls;
+}
+
 function publicMessage(m: any) {
   return {
     id: m.id, sessionId: m.sessionId, role: m.role,
@@ -725,6 +759,7 @@ async function runReal(a: {
   blocks: Block[]; resume?: string | null; abort: AbortController;
   onQuery?: (q: { interrupt: () => Promise<unknown> }) => void;
   onSessionId?: (id: string) => void; // fires as soon as the CLI reports its id, before the turn ends
+  shots?: { dir: string; url: (name: string) => string }; // where images a tool returns are written, and how the web reaches them
 }): Promise<{ claudeSessionId: string | null; inputTokens: number; outputTokens: number; costUsd: number }> {
   const { query } = await import('@anthropic-ai/claude-agent-sdk');
   const options = buildOptions(a.ctx, { canUseTool: a.canUseTool, resume: a.resume, abortController: a.abort });
@@ -804,10 +839,16 @@ async function runReal(a: {
         const content = msg.message?.content;
         if (Array.isArray(content)) for (const b of content) {
           if (b.type === 'tool_result') {
-            const out = typeof b.content === 'string' ? b.content : JSON.stringify(b.content);
+            // Text blocks become the output; image blocks (browser screenshots) go to disk and reach
+            // the web as URLs — a base64 blob in the transcript row shows nobody anything.
+            const { text: out, images } = splitToolResult(b.content);
+            const saved = images.length && a.shots ? saveToolImages(a.shots, b.tool_use_id, images) : [];
             const idx = toolIndex.get(b.tool_use_id);
-            if (idx != null) { (a.blocks[idx] as any).output = out; (a.blocks[idx] as any).isError = !!b.is_error; }
-            a.emit('tool:result', { sessionId: a.sessionId, id: b.tool_use_id, output: out, isError: !!b.is_error });
+            if (idx != null) {
+              (a.blocks[idx] as any).output = out; (a.blocks[idx] as any).isError = !!b.is_error;
+              if (saved.length) (a.blocks[idx] as any).images = saved;
+            }
+            a.emit('tool:result', { sessionId: a.sessionId, id: b.tool_use_id, output: out, isError: !!b.is_error, ...(saved.length ? { images: saved } : {}) });
           }
         }
         break;

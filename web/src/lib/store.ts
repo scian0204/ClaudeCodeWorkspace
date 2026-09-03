@@ -7,7 +7,8 @@ export type Block =
   // parentId set => the block came from a subagent, not the main thread (agentType = its subagent
   // type). Nested text renders in the task panel's live view, not the main transcript.
   | { type: 'text'; text: string; parentId?: string; agentType?: string }
-  | { type: 'tool_use'; id: string; name: string; input: any; output?: string; isError?: boolean; parentId?: string; agentType?: string };
+  // images = URLs of pictures the tool returned (browser screenshots), rendered under the tool card
+  | { type: 'tool_use'; id: string; name: string; input: any; output?: string; isError?: boolean; images?: string[]; parentId?: string; agentType?: string };
 // One piece of agent-side work a turn spawned: a Task-tool subagent, a backgrounded shell, a local
 // workflow, an MCP monitor. Mirrors server/src/claude/tasks.ts (AgentTask).
 export interface AgentTask {
@@ -62,7 +63,7 @@ export interface QueueState { running: { id: string; author: { id: string; name:
 export interface PendingResume { id: string; sessionId: string; author: { id: string; name: string }; text: string; attempts: number; resumeAt: number; }
 export interface Control { canApprove: boolean; canInterrupt: boolean; canSetMode: boolean; isOwner: boolean; delegable: string[]; }
 export interface PermReq { requestId: string; tool: string; input: any; }
-export interface Current { chatSessionId: string; kind: 'private' | 'room' | 'review'; roomId?: string; wikiTopicId?: string; wikiRefId?: string | null; reviewId?: string; review?: ReviewMeta; readOnly?: boolean; title: string; projectId: string | null; model: string; effort: string; permissionMode: string; agent?: string | null; poolId?: string | null; sandbox?: number; sandboxTarget?: string; watchMode?: string; watchPrompt?: string; room?: RoomSummary; }
+export interface Current { chatSessionId: string; kind: 'private' | 'room' | 'review'; roomId?: string; wikiTopicId?: string; wikiRefId?: string | null; reviewId?: string; review?: ReviewMeta; readOnly?: boolean; title: string; projectId: string | null; model: string; effort: string; permissionMode: string; agent?: string | null; poolId?: string | null; sandbox?: number; sandboxTarget?: string; browser?: number; watchMode?: string; watchPrompt?: string; room?: RoomSummary; }
 // A file change in the project a session watches, as `project:changed` reports it. `fired` = the
 // session's stored prompt went out as a turn ('prompt' mode).
 export interface ProjectChange { sessionId: string; projectId: string; projectName: string; files: string[]; count: number; at: number; mode?: string; self?: boolean; fired?: boolean; }
@@ -154,6 +155,7 @@ interface State {
   tokenPoolEnabled: boolean;     // admin feature flag (from /api/config) — gates the shared-plan pool UI
   sessionSandboxEnabled: boolean; // admin feature flag (from /api/config) — gates the per-session build container
   winSandboxEnabled: boolean;     // admin feature flag — a remote Windows Docker host for .NET Framework builds
+  browserEnabled: boolean;        // admin feature flag — the shared headless browser a chat can turn on
   projectWatchEnabled: boolean;   // admin feature flag (from /api/config) — gates the project file-change watch
   projectWatchPromptEnabled: boolean; // same, for the auto-sent prompt mode on top of it
   projectWatchPromptMax: number;  // admin setting — length cap on that stored prompt
@@ -254,6 +256,7 @@ interface State {
   setEffort: (effort: string) => Promise<void>;
   setPool: (poolId: string | null) => Promise<void>;
   setSandbox: (on: boolean, target?: string) => Promise<void>;
+  setBrowser: (on: boolean) => Promise<void>;
   setWatch: (mode: string, prompt?: string) => Promise<void>;
   dismissProjectChange: (sessionId: string) => void;
   setMyPool: (poolId: string | null) => Promise<void>;
@@ -294,7 +297,7 @@ export const useStore = create<State>((set, get) => ({
   presence: [], congested: false, sessionImportEnabled: true, sessionExportEnabled: true, sessionBundleEnabled: true, fileTreeWarnCount: 300, teamAgentsEnabled: true, commonProjectOpen: false, llmProvidersEnabled: true, approvalsEnabled: true, dmEnabled: true, searchEnabled: true, customContextMenuEnabled: true, autoTitleEnabled: true, autoResumeEnabled: true, windowPrimerEnabled: true, gitPublishEnabled: true, wikiSourceEditEnabled: true, wikiLinkEnabled: true, wikiAutoLearnEnabled: true, reviewWebhookEnabled: true, dockerReady: true, dockerReason: 'ok',
   guideEnabled: true, guideWriteEnabled: true, guideOpen: false, guideLoaded: false, guideMessages: [], guideLive: null, guideBusy: false, guideUnread: false,
   asideEnabled: true, asideOpen: false, asideMessages: [], asideLive: null, asideBusy: false,
-  resumes: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, toolFoldMin: 3, tokenPoolEnabled: false, sessionSandboxEnabled: false, winSandboxEnabled: false, projectWatchEnabled: true, projectWatchPromptEnabled: true, projectWatchPromptMax: 2000, pools: [], poolAllUsers: false, poolOptedOut: false, myPoolId: null, poolCanCreate: false, poolHasCredential: false, requests: [], pendingRequestCount: 0, updateAvailable: false, updateLatest: null, viewMode: 'chat', editorUrl: null, gitPanelOpen: false, explorerOpen: false, exportOpen: false, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
+  resumes: [], searchOpen: false, shortcutsOpen: false, highlightMsgId: null, processPollMs: 5000, toolFoldMin: 3, tokenPoolEnabled: false, sessionSandboxEnabled: false, winSandboxEnabled: false, browserEnabled: false, projectWatchEnabled: true, projectWatchPromptEnabled: true, projectWatchPromptMax: 2000, pools: [], poolAllUsers: false, poolOptedOut: false, myPoolId: null, poolCanCreate: false, poolHasCredential: false, requests: [], pendingRequestCount: 0, updateAvailable: false, updateLatest: null, viewMode: 'chat', editorUrl: null, gitPanelOpen: false, explorerOpen: false, exportOpen: false, panel: null, sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1', error: null,
   channels: [], activeChannelId: null, channelMessages: [], titling: [],
   commands: [], listsVersion: 0,
 
@@ -371,6 +374,7 @@ export const useStore = create<State>((set, get) => ({
       tokenPoolEnabled: cf.tokenPoolEnabled === true,
       sessionSandboxEnabled: cf.sessionSandboxEnabled === true,
       winSandboxEnabled: cf.winSandboxEnabled === true,
+      browserEnabled: cf.browserEnabled === true,
       projectWatchEnabled: cf.projectWatchEnabled !== false,
       projectWatchPromptEnabled: cf.projectWatchPromptEnabled !== false,
       projectWatchPromptMax: cf.projectWatchPromptMaxChars || 2000,
@@ -406,7 +410,7 @@ export const useStore = create<State>((set, get) => ({
     await join(set, get, {
       chatSessionId: session.id, kind: 'private', title: session.title,
       projectId: session.projectId, model: session.model, effort: session.effort || 'high', permissionMode: session.permissionMode,
-      agent: session.agent ?? null, poolId: session.poolId ?? null, sandbox: session.sandbox ?? 0, sandboxTarget: session.sandboxTarget || 'linux',
+      agent: session.agent ?? null, poolId: session.poolId ?? null, sandbox: session.sandbox ?? 0, sandboxTarget: session.sandboxTarget || 'linux', browser: session.browser ?? 0,
       wikiRefId: session.wikiRefId ?? null,
       watchMode: session.watchMode || 'off', watchPrompt: session.watchPrompt || '',
     }, messages);
@@ -419,7 +423,7 @@ export const useStore = create<State>((set, get) => ({
       chatSessionId: room.chatSessionId, kind: 'room', roomId: room.id, title: room.name,
       projectId: chat?.session?.projectId ?? null, model: chat?.session?.model || 'claude-opus-4-8',
       effort: chat?.session?.effort || 'high', permissionMode: room.permissionMode, agent: chat?.session?.agent ?? null,
-      poolId: chat?.session?.poolId ?? null, sandbox: chat?.session?.sandbox ?? 0, sandboxTarget: chat?.session?.sandboxTarget || 'linux',
+      poolId: chat?.session?.poolId ?? null, sandbox: chat?.session?.sandbox ?? 0, sandboxTarget: chat?.session?.sandboxTarget || 'linux', browser: chat?.session?.browser ?? 0,
       wikiRefId: chat?.session?.wikiRefId ?? null,
       watchMode: chat?.session?.watchMode || 'off', watchPrompt: chat?.session?.watchPrompt || '', room,
     }, messages);
@@ -793,6 +797,13 @@ export const useStore = create<State>((set, get) => ({
     await api.patch(`/api/sessions/${c.chatSessionId}`, body);
     set({ current: { ...c, sandbox: on ? 1 : 0, sandboxTarget: target || c.sandboxTarget } });
   },
+  // The shared headless browser's tools for this chat. Same PATCH as the build container; the turn
+  // re-checks the admin flag, so a stale "on" on a session is harmless once the feature is off.
+  setBrowser: async (on) => {
+    const c = get().current; if (!c) return;
+    await api.patch(`/api/sessions/${c.chatSessionId}`, { browser: on ? 1 : 0 });
+    set({ current: { ...c, browser: on ? 1 : 0 } });
+  },
   // Watch this session's project for changes made outside it. 'prompt' mode also needs the text to
   // send, so both fields go in one PATCH — the server refuses 'prompt' with an empty prompt.
   setWatch: async (mode, prompt) => {
@@ -1139,7 +1150,7 @@ function wire(set: any, get: () => State) {
     if (idx == null) return;
     const blocks = live.blocks.slice();
     const b = blocks[idx];
-    if (b && b.type === 'tool_use') blocks[idx] = { ...b, output: p.output, isError: p.isError };
+    if (b && b.type === 'tool_use') blocks[idx] = { ...b, output: p.output, isError: p.isError, ...(p.images ? { images: p.images } : {}) };
     set({ live: { ...live, blocks } });
   });
 

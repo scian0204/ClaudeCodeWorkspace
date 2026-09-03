@@ -22,7 +22,38 @@ const chunks = (s: string, n = 3) => {
   return out;
 };
 
+// A stand-in screenshot for the browser tools: an inline SVG "page", so the chat's image card has
+// something to show without a server (the real thing serves a jpeg from /api/sessions/:id/shots/…).
+const DEMO_SHOT = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">'
+  + '<rect width="640" height="360" fill="#f6f4ef"/><rect width="640" height="44" fill="#1f2937"/>'
+  + '<text x="20" y="29" font-family="sans-serif" font-size="16" fill="#fff">acme/webapp — dev</text>'
+  + '<rect x="40" y="80" width="560" height="56" rx="8" fill="#fff" stroke="#d6d3cd"/>'
+  + '<text x="60" y="115" font-family="sans-serif" font-size="18" fill="#374151">Welcome back 👋</text>'
+  + '<rect x="40" y="160" width="270" height="140" rx="8" fill="#fff" stroke="#d6d3cd"/>'
+  + '<rect x="330" y="160" width="270" height="140" rx="8" fill="#fff" stroke="#d6d3cd"/>'
+  + '<rect x="60" y="180" width="180" height="12" rx="6" fill="#e5e1d8"/><rect x="60" y="204" width="230" height="12" rx="6" fill="#e5e1d8"/>'
+  + '<rect x="350" y="180" width="140" height="12" rx="6" fill="#e5e1d8"/><rect x="350" y="204" width="200" height="12" rx="6" fill="#e5e1d8"/>'
+  + '<rect x="60" y="250" width="120" height="32" rx="6" fill="#c2410c"/><text x="82" y="272" font-family="sans-serif" font-size="14" fill="#fff">Sign in</text>'
+  + '</svg>');
+
+// Asking about the app's look, or naming the browser, drives the headless browser instead of the shell:
+// navigate → snapshot → screenshot, with the screenshot delivered as an image the tool card renders.
+function browserReply(text: string) {
+  const short = text.length > 56 ? text.slice(0, 53) + '…' : text;
+  return {
+    intro: `Let me open it in the browser — "${short}".`,
+    tools: [
+      { name: 'mcp__browser__browser_navigate', input: { url: 'http://ccw-sesbx-demo:5173/' }, output: '### Page\n- Page URL: http://ccw-sesbx-demo:5173/\n- Page Title: acme/webapp — dev\n- Console: 0 errors, 0 warnings' },
+      { name: 'mcp__browser__browser_snapshot', input: {}, output: '- banner: "acme/webapp — dev"\n- heading "Welcome back 👋" [level=1]\n- button "Sign in" [ref=e12]' },
+      { name: 'mcp__browser__browser_take_screenshot', input: { type: 'jpeg' }, output: 'Took the viewport screenshot (640×360).', images: [DEMO_SHOT] },
+    ],
+    outro: 'The page renders and the Sign in button is where the design puts it. The dev server had to listen on 0.0.0.0 for the browser to reach it — `localhost` inside the browser container is the browser itself.',
+  };
+}
+
 function reply(text: string, nAtt = 0) {
+  if (/(브라우저|browser|스크린샷|screenshot|화면 ?확인|어떻게 보여|how does it look)/i.test(text)) return browserReply(text);
   const short = text.length > 56 ? text.slice(0, 53) + '…' : text;
   const isCmd = text.trim().startsWith('/');
   const attNote = nAtt ? `Thanks — I can see ${nAtt} attachment${nAtt > 1 ? 's' : ''}. ` : '';
@@ -151,13 +182,14 @@ function runTurn(sessionId: string, text: string, nAtt = 0) {
   // run the turn's tools one after another (use → 700ms → result), then stream the outro
   const runTools = (i = 0) => {
     if (i >= r.tools.length) { streamOutro(); return; }
-    const tl = r.tools[i];
+    const tl: { name: string; input: any; output: string; images?: string[] } = r.tools[i];
     const id = `t_${rid()}`;
     deliver('tool:use', { sessionId, id, name: tl.name, input: tl.input });
     finalBlocks.push({ type: 'tool_use', id, name: tl.name, input: tl.input });
     later(700, () => {
-      deliver('tool:result', { sessionId, id, output: tl.output, isError: false });
+      deliver('tool:result', { sessionId, id, output: tl.output, isError: false, ...(tl.images ? { images: tl.images } : {}) });
       finalBlocks[finalBlocks.length - 1].output = tl.output;
+      if (tl.images) finalBlocks[finalBlocks.length - 1].images = tl.images;
       later(250, () => runTools(i + 1));
     });
   };
@@ -309,6 +341,17 @@ function guidePlan(text: string): { steps: { input: any; output: string }[]; rep
         { input: { action: 'refresh' }, output: 'ok — dispatched refresh' },
       ],
       reply: '이 대화의 빌드를 Windows 컨테이너로 돌렸습니다. .NET Framework(MSBuild)는 여기서만 빌드됩니다 — 프로젝트는 명령 전에 Windows 호스트로 복사되고, 컨테이너 안에서는 `C:\\project` 에 있습니다.\n\n상단 빌드 컨테이너 버튼에서 Linux 컨테이너로 되돌리거나 끌 수 있고, 입력창에서는 `/sandbox windows` · `/sandbox linux` · `/sandbox off` 로도 됩니다.',
+    };
+  }
+  if (/(브라우저|browser|스크린샷|screenshot|화면.*(확인|보여))/.test(q)) {
+    const sid = db.sessions[0]?.id || '';
+    (db.sessions[0] as any).browser = 1;
+    return {
+      steps: [
+        { input: { method: 'PATCH', path: `/api/sessions/${sid}`, body: { browser: 1 } }, output: 'status=200\n{"ok":true}' },
+        { input: { action: 'refresh' }, output: 'ok — dispatched refresh' },
+      ],
+      reply: '이 대화에 브라우저를 켰습니다. 이제 Claude가 웹 페이지를 열고, 클릭·입력하고, 이 대화의 개발 서버 화면을 직접 보고 스크린샷을 찍을 수 있습니다 — 스크린샷은 대화에 이미지로 나옵니다.\n\n한 가지만: 개발 서버는 `0.0.0.0` 에 떠 있어야 합니다(vite는 `--host 0.0.0.0`). 브라우저가 별도 컨테이너에서 돌기 때문에 거기서 `localhost` 는 자기 자신이라서요. 헤더의 **브라우저** 버튼이나 `/browser off` 로 끕니다.',
     };
   }
   if (/(파일 ?변경|변경 ?감지|watch|감시)/.test(q)) {

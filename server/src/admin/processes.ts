@@ -7,6 +7,7 @@ import { killEditor } from '../codeserver/manager.js';
 import { killSessionSandbox } from '../claude/session-sandbox.js';
 import { killSandbox } from '../review/sandbox.js';
 import { listWinSandboxes, killWinSandbox } from '../claude/win-sandbox.js';
+import { killBrowser } from '../claude/browser.js';
 
 // Admin "activity / processes" — a live task-manager view over the runtime activity the server
 // already manages (running/queued Claude turns, code-server editor containers, review sandbox
@@ -47,8 +48,9 @@ export async function listProcesses(): Promise<ProcessList> {
     const rooms = new Map(db.select().from(schema.rooms).all().map((r) => [r.id, r.name]));
     const projects = new Map(db.select().from(schema.projects).all().map((p) => [p.id, p.name]));
     const eds = await listCcwContainers('ccw.codeserver=1');
-    // both build-container kinds render the same row: per-PR review sandboxes and per-session ones
-    const sbx = [...await listCcwContainers('ccw.reviewsandbox=1'), ...await listCcwContainers('ccw.sessionsandbox=1')];
+    // every spawned helper container renders the same row: per-PR review sandboxes, per-session build
+    // containers, and the workspace's one shared browser
+    const sbx = [...await listCcwContainers('ccw.reviewsandbox=1'), ...await listCcwContainers('ccw.sessionsandbox=1'), ...await listCcwContainers('ccw.browser=1')];
     editors = eds.map((c): ProcEditor => {
       const oid = c.labels['ccw.owner']; const pid = c.labels['ccw.project'];
       return { id: c.id, name: c.name, owner: users.get(oid) || rooms.get(oid) || oid || '', project: projects.get(pid) || pid || '', state: c.state, createdAt: c.createdAt };
@@ -89,7 +91,7 @@ export async function controlProcess(kind: string, action: string, ids: { sessio
       // one id, three kinds: the session killer force-removes by id either way and also drops the
       // in-memory entry when it is a session container; the Windows one lives on the other daemon,
       // where an id from this list can only be found by asking that daemon
-      return { ok: (await killSessionSandbox(ids.id)) || (await killSandbox(ids.id)) || (await killWinSandbox(ids.id)) };
+      return { ok: (await killSessionSandbox(ids.id)) || (await killSandbox(ids.id)) || (await killBrowser(ids.id)) || (await killWinSandbox(ids.id)) };
     case 'pipeline':
       // "stop" a running review pipeline = interrupt the Claude turn driving its chat session.
       if (action !== 'stop' || !ids.chatSessionId) throw new Error('pipeline: stop + chatSessionId required');

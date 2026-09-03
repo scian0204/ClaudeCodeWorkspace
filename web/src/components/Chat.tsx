@@ -28,7 +28,7 @@ import {
   IconGauge, IconEye, IconBook, IconArchive, IconSparkle, IconCopy, IconPencil, IconHelp,
   IconTerminal, IconX, IconPaperclip, IconSend, IconShield, IconBolt, IconCheckSquare, IconCrown,
   IconGitBranch, IconClock, IconCheckCircle, IconBan, IconWarning, IconLink, IconRotateCcw,
-  IconCheck, IconRefresh, IconSquare, IconMessage, IconActivity, IconDownload, IconUsers, IconBox,
+  IconCheck, IconRefresh, IconSquare, IconMessage, IconActivity, IconDownload, IconUsers, IconBox, IconGlobe,
   IconPlus,
 } from '../lib/icons';
 
@@ -213,6 +213,7 @@ function Header() {
       {!c.wikiTopicId && !isReview && <AgentPicker />}
       {!isReview && <PoolPicker />}
       {!c.wikiTopicId && !isReview && <SandboxToggle />}
+      {!c.wikiTopicId && !isReview && <BrowserToggle />}
 
       <TasksButton />
 
@@ -988,6 +989,22 @@ function SandboxToggle() {
   );
 }
 
+// The shared headless browser's tools for this chat. Hidden until the admin turns the feature on AND
+// Docker is wired (the browser is a sibling container, like the build container).
+function BrowserToggle() {
+  const t = useT();
+  const { current: c, browserEnabled, dockerReady, setBrowser } = useStore();
+  if (!c || !browserEnabled || !dockerReady) return null;
+  const on = c.browser === 1;
+  return (
+    <button className={`pill inline-flex items-center gap-1 ${on ? 'ring-1 ring-clay text-clay' : ''}`}
+      disabled={!!c.readOnly} title={t(on ? 'browser.onTip' : 'browser.offTip')}
+      onClick={() => void setBrowser(!on)}>
+      <IconGlobe size={13} />{t(on ? 'browser.on' : 'browser.off')}
+    </button>
+  );
+}
+
 // Rough chars-per-output-token, used only to keep the meter moving between the SDK's exact
 // per-message totals. Mixed Korean/English/code lands near 3; the next turn:usage corrects it.
 const CHARS_PER_TOKEN = 3;
@@ -1106,6 +1123,7 @@ function ToolRun({ run }: { run: Extract<Block, { type: 'tool_use' }>[] }) {
 
 function ToolCard({ b }: { b: Extract<Block, { type: 'tool_use' }> }) {
   const [open, setOpen] = useState(false);
+  const [preview, setPreview] = useState<{ src: string; name: string } | null>(null);
   const t = useT();
   // AskUserQuestion's pick is fed back as a (technically) denied tool result — the SDK flags it
   // is_error even though nothing failed. Render it as a normal choice, not "오류".
@@ -1116,7 +1134,7 @@ function ToolCard({ b }: { b: Extract<Block, { type: 'tool_use' }> }) {
   const counts = hunks ? diffCounts(hunks) : null;
   const cmd = isAsk
     ? (b.input?.questions?.[0]?.question || t('chat.question'))
-    : (b.input?.command || b.input?.file_path || b.input?.path || JSON.stringify(b.input || {}).slice(0, 80));
+    : (b.input?.command || b.input?.file_path || b.input?.path || b.input?.url || JSON.stringify(b.input || {}).slice(0, 80));
   const status: { text: string; color: string; Icon?: typeof IconCheck } =
     b.output == null ? { text: t('chat.toolRunning'), color: 'var(--txt-3)' }
     : isAsk ? (cancelled ? { text: t('chat.cancelled'), color: 'var(--txt-3)' } : { text: t('chat.selected'), color: 'var(--ok)', Icon: IconCheck })
@@ -1142,6 +1160,18 @@ function ToolCard({ b }: { b: Extract<Block, { type: 'tool_use' }> }) {
         )}
         <span className="text-[11px] flex items-center gap-1" style={{ color: status.color }}>{status.Icon && <status.Icon size={12} />}{status.text}</span>
       </div>
+      {/* pictures the tool returned (browser screenshots) are the result itself, so they show without
+          unfolding the card; the text output stays behind the toggle as for every other tool */}
+      {!!b.images?.length && (
+        <div className="border-t border-line px-3 py-2 flex flex-wrap gap-2 bg-bg">
+          {b.images.map((src, i) => (
+            <img key={src} src={src} alt={t('chat.toolImage')} title={t('chat.toolImage')} loading="lazy"
+              onClick={() => setPreview({ src, name: `${t('chat.toolImage')} ${i + 1}` })}
+              className="max-h-48 max-w-full rounded border border-line object-contain cursor-zoom-in" />
+          ))}
+          <ImageLightbox preview={preview} onClose={() => setPreview(null)} />
+        </div>
+      )}
       {open && (hunks && !b.isError
         ? <div className="border-t border-line"><ToolDiff hunks={hunks} /></div>
         : b.output != null && (

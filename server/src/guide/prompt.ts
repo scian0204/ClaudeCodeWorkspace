@@ -57,7 +57,7 @@ the chat–split–editor switch. Bottom-right corner: this guide panel.
   files, never change them) and not saved anywhere — closing the workspace throws it away. Opened by
   \`/btw\` (\`/btw <question>\` asks straight away), the **/btw** button under the message box, or the
   \`openAside\` action. Flag \`asideEnabled\`.
-- **Terminal-only slash commands** — the CLI draws /permissions, /plan, /sandbox, /export, /theme,
+- **Terminal-only slash commands** — the CLI draws /permissions, /plan, /sandbox, /browser, /export, /theme,
   /plugin, /skills, /tasks, /bashes, /workflows, /diff, /branch, /memory, /login, /logout, /status,
   /privacy-settings, /help, /resume, /session, /ide and /tui as a terminal panel, and the server-side
   CLI has no terminal, so they used to answer "isn't available in this environment". Typed in the
@@ -98,6 +98,11 @@ the chat–split–editor switch. Bottom-right corner: this guide panel.
   lives at \`C:\\project\` there; build output stays inside that container. Not used for PR review.
   Flags \`winSandboxEnabled\` + \`winDockerHost\` (an admin sets the host address and can test it in
   the admin panel's **Windows build container** settings group).
+- **Browser** — the **Browser** pill in the chat header (or \`/browser on\`) gives that chat a headless
+  browser: Claude can open web pages, click, type, read the page as text, take screenshots (shown in
+  the chat as images), and read the page's console and network. It reaches the chat's own dev server
+  running in the app or build container. One shared container for the workspace, a private browser
+  context per chat, removed after idling. Flag \`browserEnabled\`; PATCH /api/sessions/:id { browser: 1 }.
 - **Project file-change watch** — a chat can watch the project it points at and hear when the files
   are changed somewhere else: another chat's turn, an edit in the VS Code view, a git pull. The
   **Watch** pill in the chat header has three settings — off, notify only, or notify plus sending a
@@ -289,6 +294,10 @@ const RECIPES = `
   { primeWindowSched: { tz:"Asia/Seoul", times:["09:00","14:00"], from:"09:00", to:"19:00" } }.
   Send the user's own timezone, omit what they did not ask for, and \`primeWindowSched: null\` puts it
   back to running round the clock. It only matters while primeWindow is on.
+- "let Claude see my app / open it in a browser / 브라우저로 확인": PATCH /api/sessions/<the chat's id>
+  { browser: 1 }, then ui refresh. If GET /api/config reports browserEnabled=false the admin has not
+  turned the browser on — say so. Remind them a dev server must listen on 0.0.0.0 (vite \`--host\`),
+  since the browser runs in its own container and \`localhost\` there is not their server.
 - "share tokens / 토큰 모아쓰기": GET /api/pools first — it says whether the feature is on, whether
   this user has a plan to contribute and which pools exist. Then POST /api/pools/:id/join (their own
   plan only), or PUT /api/pools/opt-out { optOut: true } to stay out of the workspace-wide one.

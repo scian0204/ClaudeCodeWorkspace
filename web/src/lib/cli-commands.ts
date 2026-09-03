@@ -30,6 +30,7 @@ export interface CmdStore {
   dockerReady: boolean;
   setMode: (mode: string) => Promise<void>;
   setSandbox: (on: boolean, target?: string) => Promise<void>;
+  setBrowser: (on: boolean) => Promise<void>;
   setExportOpen: (open: boolean) => void;
   setPanel: (p: null | 'admin' | 'plugins' | 'agents' | 'me') => void;
   setTasksOpen: (open: boolean) => void;
@@ -83,6 +84,11 @@ export const WORKSPACE_CMDS: WorkspaceCmd[] = [
       void s.setSandbox(arg !== 'off', target);
       return true;
     },
+  },
+  {
+    // the chat's headless browser (the Browser pill); `/browser` alone turns it on, like /sandbox
+    cmds: ['/browser'], label: 'cliCmd.browser', hint: 'on|off',
+    run: (s, arg) => { void s.setBrowser(arg !== 'off'); return true; },
   },
   {
     cmds: ['/export'], label: 'cliCmd.export',

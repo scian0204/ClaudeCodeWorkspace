@@ -356,6 +356,24 @@ export async function sessionRoutes(app: FastifyInstance) {
     return reply.send(fs.createReadStream(file));
   });
 
+  // stream an image a TOOL returned (browser screenshot), written by the turn under the session's
+  // `.shots` dir. Same read access as attachments; the name is the turn's own `<toolu id>-<n>.<ext>`.
+  app.get('/api/sessions/:id/shots/:name', async (req, reply) => {
+    const u = requireAuth(req, reply); if (!u) return;
+    const { id, name } = req.params as any;
+    const s = getChat(id);
+    if (!s) return reply.code(404).send({ error: 'not found' });
+    if (!canViewAttachment(u, s)) return reply.code(403).send({ error: 'forbidden' });
+    if (!/^[A-Za-z0-9_-]{1,80}\.(png|jpeg|webp|gif)$/.test(String(name))) return reply.code(400).send({ error: 'bad name' });
+    const kind = s.kind === 'room' ? 'room' : 'user';
+    const file = path.join(paths.toolImages(kind, kind === 'room' ? s.roomId! : s.ownerId, s.id), name);
+    if (!fs.existsSync(file) || !fs.statSync(file).isFile()) return reply.code(404).send({ error: 'not found' });
+    reply.header('Content-Type', contentTypeFor(name));
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('Cache-Control', 'private, max-age=86400'); // a screenshot never changes once written
+    return reply.send(fs.createReadStream(file));
+  });
+
   // drop a pending attachment (composer remove). name MUST be a bare basename.
   app.delete('/api/sessions/:id/attachments/:name', async (req, reply) => {
     const u = requireAuth(req, reply); if (!u) return;
@@ -396,7 +414,7 @@ export async function sessionRoutes(app: FastifyInstance) {
     // spend, the other spawns a container. canEditChat lets any authed user edit a room's shared row
     // (it leans on chatSessionId obscurity), which is fine for the model dropdown but too loose here —
     // require the same authority as sending a turn (admin, or a member of the room).
-    if (('poolId' in b || 'sandbox' in b || 'sandboxTarget' in b) && !canWriteSession(u, s)) {
+    if (('poolId' in b || 'sandbox' in b || 'sandboxTarget' in b || 'browser' in b) && !canWriteSession(u, s)) {
       return reply.code(403).send({ error: 'forbidden' });
     }
     // Shared-plan pool backing this session's turns. Three states: null = inherit (the sender's own
@@ -410,6 +428,8 @@ export async function sessionRoutes(app: FastifyInstance) {
     // per-session build container (only meaningful while the admin flag is on; the turn re-checks)
     if ('sandbox' in b) patch.sandbox = b.sandbox ? 1 : 0;
     if ('sandboxTarget' in b) patch.sandboxTarget = b.sandboxTarget === 'windows' ? 'windows' : 'linux';
+    // shared headless browser for this session (only meaningful while the admin flag is on; the turn re-checks)
+    if ('browser' in b) patch.browser = b.browser ? 1 : 0;
     // Project file-change watch. 'prompt' mode SENDS TURNS on its own, so it needs the same
     // authority as sending one — canEditChat alone leans on chatSessionId obscurity, which is fine
     // for a title but not for something that spends a plan unattended.

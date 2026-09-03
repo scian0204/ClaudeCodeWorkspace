@@ -33,6 +33,7 @@ function stub(over: Partial<CmdStore> = {}) {
     sessionExportEnabled: true, searchEnabled: true, taskPanelEnabled: true, dockerReady: true, asideEnabled: true,
     setMode: async (m) => { calls.push(`setMode:${m}`); },
     setSandbox: async (on, target) => { calls.push(`setSandbox:${on}${target ? ':' + target : ''}`); },
+    setBrowser: async (on) => { calls.push(`setBrowser:${on}`); },
     setExportOpen: rec('setExportOpen'), setPanel: rec('setPanel'), setTasksOpen: rec('setTasksOpen'),
     setGitPanelOpen: rec('setGitPanelOpen'), setExplorerOpen: rec('setExplorerOpen'),
     setShortcutsOpen: rec('setShortcutsOpen'), setSearchOpen: rec('setSearchOpen'),
@@ -81,6 +82,10 @@ eq(run('/sandbox', 'windows').calls, ['setSandbox:true:windows'], '/sandbox wind
 eq(run('/sandbox', 'win').calls, ['setSandbox:true:windows'], '/sandbox win is the same thing');
 eq(run('/sandbox', 'linux').calls, ['setSandbox:true:linux'], '/sandbox linux switches back');
 eq(run('/sandbox', 'on').calls, ['setSandbox:true'], '/sandbox on leaves the target alone');
+// ── /browser: same on/off shape ──
+eq(run('/browser').calls, ['setBrowser:true'], 'bare /browser turns it on');
+eq(run('/browser', 'on').calls, ['setBrowser:true'], '/browser on');
+eq(run('/browser', 'off').calls, ['setBrowser:false'], '/browser off');
 eq(run('/theme', 'dark').calls, ['toggleTheme'], '/theme dark from light');
 eq(run('/theme', 'light').calls, [], 'already light — nothing to do');
 

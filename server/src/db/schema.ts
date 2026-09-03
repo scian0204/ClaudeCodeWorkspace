@@ -78,6 +78,7 @@ export const chatSessions = sqliteTable('chat_sessions', {
   // which daemon that container runs on: 'linux' (the local socket) | 'windows' (a remote
   // Windows host, for .NET Framework builds — see claude/win-sandbox.ts)
   sandboxTarget: text('sandbox_target').notNull().default('linux'),
+  browser: integer('browser').notNull().default(0), // 1 = the shared headless browser's tools are on for this session
   // Watch this session's project for file changes made OUTSIDE it (another chat, the editor, a pull).
   // 'off' = never look; 'notify' = tell the session; 'prompt' = also send watchPrompt as a turn.
   // See server/src/lib/project-watch.ts.
