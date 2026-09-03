@@ -84,6 +84,25 @@ Each row shows only its **title and commit hash**; click the triangle for the de
 
 ---
 
+## Unreleased
+
+<details>
+<summary><b>feat(browser): a browser Claude can use — open pages, click, screenshot, look at its own dev server</b> — one shared container, a private context per chat · <code>2dbb60a</code></summary>
+
+Claude could read a web page as text (WebFetch) but never *see* one: no clicking, no typing, no screenshots, and no way to look at the dev server it had just started. Checking a UI change meant a person opening it.
+
+A chat now has a **Browser** pill in its header (`/browser on|off` from the composer does the same). With it on, the turn gets Playwright's browser tools: open a page, click, type, fill a form, read the page as an accessibility tree, take a screenshot, read the console and the network requests. Screenshots appear in the chat under the tool's card as images (click to enlarge). The browser reaches the chat's own dev server whether it runs in the app container or in the chat's build container — the system prompt tells Claude to address those by container name and to start servers on `0.0.0.0`, because inside the browser container `localhost` is the browser itself.
+
+How it is built: one Playwright MCP container (`ccw-browser`, image `browserImage`, default `mcr.microsoft.com/playwright/mcp:latest`) for the whole workspace, on the internal network, spoken to as a streamable-HTTP MCP server. Each turn opens its own connection, and the server gives every connection its own browser context (own tabs, cookies and storage) — measured: two sessions loading different pages never saw each other's, six at once finished in under four seconds, and each open context costs about 40 MB over an idle 80 MB. So one container is enough; the pill only decides which chats carry the 24 extra tool definitions. The container is started on the first turn that wants it and removed by a reaper once nobody has used it for `browserIdleMs` (default 30 min) — that is also what reclaims contexts a turn left open by never closing its session, since the server does not time those out on its own. `browserMemMB` (default 2 GB) bounds it in between; CapDrop ALL + no-new-privileges as for the other helper containers. The image needs `--host 0.0.0.0` and `--allowed-hosts *` (it answers 403 to any Host header but its bind address); `--shared-browser-context` is deliberately never passed, as it would pool every chat into one context and hand one user's cookies to the next.
+
+Tool results that carry images used to be stringified whole — a screenshot became a 30 KB base64 blob in the transcript row and nothing on screen. The images are now split off, written under `<projects>/.attachments/<sessionId>.shots/` (a sibling of the attachment dir, so they never count against the attachment limit or show up as pending attachments) and served by `GET /api/sessions/:id/shots/:name` with the same read access as attachments; the text blocks become the tool's output. Orphan cleanup recognises the `.shots` suffix.
+
+Also: `chat_sessions.browser` column; `PATCH /api/sessions/:id { browser }` (same authority as the build-container toggle); config group **Browser** (`browserEnabled`, `browserImage`, `browserMemMB`, `browserIdleMs`, `browserReaperMs`) and `browserEnabled` in `/api/config`; the admin processes panel lists the container and can stop it; boot removes a leftover one; the guide agent knows the feature and has a recipe for "let Claude see my app"; README (en/ko); the static demo drives the three browser tools and shows an inline screenshot. Not attached to PR-review turns (they run untrusted code, and the browser can reach every container on the network).
+
+</details>
+
+---
+
 ## v1.28.0 — 2026-09-03
 
 <sub>release commit `54e05b5`</sub>
